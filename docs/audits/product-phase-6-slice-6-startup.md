@@ -2962,3 +2962,41 @@ The final-source locally resource-controlled full race/shuffle suite
 (`-p=2`), `go vet ./...`, integration-tag builder vet, Product Contract lock
 verifier and diff check passed. No fresh role-image candidate was built or
 accepted at this checkpoint.
+
+Checkpoint 2026-09-30 (private egress-key source and policy draft, no
+admission): the next non-launchable builder layer accepts exactly five
+reviewed egress-authority raw Ed25519 private-key source files from a private
+0700 operator directory. Each file must be owned by the current operator,
+regular, non-symlink, mode 0600, 64 bytes and seed/public-half consistent.
+The layer retains only public keys and private source paths, derives the
+profile policy key digests from the real public halves, and reopens every key
+source together with the previous image/resource/CA/external source chain
+before a future freeze. It binds the reviewed five policy targets, the five
+broker listeners and the exact authority socket/ledger mounts, rejecting
+foreign mounts and weakened broker-authority edges. Key paths and private
+bytes are not written into the profile. These focused tests use freshly
+generated test keys only; no production authority key was generated or
+launched, and the complete Profile still lacks controller/TLS-agent bindings,
+SQL/HBA, ingress, components and live Vault issuer proof. This remains
+component/source-policy evidence only; Phase 6 stays **5/15**.
+
+Checkpoint 2026-09-30 (certificate-controller/TLS-agent binding draft, no
+live PKI evidence): the builder now accepts the closed controller response,
+controller-managed request, credential-controller-managed request and all
+ordinary/PostgreSQL-purpose TLS-agent Ed25519 key sources from private 0700
+operator directories. It reads each exact 0600 raw key only to retain its
+public half, rejects changed/missing/duplicate or inconsistent sources and
+prevents reuse of an egress authority public key. The reviewed agent/subject
+inventory constructs separate ordinary and nine PostgreSQL-purpose bindings,
+including distinct request-key digests, controller and signer Unix edges,
+private socket mount pairs, UID/GID bindings and issuer policy/role IDs.
+The controller self and credential-controller managed sockets are also
+bound. These are desired declarations from real key sources, not attestation
+that Vault has issued matching leaves, that private FDs were delivered to
+the production commands, or that peer/CRL/revocation behavior passed. Tests
+use generated private test sources solely for builder validation. The full
+Profile still needs remaining source-bound fields and actual process proof;
+Phase 6 remains **5/15**. The final-source repository race/shuffle suite
+passed with local package concurrency limited to `-p=2`; the security
+package took 258.156 seconds. This does not establish default-concurrency
+CI health, a tagged Docker integration gate, or the real 82-role run.

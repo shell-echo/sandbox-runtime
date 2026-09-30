@@ -1,6 +1,9 @@
 package phase6security
 
-import "slices"
+import (
+	"crypto/ed25519"
+	"slices"
+)
 
 type slice6EgressSpec struct {
 	id, principal, broker, authority, authorizationName string
@@ -55,6 +58,61 @@ var slice6DesiredEgress = []slice6EgressSpec{
 		dnsMaxAnswers: 8,
 		targets:       []EgressTarget{{Alias: "postgres", Host: "postgres.sandbox-runtime.test", Port: 5432, Protocol: "postgres"}},
 	},
+}
+
+// Slice6DesiredEgressAuthorityNames is the exact ordered private-key owner
+// inventory. The corresponding private bytes remain outside the profile.
+func Slice6DesiredEgressAuthorityNames() []string {
+	result := make([]string, 0, len(slice6DesiredEgress))
+	for _, spec := range slice6DesiredEgress {
+		result = append(result, spec.authority)
+	}
+	return result
+}
+
+// BuildSlice6DesiredEgressPolicies binds the reviewed policy inventory to
+// actual operator public keys and already-bound deployment identities. It
+// does not attest possession of the private keys or a running authority.
+func BuildSlice6DesiredEgressPolicies(principals []Principal, publicKeys map[string]ed25519.PublicKey) ([]EgressPolicy, error) {
+	if len(publicKeys) != len(slice6DesiredEgress) {
+		return nil, errSlice6DesiredInventory
+	}
+	byName := make(map[string]Principal, len(principals))
+	for _, principal := range principals {
+		if _, duplicate := byName[principal.Name]; duplicate {
+			return nil, errSlice6DesiredInventory
+		}
+		byName[principal.Name] = principal
+	}
+	result := make([]EgressPolicy, 0, len(slice6DesiredEgress))
+	seenKeys := make(map[string]bool, len(slice6DesiredEgress))
+	for _, spec := range slice6DesiredEgress {
+		principal, principalOK := byName[spec.principal]
+		broker, brokerOK := byName[spec.broker]
+		authority, authorityOK := byName[spec.authority]
+		key, keyOK := publicKeys[spec.authority]
+		digest := OperatorPublicKeyDigest(key)
+		if !principalOK || !brokerOK || !authorityOK || !keyOK || digest == "" || seenKeys[digest] ||
+			principal.PrincipalDigest == "" || broker.PrincipalDigest == "" || authority.PrincipalDigest == "" ||
+			principal.Kind == "egress_broker" || broker.Kind != "egress_broker" || authority.Kind != "controller" ||
+			authority.AuthorizationPrincipal == nil || authority.AuthorizationPrincipal.Name != spec.authorizationName {
+			return nil, errSlice6DesiredInventory
+		}
+		seenKeys[digest] = true
+		result = append(result, EgressPolicy{
+			ID: spec.id, Revision: "policy-1", Principal: spec.principal, Broker: spec.broker,
+			PrincipalDigest: principal.PrincipalDigest, BrokerDigest: broker.PrincipalDigest,
+			Authority: PolicyAuthority{DeploymentName: spec.authority, AuthorizationName: spec.authorizationName,
+				PrincipalDigest: authority.PrincipalDigest, KeyID: spec.keyID, PublicKeyDigest: digest,
+				SocketDirectory: spec.socketDirectory, SocketStorageID: spec.socketStorageID,
+				LedgerMountTarget: spec.ledgerTarget, LedgerStorageID: spec.ledgerStorageID,
+				PollMillis: 500, CurrentTimeoutMS: 1000, StateMaxAgeSeconds: 5},
+			LeaseSeconds: 60, DNSMaxAnswers: spec.dnsMaxAnswers, DenyRawIP: true, DenyAlternateDNS: true,
+			DenyProxyEnvironment: true, DenyRedirectAuthority: true, DenyMetadataPrivateRanges: true,
+			Targets: slices.Clone(spec.targets),
+		})
+	}
+	return result, nil
 }
 
 // VerifySlice6DesiredEgressPolicies prevents a profile from granting a new
