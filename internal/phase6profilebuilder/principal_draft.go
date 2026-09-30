@@ -9,6 +9,7 @@ type PrincipalDraft struct {
 	Principals              []phase6security.Principal
 	Networks                []phase6security.Network
 	CredentialIssuerSockets []phase6security.CredentialIssuerSocketBinding
+	ImageSupply             ImageSupply
 }
 
 // BuildSlice6PrincipalDraft composes fresh identities, reviewed UID/GID and

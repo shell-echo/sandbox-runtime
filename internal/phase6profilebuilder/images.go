@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
@@ -33,6 +34,25 @@ type ImageSupply struct {
 	RoleArtifacts                                []phase6rolecandidate.VerifiedArtifact
 	DesktopCandidate                             desktopcandidate.Manifest
 	BrowserDescriptorProofDigest                 string
+	sourceRoot, sourceRevision, roleDirectory    string
+	desktopCandidatePath, browserArchivePath     string
+}
+
+// VerifySources reopens the original local-role, Desktop and locked Browser
+// candidate artifacts. A previously checked image map is not sufficient for
+// final profile freeze after source or private archive mutation.
+func (s ImageSupply) VerifySources(ctx context.Context) error {
+	if ctx == nil || ctx.Err() != nil || !cleanAbsolute(s.sourceRoot) ||
+		!cleanAbsolute(s.roleDirectory) || !cleanAbsolute(s.desktopCandidatePath) ||
+		!cleanAbsolute(s.browserArchivePath) || s.sourceRevision == "" {
+		return ErrInvalidImageSupply
+	}
+	reopened, err := LoadImageSupply(ctx, s.sourceRoot, s.sourceRevision, s.roleDirectory,
+		s.desktopCandidatePath, s.browserArchivePath)
+	if err != nil || ctx.Err() != nil || !reflect.DeepEqual(s, reopened) {
+		return ErrInvalidImageSupply
+	}
+	return nil
 }
 
 // bindPrincipalImages fills only the image identity fields of an already
@@ -184,6 +204,8 @@ func LoadImageSupply(ctx context.Context, sourceRoot, sourceRevision, roleDirect
 			Location: "registry", Kind: phase6security.ImageIdentityOCIIndex, Platform: platform,
 			SelectedManifestDigest: selected, ConfigDigest: proof.ConfigDigest},
 		BrowserDescriptorProofDigest: proof.ProofDigest,
+		sourceRoot:                   sourceRoot, sourceRevision: sourceRevision, roleDirectory: roleDirectory,
+		desktopCandidatePath: desktopCandidatePath, browserArchivePath: browserArchivePath,
 	}, nil
 }
 

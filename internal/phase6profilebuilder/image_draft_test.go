@@ -31,8 +31,23 @@ func TestImageDraftPreservesReviewedIdentityPlacementAndIssuerMounts(t *testing.
 	}
 	bound, err := bindPrincipalDraftImages(draft, supply)
 	if err != nil || len(bound.Principals) != 82 || len(bound.CredentialIssuerSockets) != 14 ||
-		!slices.Equal(bound.CredentialIssuerSockets, draft.CredentialIssuerSockets) {
+		!slices.Equal(bound.CredentialIssuerSockets, draft.CredentialIssuerSockets) ||
+		len(bound.ImageSupply.LocalRoleTargets) != len(supply.LocalRoleTargets) ||
+		bound.ImageSupply.Browser != supply.Browser {
 		t.Fatalf("complete reviewed image binding rejected: %v", err)
+	}
+	if bound.ImageSupply.VerifySources(context.Background()) == nil {
+		t.Fatal("synthetic image binding was accepted without original source artifacts")
+	}
+	resourceRoot, _ := writeSyntheticResourceSupply(t)
+	resources, err := LoadResourceSeccompSupply(resourceRoot, platform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hardened, _, err := resources.BindResourceSeccompDraft(bound)
+	if err != nil || hardened.ImageSupply.Browser != supply.Browser ||
+		len(hardened.ImageSupply.LocalRoleTargets) != len(supply.LocalRoleTargets) {
+		t.Fatalf("resource layer lost image source handles: %v", err)
 	}
 	for index, principal := range bound.Principals {
 		original := draft.Principals[index]

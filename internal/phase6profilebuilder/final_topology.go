@@ -24,6 +24,19 @@ type FinalTopologyDraft struct {
 	ExternalSupply ExternalImageSupply
 }
 
+// VerifySources is the all-input pre-freeze recheck for this incomplete
+// layer. It refuses test-created image/resource snapshots even if their
+// structural topology is valid. A later full-profile builder must call it
+// again immediately before freezing the complete profile.
+func (d FinalTopologyDraft) VerifySources(ctx context.Context, now time.Time) error {
+	if ctx == nil || ctx.Err() != nil || d.ImageSupply.VerifySources(ctx) != nil ||
+		d.Supply.VerifySources() != nil || d.AnchorSupply.VerifySources(now) != nil ||
+		d.ExternalSupply.VerifySources(ctx) != nil {
+		return ErrInvalidFinalTopologyDraft
+	}
+	return nil
+}
+
 // BindSlice6FinalTopologyDraft reopens both operator CA files and every OCI
 // archive before combining their checked bytes with reviewed network policy.
 // The final freeze must independently reopen all original source inputs again.

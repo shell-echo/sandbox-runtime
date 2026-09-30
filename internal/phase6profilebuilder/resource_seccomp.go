@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -59,6 +60,7 @@ type resourceSeccompManifest struct {
 // It is still desired configuration, not observed Docker application or a
 // measured release-tier claim.
 type ResourceSeccompSupply struct {
+	sourceRoot     string
 	platform       string
 	manifestDigest string
 	classes        map[string]dutyClassPolicy
@@ -139,7 +141,7 @@ func LoadResourceSeccompSupply(sourceRoot, platform string) (ResourceSeccompSupp
 	if err != nil || len(manifest.Classes) != len(wantedClasses) {
 		return ResourceSeccompSupply{}, ErrInvalidResourceSeccompSupply
 	}
-	supply := ResourceSeccompSupply{platform: platform,
+	supply := ResourceSeccompSupply{sourceRoot: sourceRoot, platform: platform,
 		manifestDigest: digestSlice6Bytes(manifestBytes),
 		classes:        make(map[string]dutyClassPolicy, len(wantedClasses)),
 		assignments:    make(map[string]string, len(manifest.Assignments)),
@@ -212,6 +214,20 @@ func LoadResourceSeccompSupply(sourceRoot, platform string) (ResourceSeccompSupp
 
 func (s ResourceSeccompSupply) ManifestDigest() string { return s.manifestDigest }
 
+// VerifySources reopens the repository manifest and every original, applied
+// and license file before profile freeze. A retained policy byte snapshot is
+// not authority to launch after the checked source tree has changed.
+func (s ResourceSeccompSupply) VerifySources() error {
+	if !cleanAbsolute(s.sourceRoot) || s.platform == "" {
+		return ErrInvalidResourceSeccompSupply
+	}
+	reopened, err := LoadResourceSeccompSupply(s.sourceRoot, s.platform)
+	if err != nil || !reflect.DeepEqual(s, reopened) {
+		return ErrInvalidResourceSeccompSupply
+	}
+	return nil
+}
+
 // SeccompPolicyJSON returns a copy of the bytes checked when the repository
 // supply was loaded. A future Docker launcher must apply this exact snapshot
 // through a private input and separately inspect the resulting container;
@@ -275,7 +291,8 @@ func (s ResourceSeccompSupply) BindResourceSeccompDraft(draft PrincipalDraft) (P
 		return PrincipalDraft{}, nil, ErrInvalidResourceSeccompSupply
 	}
 	return PrincipalDraft{Principals: bound, Networks: append([]phase6security.Network(nil), draft.Networks...),
-		CredentialIssuerSockets: append([]phase6security.CredentialIssuerSocketBinding(nil), draft.CredentialIssuerSockets...)}, budgets, nil
+		CredentialIssuerSockets: append([]phase6security.CredentialIssuerSocketBinding(nil), draft.CredentialIssuerSockets...),
+		ImageSupply:             draft.ImageSupply}, budgets, nil
 }
 
 func validSlice6Architectures(architectures []string, platform string) bool {

@@ -51,5 +51,6 @@ func bindPrincipalDraftImages(draft PrincipalDraft, supply ImageSupply) (Princip
 		return PrincipalDraft{}, err
 	}
 	return PrincipalDraft{Principals: bound, Networks: append([]phase6security.Network(nil), draft.Networks...),
-		CredentialIssuerSockets: append([]phase6security.CredentialIssuerSocketBinding(nil), draft.CredentialIssuerSockets...)}, nil
+		CredentialIssuerSockets: append([]phase6security.CredentialIssuerSocketBinding(nil), draft.CredentialIssuerSockets...),
+		ImageSupply:             supply}, nil
 }

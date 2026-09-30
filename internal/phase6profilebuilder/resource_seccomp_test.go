@@ -81,8 +81,14 @@ func TestResourceSeccompSupplyBindsCompleteReviewedDuties(t *testing.T) {
 	if err != nil || supply.ManifestDigest() == "" {
 		t.Fatalf("complete synthetic supply rejected: %v", err)
 	}
+	if err := supply.VerifySources(); err != nil {
+		t.Fatalf("unchanged resource source rejected: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(root, "profiles/phase6/security/synthetic.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	if supply.VerifySources() == nil {
+		t.Fatal("changed seccomp source admitted at freeze")
 	}
 	draft, err := BuildSlice6PrincipalDraft(strings.Repeat("c", 32),
 		"sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("b", 64))

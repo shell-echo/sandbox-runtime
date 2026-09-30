@@ -2943,3 +2943,22 @@ resource and revocation bounds, exact cleanup and an immutable manifest.
 The final-source resource-controlled full repository race/shuffle run, `go vet
 ./...`, Product Contract lock verifier and diff check passed. This checkpoint
 cannot raise Phase 6 above **5/15**.
+
+Checkpoint 2026-09-30 (retained pre-freeze source handles, no admission):
+the image-supply layer now retains its clean-source revision, local-role
+candidate directory, Desktop candidate and locked Browser archive paths and
+reopens the exact source-bound artifacts before final freeze. The
+resource/seccomp layer similarly reopens the repository-owned manifest,
+original and applied policies and license bytes; a changed policy source
+fails even when the old digest snapshot is still in memory. Both supplies
+survive subsequent draft binding. The incomplete final-topology draft has an
+all-input source-recheck method and deliberately rejects synthetic image or
+resource fixtures. The new image recheck has not yet passed against one fresh
+clean revision's complete local-role, Desktop and Browser artifacts; the
+existing retained candidates are from earlier source revisions. Therefore
+this method is a fail-closed pre-freeze boundary, not evidence that a final
+profile was frozen or any role launched. Phase 6 remains **5/15**.
+The final-source locally resource-controlled full race/shuffle suite
+(`-p=2`), `go vet ./...`, integration-tag builder vet, Product Contract lock
+verifier and diff check passed. No fresh role-image candidate was built or
+accepted at this checkpoint.

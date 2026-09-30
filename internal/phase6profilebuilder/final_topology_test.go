@@ -54,6 +54,9 @@ func TestSlice6FinalTopologyDraftBindsReviewed32PathsAnd37Edges(t *testing.T) {
 		phase6security.VerifySlice6DesiredFinalNetworks(bound.Networks) != nil {
 		t.Fatalf("final desired topology incomplete: %d services, %d edges", len(bound.External), len(bound.TrustEdges))
 	}
+	if bound.VerifySources(context.Background(), time.Now().UTC()) == nil {
+		t.Fatal("synthetic image/resource or unverified OCI sources admitted at final freeze")
+	}
 	for _, path := range phase6security.Slice6DesiredFinalExternalTransports() {
 		serviceFound, dialerFound := false, false
 		for _, service := range bound.External {
