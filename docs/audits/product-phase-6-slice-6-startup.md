@@ -3000,3 +3000,35 @@ Phase 6 remains **5/15**. The final-source repository race/shuffle suite
 passed with local package concurrency limited to `-p=2`; the security
 package took 258.156 seconds. This does not establish default-concurrency
 CI health, a tagged Docker integration gate, or the real 82-role run.
+
+Checkpoint 2026-09-30 (full-profile assembly path, not frozen): the next
+builder layer now supplies the reviewed non-secret listener, Browser mux
+socket, two public ingress, two sandbox identity slots, two Provider database
+bindings, complete nine-role shared PostgreSQL HBA digest and cleanup class
+fields. A deliberately synthetic *test-only* image/component fixture was
+used to check that these fields form a structurally valid
+`phase6security.Profile`; it is neither a source-bound candidate nor a
+launch artifact. The production finalizer accepts only the prior source-
+rechecked layers, reads the effective Desktop broker executable from the
+selected, original-byte-verified OCI layers and sets the component digest
+from those bytes before calling the complete Profile and final-gate static
+validators. Layer tests reject whiteout, symlink, unsafe mode and ambiguous
+replacement. The finalizer correctly refuses current synthetic draft inputs;
+no fresh clean-revision Desktop/role image set and full real key/CA supply
+has yet produced a positive frozen Profile. The full live dependency chain,
+issuer mapping, 82-role/16-scenario evidence and cleanup remain outstanding;
+Phase 6 stays **5/15**.
+
+The opt-in Desktop broker archive component test passed against the retained
+private arm64 Desktop candidate from source revision
+`6d78afaa844ea598dba2a1b0f82d250627c7c79a`. It reopened the candidate
+sidecar/151,323,136-byte OCI archive, verified the selected descriptor and
+ordered layers, and extracted the effective 5,124,505-byte broker executable
+with SHA-256
+`f794d0324a72062d800c7da6bc3164d933db9bb67e3c6ea95e6204e601922e96`.
+This is a **prior-revision component input**, not the current-source Desktop
+image, running broker or positive full-profile freeze.
+The final-source locally resource-controlled repository race/shuffle suite
+(`-p=2`) passed; the security package took 277.587 seconds. This source
+validation still does not prove default-concurrency CI or any live Slice 6
+scenario.

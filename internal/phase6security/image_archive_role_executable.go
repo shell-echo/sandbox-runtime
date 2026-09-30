@@ -24,7 +24,21 @@ type roleLayerFile struct {
 // whiteouts, links and ambiguous replacements at the exact role path. A
 // separately rebuilt source binary must still be compared to these bytes.
 func ReadVerifiedOCIArchiveRoleExecutable(archivePath string, manifestDocument, configDocument []byte) ([]byte, error) {
+	return readVerifiedOCIArchiveExecutable(archivePath, manifestDocument, configDocument, "usr/local/bin/phase6-role")
+}
+
+// ReadVerifiedOCIArchiveDesktopBroker binds the component digest to the
+// effective broker bytes in the selected Desktop image, not a source-tree
+// binary or an operator-supplied digest. Runtime process bytes are separately
+// observed by the live gate.
+func ReadVerifiedOCIArchiveDesktopBroker(archivePath string, manifestDocument, configDocument []byte) ([]byte, error) {
+	return readVerifiedOCIArchiveExecutable(archivePath, manifestDocument, configDocument,
+		"usr/local/libexec/sandbox-runtime/desktop-broker")
+}
+
+func readVerifiedOCIArchiveExecutable(archivePath string, manifestDocument, configDocument []byte, target string) ([]byte, error) {
 	if len(manifestDocument) < 1 || len(manifestDocument) > 4<<20 ||
+		(target != "usr/local/bin/phase6-role" && target != "usr/local/libexec/sandbox-runtime/desktop-broker") ||
 		rejectDuplicateMembers(manifestDocument) != nil ||
 		VerifyOCIArchiveLayers(archivePath, manifestDocument, configDocument) != nil {
 		return nil, ErrInvalidImageDescriptor
@@ -77,7 +91,7 @@ func ReadVerifiedOCIArchiveRoleExecutable(archivePath string, manifestDocument, 
 			return nil, ErrInvalidImageDescriptor
 		}
 		seen[index] = true
-		value, err := readPhase6RoleFromLayer(reader, header.Size, manifest.Layers[index].MediaType)
+		value, err := readPhase6ExecutableFromLayer(reader, header.Size, manifest.Layers[index].MediaType, target)
 		if err != nil {
 			return nil, ErrInvalidImageDescriptor
 		}
@@ -101,7 +115,7 @@ func ReadVerifiedOCIArchiveRoleExecutable(archivePath string, manifestDocument, 
 	return effective, nil
 }
 
-func readPhase6RoleFromLayer(reader io.Reader, size int64, mediaType string) (roleLayerFile, error) {
+func readPhase6ExecutableFromLayer(reader io.Reader, size int64, mediaType, target string) (roleLayerFile, error) {
 	limited := &io.LimitedReader{R: reader, N: size}
 	var stream io.Reader = limited
 	var compressed *gzip.Reader
@@ -131,18 +145,17 @@ func readPhase6RoleFromLayer(reader io.Reader, size int64, mediaType string) (ro
 		if name == ".." || strings.HasPrefix(name, "../") {
 			return roleLayerFile{}, ErrInvalidImageDescriptor
 		}
-		if name == "usr/.wh.local" || name == "usr/local/.wh.bin" ||
-			name == "usr/.wh..wh..opq" || name == "usr/local/.wh..wh..opq" {
+		if slice6ExecutableAncestor(name, target) && header.Typeflag != tar.TypeDir {
 			return roleLayerFile{}, ErrInvalidImageDescriptor
 		}
-		if name == "usr/local/bin/.wh.phase6-role" || name == "usr/local/bin/.wh..wh..opq" {
+		if slice6ExecutableWhiteout(name, target) {
 			if result.present || result.deleted || header.Typeflag != tar.TypeReg {
 				return roleLayerFile{}, ErrInvalidImageDescriptor
 			}
 			result.deleted = true
 			continue
 		}
-		if name != "usr/local/bin/phase6-role" {
+		if name != target {
 			continue
 		}
 		if result.present || result.deleted || (header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA) ||
@@ -165,4 +178,19 @@ func readPhase6RoleFromLayer(reader io.Reader, size int64, mediaType string) (ro
 		return roleLayerFile{}, ErrInvalidImageDescriptor
 	}
 	return result, nil
+}
+
+func slice6ExecutableAncestor(name, target string) bool {
+	return name != "" && strings.HasPrefix(target, name+"/")
+}
+
+func slice6ExecutableWhiteout(name, target string) bool {
+	parts := strings.Split(target, "/")
+	for index, part := range parts {
+		parent := path.Join(parts[:index]...)
+		if name == path.Join(parent, ".wh."+part) || name == path.Join(parent, ".wh..wh..opq") {
+			return true
+		}
+	}
+	return false
 }
