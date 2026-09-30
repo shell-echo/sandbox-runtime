@@ -1350,6 +1350,42 @@ weaken TLS verification or substitute generated PEM files for real Vault
 issuer/leaf/CRL observations. A lost or rebuilt issuer invalidates that run's
 candidate rather than preserving its old digest.
 
+For the final Vault listener trust transition, the same controlled run uses
+run-owned private native `file` storage from the **first** non-dev startup.
+After the two internal issuers and final Vault/controller leaves are observed,
+stop only the old Vault process and restart it on the same private storage
+with the general issuer's final server leaf and final client-CA set. No
+parallel Vault writer, in-memory migration, issuer rebuild or intermediate
+business-role admission is allowed. SIGHUP alone is not this transition: the
+pinned listener can reload its server certificate/key but not its client CA.
+Securely unseal the restarted server without placing keys in argv/logs;
+re-read both issuer UUIDs/DER, complete signed CRLs, role `issuer_ref` and ACLs
+through the final mTLS endpoint. Prove a new client succeeds, the old
+temporary client CA is rejected by a reachable listener, and a client that
+trusts only the old temporary server CA rejects the final listener. Revoke
+the bootstrap token and remove temporary private material only after the
+managed path has taken over. Final Profile trust bundles exclude both
+temporary CAs. File storage is single-node, run-owned gate state, not a new
+HA claim or an alternative PKI authority.
+
+Descriptor-bearing role images use the closed one-shot FD input table in
+`docs/audits/product-phase-6-slice-6-fd-startup-inventory.md`. The trusted
+same-host operator checks the immutable Docker create ID/image/entrypoint,
+then closes one bounded non-TTY stdin envelope bound to run/target/new nonce.
+A fixed, source-bound Alpine shell trampoline does only literal `/dev/null`
+FD3…FD6 reservations before any Go runtime starts, then `exec`s the loader;
+it never reads stdin or interprets a secret, variable or caller-supplied
+command. The short-lived loader verifies those slots, creates sealed 0600
+regular memfds for FD0 and only that target's declared FD3…FD6, then `exec`s
+the original role at PID 1. It adds no listener, privilege, arbitrary path,
+persistent secret mount or supervisor; non-FD targets keep their direct
+entrypoint. Automatic Docker
+restart is disabled, and every restarted instance requires a new ID/nonce.
+Both loader and role executable bytes must be independently rebuilt and
+matched to the selected OCI layers before a source-bound candidate is
+accepted. This is runtime-entrypoint provenance, not a Provider Contract
+change, additional scenario or release-gate waiver.
+
 ### Two immutable Vault issuer groups and DNS client admission (2026-09-30)
 
 Stock CoreDNS has a fixed client-CA admission path; it cannot authorize an

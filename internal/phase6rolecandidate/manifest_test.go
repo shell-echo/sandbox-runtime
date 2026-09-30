@@ -89,4 +89,11 @@ func TestRoleConfigBindsSourceTargetAndDefaultIdentity(t *testing.T) {
 	if validRoleConfig(bytes.Replace(config, []byte("65532:65532"), []byte("0:0"), 1), source) {
 		t.Fatal("root default user admitted")
 	}
+	fdSource := SourceInputs{SourceRevision: source.SourceRevision, BuildTarget: "certificate-controller"}
+	fdConfig := bytes.Replace(config, []byte(`role-target":"core"`), []byte(`role-target":"certificate-controller"`), 1)
+	fdConfig = bytes.Replace(fdConfig, []byte(`"Entrypoint":["/usr/local/bin/phase6-role"]`),
+		[]byte(`"Entrypoint":["/bin/sh","-ec","exec 3</dev/null 4</dev/null 5</dev/null 6</dev/null; exec /usr/local/bin/phase6-fd-loader"]`), 1)
+	if !validRoleConfig(fdConfig, fdSource) || validRoleConfig(config, fdSource) || validRoleConfig(fdConfig, source) {
+		t.Fatal("FD-loader entrypoint did not bind exactly to its source target")
+	}
 }

@@ -10,12 +10,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 const (
-	ManifestSchema         = "sandbox-runtime.phase6-local-role-candidate.v1"
+	ManifestSchema         = "sandbox-runtime.phase6-local-role-candidate.v2"
 	ManifestClassification = "local-candidate-non-release"
 	maxManifestBytes       = 32 << 10
 )
@@ -39,6 +41,7 @@ type Manifest struct {
 	ArchiveSize                int64                          `json:"archive_size"`
 	RootFSChainDigest          string                         `json:"rootfs_chain_digest"`
 	BinaryDigest               string                         `json:"binary_digest"`
+	LoaderBinaryDigest         string                         `json:"loader_binary_digest"`
 	BuildContextDigest         string                         `json:"build_context_digest"`
 	ManifestDigest             string                         `json:"manifest_digest"`
 }
@@ -74,6 +77,7 @@ func NewManifest(ctx context.Context, sourceRoot, archivePath string, source Sou
 		OCIConfigDigest:            probe.Image.OCIConfigDigest, DescriptorProofDigest: probe.Image.DescriptorProofDigest,
 		ArchiveDigest: probe.ArchiveDigest, ArchiveSize: probe.ArchiveSize,
 		RootFSChainDigest: probe.RootFSChainDigest, BinaryDigest: build.BinaryDigest,
+		LoaderBinaryDigest: build.LoaderBinaryDigest,
 		BuildContextDigest: build.BuildContextDigest}
 	m.ManifestDigest = m.digest()
 	if m.VerifyArchive(ctx, sourceRoot, archivePath) != nil {
@@ -130,7 +134,7 @@ func (m Manifest) VerifyArchive(ctx context.Context, sourceRoot, archivePath str
 		return ErrInvalidManifest
 	}
 	build, err := VerifyBuildContext(ctx, sourceRoot, m.Source, archivePath, documents.Manifest, documents.Config)
-	if err != nil || build.BinaryDigest != m.BinaryDigest ||
+	if err != nil || build.BinaryDigest != m.BinaryDigest || build.LoaderBinaryDigest != m.LoaderBinaryDigest ||
 		build.BuildContextDigest != m.BuildContextDigest {
 		return ErrInvalidManifest
 	}
@@ -266,11 +270,18 @@ func validRoleConfig(document []byte, source SourceInputs) bool {
 		Config struct {
 			User       string            `json:"User"`
 			Entrypoint []string          `json:"Entrypoint"`
+			Cmd        []string          `json:"Cmd"`
 			Labels     map[string]string `json:"Labels"`
 		} `json:"config"`
 	}
-	if json.Unmarshal(document, &config) != nil || config.Config.User != "65532:65532" ||
-		len(config.Config.Entrypoint) != 1 || config.Config.Entrypoint[0] != "/usr/local/bin/phase6-role" {
+	if json.Unmarshal(document, &config) != nil || config.Config.User != "65532:65532" || len(config.Config.Cmd) != 0 {
+		return false
+	}
+	entrypoint := []string{phase6fdloader.RolePath}
+	if _, needsLoader := phase6fdloader.SpecificationFor(source.BuildTarget); needsLoader {
+		entrypoint = []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand}
+	}
+	if !slices.Equal(config.Config.Entrypoint, entrypoint) {
 		return false
 	}
 	labels := config.Config.Labels

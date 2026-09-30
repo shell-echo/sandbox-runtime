@@ -21,6 +21,11 @@ case "$target" in
         package=./cmd/$target ;;
     *) echo "unsupported Phase 6 role target" >&2; exit 2 ;;
 esac
+case "$target" in
+    certificate-controller|workload-tls-agent|workload-material-agent|workload-credential-controller-v2|\
+    break-glass-controller|egress-policy-state-authority) stage=fd-loader ;;
+    *) stage=direct ;;
+esac
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH= cd -- "$script_dir/../../.." && pwd)
@@ -51,11 +56,22 @@ trap cleanup EXIT HUP INT TERM
         -o "$build_context/role" "$package"
 )
 chmod 0555 "$build_context/role"
+if [ "$stage" = fd-loader ]; then
+    (
+        cd "$repository_root"
+        CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" GOPROXY=off GOSUMDB=off \
+            GOTOOLCHAIN=local GOFLAGS= \
+            go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= \
+            -o "$build_context/loader" ./cmd/phase6-fd-loader
+    )
+    chmod 0555 "$build_context/loader"
+    touch -t 197001010000 "$build_context/loader"
+fi
 cp "$script_dir/Dockerfile" "$build_context/Dockerfile"
 touch -t 197001010000 "$build_context/role" "$build_context/Dockerfile"
 
 docker build --no-cache --network none --provenance=false --pull=false \
-    --platform "$platform" --build-arg "VCS_REF=$source_revision" \
+    --platform "$platform" --target "$stage" --build-arg "VCS_REF=$source_revision" \
     --build-arg "ROLE_TARGET=$target" --build-arg SOURCE_DATE_EPOCH=0 \
     --tag "$image_tag" "$build_context"
 

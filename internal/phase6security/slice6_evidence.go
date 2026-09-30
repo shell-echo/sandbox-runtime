@@ -109,7 +109,7 @@ type Slice6Evidence struct {
 const (
 	Slice6CandidateRepositoryRole = "repository_role"
 	Slice6CandidateDesktop        = "desktop_candidate"
-	Slice6RoleManifestSchema      = "sandbox-runtime.phase6-local-role-candidate.v1"
+	Slice6RoleManifestSchema      = "sandbox-runtime.phase6-local-role-candidate.v2"
 	Slice6DesktopManifestSchema   = "sandbox.runtime/desktop-phase6-local-candidate/v3"
 )
 

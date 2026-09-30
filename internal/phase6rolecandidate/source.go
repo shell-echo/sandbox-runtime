@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
@@ -106,13 +107,17 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	}
 	parameters := struct {
 		Target    string `json:"target"`
+		Stage     string `json:"stage"`
 		Platform  string `json:"platform"`
 		BuildMode string `json:"build_mode"`
 		GoFlags   string `json:"go_flags"`
 		Docker    string `json:"docker"`
-	}{Target: target, Platform: platform, BuildMode: "CGO_ENABLED=0 GOOS=linux GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local",
+	}{Target: target, Stage: "direct", Platform: platform, BuildMode: "CGO_ENABLED=0 GOOS=linux GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local",
 		GoFlags: "-mod=readonly -trimpath -buildvcs=false -ldflags=-buildid=",
 		Docker:  "--no-cache --network none --provenance=false --pull=false SOURCE_DATE_EPOCH=0"}
+	if _, needsLoader := phase6fdloader.SpecificationFor(target); needsLoader {
+		parameters.Stage = "fd-loader"
+	}
 	parameterBytes, err := json.Marshal(parameters)
 	if err != nil {
 		return SourceInputs{}, ErrInvalidSourceInputs

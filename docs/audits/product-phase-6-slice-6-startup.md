@@ -3126,3 +3126,44 @@ The final-source locally resource-controlled repository race/shuffle suite
 (`-p=2`) passed; the security package took 277.587 seconds. This source
 validation still does not prove default-concurrency CI or any live Slice 6
 scenario.
+
+Checkpoint 2026-09-30 (Vault persistent trust cutover and FD-loader
+components, not acceptance): a tagged real Docker test now uses a run-owned
+private native Vault `file` backend on the isolated controller bridge. It
+generated two distinct internal issuer UUIDs/certificates, signed final
+Vault server and controller-client leaves from the general issuer, inspected
+each issuer's signed complete CRL, stopped and restarted the same server on
+the same storage with final TLS 1.3 mTLS trust, then securely unsealed without
+key argv. Both issuer DERs survived and neither complete CRL number regressed.
+A separate client at the reviewed controller address succeeded under final
+trust, both temporary client-CA and temporary server-CA directions were
+rejected, and a second final-trust positive probe followed the denials.
+The bootstrap root token was revoked, temporary trust files were removed and
+run-labeled Docker resources were exactly cleaned. The scoped controller ACL,
+all production role `issuer_ref`s, managed certificate-controller/agent chain,
+DNS broker/general admission and full Profile freeze are still absent. This
+component cannot be counted as one of the 16 scenarios.
+
+The six FD-bearing role build targets have a closed input inventory in
+`product-phase-6-slice-6-fd-startup-inventory.md`. A Linux one-shot loader
+with a canonical, bounded run/target/container-ID/nonce envelope now creates
+sealed 0600 seekable memfds, maps only fixed FD0/FD3…FD6, and `exec`s the
+unchanged role as PID 1. A real repeated test exposed Go runtime epoll FD4
+colliding with direct loader mapping, so the FD-stage image now uses a fixed
+Alpine shell `exec` trampoline to reserve FD3…FD6 as `/dev/null` before Go
+starts. The loader verifies those inherited slots and marks unused slots
+close-on-exec; it rejects unsafe startup environment names. A non-secret
+fixed-role fixture passed in a real
+non-root, capability-dropped, no-new-privileges, read-only, seccomp-constrained
+Docker container for ten bounded repeated positive/negative runs without a
+netpoll crash; stale nonce was rejected and exact resources cleaned. The
+local role image builder now selects a loader stage only for those six
+targets, and the private source-bound candidate schema is v2 so the second
+binary must match an independent build and selected OCI layer. This is
+component/provenance preparation only: the same real Docker test also rejected
+a truncated envelope, handled absent fixed exec target with a fixed stage
+code, rejected missing/forged reserved slots and unsafe shell-related
+environment, and stopped on pre-exec TERM without automatic restart. The real
+certificate-controller launch, held-open-input deadline, all 82 principals,
+all 16 scenarios,
+immutable evidence and push remain open. Phase 6 remains **5/15**.

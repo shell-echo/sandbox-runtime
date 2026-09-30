@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
@@ -17,6 +18,7 @@ var ErrInvalidBuildContext = errors.New("invalid Phase 6 local role build contex
 // effective regular file in the selected OCI archive's ordered layers.
 type BuildContextProof struct {
 	BinaryDigest       string
+	LoaderBinaryDigest string
 	BuildContextDigest string
 }
 
@@ -64,9 +66,38 @@ func VerifyBuildContext(ctx context.Context, sourceRoot string, inputs SourceInp
 		return BuildContextProof{}, ErrInvalidBuildContext
 	}
 	binaryDigest := hashBytes(rebuilt)
+	loaderDigest := ""
+	loaderContext := ""
+	if _, needsLoader := phase6fdloader.SpecificationFor(inputs.BuildTarget); needsLoader {
+		imageLoader, err := phase6security.ReadVerifiedOCIArchiveFDLoader(archivePath, manifestDocument, configDocument)
+		if err != nil || len(imageLoader) == 0 || len(imageLoader) > maxPhase6RoleBinaryBytes {
+			return BuildContextProof{}, ErrInvalidBuildContext
+		}
+		loaderPath := filepath.Join(workdir, "loader")
+		loaderBuild := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+			"-ldflags=-buildid=", "-o", loaderPath, "./cmd/phase6-fd-loader")
+		loaderBuild.Dir = sourceRoot
+		loaderBuild.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+architecture,
+			"GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOFLAGS=")
+		if _, err := loaderBuild.CombinedOutput(); err != nil {
+			return BuildContextProof{}, ErrInvalidBuildContext
+		}
+		loaderInfo, err := os.Lstat(loaderPath)
+		if err != nil || !loaderInfo.Mode().IsRegular() || loaderInfo.Size() < 1 || loaderInfo.Size() > maxPhase6RoleBinaryBytes {
+			return BuildContextProof{}, ErrInvalidBuildContext
+		}
+		rebuiltLoader, err := os.ReadFile(loaderPath)
+		if err != nil || !bytes.Equal(rebuiltLoader, imageLoader) {
+			return BuildContextProof{}, ErrInvalidBuildContext
+		}
+		loaderDigest = hashBytes(rebuiltLoader)
+		loaderContext = "loader:0555:epoch0"
+	}
 	return BuildContextProof{BinaryDigest: binaryDigest,
-		BuildContextDigest: hashFields("sandbox-runtime/phase6-role-build-context/v1",
-			[]byte(binaryDigest), []byte(inputs.DockerfileDigest), []byte("role:0555:epoch0"), []byte("Dockerfile:0644:epoch0"))}, nil
+		LoaderBinaryDigest: loaderDigest,
+		BuildContextDigest: hashFields("sandbox-runtime/phase6-role-build-context/v2",
+			[]byte(binaryDigest), []byte(loaderDigest), []byte(inputs.DockerfileDigest),
+			[]byte("role:0555:epoch0"), []byte(loaderContext), []byte("Dockerfile:0644:epoch0"))}, nil
 }
 
 const maxPhase6RoleBinaryBytes = 128 << 20

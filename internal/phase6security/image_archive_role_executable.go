@@ -27,6 +27,13 @@ func ReadVerifiedOCIArchiveRoleExecutable(archivePath string, manifestDocument, 
 	return readVerifiedOCIArchiveExecutable(archivePath, manifestDocument, configDocument, "usr/local/bin/phase6-role")
 }
 
+// ReadVerifiedOCIArchiveFDLoader returns the distinct one-shot startup loader
+// bytes from the ordered image layers. Callers compare an independent source
+// rebuild before treating a descriptor-bearing role candidate as current.
+func ReadVerifiedOCIArchiveFDLoader(archivePath string, manifestDocument, configDocument []byte) ([]byte, error) {
+	return readVerifiedOCIArchiveExecutable(archivePath, manifestDocument, configDocument, "usr/local/bin/phase6-fd-loader")
+}
+
 // ReadVerifiedOCIArchiveDesktopBroker binds the component digest to the
 // effective broker bytes in the selected Desktop image, not a source-tree
 // binary or an operator-supplied digest. Runtime process bytes are separately
@@ -38,7 +45,8 @@ func ReadVerifiedOCIArchiveDesktopBroker(archivePath string, manifestDocument, c
 
 func readVerifiedOCIArchiveExecutable(archivePath string, manifestDocument, configDocument []byte, target string) ([]byte, error) {
 	if len(manifestDocument) < 1 || len(manifestDocument) > 4<<20 ||
-		(target != "usr/local/bin/phase6-role" && target != "usr/local/libexec/sandbox-runtime/desktop-broker") ||
+		(target != "usr/local/bin/phase6-role" && target != "usr/local/bin/phase6-fd-loader" &&
+			target != "usr/local/libexec/sandbox-runtime/desktop-broker") ||
 		rejectDuplicateMembers(manifestDocument) != nil ||
 		VerifyOCIArchiveLayers(archivePath, manifestDocument, configDocument) != nil {
 		return nil, ErrInvalidImageDescriptor

@@ -1,0 +1,497 @@
+//go:build phase6slice6gate
+
+package productphase6gate
+
+import (
+	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"math/big"
+	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+)
+
+const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWITCH"
+
+// This is real Docker component evidence for the operator bootstrap trust
+// cutover. It is not the managed certificate-controller/agent path or a Slice 6
+// release scenario.
+func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
+	if os.Getenv(slice6VaultTrustSwitchEnv) != "1" {
+		t.Skip("set " + slice6VaultTrustSwitchEnv + "=1 for the real Vault trust switch")
+	}
+	if os.Getuid() == 0 {
+		t.Fatal("Vault trust switch must not use a root host UID")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 45*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("exact Vault trust-switch Docker cleanup: %v", err)
+		}
+	})
+	var network phase6security.Network
+	for _, candidate := range phase6security.Slice6DesiredFinalNetworks() {
+		if candidate.Name == "network-certificate-controller" {
+			network = candidate
+		}
+	}
+	if network.Name == "" || !network.Internal || network.GatewayModeIPv4 != "isolated" ||
+		len(network.Principals) != 1 || network.Principals[0] != "certificate-controller" ||
+		len(network.ExternalServices) != 1 || network.ExternalServices[0] != "vault" {
+		t.Fatal("reviewed Vault/controller isolated bridge changed")
+	}
+	vaultIP, err := phase6security.Slice6DesiredServiceEndpointAddress(network.Name, "vault")
+	if err != nil {
+		t.Fatal(err)
+	}
+	controllerIP, err := phase6security.Slice6DesiredServiceEndpointAddress(network.Name, "certificate-controller")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.MkdirTemp(".", ".sr-vault-trust-switch-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err = filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Errorf("remove exact Vault trust-switch local files: %v", err)
+		}
+	})
+	configDir := filepath.Join(root, "config")
+	dataDir := filepath.Join(root, "data")
+	for _, directory := range []string{root, configDir, dataDir} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeSlice6VaultBridgeTLS(t, configDir, vaultIP)
+	writeSlice6VaultPrivateFile(t, configDir, "vault.hcl", slice6VaultFileConfig())
+	created, err := createSlice6ProfileNetwork(ctx, run, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
+	server, err := run.docker(ctx, "run", "-d", "--pull=never", "--name", "sr-p6-vault-switch-"+run.id,
+		"--label", run.label(), "--network", created.NetworkID, "--ip", vaultIP, "--user", user,
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+		"--memory=256m", "--cpus=1", "--pids-limit=64",
+		"--mount", "type=bind,source="+configDir+",target=/vault/config,readonly",
+		"--mount", "type=bind,source="+dataDir+",target=/vault/data",
+		slice6VaultTestImage, "server")
+	serverID := strings.TrimSpace(string(server))
+	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
+		t.Fatalf("non-dev persistent Vault start failed: %v", err)
+	}
+	if err := waitSlice6VaultUninitialized(ctx, run, serverID); err != nil {
+		t.Fatal(err)
+	}
+	firstStart := slice6VaultStartedAt(t, ctx, run, serverID)
+	var initialized struct {
+		UnsealKeysBase64 []string `json:"unseal_keys_b64"`
+		RootToken        string   `json:"root_token"`
+	}
+	init, err := run.docker(ctx, slice6VaultExec(serverID, false, "operator", "init", "-format=json", "-key-shares=1", "-key-threshold=1")...)
+	if err != nil || json.Unmarshal(init, &initialized) != nil || len(initialized.UnsealKeysBase64) != 1 || initialized.RootToken == "" {
+		t.Fatal("persistent Vault initialization had an unknown outcome")
+	}
+	unsealKey := initialized.UnsealKeysBase64[0]
+	writeSlice6VaultPrivateFile(t, configDir, "root-token", []byte(initialized.RootToken))
+	clear(init)
+	initialized.RootToken = ""
+	initialized.UnsealKeysBase64 = nil
+	if output, err := slice6VaultUnseal(ctx, serverID, unsealKey); err != nil || !bytesContainUnsealedVault(output) {
+		t.Fatal("persistent Vault initial unseal failed")
+	}
+	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "secrets", "enable", "-path=pki", "pki")...); err != nil {
+		t.Fatal("persistent Vault PKI mount failed")
+	}
+	general := slice6VaultGenerateRoot(t, ctx, run, serverID, false)
+	broker := slice6VaultGenerateRoot(t, ctx, run, serverID, true)
+	if general.ID == broker.ID || !phase6security.ValidSlice6IssuerID(general.ID) || !phase6security.ValidSlice6IssuerID(broker.ID) ||
+		bytes.Equal(general.Certificate.Raw, broker.Certificate.Raw) {
+		t.Fatal("persistent Vault issuer identities are invalid or aliased")
+	}
+	serverCSR, serverKey := slice6VaultSwitchCSR(t, false)
+	clientCSR, clientKey := slice6VaultSwitchCSR(t, true)
+	writeSlice6VaultPrivateFile(t, configDir, "final-server.csr", serverCSR)
+	writeSlice6VaultPrivateFile(t, configDir, "final-client.csr", clientCSR)
+	writeSlice6VaultPrivateFile(t, configDir, "final-server-key.pem", serverKey)
+	writeSlice6VaultPrivateFile(t, configDir, "final-client-key.pem", clientKey)
+	serverLeaf := slice6VaultSignFinalLeaf(t, ctx, run, serverID, general, false)
+	clientLeaf := slice6VaultSignFinalLeaf(t, ctx, run, serverID, general, true)
+	slice6VaultAssertLeafKey(t, serverLeaf, serverKey)
+	slice6VaultAssertLeafKey(t, clientLeaf, clientKey)
+	slice6VaultAssertRoleIssuer(t, ctx, run, serverID, "final-vault-server", general.ID)
+	slice6VaultAssertRoleIssuer(t, ctx, run, serverID, "final-controller-client", general.ID)
+	beforeGeneralCRL := slice6VaultReadCRL(t, ctx, run, serverID, general)
+	beforeBrokerCRL := slice6VaultReadCRL(t, ctx, run, serverID, broker)
+	for old, preserved := range map[string]string{
+		"server-ca.pem":  "bootstrap-server-ca.pem",
+		"client.pem":     "bootstrap-client.pem",
+		"client-key.pem": "bootstrap-client-key.pem",
+	} {
+		contents, readErr := os.ReadFile(filepath.Join(configDir, old))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		writeSlice6VaultPrivateFile(t, configDir, preserved, contents)
+		clear(contents)
+	}
+	if _, err := run.docker(ctx, "stop", "-t", "10", serverID); err != nil {
+		t.Fatal("controlled Vault stop failed")
+	}
+	writeSlice6VaultPrivateFile(t, configDir, "server.pem", serverLeaf)
+	writeSlice6VaultPrivateFile(t, configDir, "server-key.pem", serverKey)
+	writeSlice6VaultPrivateFile(t, configDir, "server-ca.pem", general.PEM)
+	writeSlice6VaultPrivateFile(t, configDir, "client-ca.pem", general.PEM)
+	writeSlice6VaultPrivateFile(t, configDir, "client.pem", clientLeaf)
+	writeSlice6VaultPrivateFile(t, configDir, "client-key.pem", clientKey)
+	if _, err := run.docker(ctx, "start", serverID); err != nil {
+		t.Fatal("controlled Vault restart failed")
+	}
+	if secondStart := slice6VaultStartedAt(t, ctx, run, serverID); firstStart == secondStart {
+		t.Fatal("Vault process identity did not change at trust cutover")
+	}
+	if err := waitSlice6VaultInitializedSealed(ctx, run, serverID); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := slice6VaultUnseal(ctx, serverID, unsealKey); err != nil || !bytesContainUnsealedVault(output) {
+		t.Fatal("persistent Vault final-trust unseal failed")
+	}
+	unsealKey = ""
+	if observed := slice6VaultReadIssuer(t, ctx, run, serverID, general.ID); !bytes.Equal(observed.Raw, general.Certificate.Raw) {
+		t.Fatal("general issuer changed across the controlled restart")
+	}
+	if observed := slice6VaultReadIssuer(t, ctx, run, serverID, broker.ID); !bytes.Equal(observed.Raw, broker.Certificate.Raw) {
+		t.Fatal("broker issuer changed across the controlled restart")
+	}
+	slice6VaultAssertRoleIssuer(t, ctx, run, serverID, "final-vault-server", general.ID)
+	slice6VaultAssertRoleIssuer(t, ctx, run, serverID, "final-controller-client", general.ID)
+	afterGeneralCRL := slice6VaultReadCRL(t, ctx, run, serverID, general)
+	afterBrokerCRL := slice6VaultReadCRL(t, ctx, run, serverID, broker)
+	if afterGeneralCRL.Cmp(beforeGeneralCRL) < 0 || afterBrokerCRL.Cmp(beforeBrokerCRL) < 0 {
+		t.Fatal("a complete issuer CRL number regressed across the trust restart")
+	}
+	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"final-positive", "server-ca.pem", "client.pem", "client-key.pem", true)
+	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"old-client-denied", "server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem", false)
+	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"old-server-denied", "bootstrap-server-ca.pem", "client.pem", "client-key.pem", false)
+	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"after-denials", "server-ca.pem", "client.pem", "client-key.pem", true)
+	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); err != nil {
+		t.Fatal("bootstrap Vault root token revocation failed")
+	}
+	for _, name := range []string{"root-token", "bootstrap-server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem"} {
+		if err := os.Remove(filepath.Join(configDir, name)); err != nil {
+			t.Fatal("remove exact bootstrap trust material")
+		}
+	}
+	if err := run.cleanup(ctx); err != nil {
+		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
+	}
+	t.Log("real file-backed non-dev Vault retained two issuers through a final mTLS trust restart; both temporary trust directions were rejected and exact Docker cleanup passed; managed PKI remains absent")
+}
+
+func slice6VaultFileConfig() []byte {
+	return []byte(`ui = false
+disable_mlock = true
+listener "tcp" {
+  address = "0.0.0.0:8200"
+  tls_cert_file = "/vault/config/server.pem"
+  tls_key_file = "/vault/config/server-key.pem"
+  tls_client_ca_file = "/vault/config/client-ca.pem"
+  tls_min_version = "tls13"
+  tls_require_and_verify_client_cert = true
+}
+storage "file" { path = "/vault/data" }
+`)
+}
+
+func writeSlice6VaultPrivateFile(t *testing.T, directory, name string, contents []byte) {
+	t.Helper()
+	if name == "" || filepath.Base(name) != name {
+		t.Fatal("invalid private Vault file name")
+	}
+	if err := os.WriteFile(filepath.Join(directory, name), contents, 0o600); err != nil {
+		t.Fatal("write private Vault bootstrap material")
+	}
+}
+
+type slice6VaultRoot struct {
+	ID          string
+	PEM         []byte
+	Certificate *x509.Certificate
+}
+
+func slice6VaultGenerateRoot(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string, broker bool) slice6VaultRoot {
+	t.Helper()
+	path := "pki/root/generate/internal"
+	name := "sandbox-runtime general"
+	arguments := []string{"write", "-format=json", path, "common_name=" + name, "ttl=1h", "key_type=ec", "key_bits=256"}
+	if broker {
+		path = "pki/issuers/generate/root/internal"
+		arguments = []string{"write", "-format=json", path, "common_name=sandbox-runtime broker only", "issuer_name=broker-only", "ttl=1h", "key_type=ec", "key_bits=256"}
+	}
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, arguments...)...)
+	var document struct {
+		Data struct {
+			IssuerID    string `json:"issuer_id"`
+			Certificate string `json:"certificate"`
+		} `json:"data"`
+	}
+	if err != nil || json.Unmarshal(response, &document) != nil {
+		t.Fatal("persistent Vault root generation failed")
+	}
+	certificate := slice6VaultParsePEMCertificate(t, []byte(document.Data.Certificate))
+	return slice6VaultRoot{ID: document.Data.IssuerID, PEM: []byte(document.Data.Certificate), Certificate: certificate}
+}
+
+func slice6VaultParsePEMCertificate(t *testing.T, document []byte) *x509.Certificate {
+	t.Helper()
+	block, remainder := pem.Decode(document)
+	if block == nil || block.Type != "CERTIFICATE" || len(bytes.TrimSpace(remainder)) != 0 {
+		t.Fatal("Vault returned a non-canonical PEM certificate")
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal("Vault returned an invalid certificate")
+	}
+	return certificate
+}
+
+func slice6VaultSwitchCSR(t *testing.T, client bool) ([]byte, []byte) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal("final Vault leaf key generation failed")
+	}
+	uri := "spiffe://sandbox-runtime.test/external/vault"
+	if client {
+		uri = "spiffe://sandbox-runtime.test/certificate-controller"
+	}
+	identity, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.CertificateRequest{URIs: []*url.URL{identity}}
+	if !client {
+		template.DNSNames = []string{"vault.sandbox-runtime.test"}
+	}
+	der, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	if err != nil {
+		t.Fatal("final Vault leaf CSR generation failed")
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+}
+
+func slice6VaultSignFinalLeaf(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string, root slice6VaultRoot, client bool) []byte {
+	t.Helper()
+	role := "final-vault-server"
+	csr := "final-server.csr"
+	uri := "spiffe://sandbox-runtime.test/external/vault"
+	flags := []string{"client_flag=false", "server_flag=true", "ext_key_usage=ServerAuth", "allowed_domains=vault.sandbox-runtime.test", "allow_bare_domains=true"}
+	if client {
+		role = "final-controller-client"
+		csr = "final-client.csr"
+		uri = "spiffe://sandbox-runtime.test/certificate-controller"
+		flags = []string{"client_flag=true", "server_flag=false", "ext_key_usage=ClientAuth"}
+	}
+	roleArguments := append([]string{"write", "pki/roles/" + role,
+		"issuer_ref=" + root.ID, "allowed_uri_sans=" + uri, "require_cn=false",
+		"use_csr_common_name=false", "use_csr_sans=true", "allow_subdomains=false", "allow_ip_sans=false",
+		"enforce_hostnames=true", "max_ttl=20m", "key_type=ec", "key_bits=256",
+		"key_usage=DigitalSignature", "code_signing_flag=false", "email_protection_flag=false"}, flags...)
+	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, roleArguments...)...); err != nil {
+		t.Fatal("final Vault leaf signing role creation failed")
+	}
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json", "pki/sign/"+role,
+		"csr=@/vault/config/"+csr, "ttl=10m")...)
+	var signed struct {
+		Data struct {
+			Certificate string `json:"certificate"`
+			IssuingCA   string `json:"issuing_ca"`
+		} `json:"data"`
+	}
+	if err != nil || json.Unmarshal(response, &signed) != nil {
+		t.Fatal("final Vault leaf CSR signing failed")
+	}
+	leaf := slice6VaultParsePEMCertificate(t, []byte(signed.Data.Certificate))
+	issuer := slice6VaultParsePEMCertificate(t, []byte(signed.Data.IssuingCA))
+	if !bytes.Equal(issuer.Raw, root.Certificate.Raw) || leaf.CheckSignatureFrom(issuer) != nil {
+		t.Fatal("final Vault leaf did not bind to the general issuer")
+	}
+	wantURI := "spiffe://sandbox-runtime.test/external/vault"
+	wantEKU := x509.ExtKeyUsageServerAuth
+	if client {
+		wantURI = "spiffe://sandbox-runtime.test/certificate-controller"
+		wantEKU = x509.ExtKeyUsageClientAuth
+	}
+	if len(leaf.URIs) != 1 || leaf.URIs[0].String() != wantURI || !reflect.DeepEqual(leaf.ExtKeyUsage, []x509.ExtKeyUsage{wantEKU}) ||
+		(client && len(leaf.DNSNames) != 0) || (!client && !reflect.DeepEqual(leaf.DNSNames, []string{"vault.sandbox-runtime.test"})) {
+		t.Fatal("final Vault leaf identity/EKU does not match its exact role")
+	}
+	return []byte(signed.Data.Certificate)
+}
+
+func slice6VaultReadIssuer(t *testing.T, ctx context.Context, run slice6DockerRun, serverID, issuerID string) *x509.Certificate {
+	t.Helper()
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json", "pki/issuer/"+issuerID)...)
+	var document struct {
+		Data struct {
+			Certificate string `json:"certificate"`
+		} `json:"data"`
+	}
+	if err != nil || json.Unmarshal(response, &document) != nil {
+		t.Fatal("persistent Vault issuer could not be re-read")
+	}
+	return slice6VaultParsePEMCertificate(t, []byte(document.Data.Certificate))
+}
+
+func slice6VaultAssertLeafKey(t *testing.T, leafPEM, keyPEM []byte) {
+	t.Helper()
+	leaf := slice6VaultParsePEMCertificate(t, leafPEM)
+	block, remainder := pem.Decode(keyPEM)
+	if block == nil || block.Type != "PRIVATE KEY" || len(bytes.TrimSpace(remainder)) != 0 {
+		t.Fatal("final Vault leaf private key is not canonical PKCS#8 PEM")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	private, ok := parsed.(*ecdsa.PrivateKey)
+	if err != nil || !ok || !private.PublicKey.Equal(leaf.PublicKey) {
+		t.Fatal("final Vault leaf certificate does not match its private key")
+	}
+}
+
+func slice6VaultAssertRoleIssuer(t *testing.T, ctx context.Context, run slice6DockerRun, serverID, role, issuerID string) {
+	t.Helper()
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json", "pki/roles/"+role)...)
+	var document struct {
+		Data struct {
+			IssuerRef string `json:"issuer_ref"`
+		} `json:"data"`
+	}
+	if err != nil || json.Unmarshal(response, &document) != nil || document.Data.IssuerRef != issuerID {
+		t.Fatal("Vault role issuer_ref changed or is not the fixed general issuer")
+	}
+}
+
+func slice6VaultReadCRL(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string, root slice6VaultRoot) *big.Int {
+	t.Helper()
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json", "pki/issuer/"+root.ID+"/crl")...)
+	var document struct {
+		Data struct {
+			CRL string `json:"crl"`
+		} `json:"data"`
+	}
+	if err != nil || json.Unmarshal(response, &document) != nil {
+		t.Fatal("complete Vault issuer CRL could not be read")
+	}
+	block, remainder := pem.Decode([]byte(document.Data.CRL))
+	if block == nil || block.Type != "X509 CRL" || len(bytes.TrimSpace(remainder)) != 0 {
+		t.Fatal("complete Vault issuer CRL is not canonical PEM")
+	}
+	list, err := x509.ParseRevocationList(block.Bytes)
+	if err != nil || list.Number == nil || list.CheckSignatureFrom(root.Certificate) != nil {
+		t.Fatal("complete Vault issuer CRL signature or number is invalid")
+	}
+	now := time.Now()
+	if list.ThisUpdate.After(now) || !list.NextUpdate.After(now) {
+		t.Fatal("complete Vault issuer CRL validity does not cover the trust cutover")
+	}
+	return new(big.Int).Set(list.Number)
+}
+
+func slice6VaultStartedAt(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string) string {
+	t.Helper()
+	output, err := run.docker(ctx, "inspect", "--format", "{{.State.StartedAt}}", serverID)
+	if err != nil || len(bytes.TrimSpace(output)) < 20 {
+		t.Fatal("Vault process start identity unavailable")
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func waitSlice6VaultInitializedSealed(ctx context.Context, run slice6DockerRun, serverID string) error {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline) && ctx.Err() == nil; {
+		response, _ := run.docker(ctx, slice6VaultExec(serverID, false, "status", "-format=json")...)
+		var status struct {
+			Initialized bool `json:"initialized"`
+			Sealed      bool `json:"sealed"`
+		}
+		if json.Unmarshal(response, &status) == nil && status.Initialized && status.Sealed {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	return errors.New("persistent Vault did not restart sealed and initialized under final trust")
+}
+
+func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, networkID, controllerIP, vaultIP,
+	user, directory, suffix, serverCA, clientCert, clientKey string, wantSuccess bool) {
+	t.Helper()
+	arguments := []string{"create", "--pull=never", "--name", "sr-p6-vault-" + suffix + "-" + run.id,
+		"--label", run.label(), "--network", networkID, "--ip", controllerIP, "--user", user,
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+		"--memory=96m", "--cpus=0.5", "--pids-limit=16",
+		"--mount", "type=bind,source=" + directory + ",target=/probe,readonly",
+		slice6VaultTestImage, "status", "-address=https://" + vaultIP + ":8200",
+		"-ca-cert=/probe/" + serverCA, "-client-cert=/probe/" + clientCert,
+		"-client-key=/probe/" + clientKey, "-tls-server-name=vault.sandbox-runtime.test"}
+	created, err := run.docker(ctx, arguments...)
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("final-trust controller-address probe creation failed")
+	}
+	response, err := run.docker(ctx, "start", "-a", id)
+	if wantSuccess {
+		if err != nil || !strings.Contains(string(response), "Sealed          false") {
+			t.Fatalf("final-trust controller-address probe failed: %v: %.512s", err, response)
+		}
+	} else if err == nil || strings.Contains(string(response), "Sealed          false") ||
+		!(strings.Contains(string(response), "certificate required") ||
+			strings.Contains(string(response), "connection reset by peer") ||
+			strings.Contains(string(response), "unknown authority") ||
+			strings.Contains(string(response), "unknown certificate authority") ||
+			strings.Contains(string(response), "bad certificate")) {
+		t.Fatalf("temporary-trust probe was not attributable to TLS rejection: %v: %.512s", err, response)
+	}
+	if _, err := run.docker(ctx, "rm", id); err != nil {
+		t.Fatal(fmt.Errorf("remove exact Vault probe: %w", err))
+	}
+}
