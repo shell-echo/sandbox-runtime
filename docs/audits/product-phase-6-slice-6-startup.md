@@ -2800,6 +2800,8 @@ Docker VM reports ten CPUs, leaving only 250m of nominal quota in that active
 envelope before daemon, observer and cleanup reserve. These initial limits
 therefore **do not establish host admission**; 50m/16-PID agent classes and
 the two media classes still need real startup/rotation/media/fault calibration.
+CPU quota is an upper bound, not a reservation: that 250m arithmetic is
+neither observed remaining CPU nor, by itself, a decision to enlarge the host.
 See the [candidate rationale](../phase6-resource-seccomp-candidate-arm64.md).
 The final full profile, actual 82-role/Vault service graph, 16 scenarios,
 same-run evidence and exact cleanup remain open. Phase 6 stays **5/15**.
@@ -2859,3 +2861,30 @@ targeted real Docker seccomp A/B and cross-UID credential gates, `go vet
 ./...`, tagged package vet and Product Contract lock verifier passed.
 None of these source/component gates is the missing real 82-role/16-scenario
 Slice 6 evidence. Phase 6 remains **5/15**.
+
+Checkpoint 2026-09-30 (TLS-agent candidate calibration, still component
+only): the opt-in distinct-UID Docker socket gate was re-run with the exact
+derived controller/agent seccomp applied to its high-UID TLS-agent helper at
+64 MiB/50m/16 PIDs. Docker inspection matched the normalized source policy;
+the active process had zero effective capabilities, NNP=1 and seccomp mode 2,
+with exact cgroup maxima. Authorized signing, wrong UID/GID denial, SIGKILL
+restart and graceful-loss denial passed. The two pre-shutdown samples peaked
+at 9,109,504 bytes/13 PIDs and 8,298,496 bytes/13 PIDs, with no OOM, but
+were throttled 26/31 and 21/25 CPU periods. Probe `docker exec` calls
+contributed to both samples. This is a test binary with a local test manager,
+not the production TLS-agent command or real Vault rotation/CRL; frequent
+throttling leaves the 50m tier and revocation deadline **unapproved**. The
+named agent and both volumes were checked absent; transient `--rm` clients
+were not separately inventoried. Phase 6 remains **5/15**.
+
+Sandbox's follow-up ruling retains this tier as an unapproved finite candidate
+until the minimal **real** Vault→credential controller→certificate
+controller→production TLS-agent process chain is measured. The next run must
+cover startup, signing, credential/certificate rotation, CRL publication to
+denial and active-connection close, restart/cancel cleanup, monotonic operation
+timings, CPU usage/throttling, bounded memory/PID/OOM observation and the
+existing ten-second revocation budget. A helper throttling ratio is not a
+request-latency or p99 measurement. Do not repeatedly sample the fake-manager
+helper, auto-double agent quotas, change the Docker VM without explicit user
+approval or admit the full topology when its frozen conservative host budget
+fails. Minimal-chain success remains component evidence, not Slice 6 closure.

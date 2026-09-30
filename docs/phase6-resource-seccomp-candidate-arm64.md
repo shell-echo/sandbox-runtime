@@ -84,6 +84,25 @@ separately inventoried. This exercises real Unix transport code with a **fake
 credential backend** and test binary, not Vault, production controller
 startup, renewal pressure or ten-second revocation timing.
 
+The opt-in
+[`TestDockerDistinctUIDTLSAgentSocket`](../internal/workloadtlsagent/docker_integration_test.go)
+now applies the same derived policy to its separate high-UID TLS-agent helper
+at the candidate `tls_agent` 64 MiB/50m/16-PID tier. Docker inspection matched
+the normalized source policy and active cgroup; the running process had UID
+61001, zero effective capabilities, NNP=1 and seccomp mode 2. Authorized
+signing, wrong UID/GID denial, SIGKILL/restart and graceful-loss denial still
+passed. Before each shutdown, cgroup peaks were 9,109,504 bytes/13 PIDs and
+8,298,496 bytes/13 PIDs, with zero OOM/OOM-kill. CPU throttling was 26/31
+periods (3,923,210 microseconds) and 21/25 periods (2,653,435 microseconds),
+respectively; Docker `exec` observation contributes to these samples. This
+heavy throttling is a warning, not evidence that 50m meets a production
+rotation or revocation deadline. This test uses a test binary and local test
+manager, **not** the production TLS-agent command or real Vault. The named
+agent and both volumes were checked absent; transient `--rm` clients were not
+separately inventoried. A repeat under the race-enabled host test also passed;
+its samples peaked at 11,464,704 bytes/14 PIDs and 9,871,360 bytes/12 PIDs,
+with zero OOM and CPU throttling 18/23 and 21/24 periods.
+
 ## Initial finite limits, not measured tiers
 
 The table gives memory MiB / CPU millicores / PIDs per *deployment* in each
@@ -126,14 +145,22 @@ separately approved host budget. The memory difference also is not usable
 headroom until daemon/kernel, writable-layer, Vault/PostgreSQL and recorder
 growth are observed.
 
+CPU quota is an upper limit, not a reservation or minimum allocation: this
+9,750m/10,000m comparison says only that if all listed role limits are hit
+simultaneously, the arithmetic difference is 250m. It does not measure current
+host CPU availability or by itself require a larger host. The final gate still
+needs real simultaneous-load observation and a bounded daemon/observer/cleanup
+reserve; an explicitly insufficient frozen admission budget must stop the run.
+
 The only existing media snapshots were short component runs: Chromium
 64,462,848-byte memory peak / 56 PIDs with nonzero throttling under 1 CPU;
 Desktop 117,751,808 bytes / 74 PIDs with 6 of 9 periods throttled in one
 high-UID run under 1 CPU. They do not measure concurrent Browser+Desktop
 sessions, credential churn, migration or fault pressure. The proposed 1024
 MiB/256-PID and 512 MiB/128-PID tiers provide nominal margin over those
-snapshots, not evidence that the margin is sufficient. There is no live
-sample for the 50m/16-PID classes.
+snapshots, not evidence that the margin is sufficient. The sole live
+50m/16-PID TLS-agent *helper* sample above is heavily throttled; the other
+50m/16-PID duties and production agent behavior remain unmeasured.
 
 Freeze any candidate before a real run. A limit/policy change ends and
 exactly cleans that run, then requires a fresh run ID. The final gate must
