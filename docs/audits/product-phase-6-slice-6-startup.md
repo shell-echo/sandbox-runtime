@@ -4,6 +4,22 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-30 (isolated non-dev Vault bridge component, not the
+managed controller chain): the opt-in `phase6slice6gate` Docker test now runs
+the pinned non-dev Vault image with in-memory storage and two distinct
+Vault-internal PKI root issuer UUIDs on the reviewed isolated
+`network-certificate-controller` bridge. A separate container at the reviewed
+certificate-controller address successfully reaches Vault over mutually
+authenticated TLS; a second, certificate-less container at that address is
+rejected. Temporary TLS keys are current-user-only, both containers run with
+a matching non-root UID/GID, and the bootstrap unseal key is sent via a
+pseudoterminal rather than a process argument. The ephemeral root token is
+revoked, and run-labeled containers/network plus local temporary files are
+removed. This does not launch the production certificate-controller or
+credential-controller, issue managed role certificates, prove rotation or
+revocation, retain final issuer sources, or establish the 82-principal/
+16-scenario gate. No Slice 6 manifest was emitted; Phase 6 remains **5/15**.
+
 Checkpoint 2026-09-30 (two-issuer/DNS client-CA boundary, component evidence
 only): the production certificate-controller draft now partitions the five
 egress-broker signer policies from all ordinary policies across two immutable
