@@ -1332,6 +1332,22 @@ rotation and CRLs are later observations, not profile rewrites. Image
 descriptors derive only from locked external images or audited immutable local
 candidates, never an arbitrary image present on the host.
 
+The same-host gate may use a run-owned, short-lived operator bootstrap for its
+isolated non-dev Vault, but Vault PKI remains the actual issuer and revocation
+authority. Prefer Vault-internal issuer-key generation: export only the public
+CA chain, then verify its issuer UUID, complete DER and complete CRL against
+the existing observer before freezing source mappings. The five trust bundles
+are purpose-specific inputs, not automatically five different roots; their
+leaf, EKU, direction and issuer relationships must be checked against the
+reviewed edges. A temporary first-Vault-start TLS identity is operator-only,
+bound to the pinned isolated endpoint, and never accepted by business roles as
+final issuer or peer-CRL evidence. Revoke the initial root token and destroy
+bootstrap private material after the managed paths take over. Do not create a
+parallel local signing authority, broaden trust bundles, import system roots,
+weaken TLS verification or substitute generated PEM files for real Vault
+issuer/leaf/CRL observations. A lost or rebuilt issuer invalidates that run's
+candidate rather than preserving its old digest.
+
 For this reviewed same-host candidate inventory, all 58 deployment names map
 explicitly to their executable build targets. Static Product, Gateway,
 Provider, Guest, Browser/Desktop role processes, agents, controllers, brokers

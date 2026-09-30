@@ -4,6 +4,24 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Checkpoint 2026-09-30 (candidate input composition, not admission): all 12
+distinct local-role targets were built and recorded from clean revision
+`19b1561a8f05de8ec76da810b139087789f2651d` as private arm64 OCI
+candidate inputs; the complete four-archive external image supply also passed
+its tagged source-reopening integration. A new source-bound composition entry
+point and operator CLI walk the full image/resource/CA/external/egress/
+certificate/static chain and refuse an incomplete or changed source before
+writing a canonical exclusive candidate Profile. These code changes themselves
+change the source revision: the 19b1561 image set is component evidence only
+and must be rebuilt at the eventual clean freeze revision. There is still no
+positive real-issuer Profile or launch evidence. Sandbox confirmed that a
+same-host bootstrap may be run-owned and short-lived, but the actual issuer,
+signing and revocation authority must be non-dev Vault PKI, with the five
+purpose-specific bundles checked against real chains and edges. See ADR 0055
+and [`phase6-slice6-candidate-profile.md`](../phase6-slice6-candidate-profile.md).
+No local synthetic CA set, profile file, 16-scenario receipt or release
+manifest was fabricated. The count remains **5/15**.
+
 Checkpoint 2026-09-27 (repository role source-to-image input): the reviewed
 58-deployment inventory now maps each local application role to an exact build
 target; Browser retains its separate historical signed publication and Desktop
