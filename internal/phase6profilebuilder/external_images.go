@@ -45,6 +45,8 @@ type ExternalImageSupply struct {
 	platform         string
 	bindings         map[string]ImageBinding
 	descriptorProofs map[string]string
+	sourceRoot       string
+	archives         map[string]ExternalArchive
 }
 
 func (s ExternalImageSupply) Bindings() map[string]ImageBinding {
@@ -82,6 +84,7 @@ func LoadExternalImageSupply(ctx context.Context, input ExternalImageInputs) (Ex
 	seenPaths := make(map[string]bool, len(archives))
 	bindings := make(map[string]ImageBinding, 5)
 	proofs := make(map[string]string, 5)
+	retained := make(map[string]ExternalArchive, len(archives))
 	for _, item := range archives {
 		if ctx.Err() != nil || !cleanAbsolute(item.archive.Path) ||
 			!canonicalOutsideSource(input.SourceRoot, item.archive.Path) || !privateFileParent(item.archive.Path) ||
@@ -95,13 +98,44 @@ func LoadExternalImageSupply(ctx context.Context, input ExternalImageInputs) (Ex
 		}
 		bindings[item.name] = binding
 		proofs[item.name] = proof
+		retained[item.name] = item.archive
 	}
 	bindings["action-history-postgres"] = bindings["postgres"]
 	proofs["action-history-postgres"] = proofs["postgres"]
 	if len(bindings) != 5 || len(proofs) != 5 {
 		return ExternalImageSupply{}, ErrInvalidExternalImageSupply
 	}
-	return ExternalImageSupply{platform: input.Platform, bindings: bindings, descriptorProofs: proofs}, nil
+	return ExternalImageSupply{platform: input.Platform, bindings: bindings, descriptorProofs: proofs,
+		sourceRoot: input.SourceRoot, archives: retained}, nil
+}
+
+// VerifySources reopens the original four complete OCI archives immediately
+// before a profile is frozen. A checked descriptor snapshot is not permission
+// to launch after the operator source or any compressed layer has changed.
+func (s ExternalImageSupply) VerifySources(ctx context.Context) error {
+	if ctx == nil || ctx.Err() != nil || !cleanAbsolute(s.sourceRoot) ||
+		len(s.archives) != 4 || len(s.bindings) != 5 || len(s.descriptorProofs) != 5 {
+		return ErrInvalidExternalImageSupply
+	}
+	for _, item := range []struct{ name, reference string }{
+		{"vault", slice6VaultImage}, {"postgres", slice6PostgresImage},
+		{"capacity-valkey", slice6ValkeyImage}, {"dns", slice6DNSImage},
+	} {
+		archive, found := s.archives[item.name]
+		if !found || !canonicalOutsideSource(s.sourceRoot, archive.Path) ||
+			!privateFileParent(archive.Path) || ctx.Err() != nil {
+			return ErrInvalidExternalImageSupply
+		}
+		binding, proof, err := verifyExternalArchive(archive, item.reference, s.platform)
+		if err != nil || ctx.Err() != nil || binding != s.bindings[item.name] || proof != s.descriptorProofs[item.name] {
+			return ErrInvalidExternalImageSupply
+		}
+	}
+	if s.bindings["action-history-postgres"] != s.bindings["postgres"] ||
+		s.descriptorProofs["action-history-postgres"] != s.descriptorProofs["postgres"] {
+		return ErrInvalidExternalImageSupply
+	}
+	return nil
 }
 
 // Resolve archive ancestors before comparing against the real source tree.

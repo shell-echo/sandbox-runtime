@@ -54,6 +54,9 @@ func TestFullPinnedExternalImageSupply(t *testing.T) {
 	}
 	input := externalImageInputsFromEnv(t)
 	supply, err := LoadExternalImageSupply(context.Background(), input)
+	if err == nil {
+		err = supply.VerifySources(context.Background())
+	}
 	bindings, proofs := supply.Bindings(), supply.DescriptorProofs()
 	if err != nil || len(bindings) != 5 || len(proofs) != 5 ||
 		bindings["action-history-postgres"] != bindings["postgres"] ||
@@ -65,6 +68,28 @@ func TestFullPinnedExternalImageSupply(t *testing.T) {
 		t.Fatalf("reviewed external service skeleton unavailable: %v", err)
 	}
 	t.Log("four independently verified complete OCI archives bind all five reviewed service names; no profile or deployment")
+}
+
+// This exercises the public source-reopening topology binder with real pinned
+// external archives. The other draft inputs are test-owned synthetic CA and
+// image/resource policy, so it is not a launchable profile or release gate.
+func TestFullPinnedExternalTopologyComponent(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_FULL_EXTERNAL_IMAGE_SUPPLY") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_FULL_EXTERNAL_IMAGE_SUPPLY=1 for all four private archives")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	supply, err := LoadExternalImageSupply(ctx, externalImageInputsFromEnv(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := testSlice6TrustDraft(t)
+	bound, err := BindSlice6FinalTopologyDraft(ctx, draft, supply, time.Now().UTC())
+	if err != nil || len(bound.External) != 5 || len(bound.TrustEdges) != 152 ||
+		phase6security.VerifySlice6DesiredFinalNetworks(bound.Networks) != nil {
+		t.Fatalf("source-bound final topology component unavailable: %v", err)
+	}
+	t.Log("reopened real pinned external OCI bytes under a synthetic non-launchable draft; no live service or final profile")
 }
 
 func externalImageInputsFromEnv(t *testing.T) ExternalImageInputs {

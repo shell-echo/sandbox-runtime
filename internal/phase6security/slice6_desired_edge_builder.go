@@ -1,5 +1,7 @@
 package phase6security
 
+import "sort"
+
 // BuildSlice6DesiredTrustEdges binds the reviewed exact-edge policy to already
 // constructed principal and external-service identities. It derives numeric
 // local targets from the preapproved IPAM graph, never from a running Docker
@@ -66,4 +68,51 @@ func BuildSlice6DesiredTrustEdges(principals []Principal, external []ExternalSer
 		edges = append(edges, edge)
 	}
 	return edges, nil
+}
+
+// BuildSlice6DesiredFinalTrustEdges binds the additional reviewed physical
+// external callers to the final 32-path graph. It remains desired policy, not
+// a live TLS, SQL or external-service observation.
+func BuildSlice6DesiredFinalTrustEdges(principals []Principal, external []ExternalService) ([]TrustEdge, error) {
+	base, err := BuildSlice6DesiredTrustEdges(principals, external)
+	if err != nil || VerifySlice6DesiredFinalExternalGraph(Slice6DesiredFinalExternalTransports(),
+		Slice6DesiredFinalExternalEdges()) != nil {
+		return nil, errSlice6DesiredInventory
+	}
+	byPrincipal := make(map[string]Principal, len(principals))
+	for _, principal := range principals {
+		byPrincipal[principal.Name] = principal
+	}
+	byService := make(map[string]ExternalService, len(external))
+	for _, service := range external {
+		byService[service.Name] = service
+	}
+	seen := make(map[string]bool, len(base))
+	for _, edge := range base {
+		if seen[edge.ID] {
+			return nil, errSlice6DesiredInventory
+		}
+		seen[edge.ID] = true
+	}
+	for _, spec := range Slice6DesiredFinalExternalEdges() {
+		if seen[spec.id] {
+			continue
+		}
+		from, to := byPrincipal[spec.from], byService[spec.to]
+		if from.Name == "" || from.TLS == nil || from.PrincipalDigest == "" ||
+			to.Name == "" || to.IdentityDigest != to.Digest() {
+			return nil, errSlice6DesiredInventory
+		}
+		base = append(base, TrustEdge{ID: spec.id, From: spec.from, To: spec.to,
+			Protocol: spec.protocol, Port: spec.port, Authentication: "mtls",
+			ServerAnchorID: "external-server-ca", FromURI: from.TLS.URI, ToURI: to.URI,
+			FromPrincipalDigest: from.PrincipalDigest, ExternalIdentityDigest: to.IdentityDigest,
+			TenantScope: spec.scope, MaxConnectionSeconds: spec.maxSeconds, CrossDomain: true})
+		seen[spec.id] = true
+	}
+	sort.Slice(base, func(i, j int) bool { return base[i].ID < base[j].ID })
+	if len(base) != len(slice6DesiredTrustEdges())+20 {
+		return nil, errSlice6DesiredInventory
+	}
+	return base, nil
 }

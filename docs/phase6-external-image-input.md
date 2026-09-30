@@ -51,7 +51,7 @@ toolchain, run:
 
 ```bash
 SANDBOX_RUNTIME_PHASE6_FULL_EXTERNAL_IMAGE_SUPPLY=1 \
-  go test -tags=integration -run '^(TestPinnedExternalArchiveComponent|TestFullPinnedExternalImageSupply)$' \
+  go test -tags=integration -run '^(TestPinnedExternalArchiveComponent|TestFullPinnedExternalImageSupply|TestFullPinnedExternalTopologyComponent)$' \
   -count=1 -v ./internal/phase6profilebuilder
 
 SANDBOX_RUNTIME_PHASE6_DOCKER_EXTERNAL_IMAGE_SELECTION=1 \
@@ -66,6 +66,10 @@ then removes the exact containers and anonymous volumes. It is component
 evidence only: no Vault, PostgreSQL, Valkey or CoreDNS service is started,
 and no network, TLS, least-privilege or 16-scenario Slice 6 gate passes from
 these checks. A new source/image revision must repeat the affected checks.
+The topology component test reopens the real external archives but combines
+them with test-owned synthetic CA and resource/image draft inputs. Its
+152-edge result checks builder wiring only; it is not a final profile, live
+service, or independent-process release observation.
 
 The observed private archive outer SHA-256 values are recorded in the
 [Slice 6 startup audit](audits/product-phase-6-slice-6-startup.md). A rebuilt

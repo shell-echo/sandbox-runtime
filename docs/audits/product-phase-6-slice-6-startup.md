@@ -2908,3 +2908,38 @@ The final-source `go test -race -shuffle=on -count=1 -p=2 ./...`,
 `go vet ./...`, Product Contract lock verifier and `git diff --check`
 passed. These are source tests only; no new tagged Docker or full-chain
 runtime result was produced by this checkpoint.
+
+Checkpoint 2026-09-30 (reviewed final-topology draft, no new runtime
+evidence): the builder now reopens the original four pinned external OCI
+archives before combining their five service identities with the checked CA
+draft. The new non-launchable topology layer applies the reviewed 32 isolated
+physical service paths and finite 37 external trust edges, yielding 152 total
+trust edges. It rejects changed source descriptors/layers, external identity
+substitution, mismatched platform, changed CA mounts or consumers, TLS identity
+drift and IPAM drift. The edge builder is checked against the existing final
+external profile target, while focused draft tests verify every path's dialer,
+service and ingress-edge membership. Unit test image descriptors are synthetic
+and are only policy tests; the public binder rejects them because no original
+OCI archives can be reopened. The opt-in real four-archive integration reopened
+the previously retained complete private archives: their outer SHA-256 values
+match the recorded 2026-09-29 input checkpoint, including Vault
+`197d50221e900ccaef05db51982d3a3e225035c349631419cc5119cc0b5c62b6`.
+The archive/layer and new second-pass source verifier succeeded for all four
+indexes; the separate Docker store/container-selection component gate also
+passed for all four native arm64 manifests and removed its exact stopped
+observation containers. A fresh Docker `save` of the Vault index again emitted
+only index and selected-manifest bytes (9,216 bytes), so that incomplete
+temporary export correctly failed the directed Vault archive test. The
+retained complete archive, not the incomplete export, was used for the passing
+checks. No registry download or replacement digest was necessary.
+The new opt-in public topology-binder component test also passed by reopening
+the four real archives under explicitly synthetic CA and resource/image draft
+inputs; it provides source-reopen and 152-edge wiring coverage only, not a
+deployable or final profile.
+Remaining work includes source-bound complete profile fields and bootstrap,
+the real Vault→credential controller→certificate controller→production
+TLS-agent process measurement, the full 82-role/16-scenario local gate,
+resource and revocation bounds, exact cleanup and an immutable manifest.
+The final-source resource-controlled full repository race/shuffle run, `go vet
+./...`, Product Contract lock verifier and diff check passed. This checkpoint
+cannot raise Phase 6 above **5/15**.
