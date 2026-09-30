@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 )
 
 func TestSlice6LocalRoleImageInspectBindsSourceTargetAndEntrypoint(t *testing.T) {
@@ -36,6 +38,30 @@ func TestSlice6LocalRoleImageInspectBindsSourceTargetAndEntrypoint(t *testing.T)
 	good := document(digest, "arm64", "core", revision, "65532:65532", "/usr/local/bin/phase6-role", manifestType)
 	if err := VerifySlice6LocalRoleImageInspect(principal, revision, good); err != nil {
 		t.Fatalf("reviewed local role image rejected: %v", err)
+	}
+	fdPrincipal := principal
+	fdPrincipal.Name = "certificate-controller"
+	fdValue := map[string]any{
+		"Id": digest, "Os": "linux", "Architecture": "arm64",
+		"Descriptor": map[string]any{"mediaType": manifestType, "digest": digest},
+		"Config": map[string]any{
+			"User": "65532:65532", "Entrypoint": []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand},
+			"Labels": map[string]string{
+				"io.github.shell-echo.sandbox-runtime.phase6-candidate": "local-only-non-release",
+				"io.github.shell-echo.sandbox-runtime.source-revision":  revision,
+				"io.github.shell-echo.sandbox-runtime.role-target":      "certificate-controller",
+				"io.github.shell-echo.sandbox-runtime.go-version":       "go1.26.8",
+			},
+		},
+	}
+	fdDocument, err := json.Marshal([]any{fdValue})
+	if err != nil || VerifySlice6LocalRoleImageInspect(fdPrincipal, revision, fdDocument) != nil {
+		t.Fatal("source-bound FD-stage entrypoint rejected")
+	}
+	fdValue["Config"].(map[string]any)["Cmd"] = []string{"--unsafe-override"}
+	fdWithCmd, _ := json.Marshal([]any{fdValue})
+	if VerifySlice6LocalRoleImageInspect(fdPrincipal, revision, fdWithCmd) == nil {
+		t.Fatal("FD-stage image command override admitted")
 	}
 	for name, candidate := range map[string][]byte{
 		"wrong image ID":         document("sha256:"+strings.Repeat("d", 64), "arm64", "core", revision, "65532:65532", "/usr/local/bin/phase6-role", manifestType),

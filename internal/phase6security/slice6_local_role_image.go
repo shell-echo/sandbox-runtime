@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 )
 
 // VerifySlice6LocalRoleImageInspect is a strict, reusable preflight check for
@@ -33,8 +35,13 @@ func VerifySlice6LocalRoleImageInspect(principal Principal, sourceRevision strin
 		Config struct {
 			User       string            `json:"User"`
 			Entrypoint []string          `json:"Entrypoint"`
+			Cmd        []string          `json:"Cmd"`
 			Labels     map[string]string `json:"Labels"`
 		} `json:"Config"`
+	}
+	expectedEntrypoint := []string{phase6fdloader.RolePath}
+	if _, needsLoader := phase6fdloader.SpecificationFor(target); needsLoader {
+		expectedEntrypoint = []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand}
 	}
 	if json.Unmarshal(document, &images) != nil || len(images) != 1 ||
 		images[0].ID != principal.ImageDigest ||
@@ -42,7 +49,7 @@ func VerifySlice6LocalRoleImageInspect(principal Principal, sourceRevision strin
 		images[0].Descriptor == nil || images[0].Descriptor.Digest != principal.ImageDigest ||
 		!validStoreDescriptorMediaType(principal.ImageIdentityKind, images[0].Descriptor.MediaType) ||
 		images[0].Config.User != "65532:65532" ||
-		!slices.Equal(images[0].Config.Entrypoint, []string{"/usr/local/bin/phase6-role"}) {
+		len(images[0].Config.Cmd) != 0 || !slices.Equal(images[0].Config.Entrypoint, expectedEntrypoint) {
 		return errors.New("Slice 6 local role image identity differs from profile")
 	}
 	labels := images[0].Config.Labels
