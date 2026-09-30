@@ -2888,3 +2888,23 @@ request-latency or p99 measurement. Do not repeatedly sample the fake-manager
 helper, auto-double agent quotas, change the Docker VM without explicit user
 approval or admit the full topology when its frozen conservative host budget
 fails. Minimal-chain success remains component evidence, not Slice 6 closure.
+
+Checkpoint 2026-09-30 (pre-freeze CA supply layer, no new runtime evidence):
+the Phase 6 profile builder now has a closed five-anchor input step after
+resource/seccomp binding. It reads each operator-owned CA PEM from a private
+0700 directory and a read-only regular file, rejects missing/surplus IDs,
+symlinks, invalid/expired/duplicate CA records and check/read identity drift,
+then binds the exact original-byte digest, reviewed consumer set and read-only
+mount identity. Callers can retrieve only a copy of the checked bytes; a
+mutated snapshot fails binding, and the binder reopens all five original
+operator files before freeze so changed or unavailable bytes fail. The desired
+template derives from the same
+reviewed final-anchor inventory used by profile validation. This does **not**
+attest operator identity, Vault issuer correspondence, Docker mount contents,
+leaf issuance, the production command chain or final profile completeness;
+those remain live gates. No synthetic `validProfile()` is promoted to a
+launchable profile, and Phase 6 remains **5/15**.
+The final-source `go test -race -shuffle=on -count=1 -p=2 ./...`,
+`go vet ./...`, Product Contract lock verifier and `git diff --check`
+passed. These are source tests only; no new tagged Docker or full-chain
+runtime result was produced by this checkpoint.

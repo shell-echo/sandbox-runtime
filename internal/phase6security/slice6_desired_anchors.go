@@ -33,6 +33,26 @@ func VerifySlice6DesiredTrustAnchors(profile Profile) error {
 // VerifySlice6DesiredFinalTrustAnchors also freezes the Vault and external
 // server roots needed by every direct dialer in the final 32-path graph.
 func VerifySlice6DesiredFinalTrustAnchors(profile Profile) error {
+	return verifySlice6TrustAnchors(profile, slice6FinalAnchorSpecs())
+}
+
+// Slice6DesiredFinalTrustAnchorTemplates returns the reviewed anchor and
+// consumer inventory without inventing CA bytes or bundle digests. A
+// bootstrap builder must bind each digest to checked operator-owned bytes
+// before the resulting profile can be verified or launched.
+func Slice6DesiredFinalTrustAnchorTemplates() []TrustAnchor {
+	specs := slice6FinalAnchorSpecs()
+	result := make([]TrustAnchor, 0, len(specs))
+	for _, spec := range specs {
+		result = append(result, TrustAnchor{ID: spec.id, Purpose: spec.purpose,
+			TrustDomain: "sandbox-runtime.test", ArtifactID: spec.artifactID,
+			StorageID: spec.storageID, TargetPath: spec.targetPath,
+			WriterAuthority: "operator", Consumers: append([]string(nil), spec.consumers...)})
+	}
+	return result
+}
+
+func slice6FinalAnchorSpecs() []slice6AnchorSpec {
 	expected := make([]slice6AnchorSpec, len(slice6DesiredAnchors))
 	copy(expected, slice6DesiredAnchors)
 	for i := range expected {
@@ -48,7 +68,7 @@ func VerifySlice6DesiredFinalTrustAnchors(profile Profile) error {
 		}
 		sort.Strings(expected[i].consumers)
 	}
-	return verifySlice6TrustAnchors(profile, expected)
+	return expected
 }
 
 func verifySlice6TrustAnchors(profile Profile, expected []slice6AnchorSpec) error {
