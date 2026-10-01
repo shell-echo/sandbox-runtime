@@ -311,6 +311,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv(slice6CertificateProcessEnv) == "1" && os.Getenv(slice6CredentialProcessEnv) != "1" {
 		t.Fatal("real certificate controller process requires live credential controller")
 	}
+	if os.Getenv(slice6TerminalOperatorEnv) == "1" &&
+		(os.Getenv(slice6CertificateProcessEnv) != "1" || os.Getenv(slice6QuiesceProcessEnv) != "1") {
+		t.Fatal("terminal operator requires two real quiesced controller processes")
+	}
 	rootRevoked := false
 	revokeBootstrapRoot := func() {
 		t.Helper()
@@ -345,8 +349,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
 		}
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
-			managementToken := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
-			defer clear(managementToken)
+			management := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
+			defer clear(management.Token)
 			if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 				credentialLeaf, credentialKey := slice6VaultSignControllerBootstrap(t, ctx, run,
 					serverID, configDir, composed.Profile, general,
@@ -375,6 +379,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				defer clear(certificateConfig)
 				t.Logf("same-run real-Vault certificate controller startup inputs assembled: canonical_config_bytes=%d signing_policies=%d bootstrap_chain_bytes=%d; no certificate process yet",
 					len(certificateConfig), len(composed.CertificateKeys)-1, len(certificateLeaf))
+				var terminalOperator *slice6TerminalOperatorCredential
+				if os.Getenv(slice6TerminalOperatorEnv) == "1" {
+					prepared := slice6VaultPrepareTerminalOperator(t, ctx, run, serverID, configDir, composed.Profile, general)
+					terminalOperator = &prepared
+					defer terminalOperator.clear()
+				}
 				if os.Getenv(slice6CredentialProcessEnv) == "1" {
 					// All role/PKI material and bootstrap leaves are now fixed. The
 					// controller chain must run with the orphan management token,
@@ -383,13 +393,20 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 					var onCredentialReady func(func())
 					if os.Getenv(slice6CertificateProcessEnv) == "1" {
 						onCredentialReady = func(stopCredential func()) {
+							var onTerminated func()
+							if terminalOperator != nil {
+								onTerminated = func() {
+									slice6RunTerminalOperator(t, ctx, run, composed, serverID, root,
+										management.Accessor, general, terminalOperator)
+								}
+							}
 							slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
 								controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
-								stopCredential)
+								stopCredential, onTerminated)
 						}
 					}
 					slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
-						credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, managementToken,
+						credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, management.Token,
 						credentialKey, onCredentialReady)
 				}
 			}

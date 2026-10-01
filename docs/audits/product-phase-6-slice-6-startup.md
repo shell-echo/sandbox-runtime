@@ -872,20 +872,26 @@ test therefore failed after 198.16 seconds; exact run-labeled containers,
 networks and volumes were independently observed at zero. This is component
 diagnostic evidence only, not a passed gate.
 
-The next source change adds a durable, idempotent quiesce marker to both
-exclusive controller ledgers. A private `SIGUSR1` transition stops new
-certificate/token issuance and token renewal while authenticated revocation,
-status and fixed CRL reads remain available; a subsequent termination still
-uses the existing Close path. Focused race tests prove fail-closed issuance
-after controller reconstruction from each ledger. This code has not yet been
-rebuilt into a common source-bound candidate or exercised in the real
-two-process diagnostic. The revised diagnostic also revokes and removes the
-bootstrap root token before controller PID1 startup, after installing scoped
-roles and signing both bootstrap leaves; that ordering is not yet observed
-in a real run. The terminal pair still requires the separately
-authorized short-lived one-shot operator cleanup and exact Vault readback;
-there is no accepted 16-scenario evidence, rootless-managed-operation proof,
-release manifest or push. Phase 6 remains **5/15**.
+R21 source `ee64de3b5c9de1ad5fda8004a30347dad035e394` added durable,
+idempotent quiesce markers to both exclusive ledgers. A private `SIGUSR1`
+transition stops certificate/token issuance and token renewal while
+authenticated revocation, status and fixed CRL reads remain available;
+reconstruction from each ledger stays fail-closed. It also revoked and
+removed the bootstrap Vault root token before either controller PID1
+started. All role images and Desktop were rebuilt from the same clean source.
+The 204.79-second non-dev Vault run observed managed startup and both actual
+PID1 ledger quiesce receipts, then failed closed on the unchanged terminal
+`credential-revoke` cycle. Exact labeled Docker cleanup returned to zero.
+The full Go race suite, vet and locked Contract verifier passed for R21, but
+no independent terminal operator ran.
+
+R22 source adds a one-shot private cleanup plan and restricted Vault client
+that reject unbound ledgers, unknown targets, noncanonical input,
+ambiguous accessor absence, missing CRL entries and failed remote readback in
+component tests. Management-token mint binds exact run/Profile/owner metadata
+and accessor. The gate now declares an operator-only container path, but its
+independent receipt and the complete 16-scenario Slice 6 gate remain unproved. There is
+no release manifest or push; Phase 6 remains **5/15**.
 
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two

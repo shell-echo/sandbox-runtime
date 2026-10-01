@@ -32,7 +32,7 @@ const slice6QuiesceProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_QUIESCE_PROCESS"
 // or a proof that final shutdown's cyclic revocations are ordered safely.
 func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, bootstrapKey []byte, stopCredential func()) {
+	config, bootstrapKey []byte, stopCredential func(), onTerminated func()) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -288,10 +288,16 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		stage := slice6ControllerFailureStage(result.output)
 		clear(result.output)
 		if result.err != nil {
-			t.Fatalf("certificate controller did not shut down cleanly after credential controller: stage=%s exit=%v", stage, result.err)
+			if onTerminated == nil || stage != "credential-revoke" {
+				t.Fatalf("certificate controller did not shut down cleanly after credential controller: stage=%s exit=%v", stage, result.err)
+			}
+			t.Log("quiesced certificate controller retained a sticky terminal credential-revoke failure; independent operator cleanup required")
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("certificate controller attached start did not drain")
+	}
+	if onTerminated != nil {
+		onTerminated()
 	}
 	if _, err := run.docker(ctx, "rm", id); err != nil {
 		t.Fatal("remove stopped certificate controller diagnostic")

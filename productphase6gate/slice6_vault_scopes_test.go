@@ -41,8 +41,13 @@ func slice6VaultScopedPolicyCommandDiagnostic(t *testing.T, ctx context.Context,
 	t.Log("real Vault CLI exact ACL/role write/read and scoped token capabilities passed without business material; diagnostic only")
 }
 
+type slice6ManagementCredential struct {
+	Token    []byte
+	Accessor string
+}
+
 func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice6DockerRun,
-	serverID, configDir string, profile phase6security.Profile, general, broker slice6VaultRoot) []byte {
+	serverID, configDir string, profile phase6security.Profile, general, broker slice6VaultRoot) slice6ManagementCredential {
 	t.Helper()
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil || len(plan) != 11 {
@@ -80,8 +85,8 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 	slice6VaultWriteAndReadTokenRole(t, ctx, run, serverID, certificateRole, "certificate-controller-pki")
 	managementACL := slice6VaultCredentialManagementACL(plan, certificateRole)
 	slice6VaultWriteAndReadACL(t, ctx, run, serverID, configDir, "phase6-credential-management", managementACL)
-	managementToken := slice6VaultMintManagementToken(t, ctx, run, serverID)
-	writeSlice6VaultPrivateFile(t, configDir, "scope-token-management", []byte(managementToken))
+	management := slice6VaultMintManagementToken(t, ctx, run, serverID, profile)
+	writeSlice6VaultPrivateFile(t, configDir, "scope-token-management", management.Token)
 	for _, entry := range plan {
 		slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-management",
 			"auth/token/create/"+entry.TokenRole, "update")
@@ -132,25 +137,66 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 		t.Fatal("remove exact disposable certificate test token")
 	}
 	t.Logf("real Vault KVv2 mount, 11 exact material ACLs, 12 scoped token roles, 38 issuer-pinned PKI roles, root and scoped PKI-token CSR sign/foreign CSR denial and positive/negative token capabilities passed for Profile %s; no material documents or controller process yet", profile.ProfileDigest)
-	return []byte(managementToken)
+	return management
 }
 
-func slice6VaultMintManagementToken(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string) string {
+func slice6VaultMintManagementToken(t *testing.T, ctx context.Context, run slice6DockerRun,
+	serverID string, profile phase6security.Profile) slice6ManagementCredential {
 	t.Helper()
-	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json", "auth/token/create-orphan",
-		"policies=phase6-credential-management", "ttl=15m", "renewable=false", "no_default_policy=true")...)
+	var ownerDigest string
+	for _, principal := range profile.Principals {
+		if principal.Name == "workload-credential-controller" && principal.AuthorizationPrincipal != nil {
+			ownerDigest = principal.AuthorizationPrincipal.Digest()
+		}
+	}
+	if ownerDigest == "" || profile.ProfileDigest == "" {
+		t.Fatal("credential-management owner binding missing")
+	}
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "create", "-format=json",
+		"-orphan", "-policy=phase6-credential-management", "-ttl=15m", "-renewable=false",
+		"-no-default-policy", "-metadata=run_id="+run.id,
+		"-metadata=profile_digest="+profile.ProfileDigest, "-metadata=owner_digest="+ownerDigest)...)
+	defer clear(response)
 	var issued struct {
 		Auth struct {
-			ClientToken string   `json:"client_token"`
-			Policies    []string `json:"policies"`
-			Orphan      bool     `json:"orphan"`
+			ClientToken string            `json:"client_token"`
+			Accessor    string            `json:"accessor"`
+			Policies    []string          `json:"policies"`
+			Orphan      bool              `json:"orphan"`
+			Renewable   bool              `json:"renewable"`
+			Metadata    map[string]string `json:"metadata"`
 		} `json:"auth"`
 	}
 	if err != nil || json.Unmarshal(response, &issued) != nil || issued.Auth.ClientToken == "" ||
-		!slices.Equal(issued.Auth.Policies, []string{"phase6-credential-management"}) || !issued.Auth.Orphan {
+		issued.Auth.Accessor == "" || !slices.Equal(issued.Auth.Policies, []string{"phase6-credential-management"}) ||
+		!issued.Auth.Orphan || issued.Auth.Renewable || len(issued.Auth.Metadata) != 3 ||
+		issued.Auth.Metadata["run_id"] != run.id || issued.Auth.Metadata["profile_digest"] != profile.ProfileDigest ||
+		issued.Auth.Metadata["owner_digest"] != ownerDigest {
 		t.Fatal("real Vault limited orphan management token issuance failed")
 	}
-	return issued.Auth.ClientToken
+	readback, readErr := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json",
+		"auth/token/lookup-accessor", "accessor="+issued.Auth.Accessor)...)
+	var observed struct {
+		Data struct {
+			Accessor  string            `json:"accessor"`
+			Policies  []string          `json:"policies"`
+			Meta      map[string]string `json:"meta"`
+			Type      string            `json:"type"`
+			Orphan    bool              `json:"orphan"`
+			Renewable bool              `json:"renewable"`
+			TTL       int64             `json:"ttl"`
+		} `json:"data"`
+	}
+	if readErr != nil || json.Unmarshal(readback, &observed) != nil ||
+		observed.Data.Accessor != issued.Auth.Accessor ||
+		!slices.Equal(observed.Data.Policies, []string{"phase6-credential-management"}) ||
+		observed.Data.Type != "service" || !observed.Data.Orphan || observed.Data.Renewable ||
+		observed.Data.TTL < 1 || observed.Data.TTL > 900 || len(observed.Data.Meta) != 3 ||
+		observed.Data.Meta["run_id"] != run.id || observed.Data.Meta["profile_digest"] != profile.ProfileDigest ||
+		observed.Data.Meta["owner_digest"] != ownerDigest {
+		t.Fatal("real Vault management accessor lookup did not match the prefrozen run and owner")
+	}
+	return slice6ManagementCredential{Token: []byte(issued.Auth.ClientToken), Accessor: issued.Auth.Accessor}
 }
 
 func slice6VaultWriteAndReadACL(t *testing.T, ctx context.Context, run slice6DockerRun,

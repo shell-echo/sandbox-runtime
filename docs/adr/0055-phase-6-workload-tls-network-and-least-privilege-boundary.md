@@ -2019,6 +2019,26 @@ Vault. Deleting that Vault alone proves only resource cleanup. The operator
 token then self-revokes, its mTLS key is destroyed, and any remaining
 certificate lifetime/trust boundary is reported rather than concealed.
 
+For the local Slice 6 diagnostic, the one-shot cleanup may reuse the
+already pinned Vault image as a fixed, source-digest-bound binary carrier;
+it is a finite task in the closed bootstrap/cleanup inventory, not a new
+resident Profile workload. Its sole bridge has Vault and this one task as
+members. Docker inspect must bind its non-root UID:GID, exact image and
+command digest, read-only mounts/rootfs, dropped capabilities,
+no-new-privileges, seccomp and bounded memory/CPU/PIDs/time. It has no host
+publication, daemon socket, business bridge, host network, HOME, named
+volume, credential cache or log sink. The task receives its limited token,
+independent mTLS key, prefrozen plan and two independently read ledgers only
+through bounded stdin or an equally private in-memory/FD handoff, never
+arguments, environment or stable API. The final observer inventories both
+resident and finite tasks; unknown containers fail closed. A stock CLI
+requiring privilege is not a reason to relax the boundary: a narrow HTTP
+client with a fixed Vault host and operation set is preferred. An operator
+response is accepted only after exact accessor and issuer/complete-CRL
+readback, self-revocation and private receipt; source/controller ledgers
+remain unmodified. This diagnostic does not establish production operator
+acceptance in later slices.
+
 This is the approved minimal local gate boundary, not proof that an
 independent production operator, recovery or terminal-credential supply has
 passed. Those remain named release gates. The existing diagnostic still holds
