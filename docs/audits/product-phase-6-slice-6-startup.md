@@ -3274,3 +3274,18 @@ required. The cleanup incurs cold Go rebuild cost and is not durable capacity
 proof: the full runner must remeasure both sides immediately before each
 writer-heavy stage and stop early on reserve loss. No topology was launched
 or Slice 6 evidence emitted.
+
+Checkpoint 2026-10-01 (two-issuer peer-CRL controller input, not controller
+execution): the same-run real persistent-Vault test now derives the canonical
+private peer-CRL source document from the two independently observed issuer
+UUIDs and DER digests plus the complete candidate Profile. It obtains 48
+edge/direction/principal bindings, derives and revalidates minimal role
+documents for all 16 ordinary TLS subjects that actually own an mTLS peer
+edge, and separately covers all nine PostgreSQL-purpose signer roles. A
+Unix-only material agent with no mTLS peer edge correctly gets no peer-CRL
+role document. The source file is reopened through the production strict
+decoder, then exactly removed with the run-owned temporary directory.
+The tagged real test passed in 128.64 s with exact Docker cleanup. No
+certificate-controller process consumed this document, no active connection
+was revoked, and no 16-scenario or release evidence was emitted; Phase 6
+remains **5/15**.

@@ -124,6 +124,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		gateInput.profile.ProfileDigest != verified.ProfileDigest {
 		t.Fatalf("same-run candidate failed strict Slice 6 gate input preflight: %v", err)
 	}
+	_, peerSources := slice6VaultComposePeerCRLSources(t, directory, verified, general, broker)
 	loadedImages, err := verifySlice6LoadedImageStore(ctx, gateInput)
 	if err != nil {
 		t.Fatalf("same-run candidate image store preflight failed: %v", err)
@@ -157,8 +158,8 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	if ctx.Err() != nil || candidate.VerifySources(ctx, time.Now().UTC()) == nil {
 		t.Fatal("post-freeze source mutation was not rejected")
 	}
-	t.Logf("real-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
-		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages)
+	t.Logf("real-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d peer_crl_edges=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
+		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages, len(peerSources.Edges))
 }
 
 // The five anchor names are trust purposes, not five independent CAs. The
