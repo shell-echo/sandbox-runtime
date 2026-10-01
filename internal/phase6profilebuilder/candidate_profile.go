@@ -104,10 +104,18 @@ func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, err
 		return phase6security.Profile{}, ErrInvalidCandidateProfile
 	}
 	identity := draft.Principals[0].AuthorizationPrincipal
+	principals, err := phase6security.AttachSlice6ControllerLedgerMounts(draft.Principals)
+	if err != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
+	principals, err = phase6security.AttachSlice6PrivateConfigMounts(principals)
+	if err != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	profile := phase6security.Profile{Protocol: phase6security.ProtocolID, Version: phase6security.Version,
 		Revision:          "slice6-" + draft.ImageSupply.RuntimeRevision,
 		EnvironmentDigest: identity.EnvironmentDigest, PrincipalProfileDigest: identity.ProfileDigest,
-		Principals: draft.Principals, SandboxIdentitySlots: draft.SandboxIdentitySlots,
+		Principals: principals, SandboxIdentitySlots: draft.SandboxIdentitySlots,
 		ProviderDatabases: draft.ProviderDatabases, PostgresServerAuth: draft.PostgresServerAuth,
 		Components: []phase6security.Component{component}, Networks: draft.Networks,
 		External: draft.External, TrustEdges: draft.TrustEdges, TrustAnchors: draft.TrustAnchors,

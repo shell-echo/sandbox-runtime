@@ -39,6 +39,14 @@ func BuildSlice6FinalExternalProfileTarget(draft Profile) (Profile, error) {
 	}
 	sum := sha256.Sum256(hba)
 	final.PostgresServerAuth.HBADigest = "sha256:" + hex.EncodeToString(sum[:])
+	final.Principals, err = AttachSlice6ControllerLedgerMounts(final.Principals)
+	if err != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
+	final.Principals, err = AttachSlice6PrivateConfigMounts(final.Principals)
+	if err != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
 	final.ProfileDigest = final.Digest()
 	if VerifySlice6DesiredFinalExternalProfile(final) != nil {
 		return Profile{}, errSlice6DesiredInventory

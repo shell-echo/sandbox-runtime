@@ -23,7 +23,7 @@ func preflightProductV3Postgres(cfg *config.ProductProcessConfig) (phase6securit
 	if cfg == nil || cfg.SchemaVersion != config.ProductProductionSchemaV3 || cfg.Validate() != nil {
 		return phase6security.Profile{}, errors.New("Product v3 PostgreSQL configuration is unavailable")
 	}
-	profile, err := phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "product-runtime")
 	if err != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 		return phase6security.Profile{}, errors.New("Product v3 security profile mismatch")
 	}
@@ -34,13 +34,15 @@ func preflightProductV3Postgres(cfg *config.ProductProcessConfig) (phase6securit
 		authority.Signer.AgentGID != cfg.Postgres.ClientAgentGID {
 		return phase6security.Profile{}, errors.New("Product v3 PostgreSQL target does not match profile")
 	}
-	role, err := phase6security.VerifyPeerCRLRoleFile(cfg.Postgres.PeerCRLRoleFile, profile,
+	role, err := phase6security.VerifySlice6PeerCRLRoleForDeployment(cfg.Postgres.PeerCRLRoleFile,
+		"product-runtime", phase6security.Slice6PostgresPeerCRLRoleFile, profile,
 		cfg.Postgres.PeerCRLSourceMappingDigest, cfg.Postgres.PeerCRLRoleDigest)
 	if err != nil || len(role.Edges) != 1 || role.Edges[0].EdgeID != authority.PeerEdgeID ||
 		role.Edges[0].Direction != "outbound" || role.Edges[0].PeerAnchorID != authority.ServerAnchor.ID {
 		return phase6security.Profile{}, errors.New("Product v3 PostgreSQL peer CRL role does not match profile")
 	}
-	if _, err := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, profile,
+	if _, err := phase6security.VerifySlice6PeerCRLRoleForDeployment(cfg.TLS.PeerCRLRoleFile,
+		"product-runtime", phase6security.Slice6PeerCRLRoleFile, profile,
 		cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest); err != nil {
 		return phase6security.Profile{}, errors.New("Product v3 private peer CRL role does not match profile")
 	}

@@ -252,7 +252,7 @@ func TestUnixClientControllerRoundTripAndSocketCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer controller.Close()
-	socket := filepath.Join(directory, "controller.sock")
+	socket := filepath.Join(securePKIDirectory(t), "controller.sock")
 	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()), InternalSelf: true,
 		ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()), MaxConnections: 2, ReapInterval: time.Second}, controller)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestClientRejectsWrongControllerKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer controller.Close()
-	socket := filepath.Join(directory, "controller.sock")
+	socket := filepath.Join(securePKIDirectory(t), "controller.sock")
 	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
 		InternalSelf: true, ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()),
 		MaxConnections: 1, ReapInterval: time.Second}, controller)

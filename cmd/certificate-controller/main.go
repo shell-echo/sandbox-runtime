@@ -181,13 +181,24 @@ func run() (runErr error) { //nolint:gocyclo
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
 	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
 		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest ||
-		(len(profile.PostgresClientAgents) != 0 && config.Protocol != postgresConfigProtocol) {
+		(len(profile.PostgresClientAgents) != 0 && config.Protocol != postgresConfigProtocol) ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "certificate-controller",
+			phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
 		return stageError("security-profile")
+	}
+	_, ledgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("certificate-controller")
+	if ledgerErr != nil || config.LedgerPath != ledgerPath ||
+		phase6security.VerifySlice6ControllerLedgerMounts(profile) != nil {
+		return stageError("ledger-binding")
 	}
 	var peerSources *phase6security.PeerCRLSources
 	var peerProfile *phase6security.Profile
 	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
 	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
+		if phase6security.VerifySlice6PrivateConfigPath(profile, "certificate-controller",
+			phase6security.Slice6PeerCRLSourcesFile, config.PeerCRLSourcesPath) != nil {
+			return stageError("peer-crl-sources-path")
+		}
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
 		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")

@@ -610,9 +610,25 @@ func providerContractSelection(profile config.ProviderProcessProfile) (string, s
 }
 
 func loadProviderSecurityProfile(cfg *config.ProviderProcessConfig) (phase6security.Profile, error) {
-	profile, err := phase6security.VerifyFile(cfg.Transport.SecurityProfilePath)
+	var profile phase6security.Profile
+	var err error
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		deployment, _ := providerContractSelection(cfg.Profile)
+		profile, err = phase6security.VerifySlice6ProfileForDeployment(cfg.Transport.SecurityProfilePath, deployment)
+	} else {
+		profile, err = phase6security.VerifyFile(cfg.Transport.SecurityProfilePath)
+	}
 	if err != nil || profile.ProfileDigest != cfg.Transport.SecurityProfileDigest {
 		return phase6security.Profile{}, errors.New("Provider security profile mismatch")
+	}
+	if cfg.SchemaVersion == config.ProviderProductionSchemaV3 {
+		deployment, _ := providerContractSelection(cfg.Profile)
+		if phase6security.VerifySlice6PrivateConfigPath(profile, deployment,
+			phase6security.Slice6PeerCRLRoleFile, cfg.Transport.PeerCRLRoleFile) != nil ||
+			phase6security.VerifySlice6PrivateConfigPath(profile, deployment,
+				phase6security.Slice6PostgresPeerCRLRoleFile, cfg.Postgres.PeerCRLRoleFile) != nil {
+			return phase6security.Profile{}, errors.New("Provider private peer role paths mismatch")
+		}
 	}
 	return profile, nil
 }

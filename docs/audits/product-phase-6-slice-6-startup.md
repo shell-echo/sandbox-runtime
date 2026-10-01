@@ -3384,3 +3384,59 @@ observed the sole expected Vault endpoint there, and kept the existing
 passed again in 148.56 s with exact cleanup. This establishes the two
 controller network prerequisites only; neither controller container has
 started or exercised a managed certificate exchange.
+
+Checkpoint 2026-10-01 (unfrozen post-R18 source correction): the proposed
+final Profile now assigns the certificate and credential controllers separate
+exclusive persistent ledger mounts and assigns 75 actual Profile consumers
+dedicated read-only private-config mounts with closed filenames, purposes and
+storage IDs. Startup checks bind controller ledger paths and the first set of
+static authority/Profile/peer-role paths; ordinary and PostgreSQL-purpose
+derivatives are separate, and migration jobs receive only their PostgreSQL
+role. Both controller ledger implementations now reject an unknown or
+SIGKILL-leftover temporary file at restart and before another write, rather
+than accumulating or silently deleting it. Focused package tests pass. This
+revision has not been frozen into new role images, and the R18 archives cannot
+be used as evidence for it. Sandbox clarified that named-volume `MaxBytes`
+is a logical file-set budget, not a Docker hard quota: the future live gate
+must measure files/bytes/owner/mode, read-only write denial and disk headroom.
+No new controller process, full topology, 16-scenario result, release
+manifest, push or Phase 6 count advancement is claimed; Phase 6 remains
+**5/15**.
+
+Checkpoint 2026-10-01 (restricted private-config preparation component): a
+same-run, labeled Docker named volume was prepared by a one-shot UID-0
+container using a pinned Alpine image, no network, read-only root filesystem,
+all capabilities dropped except `CAP_CHOWN`, no-new-privileges, locked
+seccomp and bounded memory/CPU/PIDs. Non-secret fixture bytes entered only
+through stdin; ownership and 0700/0600 modes were set before the prep
+container exited and was removed. A distinct non-root reader reopened the
+same volume read-only, checked exact file count/owner/mode/SHA-256 and observed
+write denial. Docker inspect confirmed the effective capability, seccomp,
+resource, network, rootfs and sole-volume settings; rerunning prep against
+the nonempty volume was rejected. The labeled volume and containers were
+precisely cleaned. An
+initial test attempt exposed the necessary `chmod`-before-`chown` ordering
+under the constrained capability set; the corrected test passed. This is a
+fixture mechanism test, not the 75-principal file distribution, actual
+Profile/peer-role semantic verification or live controller startup.
+
+Checkpoint 2026-10-01 (exact archive handoff and validation): the private
+configuration preparation input now goes through a per-deployment archive
+builder before Docker stdin. It accepts only the Profile-declared closed file
+set, requires the exact canonical Profile bytes, bounds each file and the
+aggregate logical byte count, emits deterministic 0600 regular-file tar
+members, and records file SHA-256 digests and the total byte count for subsequent
+independent reopen. The real restricted Docker prep component was rerun using
+this builder and passed; the full Go race suite and `go vet ./...` also passed
+for the preceding source checkpoint. The component still used a synthetic
+Profile and is **not** the 75-principal distribution or evidence that Docker
+enforces a named-volume disk quota. The current post-R18 source remains
+unfrozen, with no controller launch, 16-scenario receipt, release manifest or
+push. Phase 6 remains **5/15**.
+
+The same handoff API now rejects an incomplete or extra deployment set and
+returns no partial archive unless all 75 actual Profile readers have exact
+private file sets. It clears already-built private archives on later failure.
+This validation is exercised with synthetic document bytes; it does not
+claim that the 75 real authority/peer-role inputs have been generated or
+mounted in their final containers.

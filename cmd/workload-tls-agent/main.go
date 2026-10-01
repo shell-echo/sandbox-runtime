@@ -147,11 +147,17 @@ func run() error { //nolint:gocyclo
 		return stageError("security-profile-path")
 	}
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
-	if err != nil || !validateProfileBinding(profile, config) {
+	if err != nil || !validateProfileBinding(profile, config) ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, config.AgentDeployment,
+			phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
 		return stageError("security-profile-binding")
 	}
 	var peerSources *phase6security.PeerCRLSources
 	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
+		if phase6security.VerifySlice6PrivateConfigPath(profile, config.AgentDeployment,
+			phase6security.Slice6PeerCRLSourcesFile, config.PeerCRLSourcesPath) != nil {
+			return stageError("peer-crl-sources-path")
+		}
 		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
 		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
 			return stageError("peer-crl-sources")

@@ -295,11 +295,12 @@ type Network struct {
 }
 
 type Mount struct {
-	Target    string `json:"target"`
-	Kind      string `json:"kind"`
-	ReadOnly  bool   `json:"read_only"`
-	MaxBytes  int64  `json:"max_bytes"`
-	StorageID string `json:"storage_id"`
+	Target       string `json:"target"`
+	Kind         string `json:"kind"`
+	ReadOnly     bool   `json:"read_only"`
+	MaxBytes     int64  `json:"max_bytes"`
+	StorageID    string `json:"storage_id"`
+	PrivateFiles string `json:"private_files,omitempty"`
 }
 
 // TrustAnchor pins one read-only CA bundle artifact and its exact consumers.
@@ -954,7 +955,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 		}
 	} else if value.Kind == "ingress_relay" {
 		if value.AuthorizationPrincipal == nil || !value.ExternalUplink || value.DirectEgressBlocked ||
-			len(value.Networks) != 3 || len(value.Mounts) != 0 || len(value.Listeners) != 2 {
+			len(value.Networks) != 3 || len(value.Mounts) > 1 || len(value.Listeners) != 2 {
 			return ErrInvalidProfile
 		}
 	} else if value.ExternalUplink || !value.DirectEgressBlocked {
@@ -969,7 +970,8 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	seenMounts := map[string]struct{}{}
 	for _, mount := range value.Mounts {
 		if !strings.HasPrefix(mount.Target, "/") || path.Clean(mount.Target) != mount.Target || mount.Target == "/" ||
-			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger" && mount.Kind != "trust_anchor") {
+			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger" &&
+				mount.Kind != "trust_anchor" && mount.Kind != "private_config") {
 			return ErrInvalidProfile
 		}
 		if _, duplicate := seenMounts[mount.Target]; duplicate {
@@ -987,7 +989,8 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 			}
 		case "persistent_ledger":
 			_, policyAuthority := authorityBindings[value.Name]
-			if !policyAuthority || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
+			_, _, controllerLedger := Slice6ControllerLedgerMount(value.Name)
+			if !policyAuthority && controllerLedger != nil || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
 				!namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
 			}
@@ -995,6 +998,14 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 			if !mount.ReadOnly || mount.MaxBytes != 0 || !namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
 			}
+		case "private_config":
+			if !mount.ReadOnly || mount.MaxBytes != Slice6PrivateConfigMaxBytes ||
+				!namePattern.MatchString(mount.StorageID) || mount.PrivateFiles == "" {
+				return ErrInvalidProfile
+			}
+		}
+		if mount.Kind != "private_config" && mount.PrivateFiles != "" {
+			return ErrInvalidProfile
 		}
 	}
 	seenListeners := map[string]struct{}{}

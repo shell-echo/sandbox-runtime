@@ -43,7 +43,8 @@ func validObservations(profile Profile) ObservationSet {
 		}
 		for _, mount := range principal.Mounts {
 			observation.Mounts = append(observation.Mounts, ObservedMount{Target: mount.Target, Kind: mount.Kind,
-				ReadOnly: mount.ReadOnly, MaxBytes: mount.MaxBytes, StorageID: mount.StorageID})
+				ReadOnly: mount.ReadOnly, MaxBytes: mount.MaxBytes, StorageID: mount.StorageID,
+				PrivateFiles: mount.PrivateFiles})
 		}
 		containers = append(containers, observation)
 	}

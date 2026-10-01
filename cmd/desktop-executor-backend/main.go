@@ -63,8 +63,12 @@ func run(arguments []string) error {
 	if err := validateAuthority(value); err != nil {
 		return err
 	}
-	profile, err := phase6security.VerifyFile(value.SecurityProfilePath)
-	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest {
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(value.SecurityProfilePath, "desktop-executor-backend")
+	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "desktop-executor-backend",
+			phase6security.Slice6StartupAuthorityFile, arguments[1]) != nil ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "desktop-executor-backend",
+			phase6security.Slice6PeerCRLRoleFile, value.PeerCRLRoleFile) != nil {
 		return errors.New("Desktop executor security profile mismatch")
 	}
 	roleDocument, err := phase6security.VerifyPeerCRLRoleFile(value.PeerCRLRoleFile, profile,

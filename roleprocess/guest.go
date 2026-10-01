@@ -175,10 +175,21 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 			return GuestAuthority{}, errors.New("invalid Guest private key")
 		}
 		if productionV3 {
-			profile, profileErr := phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+			profile, profileErr := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "guest-runtime")
 			if profileErr != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 				clear(privateKey)
 				return GuestAuthority{}, errors.New("Guest security profile mismatch")
+			}
+			for _, input := range []struct{ filename, path string }{
+				{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
+				{phase6security.Slice6DependencyAuthorityFile, cfg.Authority.DependencyFile},
+				{phase6security.Slice6PolicyAuthorityFile, cfg.Authority.PolicyFile},
+				{phase6security.Slice6PeerCRLRoleFile, cfg.TLS.PeerCRLRoleFile},
+			} {
+				if phase6security.VerifySlice6PrivateConfigPath(profile, "guest-runtime", input.filename, input.path) != nil {
+					clear(privateKey)
+					return GuestAuthority{}, errors.New("Guest private config path mismatch")
+				}
 			}
 			peerRole, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, profile,
 				cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)

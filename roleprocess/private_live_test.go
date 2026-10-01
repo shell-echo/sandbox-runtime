@@ -378,6 +378,11 @@ func TestPrivateRoleV3GraphSelectsOnlyLiveTransport(t *testing.T) {
 			if err != nil || composition.private == nil {
 				t.Fatalf("live private graph: %v", err)
 			}
+			withUnlistedRelease := value
+			withUnlistedRelease.Authority.ReleaseProfile = path("release-profile")
+			if _, err := NewWithGraph(context.Background(), &withUnlistedRelease, graph); err == nil {
+				t.Fatal("v3 role accepted an unlisted release-profile file")
+			}
 			private, ok := composition.private.(*privateTLSServer)
 			if !ok || private.connections == nil || private.peer != peer {
 				t.Fatal("v3 private graph did not select tracked live transport")

@@ -106,9 +106,23 @@ func LoadExecutorAuthority(ctx context.Context, cfg *config.DataPlaneProcessConf
 	var err error
 	timeout := time.Duration(policy.OperationTimeoutMillis) * time.Millisecond
 	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 {
-		profile, profileErr := phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+		deployment := "browser-runtime-role"
+		if cfg.Role == config.DataPlaneDesktop {
+			deployment = "desktop-runtime-role"
+		}
+		profile, profileErr := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, deployment)
 		if profileErr != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 			return ExecutorAuthority{}, errors.New("executor security profile mismatch")
+		}
+		for _, input := range []struct{ filename, path string }{
+			{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
+			{phase6security.Slice6DependencyAuthorityFile, cfg.Authority.DependencyFile},
+			{phase6security.Slice6PolicyAuthorityFile, cfg.Authority.PolicyFile},
+			{phase6security.Slice6PeerCRLRoleFile, cfg.TLS.PeerCRLRoleFile},
+		} {
+			if phase6security.VerifySlice6PrivateConfigPath(profile, deployment, input.filename, input.path) != nil {
+				return ExecutorAuthority{}, errors.New("executor private config path mismatch")
+			}
 		}
 		peerRole, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, profile,
 			cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)

@@ -115,6 +115,9 @@ func NewWithGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig, graph
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	if cfg.SchemaVersion == config.DataPlaneProductionSchemaV3 && cfg.Authority.ReleaseProfile != "" {
+		return nil, errors.New("v3 role release profile is outside the closed private-config file set")
+	}
 	if (cfg.SchemaVersion == config.DataPlaneProductionSchemaV2 || cfg.SchemaVersion == config.DataPlaneProductionSchemaV3) &&
 		cfg.Role != config.DataPlaneGuest && graph.TLS == nil {
 		return nil, errors.New("production role transport TLS is not resolved")

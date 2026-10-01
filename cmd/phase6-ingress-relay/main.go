@@ -48,8 +48,10 @@ func run(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	profile, err := phase6security.VerifyFile(value.SecurityProfilePath)
-	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest {
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(value.SecurityProfilePath, "public-ingress-relay")
+	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "public-ingress-relay",
+			phase6security.Slice6StartupAuthorityFile, arguments[1]) != nil {
 		return errors.New("ingress relay security profile mismatch")
 	}
 	config, principal, err := profile.IngressRelayConfig()

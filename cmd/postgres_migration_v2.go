@@ -24,7 +24,7 @@ type migrationV2Authority struct {
 }
 
 func preflightMigrationV2(value migrationV2Authority) (phase6security.Profile, phase6security.Slice6PostgresAuthority, error) {
-	profile, err := phase6security.VerifyFile(value.ProfilePath)
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(value.ProfilePath, value.Owner)
 	if err != nil || profile.ProfileDigest != value.ProfileDigest {
 		return phase6security.Profile{}, phase6security.Slice6PostgresAuthority{}, errors.New("migration v2 security profile mismatch")
 	}
@@ -34,7 +34,8 @@ func preflightMigrationV2(value migrationV2Authority) (phase6security.Profile, p
 		authority.Signer.AgentUID != value.ClientAgentUID || authority.Signer.AgentGID != value.ClientAgentGID {
 		return phase6security.Profile{}, phase6security.Slice6PostgresAuthority{}, errors.New("migration v2 PostgreSQL target does not match profile")
 	}
-	role, err := phase6security.VerifyPeerCRLRoleFile(value.PeerCRLRoleFile, profile,
+	role, err := phase6security.VerifySlice6PeerCRLRoleForDeployment(value.PeerCRLRoleFile,
+		value.Owner, phase6security.Slice6PostgresPeerCRLRoleFile, profile,
 		value.PeerCRLSourceMappingDigest, value.PeerCRLRoleDigest)
 	if err != nil || len(role.Edges) != 1 || role.Edges[0].EdgeID != authority.PeerEdgeID ||
 		role.Edges[0].Direction != "outbound" || role.Edges[0].PeerAnchorID != authority.ServerAnchor.ID {

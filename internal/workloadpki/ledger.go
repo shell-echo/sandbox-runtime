@@ -43,7 +43,7 @@ type ReplayRecord struct {
 }
 
 func loadLedger(path string) (Ledger, error) {
-	if !validLedgerPath(path) {
+	if !closedLedgerDirectory(path) {
 		return Ledger{}, ErrUnavailable
 	}
 	info, err := os.Lstat(path)
@@ -79,7 +79,7 @@ func loadLedger(path string) (Ledger, error) {
 }
 
 func saveLedger(path string, ledger Ledger) error {
-	if !validLedgerPath(path) || ledger.Schema != LedgerSchema || ledger.Revision < 1 || len(ledger.Certificates) > maxLedgerRecords || len(ledger.Replays) > maxLedgerRecords {
+	if !closedLedgerDirectory(path) || ledger.Schema != LedgerSchema || ledger.Revision < 1 || len(ledger.Certificates) > maxLedgerRecords || len(ledger.Replays) > maxLedgerRecords {
 		return ErrUnavailable
 	}
 	document, err := json.Marshal(ledger)
@@ -159,6 +159,30 @@ func validLedgerPath(path string) bool {
 	directory := filepath.Dir(path)
 	info, err := os.Lstat(directory)
 	return err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm() == 0o700 && ownedByCurrentUser(info)
+}
+
+// A crashed atomic replacement can leave its temporary inode behind. Never
+// silently accumulate or remove that inode: recovery requires an operator to
+// inspect the exact run-owned volume before this controller can resume.
+func closedLedgerDirectory(path string) bool {
+	if !validLedgerPath(path) {
+		return false
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil || len(entries) > 1 {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Name() != filepath.Base(path) {
+			return false
+		}
+		info, err := os.Lstat(filepath.Join(filepath.Dir(path), entry.Name()))
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 ||
+			!ownedByCurrentUser(info) || info.Size() < 1 || info.Size() > 8<<20 {
+			return false
+		}
+	}
+	return true
 }
 
 func ownedByCurrentUser(info os.FileInfo) bool {

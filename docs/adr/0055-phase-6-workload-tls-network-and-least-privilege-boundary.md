@@ -1928,3 +1928,56 @@ to one document version at the Vault service: the client must still request
 and verify the exact binding version and returned metadata. The mapping and
 readback verifier are configuration tests only at this point; no live
 controller/agent or final Slice 6 acceptance is claimed.
+
+### Slice 6 run-owned bootstrap and private startup inputs (2026-10-01)
+
+The local gate may bootstrap only fresh, empty, exact run-owned named volumes.
+Its one-shot filesystem-preparation container may run as UID 0 solely to
+assign each private startup directory and 0600 file to its distinct reviewed
+non-root principal. It has no network, host path, existing-volume access or
+business migration duty; its root filesystem is read-only, privileges cannot
+increase, all capabilities are dropped except narrowly required `CAP_CHOWN`,
+and seccomp, resource and time limits are mandatory. It exits and is removed
+before any non-root runtime starts. The public CA directory remains a separate
+root-owned, read-only trust input. Private keys, Vault tokens, passwords and
+DSNs never enter volume metadata, arguments, environment, logs, Git or public
+evidence. Real PostgreSQL/Valkey accounts and short-lived keys may be created
+only as same-run operator bootstrap; the first business DDL comes from the
+actual migration job, and actual consumers and cross-owner denial must be
+observed before acceptance.
+
+The two live controllers have distinct exclusive `persistent_ledger` mounts
+and fixed `ledger.json` paths. The bootstrap operator creates only empty
+volumes; each controller creates and replaces its own ledger. A restart uses
+that same volume; loss, corruption, aliasing, extra writer or a shared mount
+fails closed. A declared `MaxBytes` is not proof of a filesystem hard quota:
+for these named volumes it is a logical allowed-file-set budget, not a hard
+device or per-volume quota. The 20 MiB ledger budget covers the 8 MiB current
+file and at most one 8 MiB in-flight atomic replacement plus allowance; each
+controller rejects unknown, unsafe or crash-leftover entries in its exclusive
+directory before recovery and before another write. It does not silently
+delete evidence. The 4 MiB private-config budget bounds a closed set of
+individually size-limited files. The gate must measure actual file count,
+logical bytes, ownership and modes, demonstrate read-only write denial with
+no remaining writer, and record host/daemon disk headroom. None of this claims
+kernel-level disk isolation against a compromised controller; tmpfs and
+container memory, CPU and PID enforcement remain separate actual gates.
+
+Every actual startup Profile reader has one dedicated, read-only
+`private_config` directory with a closed filename/purpose manifest and unique
+storage identity. The Profile file is per-principal and is pinned by its
+launch digest, not by a self-referential hash in the Profile. Full peer-CRL
+source documents go only to the controller and TLS-agent consumers; ordinary
+and PostgreSQL-purpose role derivatives occupy different filenames and may
+not be substituted. Browser/Desktop backends, ingress relay and Browser
+action ingress use a fixed startup-authority filename there. Gateway, Guest,
+Browser and Desktop roles use three separately named credential, dependency
+and policy authority files. Dynamic secrets still use their existing
+Unix/descriptor/in-memory boundaries; this decision does not create a
+generic secret-output volume or relax the Provider Contract. The release
+Profile is optional and may not be fabricated merely to satisfy a mount.
+
+These are source-level corrections to an unaccepted v3 candidate. The final
+78-principal topology, both controller processes, real material consumers,
+first migrations, 16 scenarios and exact cleanup remain live release gates;
+no static Profile or component test alone advances the 5/15 Phase 6 count.

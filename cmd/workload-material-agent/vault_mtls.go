@@ -23,6 +23,8 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 	profile, err := phase6security.VerifyFile(v2.SecurityProfilePath)
 	if err != nil || phase6security.VerifySlice6FinalExternalDependencyClosure(profile) != nil ||
 		profile.ProfileDigest != v2.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, config.CredentialAgentID,
+			phase6security.Slice6ProfileConfigFile, v2.SecurityProfilePath) != nil ||
 		config.Protocol != configProtocolV2 || len(config.VaultCABundle) != 0 ||
 		uint32(os.Getuid()) != config.SocketUID || uint32(os.Getgid()) != config.SocketGID {
 		return nil, secretref.ErrUnavailable

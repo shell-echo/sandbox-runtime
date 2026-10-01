@@ -72,6 +72,10 @@ func run() error {
 	if policy.ID == "" {
 		return stageError("policy")
 	}
+	if phase6security.VerifySlice6PrivateConfigPath(profile, policy.Authority.DeploymentName,
+		phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
+		return stageError("private-config")
+	}
 	if !validateProfileBinding(profile, policy, config) {
 		return stageError("profile-binding")
 	}

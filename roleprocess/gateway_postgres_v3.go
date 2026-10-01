@@ -22,9 +22,20 @@ func preflightGatewayV3Postgres(cfg *config.DataPlaneProcessConfig,
 		cfg.Role != config.DataPlaneGateway || cfg.Validate() != nil {
 		return phase6security.Profile{}, errors.New("Gateway v3 PostgreSQL configuration is unavailable")
 	}
-	profile, err := phase6security.VerifyFile(cfg.TLS.SecurityProfilePath)
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "gateway-runtime")
 	if err != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 		return phase6security.Profile{}, errors.New("Gateway v3 security profile mismatch")
+	}
+	for _, input := range []struct{ filename, path string }{
+		{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
+		{phase6security.Slice6DependencyAuthorityFile, cfg.Authority.DependencyFile},
+		{phase6security.Slice6PolicyAuthorityFile, cfg.Authority.PolicyFile},
+		{phase6security.Slice6PeerCRLRoleFile, cfg.TLS.PeerCRLRoleFile},
+		{phase6security.Slice6PostgresPeerCRLRoleFile, credential.PostgresPeerCRLRoleFile},
+	} {
+		if phase6security.VerifySlice6PrivateConfigPath(profile, "gateway-runtime", input.filename, input.path) != nil {
+			return phase6security.Profile{}, errors.New("Gateway v3 private config path mismatch")
+		}
 	}
 	authority, err := profile.ResolveSlice6FinalPostgresAuthority("gateway-runtime")
 	if err != nil || authority.BrokerOnly || authority.Dialer != "gateway-runtime" ||

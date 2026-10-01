@@ -142,8 +142,15 @@ func run() (runErr error) {
 	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
 	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
 		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest ||
-		!vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) {
+		!vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "workload-credential-controller",
+			phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
 		return stageError("security-profile")
+	}
+	_, ledgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("workload-credential-controller")
+	if ledgerErr != nil || config.LedgerPath != ledgerPath ||
+		phase6security.VerifySlice6ControllerLedgerMounts(profile) != nil {
+		return stageError("ledger-binding")
 	}
 	materialPlan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil || !validateMaterialPolicyBindings(profile, config.Policies, materialPlan) {

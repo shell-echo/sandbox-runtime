@@ -113,7 +113,7 @@ func run(arguments []string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	return serve(ctx, value)
+	return serve(ctx, value, arguments[1])
 }
 
 func decodeAuthority(document []byte) (authority, error) {
@@ -184,9 +184,13 @@ func (a authority) materials() config.RoleMaterialsConfig {
 	}, Bindings: bindings}
 }
 
-func serve(ctx context.Context, a authority) error { //nolint:cyclop
-	profile, err := phase6security.VerifyFile(a.SecurityProfilePath)
-	if err != nil || profile.ProfileDigest != a.SecurityProfileDigest {
+func serve(ctx context.Context, a authority, authorityPath string) error { //nolint:cyclop
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(a.SecurityProfilePath, "browser-action-ingress-runtime")
+	if err != nil || profile.ProfileDigest != a.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "browser-action-ingress-runtime",
+			phase6security.Slice6StartupAuthorityFile, authorityPath) != nil ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "browser-action-ingress-runtime",
+			phase6security.Slice6PeerCRLRoleFile, a.PeerCRLRoleFile) != nil {
 		return errors.New("Browser action ingress security profile mismatch")
 	}
 	role, err := phase6security.VerifyPeerCRLRoleFile(a.PeerCRLRoleFile, profile,

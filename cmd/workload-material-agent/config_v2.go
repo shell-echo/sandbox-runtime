@@ -56,6 +56,8 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	}
 	profile, err := phase6security.VerifyFile(v2.SecurityProfilePath)
 	if err != nil || profile.ProfileDigest != v2.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, config.CredentialAgentID,
+			phase6security.Slice6ProfileConfigFile, v2.SecurityProfilePath) != nil ||
 		v2.CredentialMaxTTLSeconds < v2.CredentialTTLSeconds || v2.CredentialMaxTTLSeconds > 900 {
 		return nil, secretref.ErrUnavailable
 	}

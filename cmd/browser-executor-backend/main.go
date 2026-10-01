@@ -71,8 +71,12 @@ func run(arguments []string) error {
 	if err := validateAuthority(value); err != nil {
 		return err
 	}
-	profile, err := phase6security.VerifyFile(value.SecurityProfilePath)
-	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest {
+	profile, err := phase6security.VerifySlice6ProfileForDeployment(value.SecurityProfilePath, "browser-executor-backend")
+	if err != nil || profile.ProfileDigest != value.SecurityProfileDigest ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "browser-executor-backend",
+			phase6security.Slice6StartupAuthorityFile, arguments[1]) != nil ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, "browser-executor-backend",
+			phase6security.Slice6PeerCRLRoleFile, value.PeerCRLRoleFile) != nil {
 		return errors.New("Browser executor security profile mismatch")
 	}
 	if err := validateMuxProfile(profile, value); err != nil {

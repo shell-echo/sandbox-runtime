@@ -120,11 +120,14 @@ type ContainerObservation struct {
 }
 
 type ObservedMount struct {
-	Target    string `json:"target"`
-	Kind      string `json:"kind"`
-	ReadOnly  bool   `json:"read_only"`
-	MaxBytes  int64  `json:"max_bytes"`
-	StorageID string `json:"storage_id"`
+	Target   string `json:"target"`
+	Kind     string `json:"kind"`
+	ReadOnly bool   `json:"read_only"`
+	// MaxBytes echoes the Profile's bound. For named volumes it is a logical
+	// file-set budget, not a measured Docker or filesystem hard quota.
+	MaxBytes     int64  `json:"max_bytes"`
+	StorageID    string `json:"storage_id"`
+	PrivateFiles string `json:"private_files,omitempty"`
 }
 
 func DecodeObservations(document []byte, profile Profile) (ObservationSet, error) {
@@ -451,7 +454,8 @@ func equalObservedMounts(actual []ObservedMount, expected []Mount) bool {
 	}
 	for index := range expected {
 		if actual[index] != (ObservedMount{Target: expected[index].Target, Kind: expected[index].Kind,
-			ReadOnly: expected[index].ReadOnly, MaxBytes: expected[index].MaxBytes, StorageID: expected[index].StorageID}) {
+			ReadOnly: expected[index].ReadOnly, MaxBytes: expected[index].MaxBytes, StorageID: expected[index].StorageID,
+			PrivateFiles: expected[index].PrivateFiles}) {
 			return false
 		}
 	}

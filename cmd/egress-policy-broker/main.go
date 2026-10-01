@@ -95,6 +95,12 @@ func run() error { //nolint:gocyclo
 	if profilePolicy.ID == "" {
 		return stageError("policy")
 	}
+	if phase6security.VerifySlice6PrivateConfigPath(profile, profilePolicy.Broker,
+		phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil ||
+		phase6security.VerifySlice6PrivateConfigPath(profile, profilePolicy.Broker,
+			phase6security.Slice6PeerCRLRoleFile, config.PeerCRLRoleFile) != nil {
+		return stageError("private-config")
+	}
 	principal, principalOK := deploymentPrincipal(profile, profilePolicy.Principal)
 	broker, brokerOK := deploymentPrincipal(profile, profilePolicy.Broker)
 	if !principalOK || !brokerOK || principal.AuthorizationPrincipal == nil || broker.AuthorizationPrincipal == nil ||
