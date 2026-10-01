@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
@@ -80,6 +81,26 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		registry.Validate(*agent.AuthorizationPrincipal) != nil {
 		return nil, secretref.ErrUnavailable
 	}
+	materialPlan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
+	if err != nil {
+		return nil, secretref.ErrUnavailable
+	}
+	accessBound := false
+	for _, entry := range materialPlan {
+		if entry.Agent != agent.Name {
+			continue
+		}
+		if !validV2MaterialAccessConfig(entry, config, *v2) ||
+			entry.AgentPrincipal != agent.PrincipalDigest || entry.AgentUID != agent.UID ||
+			entry.AgentGID != agent.GID {
+			return nil, secretref.ErrUnavailable
+		}
+		accessBound = true
+		break
+	}
+	if !accessBound {
+		return nil, secretref.ErrUnavailable
+	}
 	binding, boundController, boundAgent, err := profile.CredentialIssuerSocketForClient(agent.Name)
 	if err != nil || binding.SocketPath != config.CredentialControllerSocket ||
 		boundController.UID != controller.UID || boundController.GID != controller.GID ||
@@ -104,4 +125,14 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		return nil, err
 	}
 	return principalCredentialIssuer{client}, nil
+}
+
+func validV2MaterialAccessConfig(entry phase6security.Slice6MaterialAccess, config configDocument, v2 configDocumentV2) bool {
+	return entry.Agent != "" && entry.Agent == config.CredentialAgentID &&
+		entry.Role == config.Role && entry.Migration == config.Migration &&
+		entry.CredentialSocket == config.CredentialControllerSocket &&
+		entry.CredentialPolicyID == config.CredentialPolicyID &&
+		entry.BackendPolicy == v2.CredentialBackendPolicy &&
+		reflect.DeepEqual(entry.Bindings, config.Bindings) &&
+		config.VaultMount == "kv" && config.VaultReferenceAuthority == "phase6"
 }

@@ -100,7 +100,7 @@ func TestResourceSeccompSupplyBindsCompleteReviewedDuties(t *testing.T) {
 		draft.Principals[index].ImageDigest = "sha256:" + strings.Repeat("d", 64)
 	}
 	bound, budgets, err := supply.BindResourceSeccompDraft(draft)
-	if err != nil || len(bound.Principals) != 82 || len(budgets) != 6 ||
+	if err != nil || len(bound.Principals) != 78 || len(budgets) != 6 ||
 		!slices.Equal(bound.CredentialIssuerSockets, draft.CredentialIssuerSockets) {
 		t.Fatalf("complete resource/seccomp draft rejected: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestSlice6RepositoryArm64CandidateResourceSupply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reviewed arm64 candidate supply rejected: %v", err)
 	}
-	if len(supply.classes) != 23 || len(supply.assignments) != 82 || len(supply.external) != 5 {
+	if len(supply.classes) != 23 || len(supply.assignments) != 78 || len(supply.external) != 5 {
 		t.Fatal("arm64 candidate does not cover the complete duty/deployment/service inventory")
 	}
 	if supply.classes["chromium_sandbox"].PolicyDigest !=
@@ -345,9 +345,9 @@ func TestSlice6RepositoryArm64CandidateResourceSupply(t *testing.T) {
 		t.Fatalf("arm64 candidate lifecycle arithmetic rejected: %v", err)
 	}
 	if budgets[0].Envelope != "steady_without_sandboxes" ||
-		budgets[0].MemoryBytes != 7680<<20 || budgets[0].CPUMillis != 7750 || budgets[0].PIDs != 2096 ||
+		budgets[0].MemoryBytes != 7360<<20 || budgets[0].CPUMillis != 7450 || budgets[0].PIDs != 2000 ||
 		budgets[5].Envelope != "browser_desktop_active" ||
-		budgets[5].MemoryBytes != 9216<<20 || budgets[5].CPUMillis != 9750 || budgets[5].PIDs != 2480 {
+		budgets[5].MemoryBytes != 8896<<20 || budgets[5].CPUMillis != 9450 || budgets[5].PIDs != 2384 {
 		t.Fatalf("arm64 candidate capacity arithmetic drifted: %#v", budgets)
 	}
 }

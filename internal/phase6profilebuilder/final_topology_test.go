@@ -43,14 +43,14 @@ func testSlice6TrustDraft(t *testing.T) TrustDraft {
 	return bound
 }
 
-func TestSlice6FinalTopologyDraftBindsReviewed32PathsAnd37Edges(t *testing.T) {
+func TestSlice6FinalTopologyDraftBindsReviewed30PathsAnd35Edges(t *testing.T) {
 	before := testSlice6TrustDraft(t)
 	supply := testSlice6ExternalSupply()
 	bound, err := bindSlice6FinalTopologyDraft(before, supply)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bound.External) != 5 || len(bound.TrustEdges) != 152 ||
+	if len(bound.External) != 5 || len(bound.TrustEdges) != 144 ||
 		phase6security.VerifySlice6DesiredFinalNetworks(bound.Networks) != nil {
 		t.Fatalf("final desired topology incomplete: %d services, %d edges", len(bound.External), len(bound.TrustEdges))
 	}

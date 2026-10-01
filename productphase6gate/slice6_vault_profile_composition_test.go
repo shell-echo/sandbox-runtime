@@ -22,8 +22,16 @@ import (
 // This optional diagnostic freezes a complete source-bound desired Profile
 // while the same-run real Vault issuers are still live. It does not launch the
 // controller or prove that all five external services use these trust roots.
+type slice6VaultComposedInputs struct {
+	ProfilePath     string
+	Profile         phase6security.Profile
+	PeerSourcesPath string
+	PeerSources     phase6security.PeerCRLSources
+	CertificateKeys map[string]string
+}
+
 func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root, runID string,
-	general, broker slice6VaultRoot) {
+	general, broker slice6VaultRoot) slice6VaultComposedInputs {
 	t.Helper()
 	directory := filepath.Join(root, "composition")
 	if err := os.Mkdir(directory, 0o700); err != nil {
@@ -115,8 +123,11 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		t.Fatal("write run-owned candidate profile")
 	}
 	verified, err := phase6security.VerifyFile(profilePath)
-	if err != nil || verified.ProfileDigest != candidate.Profile.ProfileDigest || len(verified.Principals) != 82 {
+	if err != nil || verified.ProfileDigest != candidate.Profile.ProfileDigest || len(verified.Principals) != 78 {
 		t.Fatal("reopen real-issuer source-bound profile")
+	}
+	if err := verifySlice6ControllerKeyHandoff(verified, input.CertificateKeys); err != nil {
+		t.Fatalf("same-run sealed-FD controller key handoff failed: %v", err)
 	}
 	gateInput, err := loadSlice6GateInput(ctx, profilePath, sourceRoot, input.Images.SourceRevision,
 		input.Images.DesktopCandidatePath, input.Images.RoleCandidateDirectory)
@@ -124,7 +135,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		gateInput.profile.ProfileDigest != verified.ProfileDigest {
 		t.Fatalf("same-run candidate failed strict Slice 6 gate input preflight: %v", err)
 	}
-	_, peerSources := slice6VaultComposePeerCRLSources(t, directory, verified, general, broker)
+	peerSourcesPath, peerSources := slice6VaultComposePeerCRLSources(t, directory, verified, general, broker)
 	loadedImages, err := verifySlice6LoadedImageStore(ctx, gateInput)
 	if err != nil {
 		t.Fatalf("same-run candidate image store preflight failed: %v", err)
@@ -160,6 +171,8 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	}
 	t.Logf("real-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d peer_crl_edges=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
 		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages, len(peerSources.Edges))
+	return slice6VaultComposedInputs{ProfilePath: profilePath, Profile: verified,
+		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources, CertificateKeys: input.CertificateKeys}
 }
 
 // The five anchor names are trust purposes, not five independent CAs. The

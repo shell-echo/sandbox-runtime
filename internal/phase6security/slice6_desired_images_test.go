@@ -7,7 +7,7 @@ import (
 )
 
 func TestSlice6EveryDeploymentHasOneReviewedImageTarget(t *testing.T) {
-	if len(slice6DesiredImageTargets) != 82 || len(slice6DesiredImageTargets) != len(slice6ApprovedDeploymentKinds) {
+	if len(slice6DesiredImageTargets) != 78 || len(slice6DesiredImageTargets) != len(slice6ApprovedDeploymentKinds) {
 		t.Fatal("reviewed Slice 6 image-target inventory drifted")
 	}
 	allowed := map[string]bool{

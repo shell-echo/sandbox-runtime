@@ -18,7 +18,7 @@ func TestCredentialIssuerMountsComeFromReviewedPrincipalBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	bound, bindings, err := bindCredentialIssuerSockets(placed)
-	if err != nil || len(bindings) != 14 {
+	if err != nil || len(bindings) != 12 {
 		t.Fatalf("reviewed issuer mounts = %d, %v", len(bindings), err)
 	}
 	for _, binding := range bindings {

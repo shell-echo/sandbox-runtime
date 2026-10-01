@@ -231,9 +231,16 @@ Current verified state:
   readiness remain false. Slice 6 is underway under ADR 0055 with real Vault
   PKI, live TLS rotation/revocation, role-isolated egress enforcement and exact
   container least privilege as its frozen order. Current source-level work
-  closes a candidate inventory of 82 deployments, 32 isolated external
-  paths, 37 external edge IDs, 9 PostgreSQL-purpose signers and one ordered
-  nine-role shared-service HBA. The added migration bridge has a real Docker
+  now closes a corrected desired inventory of 78 deployments, 30 isolated
+  external paths, 35 external edge IDs, 11 actual material agents, 12
+  credential issuer sockets, 9 PostgreSQL-purpose signers and one ordered
+  nine-role shared-service HBA. Four unconsumed V2 Browser/Desktop material
+  deployments were removed without renumbering surviving identities or
+  networks. The earlier 82-deployment source-bound candidate is historical
+  component evidence and must be rebuilt before use with this topology.
+  A private 18-document exact KV ACL mapping has passed configuration tests;
+  Vault ACL installation/readback and the two-controller launch have not.
+  The added migration bridge has a real Docker
   endpoint/cleanup diagnostic, and one real PostgreSQL 16 process on nine
   isolated bridges passes all nine exact HBA source/login checks, denials,
   restart and cleanup with test-local certificates; the historical

@@ -1891,3 +1891,40 @@ before revoking the managed leaf and closes its leased PKI token on early
 startup failures. The real Vault mTLS component test exercises this transport
 switch and managed-certificate revocation, but does not establish the actual
 two-controller process order or final network confinement.
+
+### V3 material-consumer correction and exact KV authority (2026-10-01)
+
+The Browser and Desktop v3 executor commands construct live TLS signer and
+peer-CRL clients; they do not construct a material registry or read Vault KV.
+Their historical `browser-agent` and `desktop-agent` material processes, and
+the two TLS agents that existed solely to authenticate those processes to
+Vault, are therefore retired from the unaccepted Slice 6 final inventory.
+This is not a switch back to static V2 TLS material. The Browser/Desktop role,
+executor backend, and their actual v3 TLS agents remain mandatory. The closed
+desired inventory is now 78 deployments, 11 material agents and 12 credential
+issuer sockets/policies. The original 82-deployment candidate remains
+historical component work, not evidence for the revised topology. The 16
+release scenarios and their security assertions are unchanged. Surviving
+UID/GID and CIDR allocations retain their old values; the retired slots are
+reserved, not reassigned to another principal or network.
+
+For the 11 remaining agents, `slice6_material_access.go` defines 18 distinct
+run-private KV v2 documents from actual v3 runtime/migration material
+purposes. Each agent has one distinct backend policy and fixed token role;
+each policy grants only `read` on its own exact `kv/data/<agent>/<purpose>`
+paths. The finite mapping binds the owning deployment, agent principal,
+UID/GID, credential socket, policy, binding version and purpose, paths and
+configuration digest to the verified Profile. No agent receives a TLS private
+key from KV, a wildcard/prefix or directory-list permission, another owner's
+document, or PKI/token-management authority. The certificate controller's
+separate `certificate-controller-pki` policy does not gain KV access.
+
+Vault token-role validation checks the policy *name*, not its ACL contents.
+The controlled operator must install and read back the exact ACL text and
+fixed token-role restrictions before running the credential controller;
+positive own-path reads and negative cross-owner, list, write, PKI and token
+creation probes remain real-gate work. KV path ACLs do not restrict a caller
+to one document version at the Vault service: the client must still request
+and verify the exact binding version and returned metadata. The mapping and
+readback verifier are configuration tests only at this point; no live
+controller/agent or final Slice 6 acceptance is claimed.

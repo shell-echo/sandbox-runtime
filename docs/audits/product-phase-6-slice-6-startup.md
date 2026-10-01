@@ -3289,3 +3289,65 @@ The tagged real test passed in 128.64 s with exact Docker cleanup. No
 certificate-controller process consumed this document, no active connection
 was revoked, and no 16-scenario or release evidence was emitted; Phase 6
 remains **5/15**.
+
+Checkpoint 2026-10-01 (v3 consumer correction, supersedes the old candidate
+counts above but not their historical observations): the Browser/Desktop v3
+executor paths consume live `phase6tls` signers and peer-CRL guards, not the
+V2 material registries. Sandbox therefore removed only `browser-agent`,
+`desktop-agent` and their two dedicated Vault-client TLS agents from the
+unaccepted final desired inventory. The current closed target is **78**
+deployments, **36** ordinary TLS-agent bindings, **11** material agents,
+**12** credential issuer sockets, **30** final external paths and **35**
+external edge IDs. Nine PostgreSQL-purpose signers, five egress brokers,
+real Browser/Desktop runtime/executor signers and all 16 release scenarios
+remain. Existing UID/GID and role/service CIDRs are unchanged for every
+survivor: tombstones reserve the retired slots, and a snapshot comparison
+against clean old R pins all 78 surviving identities and 121 final networks.
+The resource/seccomp assignment manifest now has 78 exact deployments; its
+recomputed steady envelope is 7360 MiB, 7450 CPU millicores, 2000 PIDs and
+the Browser+Desktop active envelope is 8896 MiB, 9450 millicores, 2384 PIDs.
+The new `phase6security` and `phase6profilebuilder` package suites and
+non-Docker tagged gate tests pass. This is a revised desired candidate, not a
+measured process topology. Existing R=`142ea0c3e372178cc3cfbaf1714621cfdb21a955`
+images embed the old profile validators and cannot be combined with it;
+the C/R/E source and affected role archives must be rebuilt together.
+
+The same checkpoint adds a repository-owned private material authority
+plan for the **11** remaining actual v3 material agents. It binds owner,
+principal, UID/GID, credential socket, backend policy, fixed Vault token
+role, exact secret binding/version/purpose and **18** distinct KV v2 data
+paths. Each agent's policy text grants only `read` on its own exact paths;
+the readback verifier rejects even a formatting or extra-capability drift.
+The `certificate-controller-pki` policy remains separate. This is a static
+plan and test only: no KV mount or document has been created, no ACL/token
+role has been read back from real Vault, no actual material or managed TLS
+certificate has been issued to the two controllers, and no agent has read a
+live secret. Vault service-side ACLs cannot limit a reader to one KV version;
+the existing client still must check the requested and returned version.
+The prior 82-principal/two-issuer composition and 48-edge peer-source run is
+historical evidence for the superseded source candidate, not a 78-principal
+gate result. Phase 6 remains **5/15**, with no release evidence or push.
+
+Checkpoint 2026-10-01 (material policy enforcement and real Vault diagnostic):
+the v2 material-agent command now checks its complete material binding set,
+fixed backend policy, credential policy/socket, migration property and KV
+mount/reference authority against the verified 78-principal Profile plan.
+The credential-controller command separately requires all 11 corresponding
+policy/peer/renewability bindings before starting. This closes a source-level
+configuration substitution route; it does not attest a launched process.
+The persistent, file-backed non-dev Vault trust-switch test additionally
+installed and read back one disposable exact KVv2 read-only policy and fixed
+token role, then used Vault's privileged capability query against a scoped
+token to observe own-path `read` and cross-owner/metadata/PKI/generic-token
+`deny`. It retained the root-token revocation, two-issuer trust cutover and
+exact run-owned cleanup. The diagnostic installed no business material and
+is not one of the release scenarios. A separate opt-in test path is written
+to install/read back the full 11-agent/18-path ACL inventory, 12 fixed token
+roles and distinct certificate-controller PKI policy against a same-run
+source-bound Profile; it remains unexecuted until the corrected clean-source
+candidate images are rebuilt. Sandbox explicitly approved run-owned real
+PostgreSQL/Valkey accounts and appropriately generated short-lived keys as
+local operator bootstrap input, provided genuine one-shot migrations and
+consumer-side reads/operations follow and all secrets/resources are precisely
+destroyed. Capability inspection alone remains insufficient. Phase 6 remains
+**5/15**.

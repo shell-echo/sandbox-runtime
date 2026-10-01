@@ -101,14 +101,31 @@ func Slice6DesiredNetworks() []Network {
 		result = append(result, Network{Name: edge.name, Kind: edge.kind, Internal: internal,
 			GatewayModeIPv4: mode, Principals: participants})
 	}
+	// Preserve the old IPAM ordinals of every surviving bridge. These two
+	// networks are sorting tombstones only; they are never returned or run.
+	for _, name := range []string{"browser-agent", "desktop-agent"} {
+		result = append(result, Network{Name: "network-" + name})
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	for index := range result {
 		result[index].IPv4Subnet = "172.31." + strconv.Itoa(index+1) + ".0/24"
 	}
+	active := result[:0]
+	for _, network := range result {
+		if network.Name != "network-browser-agent" && network.Name != "network-desktop-agent" {
+			active = append(active, network)
+		}
+	}
+	result = active
 	// Material-agent signer principals were added after the first reviewed
 	// role IPAM. Keep every old subnet unchanged and reserve 80-90 for their
 	// dedicated isolated networks; service bridges start separately at 128.
+	materialSigners = append(materialSigners, "browser-agent-tls-agent", "desktop-agent-tls-agent")
+	sort.Strings(materialSigners)
 	for index, name := range materialSigners {
+		if name == "browser-agent-tls-agent" || name == "desktop-agent-tls-agent" {
+			continue
+		}
 		result = append(result, Network{Name: "network-" + name, Kind: "role_internal", Internal: true,
 			GatewayModeIPv4: "isolated", IPv4Subnet: "172.31." + strconv.Itoa(80+index) + ".0/24",
 			Principals: []string{name}})

@@ -3,6 +3,7 @@ package phase6security
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"sort"
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
@@ -120,10 +121,31 @@ var slice6AdditionalDeploymentOrdinals = map[string]int{
 // account slots are separately constrained by SandboxIdentitySlots and the
 // actual Desktop image account allowlist before launch.
 func Slice6DesiredUIDGID() map[string][2]uint32 {
-	names := slice6ApprovedDeploymentNames()
-	result := make(map[string][2]uint32, len(names))
+	// These four retired V2 material deployments retain their old ordinal
+	// slots. Removing an unused principal must not renumber any surviving
+	// production identity or grant it another process's former UID/GID.
+	retiredSigner := map[string]bool{
+		"browser-agent-tls-agent": true,
+		"desktop-agent-tls-agent": true,
+	}
+	retiredBase := map[string]bool{
+		"browser-agent": true,
+		"desktop-agent": true,
+	}
+	names := append(slice6ApprovedDeploymentNames(),
+		"browser-agent", "browser-agent-tls-agent", "desktop-agent", "desktop-agent-tls-agent")
+	sort.Strings(names)
+	result := make(map[string][2]uint32, len(slice6ApprovedDeploymentKinds))
 	baseIndex, signerIndex := 0, 0
 	for _, name := range names {
+		if retiredSigner[name] {
+			signerIndex++
+			continue
+		}
+		if retiredBase[name] {
+			baseIndex++
+			continue
+		}
 		if ordinal, added := slice6AdditionalDeploymentOrdinals[name]; added {
 			result[name] = [2]uint32{uint32(56000 + ordinal), uint32(58000 + ordinal)}
 			continue

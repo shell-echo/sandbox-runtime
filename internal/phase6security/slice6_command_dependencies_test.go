@@ -14,8 +14,8 @@ func TestSlice6CommandDependencyAuditDoesNotMistakeEdgeCoverageForCompleteTransp
 	if VerifySlice6ExecutableExternalDependencyCoverage(paths) == nil {
 		t.Fatal("incomplete command-level dependencies admitted")
 	}
-	if len(missing) != 16 {
-		t.Fatalf("missing command-level direct paths = %d, want 16", len(missing))
+	if len(missing) != 14 {
+		t.Fatalf("missing command-level direct paths = %d, want 14", len(missing))
 	}
 	if !slices.Contains(missing, Slice6DirectExternalDependency{
 		Dialer: "provider-runtime", Service: "postgres", Network: "service-provider-runtime-postgres", EdgeID: "provider-coding-postgres"}) ||
@@ -44,8 +44,8 @@ func TestSlice6CommandDependencyAuditDoesNotMistakeEdgeCoverageForCompleteTransp
 
 func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 	wanted := Slice6RequiredDirectExternalDependencies()
-	if len(wanted) != 18 {
-		t.Fatalf("direct dependency count = %d, want 18", len(wanted))
+	if len(wanted) != 16 {
+		t.Fatalf("direct dependency count = %d, want 16", len(wanted))
 	}
 	seen := make(map[string]bool, len(wanted))
 	materialAgents := 0
@@ -63,8 +63,8 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 			}
 		}
 	}
-	if materialAgents != 11 {
-		t.Fatalf("material-agent direct Vault dials = %d, want 11", materialAgents)
+	if materialAgents != 9 {
+		t.Fatalf("material-agent direct Vault dials = %d, want 9", materialAgents)
 	}
 	finalMaterialAgents := materialAgents
 	for _, dependency := range Slice6ProviderMigrationExternalDependencies() {
@@ -76,8 +76,8 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 			finalMaterialAgents++
 		}
 	}
-	if finalMaterialAgents != 13 {
-		t.Fatalf("final material-agent Vault dials = %d, want 13", finalMaterialAgents)
+	if finalMaterialAgents != 11 {
+		t.Fatalf("final material-agent Vault dials = %d, want 11", finalMaterialAgents)
 	}
 	for deployment, kind := range slice6ApprovedDeploymentKinds {
 		if kind == "material_agent" && !seen[deployment] {
@@ -89,13 +89,13 @@ func TestSlice6DirectExternalDependencyAuditHasExactOwners(t *testing.T) {
 func TestSlice6ExecutableExternalTransportPlanIsExactAndComplete(t *testing.T) {
 	plan := Slice6DesiredExecutableExternalTransports()
 	if err := VerifySlice6DesiredExecutableExternalTransports(plan); err != nil {
-		t.Fatalf("reviewed 28-path command transport plan rejected: %v", err)
+		t.Fatalf("reviewed 26-path command transport plan rejected: %v", err)
 	}
-	if len(plan) != 28 {
-		t.Fatalf("physical path count = %d, want 28", len(plan))
+	if len(plan) != 26 {
+		t.Fatalf("physical path count = %d, want 26", len(plan))
 	}
 	seenNetworks := make(map[string]bool, len(plan))
-	seenEdges := make(map[string]bool, 33)
+	seenEdges := make(map[string]bool, 31)
 	for _, path := range plan {
 		if seenNetworks[path.Network] {
 			t.Fatalf("two actual dialers share %s", path.Network)
@@ -108,8 +108,8 @@ func TestSlice6ExecutableExternalTransportPlanIsExactAndComplete(t *testing.T) {
 			seenEdges[edge] = true
 		}
 	}
-	if len(seenEdges) != 33 {
-		t.Fatalf("reviewed external logical/egress edges = %d, want 33", len(seenEdges))
+	if len(seenEdges) != 31 {
+		t.Fatalf("reviewed external logical/egress edges = %d, want 31", len(seenEdges))
 	}
 	wrong := append([]Slice6ExternalTransportPath(nil), plan...)
 	wrong[0].Network = "external-uplink"
@@ -126,10 +126,10 @@ func TestSlice6ExecutableExternalTransportPlanIsExactAndComplete(t *testing.T) {
 func TestSlice6ExecutableExternalEdgeTargetIsExactAndOwnerBound(t *testing.T) {
 	edges := Slice6DesiredExecutableExternalEdges()
 	if err := VerifySlice6DesiredExecutableExternalEdges(edges); err != nil {
-		t.Fatalf("complete 33-edge target rejected: %v", err)
+		t.Fatalf("complete 31-edge target rejected: %v", err)
 	}
-	if len(edges) != 33 {
-		t.Fatalf("external target edges = %d, want 33", len(edges))
+	if len(edges) != 31 {
+		t.Fatalf("external target edges = %d, want 31", len(edges))
 	}
 	byID := make(map[string]slice6ExternalEdge, len(edges))
 	for _, edge := range edges {

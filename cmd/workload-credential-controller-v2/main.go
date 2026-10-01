@@ -145,6 +145,10 @@ func run() (runErr error) {
 		!vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) {
 		return stageError("security-profile")
 	}
+	materialPlan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
+	if err != nil || !validateMaterialPolicyBindings(profile, config.Policies, materialPlan) {
+		return stageError("material-policy-binding")
+	}
 	registry, err := profile.PrincipalRegistry()
 	if err != nil {
 		return stageError("profile-principal-registry")

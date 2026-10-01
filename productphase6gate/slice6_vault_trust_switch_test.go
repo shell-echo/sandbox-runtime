@@ -240,6 +240,20 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		"old-server-denied", "bootstrap-server-ca.pem", "client.pem", "client-key.pem", false)
 	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
 		"after-denials", "server-ca.pem", "client.pem", "client-key.pem", true)
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_POLICY_PROBE") == "1" &&
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
+		slice6VaultScopedPolicyCommandDiagnostic(t, ctx, run, serverID, configDir)
+	}
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" &&
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") != "1" {
+		t.Fatal("real Vault access installation requires same-run source-bound profile composition")
+	}
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
+		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
+		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
+			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general.ID, broker.ID)
+		}
+	}
 	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); err != nil {
 		t.Fatal("bootstrap Vault root token revocation failed")
 	}
@@ -247,9 +261,6 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if err := os.Remove(filepath.Join(configDir, name)); err != nil {
 			t.Fatal("remove exact bootstrap trust material")
 		}
-	}
-	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
-		slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)

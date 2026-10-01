@@ -8,7 +8,7 @@ import (
 func TestSlice6DutyClassesCoverEveryReviewedDeployment(t *testing.T) {
 	deployments := Slice6DesiredDeploymentNames()
 	classes, err := Slice6DesiredDutyClasses()
-	if err != nil || len(deployments) != 82 || len(classes) != 23 || !slices.IsSorted(classes) {
+	if err != nil || len(deployments) != 78 || len(classes) != 23 || !slices.IsSorted(classes) {
 		t.Fatalf("incomplete duty inventory: deployments=%d classes=%d err=%v", len(deployments), len(classes), err)
 	}
 	for _, deployment := range deployments {

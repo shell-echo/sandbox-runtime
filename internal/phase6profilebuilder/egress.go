@@ -104,7 +104,7 @@ func BindSlice6EgressDraft(ctx context.Context, draft FinalTopologyDraft,
 
 func bindSlice6EgressDraft(draft FinalTopologyDraft, keys EgressKeySupply) (EgressDraft, error) {
 	policies, err := phase6security.BuildSlice6DesiredEgressPolicies(draft.Principals, keys.publicKeys())
-	if err != nil || len(policies) != 5 || len(draft.TrustEdges) != 152 {
+	if err != nil || len(policies) != 5 || len(draft.TrustEdges) != 144 {
 		return EgressDraft{}, ErrInvalidEgressDraft
 	}
 	bound := draft

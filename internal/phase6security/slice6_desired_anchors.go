@@ -31,7 +31,7 @@ func VerifySlice6DesiredTrustAnchors(profile Profile) error {
 }
 
 // VerifySlice6DesiredFinalTrustAnchors also freezes the Vault and external
-// server roots needed by every direct dialer in the final 32-path graph.
+// server roots needed by every direct dialer in the final 30-path graph.
 func VerifySlice6DesiredFinalTrustAnchors(profile Profile) error {
 	return verifySlice6TrustAnchors(profile, slice6FinalAnchorSpecs())
 }

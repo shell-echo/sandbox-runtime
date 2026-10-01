@@ -20,7 +20,7 @@ type ImageDraftInputs struct {
 	BrowserArchivePath     string
 }
 
-// BuildSlice6ImageDraft composes the reviewed 82-principal identity,
+// BuildSlice6ImageDraft composes the reviewed 78-principal identity,
 // placement and credential-issuer draft with verified image identities.
 // Its output remains non-launchable: resource/seccomp policy, full mounts,
 // TLS/external artifacts, trust edges and the final profile are still absent.

@@ -72,6 +72,56 @@ func validateProfileConfig(profile phase6security.Profile, config configDocument
 	return matched == 1
 }
 
+// validateMaterialPolicyBindings prevents the operator controller JSON from
+// selecting a different Vault policy than the closed v3 material inventory.
+// The certificate-controller policy is intentionally a separate PKI domain.
+func validateMaterialPolicyBindings(profile phase6security.Profile, policies []policyDocument,
+	plan []phase6security.Slice6MaterialAccess) bool {
+	if len(plan) != 11 || len(policies) != len(plan)+1 {
+		return false
+	}
+	byAgent := make(map[string]phase6security.Slice6MaterialAccess, len(plan))
+	principals := make(map[string]phase6security.Principal, len(profile.Principals))
+	for _, principal := range profile.Principals {
+		principals[principal.Name] = principal
+	}
+	for _, entry := range plan {
+		if entry.SecurityProfileDigest != profile.ProfileDigest || byAgent[entry.Agent].Agent != "" {
+			return false
+		}
+		byAgent[entry.Agent] = entry
+	}
+	seen := make(map[string]bool, len(plan))
+	certificateCount := 0
+	for _, policy := range policies {
+		if policy.BackendPolicy == "certificate-controller-pki" {
+			certificateCount++
+			continue
+		}
+		matched := false
+		for _, entry := range plan {
+			if policy.ID != entry.CredentialPolicyID {
+				continue
+			}
+			agent := principals[entry.Agent]
+			if seen[entry.Agent] || agent.AuthorizationPrincipal == nil ||
+				policy.Principal != *agent.AuthorizationPrincipal ||
+				policy.BackendPolicy != entry.BackendPolicy ||
+				policy.Purpose != secretref.PurposeWorkloadCredential ||
+				policy.ExpectedUID != entry.AgentUID || policy.ExpectedGID != entry.AgentGID ||
+				policy.Renewable == entry.Migration || policy.MaxTTLSeconds < 5 || policy.MaxTTLSeconds > 900 {
+				return false
+			}
+			seen[entry.Agent], matched = true, true
+			break
+		}
+		if !matched {
+			return false
+		}
+	}
+	return certificateCount == 1 && len(seen) == len(plan)
+}
+
 func validateCredentialListenerBindings(profile phase6security.Profile, listeners []listenerDocument) bool {
 	if len(listeners) != len(profile.CredentialIssuerSockets) {
 		return false

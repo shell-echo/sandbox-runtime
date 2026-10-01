@@ -85,7 +85,7 @@ func TestFullPinnedExternalTopologyComponent(t *testing.T) {
 	}
 	draft := testSlice6TrustDraft(t)
 	bound, err := BindSlice6FinalTopologyDraft(ctx, draft, supply, time.Now().UTC())
-	if err != nil || len(bound.External) != 5 || len(bound.TrustEdges) != 152 ||
+	if err != nil || len(bound.External) != 5 || len(bound.TrustEdges) != 144 ||
 		phase6security.VerifySlice6DesiredFinalNetworks(bound.Networks) != nil {
 		t.Fatalf("source-bound final topology component unavailable: %v", err)
 	}

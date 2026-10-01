@@ -96,7 +96,7 @@ func TestSlice6TrustAnchorSupplyBindsExactReviewedConsumers(t *testing.T) {
 	}
 	before := testSlice6ResourceDraft(t)
 	bound, err := BindSlice6TrustAnchorDraft(before, supply, now)
-	if err != nil || len(bound.TrustAnchors) != 5 || len(bound.Principals) != 82 {
+	if err != nil || len(bound.TrustAnchors) != 5 || len(bound.Principals) != 78 {
 		t.Fatalf("trust-anchor draft = %d anchors, %v", len(bound.TrustAnchors), err)
 	}
 	for _, anchor := range bound.TrustAnchors {

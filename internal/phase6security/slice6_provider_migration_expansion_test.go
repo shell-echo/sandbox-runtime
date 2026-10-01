@@ -30,7 +30,7 @@ func TestSlice6BrowserDesktopMigrationExpansionCannotBorrowCodingAuthority(t *te
 	}
 }
 
-func TestSlice6FinalExternalAuditRejectsEarlierTwentyEightPathCandidate(t *testing.T) {
+func TestSlice6FinalExternalAuditRejectsEarlierTwentySixPathCandidate(t *testing.T) {
 	intermediate := Slice6DesiredExecutableExternalTransports()
 	missing := MissingSlice6FinalExternalDependencies(intermediate)
 	if len(missing) != 4 {
@@ -38,7 +38,7 @@ func TestSlice6FinalExternalAuditRejectsEarlierTwentyEightPathCandidate(t *testi
 	}
 	profile, err := BuildSlice6ExecutableProfileTarget(validProfile())
 	if err != nil || VerifySlice6FinalExternalDependencyClosure(profile) == nil {
-		t.Fatal("intermediate 33/28 profile admitted as final dependency closure")
+		t.Fatal("intermediate 31/26 profile admitted as final dependency closure")
 	}
 	for _, dependency := range Slice6ProviderMigrationExternalDependencies() {
 		intermediate = append(intermediate, Slice6ExternalTransportPath{LogicalCaller: dependency.Dialer,
@@ -55,7 +55,7 @@ func TestSlice6FinalExternalAuditRejectsEarlierTwentyEightPathCandidate(t *testi
 	}
 }
 
-func TestSlice6FinalExternalGraphHasThirtyTwoDedicatedBridges(t *testing.T) {
+func TestSlice6FinalExternalGraphHasThirtyDedicatedBridges(t *testing.T) {
 	paths, edges := Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges()
 	if err := VerifySlice6DesiredFinalExternalGraph(paths, edges); err != nil {
 		t.Fatalf("final external target rejected: %v", err)
@@ -67,8 +67,8 @@ func TestSlice6FinalExternalGraphHasThirtyTwoDedicatedBridges(t *testing.T) {
 	if err := VerifySlice6DesiredFinalNetworks(Slice6DesiredFinalNetworks()); err != nil {
 		t.Fatalf("final merged network target rejected: %v", err)
 	}
-	if len(Slice6DesiredFinalNetworks()) != len(Slice6DesiredNetworks())+31 {
-		t.Fatal("final role networks did not merge exactly 31 new service bridges")
+	if len(Slice6DesiredFinalNetworks()) != len(Slice6DesiredNetworks())+29 {
+		t.Fatal("final role networks did not merge exactly 29 new service bridges")
 	}
 	for _, dependency := range Slice6ProviderMigrationExternalDependencies() {
 		dialer, err := Slice6DesiredFinalServiceEndpointAddress(dependency.Network, dependency.Dialer)

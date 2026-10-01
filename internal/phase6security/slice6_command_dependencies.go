@@ -19,9 +19,7 @@ type Slice6DirectExternalDependency struct {
 
 var slice6RequiredDirectExternalDependencies = []Slice6DirectExternalDependency{
 	{"browser-action-ingress-agent", "vault", "service-browser-action-ingress-agent-vault", "browser-action-ingress-agent-vault"},
-	{"browser-agent", "vault", "service-browser-agent-vault", "browser-agent-vault"},
 	{"certificate-controller", "vault", "network-certificate-controller", "certificate-vault"},
-	{"desktop-agent", "vault", "service-desktop-agent-vault", "desktop-agent-vault"},
 	{"gateway-agent", "vault", "service-gateway-agent-vault", "gateway-agent-vault"},
 	{"gateway-runtime", "postgres", "service-gateway-postgres", "gateway-postgres"},
 	{"guest-agent", "vault", "service-guest-agent-vault", "guest-agent-vault"},
@@ -65,7 +63,7 @@ func MissingSlice6DirectExternalDependencies(paths []Slice6ExternalTransportPath
 	return missing
 }
 
-// Slice6DesiredExecutableExternalTransports is the earlier approved 28-path
+// Slice6DesiredExecutableExternalTransports is the intermediate 26-path
 // candidate. It does not include the subsequently required Browser/Desktop
 // Provider migration instances; MissingSlice6FinalExternalDependencies must
 // be empty before a final profile or evidence can be admitted.
@@ -89,10 +87,10 @@ func Slice6DesiredExecutableExternalTransports() []Slice6ExternalTransportPath {
 }
 
 // VerifySlice6DesiredExecutableExternalTransports freezes that intermediate
-// 28-path candidate; it is not the final migration-complete admission gate.
+// 26-path candidate; it is not the final migration-complete admission gate.
 func VerifySlice6DesiredExecutableExternalTransports(paths []Slice6ExternalTransportPath) error {
 	wanted := Slice6DesiredExecutableExternalTransports()
-	if len(paths) != 28 || !slices.EqualFunc(paths, wanted, func(left, right Slice6ExternalTransportPath) bool {
+	if len(paths) != 26 || !slices.EqualFunc(paths, wanted, func(left, right Slice6ExternalTransportPath) bool {
 		return left.LogicalCaller == right.LogicalCaller && left.Dialer == right.Dialer &&
 			left.Service == right.Service && left.Network == right.Network && slices.Equal(left.EdgeIDs, right.EdgeIDs)
 	}) || VerifySlice6DesiredExternalTransportCoverage(Slice6DesiredExternalTransports()) != nil ||
@@ -112,7 +110,7 @@ func VerifySlice6ExecutableExternalDependencyCoverage(paths []Slice6ExternalTran
 	return nil
 }
 
-// Slice6DesiredExecutableExternalEdges is the earlier 33-edge candidate,
+// Slice6DesiredExecutableExternalEdges is the intermediate 31-edge candidate,
 // not the currently activated 17-edge profile graph or final migration graph.
 // Each extra direct dial
 // has one independently named edge; a service bridge never confers authority
@@ -135,10 +133,10 @@ func Slice6DesiredExecutableExternalEdges() []slice6ExternalEdge {
 }
 
 // VerifySlice6DesiredExecutableExternalEdges checks exact edge/path ownership
-// before the 33-edge target can replace the partial activated graph.
+// before the 31-edge target can replace the partial activated graph.
 func VerifySlice6DesiredExecutableExternalEdges(edges []slice6ExternalEdge) error {
 	wanted := Slice6DesiredExecutableExternalEdges()
-	if len(edges) != 33 || !slices.Equal(edges, wanted) ||
+	if len(edges) != 31 || !slices.Equal(edges, wanted) ||
 		VerifySlice6DesiredExecutableExternalTransports(Slice6DesiredExecutableExternalTransports()) != nil {
 		return errSlice6DesiredInventory
 	}

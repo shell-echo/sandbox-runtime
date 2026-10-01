@@ -92,7 +92,7 @@ func Slice6ProviderMigrationExternalDependencies() []Slice6DirectExternalDepende
 }
 
 // MissingSlice6FinalExternalDependencies is a fail-closed final-inventory
-// complement to the older 18-direct-path audit. A green 28/33 candidate is
+// complement to the older 18-direct-path audit. A green 26/31 candidate is
 // insufficient once the two real Provider migration jobs are required.
 func MissingSlice6FinalExternalDependencies(paths []Slice6ExternalTransportPath) []Slice6DirectExternalDependency {
 	wanted := append(Slice6RequiredDirectExternalDependencies(), Slice6ProviderMigrationExternalDependencies()...)
@@ -173,7 +173,7 @@ func VerifySlice6FinalExternalDependencyClosure(profile Profile) error {
 	return nil
 }
 
-// Slice6DesiredFinalExternalTransports extends the reviewed 28-path
+// Slice6DesiredFinalExternalTransports extends the reviewed 26-path
 // intermediate graph with the two real Provider migrations' four physical
 // dials. It remains desired configuration, never Docker observation.
 func Slice6DesiredFinalExternalTransports() []Slice6ExternalTransportPath {
@@ -187,7 +187,7 @@ func Slice6DesiredFinalExternalTransports() []Slice6ExternalTransportPath {
 	return paths
 }
 
-// Slice6DesiredFinalExternalEdges is the matching finite 37-edge target.
+// Slice6DesiredFinalExternalEdges is the matching finite 35-edge target.
 // It cannot be substituted for PKI/SQL/HBA/live connection evidence.
 func Slice6DesiredFinalExternalEdges() []slice6ExternalEdge {
 	edges := Slice6DesiredExecutableExternalEdges()
@@ -205,7 +205,7 @@ func Slice6DesiredFinalExternalEdges() []slice6ExternalEdge {
 
 func VerifySlice6DesiredFinalExternalGraph(paths []Slice6ExternalTransportPath, edges []slice6ExternalEdge) error {
 	wantedPaths, wantedEdges := Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges()
-	if len(paths) != 32 || len(edges) != 37 ||
+	if len(paths) != 30 || len(edges) != 35 ||
 		!slices.EqualFunc(paths, wantedPaths, func(left, right Slice6ExternalTransportPath) bool {
 			return left.LogicalCaller == right.LogicalCaller && left.Dialer == right.Dialer &&
 				left.Service == right.Service && left.Network == right.Network && slices.Equal(left.EdgeIDs, right.EdgeIDs)
@@ -254,7 +254,7 @@ func Slice6DesiredFinalServiceBridges() []Network {
 
 func VerifySlice6DesiredFinalServiceBridges(bridges []Network) error {
 	wanted := Slice6DesiredFinalServiceBridges()
-	if len(bridges) != 32 || !slices.EqualFunc(bridges, wanted, func(left, right Network) bool {
+	if len(bridges) != 30 || !slices.EqualFunc(bridges, wanted, func(left, right Network) bool {
 		return left.Name == right.Name && left.Kind == right.Kind && left.Internal == right.Internal &&
 			left.GatewayModeIPv4 == right.GatewayModeIPv4 && left.IPv4Subnet == right.IPv4Subnet &&
 			!left.IPv6Enabled && slices.Equal(left.Principals, right.Principals) &&
@@ -335,7 +335,7 @@ func VerifySlice6DesiredFinalNetworks(networks []Network) error {
 }
 
 // VerifySlice6DesiredFinalServiceBridgeObservation compares raw-inspect
-// output against the final 32-path plan, including migration-only bridges.
+// output against the final 30-path plan, including migration-only bridges.
 // It does not claim that the real service or migration command ran.
 func VerifySlice6DesiredFinalServiceBridgeObservation(expected Network, observed NetworkObservation,
 	dialerContainerID, serviceContainerID string) error {

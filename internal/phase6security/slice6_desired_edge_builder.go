@@ -71,7 +71,7 @@ func BuildSlice6DesiredTrustEdges(principals []Principal, external []ExternalSer
 }
 
 // BuildSlice6DesiredFinalTrustEdges binds the additional reviewed physical
-// external callers to the final 32-path graph. It remains desired policy, not
+// external callers to the final 30-path graph. It remains desired policy, not
 // a live TLS, SQL or external-service observation.
 func BuildSlice6DesiredFinalTrustEdges(principals []Principal, external []ExternalService) ([]TrustEdge, error) {
 	base, err := BuildSlice6DesiredTrustEdges(principals, external)
@@ -111,7 +111,7 @@ func BuildSlice6DesiredFinalTrustEdges(principals []Principal, external []Extern
 		seen[spec.id] = true
 	}
 	sort.Slice(base, func(i, j int) bool { return base[i].ID < base[j].ID })
-	if len(base) != len(slice6DesiredTrustEdges())+20 {
+	if len(base) != len(slice6DesiredTrustEdges())+18 {
 		return nil, errSlice6DesiredInventory
 	}
 	return base, nil

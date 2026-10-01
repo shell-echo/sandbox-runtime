@@ -84,7 +84,7 @@ func slice6Sum(values ...int64) (int64, error) {
 }
 
 // The topology estimate includes bounded test-input/time growth for three
-// PostgreSQL databases including WAL/temp, Vault, Valkey, recording, all 82
+// PostgreSQL databases including WAL/temp, Vault, Valkey, recording, all 78
 // static role logs plus external/dynamic logs, and writable layers. Only
 // tmpfs/log rotation are hard limits; DB/volume figures require active
 // monitoring and early stop.

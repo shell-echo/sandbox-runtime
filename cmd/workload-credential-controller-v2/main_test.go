@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -80,6 +82,50 @@ func TestCredentialControllerManagedBindingRejectsPolicyKeyAndPeerDrift(t *testi
 	if validateProfileConfig(profile, valid(), ed25519.PublicKey(bytes.Repeat([]byte{3}, 32)), controllerPublic) ||
 		validateProfileConfig(profile, valid(), requestPublic, ed25519.PublicKey(bytes.Repeat([]byte{4}, 32))) {
 		t.Fatal("request or controller signing key substitution accepted")
+	}
+}
+
+func TestCredentialControllerBindsAllMaterialPoliciesToPlan(t *testing.T) {
+	profile := phase6security.Profile{ProfileDigest: "sha256:" + strings.Repeat("a", 64)}
+	plan := make([]phase6security.Slice6MaterialAccess, 0, 11)
+	policies := []policyDocument{{ID: "credential-certificate-controller", BackendPolicy: "certificate-controller-pki"}}
+	for index := range 11 {
+		name := fmt.Sprintf("agent-%d", index)
+		principal := securityprincipal.Principal{Name: name}
+		profile.Principals = append(profile.Principals, phase6security.Principal{Name: name,
+			UID: uint32(20000 + index), GID: uint32(30000 + index), AuthorizationPrincipal: &principal})
+		migration := index == 10
+		entry := phase6security.Slice6MaterialAccess{SecurityProfileDigest: profile.ProfileDigest,
+			Agent: name, AgentUID: uint32(20000 + index), AgentGID: uint32(30000 + index),
+			Migration: migration, CredentialPolicyID: "credential-" + name, BackendPolicy: name + "-kv"}
+		plan = append(plan, entry)
+		policies = append(policies, policyDocument{ID: entry.CredentialPolicyID, Principal: principal,
+			Purpose: secretref.PurposeWorkloadCredential, BackendPolicy: entry.BackendPolicy,
+			MaxTTLSeconds: 300, Renewable: !migration, ExpectedUID: entry.AgentUID, ExpectedGID: entry.AgentGID})
+	}
+	if !validateMaterialPolicyBindings(profile, policies, plan) {
+		t.Fatal("exact closed material policy plan rejected")
+	}
+	for name, mutate := range map[string]func([]policyDocument){
+		"cross owner backend":   func(values []policyDocument) { values[1].BackendPolicy = values[2].BackendPolicy },
+		"policy alias":          func(values []policyDocument) { values[1].ID = values[2].ID },
+		"wrong purpose":         func(values []policyDocument) { values[1].Purpose = secretref.PurposePostgresRuntimeDSN },
+		"migration renewable":   func(values []policyDocument) { values[11].Renewable = true },
+		"runtime nonrenewable":  func(values []policyDocument) { values[1].Renewable = false },
+		"wrong UID":             func(values []policyDocument) { values[1].ExpectedUID++ },
+		"excessive TTL":         func(values []policyDocument) { values[1].MaxTTLSeconds = 901 },
+		"cross owner principal": func(values []policyDocument) { values[1].Principal = values[2].Principal },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := append([]policyDocument(nil), policies...)
+			mutate(changed)
+			if validateMaterialPolicyBindings(profile, changed, plan) {
+				t.Fatal("material controller policy drift admitted")
+			}
+		})
+	}
+	if validateMaterialPolicyBindings(profile, policies[:len(policies)-1], plan) {
+		t.Fatal("missing policy admitted")
 	}
 }
 

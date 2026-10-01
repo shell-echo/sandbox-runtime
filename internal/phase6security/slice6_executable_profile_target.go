@@ -8,7 +8,7 @@ import (
 )
 
 // BuildSlice6ExecutableProfileTarget upgrades a reviewed 17/12 draft to the
-// earlier 33/28 command-level candidate. It is a profile construction step,
+// intermediate 31/26 command-level candidate. It is a profile construction step,
 // not launch authorization or observed evidence. The caller must still bind
 // the additional two Provider migrations, real image, trust, credential,
 // resource and issuer inputs, then run all named live gates before acceptance.
@@ -160,10 +160,10 @@ func buildSlice6ExternalProfileTarget(draft Profile, networks []Network, paths [
 // admission and cannot pass the final migration-complete dependency gate.
 func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
 	return verifySlice6ExternalProfile(profile, VerifySlice6DesiredCompleteNetworks,
-		Slice6DesiredExecutableExternalTransports(), Slice6DesiredExecutableExternalEdges(), 16)
+		Slice6DesiredExecutableExternalTransports(), Slice6DesiredExecutableExternalEdges(), 14)
 }
 
-// VerifySlice6DesiredFinalExternalProfile freezes the complete 32-path/37-edge
+// VerifySlice6DesiredFinalExternalProfile freezes the complete 30-path/35-edge
 // external candidate. It deliberately does not assert live SQL, PKI or HBA loading.
 func VerifySlice6DesiredFinalExternalProfile(profile Profile) error {
 	if VerifySlice6FinalExternalDependencyClosure(profile) != nil ||
@@ -177,7 +177,7 @@ func VerifySlice6DesiredFinalExternalProfile(profile Profile) error {
 		return errSlice6DesiredInventory
 	}
 	return verifySlice6ExternalProfile(profile, VerifySlice6DesiredFinalNetworks,
-		Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges(), 20)
+		Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges(), 18)
 }
 
 func verifySlice6ExternalProfile(profile Profile, verifyNetworks func([]Network) error,

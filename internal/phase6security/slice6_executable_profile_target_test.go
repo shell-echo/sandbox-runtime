@@ -21,8 +21,8 @@ func TestSlice6ExecutableProfileTargetBindsAllPhysicalDependencies(t *testing.T)
 	if err := VerifySlice6DesiredExecutableExternalProfile(target); err != nil {
 		t.Fatalf("complete target rejected: %v", err)
 	}
-	if len(target.Networks) != len(Slice6DesiredNetworks())+27 ||
-		len(target.TrustEdges) != len(slice6DesiredTrustEdges())+16 {
+	if len(target.Networks) != len(Slice6DesiredNetworks())+25 ||
+		len(target.TrustEdges) != len(slice6DesiredTrustEdges())+14 {
 		t.Fatalf("incomplete target: %d networks, %d trust edges", len(target.Networks), len(target.TrustEdges))
 	}
 	if len(draft.Networks) == len(target.Networks) || len(draft.TrustEdges) == len(target.TrustEdges) {
@@ -35,15 +35,15 @@ func TestSlice6ExecutableProfileTargetBindsAllPhysicalDependencies(t *testing.T)
 		{"remove bridge", func(p *Profile) { p.Networks = p.Networks[1:] }},
 		{"share Vault material bridge", func(p *Profile) {
 			for index := range p.Networks {
-				if p.Networks[index].Name == "service-browser-agent-vault" {
-					p.Networks[index].Principals = []string{"browser-agent", "desktop-agent"}
+				if p.Networks[index].Name == "service-browser-action-ingress-agent-vault" {
+					p.Networks[index].Principals = []string{"browser-action-ingress-agent", "gateway-agent"}
 				}
 			}
 		}},
 		{"swap agent Vault edge", func(p *Profile) {
 			for index := range p.TrustEdges {
-				if p.TrustEdges[index].ID == "browser-agent-vault" {
-					p.TrustEdges[index].From = "desktop-agent"
+				if p.TrustEdges[index].ID == "browser-action-ingress-agent-vault" {
+					p.TrustEdges[index].From = "gateway-agent"
 				}
 			}
 		}},
@@ -103,10 +103,10 @@ func TestSlice6FinalExternalProfileTargetClosesMigrationDependencies(t *testing.
 	if validSlice6PostgresIngressProof(final.PostgresServerAuth, proof) {
 		t.Fatal("wrong shared HBA source evidence accepted")
 	}
-	if got, want := len(final.TrustEdges), len(slice6DesiredTrustEdges())+20; got != want {
+	if got, want := len(final.TrustEdges), len(slice6DesiredTrustEdges())+18; got != want {
 		t.Fatalf("trust edges = %d, want %d", got, want)
 	}
-	if got, want := len(final.Networks), len(Slice6DesiredNetworks())+31; got != want {
+	if got, want := len(final.Networks), len(Slice6DesiredNetworks())+29; got != want {
 		t.Fatalf("networks = %d, want %d", got, want)
 	}
 	if len(draft.Networks) == len(final.Networks) || len(draft.TrustEdges) == len(final.TrustEdges) {

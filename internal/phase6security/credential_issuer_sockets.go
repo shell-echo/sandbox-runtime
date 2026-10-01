@@ -17,7 +17,7 @@ type CredentialIssuerSocketBinding struct {
 }
 
 var approvedCredentialIssuerClients = []string{
-	"browser-action-ingress-agent", "browser-agent", "certificate-controller", "desktop-agent",
+	"browser-action-ingress-agent", "certificate-controller",
 	"gateway-agent", "guest-agent", "product-migration-agent", "product-runtime-agent",
 	"provider-browser-migration-agent", "provider-browser-runtime-agent",
 	"provider-desktop-migration-agent", "provider-desktop-runtime-agent",

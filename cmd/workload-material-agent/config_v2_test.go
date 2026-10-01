@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredential"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredentialv2"
 )
@@ -42,6 +44,44 @@ func TestV2ConfigIsCanonicalAndDoesNotAliasV1(t *testing.T) {
 		if decodeCanonicalConfig(invalid, &configDocumentV2{}) == nil {
 			t.Fatal("noncanonical or unknown v2 configuration was admitted")
 		}
+	}
+}
+
+func TestV2MaterialAccessConfigRequiresExactProfilePlan(t *testing.T) {
+	binding := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
+		Reference: "secret://phase6/kv/gateway-agent/gateway-grant-key", Version: "v1",
+		Purpose: secretref.PurposeGatewayGrantKey, TenantID: secretref.SystemTenant, Role: secretref.RoleGateway}
+	entry := phase6security.Slice6MaterialAccess{Agent: "gateway-agent", Role: secretref.RoleGateway,
+		CredentialSocket:   "/run/workload-credential-controller/gateway-agent/issuer.sock",
+		CredentialPolicyID: "credential-gateway-agent", BackendPolicy: "gateway-agent-kv",
+		Bindings: []secretref.Binding{binding}}
+	config := configDocument{CredentialAgentID: entry.Agent, Role: entry.Role,
+		CredentialControllerSocket: entry.CredentialSocket, CredentialPolicyID: entry.CredentialPolicyID,
+		VaultMount: "kv", VaultReferenceAuthority: "phase6", Bindings: []secretref.Binding{binding}}
+	v2 := configDocumentV2{CredentialBackendPolicy: entry.BackendPolicy}
+	if !validV2MaterialAccessConfig(entry, config, v2) {
+		t.Fatal("exact material access plan rejected")
+	}
+	for name, drift := range map[string]func(*configDocument, *configDocumentV2){
+		"agent":          func(c *configDocument, _ *configDocumentV2) { c.CredentialAgentID = "product-runtime-agent" },
+		"policy":         func(c *configDocument, _ *configDocumentV2) { c.CredentialPolicyID = "other" },
+		"backend policy": func(_ *configDocument, v *configDocumentV2) { v.CredentialBackendPolicy = "other" },
+		"cross-owner KV": func(c *configDocument, _ *configDocumentV2) {
+			c.Bindings = []secretref.Binding{binding}
+			c.Bindings[0].Reference = "secret://phase6/kv/other/gateway-grant-key"
+		},
+		"extra KV":  func(c *configDocument, _ *configDocumentV2) { c.Bindings = append(c.Bindings, binding) },
+		"migration": func(c *configDocument, _ *configDocumentV2) { c.Migration = true },
+		"mount":     func(c *configDocument, _ *configDocumentV2) { c.VaultMount = "secret" },
+		"authority": func(c *configDocument, _ *configDocumentV2) { c.VaultReferenceAuthority = "other" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changedConfig, changedV2 := config, v2
+			drift(&changedConfig, &changedV2)
+			if validV2MaterialAccessConfig(entry, changedConfig, changedV2) {
+				t.Fatal("material authority drift admitted")
+			}
+		})
 	}
 }
 

@@ -56,7 +56,7 @@ func TestSlice6CertificateDraftBindsControllerAndPurposeSpecificAgents(t *testin
 	}
 	if len(bound.TLSAgentBindings)+len(bound.PostgresClientAgents) !=
 		len(phase6security.Slice6DesiredCertificateKeyIDs())-3 || len(bound.PostgresClientAgents) != 9 ||
-		len(bound.Principals) != 82 {
+		len(bound.Principals) != 78 {
 		t.Fatal("closed certificate agent inventory not bound")
 	}
 	for _, binding := range bound.TLSAgentBindings {

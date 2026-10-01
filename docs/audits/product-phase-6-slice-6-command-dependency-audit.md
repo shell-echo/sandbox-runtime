@@ -158,3 +158,27 @@ therefore reject even the structurally valid 33/28 candidate until the new
 migration instances and paths are represented. That check is deliberately
 necessary, not sufficient: full PKI, SQL/HBA, image and live scenarios remain
 separate release gates.
+
+## Current v3 correction (2026-10-01)
+
+The preceding counts record historical, unaccepted v2 and R142 planning
+snapshots. They do not describe the current desired v3 topology. Inspection of
+the actual Browser/Desktop role and executor commands found no non-TLS Vault KV
+consumer for `browser-agent` or `desktop-agent`. Sandbox therefore directed
+removal of those two idle material agents and their two dedicated TLS signers,
+without renumbering any survivor UID/GID or CIDR. The corrected desired graph
+has 78 active principals, 11 actual material agents (9 before the two
+Provider migration expansions), 12 credential sockets/policies, 36 ordinary
+TLS-agent bindings, 26/31 intermediate external paths/edges, and 30/35 final
+external paths/edges. The 26/30 service bridges retain their assigned CIDRs.
+
+The direct command inventory now has 16 requirements; 14 were missing from
+the original 17-edge/12-path base. The final inventory separately includes
+the two real Provider migration jobs. The 11 material-agent clients map to
+18 exact, purpose-specific KVv2 paths, with single-path read-only ACL text,
+principal/UID/GID/socket bindings, and negative widening tests. This is a
+static intended-access plan only. No Vault mount, role, policy, material
+document, live token, controller chain, database grant, or Docker endpoint is
+claimed installed by this audit. The prior R142 82-principal source-bound
+artifacts cannot attest the corrected profile and must be rebuilt. Phase 6
+remains 5/15 until the named live gate and evidence pass.

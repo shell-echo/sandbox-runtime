@@ -55,7 +55,7 @@ func BindSlice6StaticDraft(ctx context.Context, draft CertificateDraft, now time
 
 func bindSlice6StaticDraft(draft CertificateDraft) (StaticDraft, error) {
 	if len(draft.Principals) != len(phase6security.Slice6DesiredDeploymentNames()) ||
-		len(draft.External) != 5 || len(draft.TrustEdges) != 152 ||
+		len(draft.External) != 5 || len(draft.TrustEdges) != 144 ||
 		phase6security.VerifySlice6DesiredFinalNetworks(draft.Networks) != nil {
 		return StaticDraft{}, ErrInvalidStaticDraft
 	}

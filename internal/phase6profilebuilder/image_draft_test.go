@@ -30,7 +30,7 @@ func TestImageDraftPreservesReviewedIdentityPlacementAndIssuerMounts(t *testing.
 		supply.LocalRoleTargets[target] = local
 	}
 	bound, err := bindPrincipalDraftImages(draft, supply)
-	if err != nil || len(bound.Principals) != 82 || len(bound.CredentialIssuerSockets) != 14 ||
+	if err != nil || len(bound.Principals) != 78 || len(bound.CredentialIssuerSockets) != 12 ||
 		!slices.Equal(bound.CredentialIssuerSockets, draft.CredentialIssuerSockets) ||
 		len(bound.ImageSupply.LocalRoleTargets) != len(supply.LocalRoleTargets) ||
 		bound.ImageSupply.Browser != supply.Browser {

@@ -6,11 +6,9 @@ import (
 	"testing"
 )
 
-func TestSlice6MaterialAgentSignerInventoryHasElevenDistinctKeyOwners(t *testing.T) {
+func TestSlice6MaterialAgentSignerInventoryHasNineDistinctKeyOwners(t *testing.T) {
 	wanted := map[string]string{
 		"browser-action-ingress-agent-tls-agent":   "browser-action-ingress-agent",
-		"browser-agent-tls-agent":                  "browser-agent",
-		"desktop-agent-tls-agent":                  "desktop-agent",
 		"gateway-agent-tls-agent":                  "gateway-agent",
 		"guest-agent-tls-agent":                    "guest-agent",
 		"product-migration-agent-tls-agent":        "product-migration-agent",
@@ -21,7 +19,7 @@ func TestSlice6MaterialAgentSignerInventoryHasElevenDistinctKeyOwners(t *testing
 		"provider-runtime-agent-tls-agent":         "provider-runtime-agent",
 	}
 	profile := validProfile()
-	if profile.Validate() != nil || len(wanted) != 11 {
+	if profile.Validate() != nil || len(wanted) != 9 {
 		t.Fatal("material signer fixture is not a valid closed profile")
 	}
 	byName := make(map[string]Principal, len(profile.Principals))
@@ -80,7 +78,7 @@ func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T
 	newCount, oldCount, addedCount := 0, 0, 0
 	usedSubnets := make(map[string]bool, len(networks))
 	baseNetworks := make([]string, 0, len(networks))
-	materialNetworks := make([]string, 0, 11)
+	materialNetworks := make([]string, 0, 9)
 	for _, network := range networks {
 		if usedSubnets[network.IPv4Subnet] {
 			t.Fatalf("duplicate local subnet %s", network.IPv4Subnet)
@@ -122,24 +120,15 @@ func TestSlice6MaterialSignerIDsAndNetworksDoNotShiftOldAllocations(t *testing.T
 			t.Fatalf("old deployment %s moved out of its reviewed UID/GID partition", name)
 		}
 	}
-	if newCount != 11 || oldCount != 58 || addedCount != 13 {
+	if newCount != 9 || oldCount != 56 || addedCount != 13 {
 		t.Fatalf("identity inventory = %d material signers, %d old, %d added", newCount, oldCount, addedCount)
 	}
 	if len(baseNetworks) >= 80 {
 		t.Fatal("reviewed base networks overlap the material signer reservation")
 	}
-	for index, name := range baseNetworks {
-		for _, network := range networks {
-			if network.Name == name && network.IPv4Subnet != "172.31."+strconv.Itoa(index+1)+".0/24" {
-				t.Fatalf("old network %s changed its reviewed CIDR", name)
-			}
-		}
+	if len(materialNetworks) != 9 {
+		t.Fatal("material signer network coverage changed")
 	}
-	for index, name := range materialNetworks {
-		for _, network := range networks {
-			if network.Name == name && network.IPv4Subnet != "172.31."+strconv.Itoa(80+index)+".0/24" {
-				t.Fatalf("material signer %s changed its reserved CIDR", name)
-			}
-		}
-	}
+	// The independent full-allocation snapshot checks exact surviving
+	// addresses, including the intentionally unassigned retired slots.
 }

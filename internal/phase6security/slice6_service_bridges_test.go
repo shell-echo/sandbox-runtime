@@ -9,7 +9,7 @@ import (
 func TestSlice6DesiredServiceBridgesHaveExactDedicatedMembersAndStableCIDRs(t *testing.T) {
 	bridges := Slice6DesiredServiceBridges()
 	if err := VerifySlice6DesiredServiceBridges(bridges); err != nil {
-		t.Fatalf("28 service bridges rejected: %v", err)
+		t.Fatalf("26 service bridges rejected: %v", err)
 	}
 	old := Slice6DesiredNetworks()
 	oldSubnets := make(map[string]bool, len(old))
@@ -81,8 +81,8 @@ func TestSlice6CompleteNetworkTargetContainsEveryDedicatedServiceBridge(t *testi
 	if err := VerifySlice6DesiredCompleteNetworks(networks); err != nil {
 		t.Fatalf("complete service network target rejected: %v", err)
 	}
-	if len(networks) != len(Slice6DesiredNetworks())+27 {
-		t.Fatalf("complete network count = %d; expected role networks plus 27 new bridges", len(networks))
+	if len(networks) != len(Slice6DesiredNetworks())+25 {
+		t.Fatalf("complete network count = %d; expected role networks plus 25 new bridges", len(networks))
 	}
 	wrong := append([]Network(nil), networks...)
 	for index := range wrong {

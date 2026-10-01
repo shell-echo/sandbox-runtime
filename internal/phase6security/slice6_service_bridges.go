@@ -8,13 +8,28 @@ import (
 	"strconv"
 )
 
-// Slice6DesiredServiceBridges allocates the 28 approved dialer/service paths
+// Slice6DesiredServiceBridges allocates the 26 approved dialer/service paths
 // without shifting the previously reviewed role-network CIDRs. This is a
 // pre-freeze desired plan, not an observed or activated Docker network.
 func Slice6DesiredServiceBridges() []Network {
 	paths := Slice6DesiredExecutableExternalTransports()
+	// The V2 Browser/Desktop material agents are retired, but their old
+	// service-bridge slots remain reserved so no surviving bridge changes IP.
+	for _, name := range []string{"browser-agent", "desktop-agent"} {
+		paths = append(paths, Slice6ExternalTransportPath{LogicalCaller: name, Dialer: name,
+			Service: "vault", Network: "service-" + name + "-vault", EdgeIDs: []string{name + "-vault"}})
+	}
+	sort.Slice(paths, func(i, j int) bool {
+		if paths[i].LogicalCaller != paths[j].LogicalCaller {
+			return paths[i].LogicalCaller < paths[j].LogicalCaller
+		}
+		if paths[i].Service != paths[j].Service {
+			return paths[i].Service < paths[j].Service
+		}
+		return paths[i].Network < paths[j].Network
+	})
 	old := Slice6DesiredNetworks()
-	bridges := make([]Network, 0, len(paths))
+	bridges := make([]Network, 0, len(paths)-2)
 	ordinal := 0
 	for _, path := range paths {
 		if path.Network == "network-certificate-controller" {
@@ -24,6 +39,10 @@ func Slice6DesiredServiceBridges() []Network {
 					bridges = append(bridges, network)
 				}
 			}
+			continue
+		}
+		if path.Dialer == "browser-agent" || path.Dialer == "desktop-agent" {
+			ordinal++
 			continue
 		}
 		bridges = append(bridges, Network{Name: path.Network, Kind: "trust_edge", Internal: true,
@@ -65,7 +84,7 @@ func Slice6DesiredServiceEndpointAddress(networkName, member string) (string, er
 func VerifySlice6DesiredServiceBridges(bridges []Network) error {
 	wanted := Slice6DesiredServiceBridges()
 	if VerifySlice6DesiredExecutableExternalTransports(Slice6DesiredExecutableExternalTransports()) != nil ||
-		len(bridges) != 28 || !slices.EqualFunc(bridges, wanted, func(left, right Network) bool {
+		len(bridges) != 26 || !slices.EqualFunc(bridges, wanted, func(left, right Network) bool {
 		return left.Name == right.Name && left.Kind == right.Kind && left.Internal == right.Internal &&
 			left.GatewayModeIPv4 == right.GatewayModeIPv4 && left.IPv4Subnet == right.IPv4Subnet &&
 			!left.IPv6Enabled && slices.Equal(left.Principals, right.Principals) &&
@@ -96,7 +115,7 @@ func Slice6DesiredCompleteNetworks() []Network {
 	return result
 }
 
-// VerifySlice6DesiredCompleteNetworks freezes the pre-activation 28-bridge
+// VerifySlice6DesiredCompleteNetworks freezes the pre-activation 26-bridge
 // target and rejects a missing, shared or NAT-routed physical dependency.
 func VerifySlice6DesiredCompleteNetworks(networks []Network) error {
 	wanted := Slice6DesiredCompleteNetworks()
