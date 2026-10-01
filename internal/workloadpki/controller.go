@@ -66,6 +66,8 @@ type Controller struct {
 	now              func() time.Time
 	maximumActive    int
 	maximumLedgerAge time.Duration
+	quiescing        bool
+	quiesceErr       error
 	ledger           Ledger
 	peerCRLProfile   *phase6security.Profile
 	peerCRLSources   *phase6security.PeerCRLSources
@@ -152,6 +154,7 @@ func NewController(config ControllerConfig) (*Controller, error) {
 		controller.Close()
 		return nil, ErrUnavailable
 	}
+	controller.quiescing = controller.ledger.QuiescedAt != nil
 	return controller, nil
 }
 
@@ -167,6 +170,28 @@ func (c *Controller) Close() {
 	}
 }
 
+// BeginQuiesce closes issuance while retaining authenticated revocation and
+// fixed-issuer CRL reads. The caller must keep the listener and Vault authority
+// alive until those operations have drained or terminal cleanup takes over.
+func (c *Controller) BeginQuiesce() error {
+	if c == nil {
+		return ErrUnavailable
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.quiescing {
+		return c.quiesceErr
+	}
+	c.quiescing = true
+	now := c.now().UTC()
+	c.ledger.QuiescedAt = &now
+	if err := c.persist(); err != nil {
+		c.quiesceErr = ErrUnavailable
+		return c.quiesceErr
+	}
+	return nil
+}
+
 func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerGID uint32) (Response, error) {
 	if c == nil || ctx == nil {
 		return Response{}, ErrUnavailable
@@ -179,6 +204,9 @@ func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerG
 	now := c.now().UTC()
 	policy, known := c.policies[request.PolicyID]
 	if !known || policy.ExpectedUID != peerUID || policy.ExpectedGID != peerGID || request.Validate(policy, now) != nil {
+		return c.errorResponse(request, StatusDenied, ErrDenied)
+	}
+	if c.quiescing && request.Type == IssueType {
 		return c.errorResponse(request, StatusDenied, ErrDenied)
 	}
 	if !c.consumeReplay(request.Nonce, request.Deadline, now) {

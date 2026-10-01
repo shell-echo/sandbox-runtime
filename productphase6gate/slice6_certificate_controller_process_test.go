@@ -25,6 +25,7 @@ import (
 )
 
 const slice6CertificateProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CERTIFICATE_PROCESS"
+const slice6QuiesceProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_QUIESCE_PROCESS"
 
 // This opt-in diagnostic starts the second real controller while the first is
 // live. Even two issued managed leaves do not constitute the 16-scenario gate
@@ -239,7 +240,45 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 	if !ready {
 		t.Fatal("two-controller managed issuance and credential listener were not observed in time")
 	}
-	t.Log("real R19 certificate controller PID1 issued self and credential managed leaves; credential controller opened post-switch listeners; final shutdown ordering not yet proven")
+	t.Log("real certificate controller PID1 issued self and credential managed leaves; credential controller opened post-switch listeners; final shutdown ordering not yet proven")
+	if os.Getenv(slice6QuiesceProcessEnv) == "1" {
+		for _, target := range []string{"sr-p6-credential-live-" + run.id, id} {
+			if _, err := run.docker(ctx, "kill", "--signal=USR1", target); err != nil {
+				t.Fatal("signal controller quiesce")
+			}
+		}
+		credentialLedgerMount, credentialLedgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("workload-credential-controller")
+		if ledgerErr != nil || credentialLedgerMount.Target == "" {
+			t.Fatal("credential controller ledger mount unavailable")
+		}
+		for _, witness := range []struct {
+			id   string
+			uid  uint32
+			gid  uint32
+			path string
+		}{
+			{"sr-p6-credential-live-" + run.id, credentialPrincipal.UID, credentialPrincipal.GID, credentialLedgerPath},
+			{id, principal.UID, principal.GID, ledgerPath},
+		} {
+			quiesced := false
+			for attempt := 0; attempt < 50 && ctx.Err() == nil; attempt++ {
+				document, readErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", witness.uid, witness.gid),
+					witness.id, "/bin/sh", "-ec", "cat "+witness.path)
+				var ledger struct {
+					QuiescedAt *time.Time `json:"quiesced_at"`
+				}
+				if readErr == nil && len(document) <= 8<<20 && json.Unmarshal(document, &ledger) == nil && ledger.QuiescedAt != nil {
+					quiesced = true
+					break
+				}
+				time.Sleep(200 * time.Millisecond)
+			}
+			if !quiesced {
+				t.Fatal("controller did not persist quiesce receipt")
+			}
+		}
+		t.Log("both real controller PID1 processes persisted quiesce receipts before terminal shutdown")
+	}
 	stopCredential()
 	if _, err := run.docker(ctx, "stop", "-t", "5", id); err != nil {
 		t.Fatal("stop real certificate controller diagnostic")

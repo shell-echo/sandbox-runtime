@@ -311,6 +311,22 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv(slice6CertificateProcessEnv) == "1" && os.Getenv(slice6CredentialProcessEnv) != "1" {
 		t.Fatal("real certificate controller process requires live credential controller")
 	}
+	rootRevoked := false
+	revokeBootstrapRoot := func() {
+		t.Helper()
+		if rootRevoked {
+			return
+		}
+		if _, revokeErr := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); revokeErr != nil {
+			t.Fatal("bootstrap Vault root token revocation failed")
+		}
+		for _, name := range []string{"root-token", "bootstrap-server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem"} {
+			if removeErr := os.Remove(filepath.Join(configDir, name)); removeErr != nil {
+				t.Fatal("remove exact bootstrap trust material")
+			}
+		}
+		rootRevoked = true
+	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 		var socketVolumes map[string]string
@@ -360,6 +376,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				t.Logf("same-run real-Vault certificate controller startup inputs assembled: canonical_config_bytes=%d signing_policies=%d bootstrap_chain_bytes=%d; no certificate process yet",
 					len(certificateConfig), len(composed.CertificateKeys)-1, len(certificateLeaf))
 				if os.Getenv(slice6CredentialProcessEnv) == "1" {
+					// All role/PKI material and bootstrap leaves are now fixed. The
+					// controller chain must run with the orphan management token,
+					// never with the bootstrap root authority still live.
+					revokeBootstrapRoot()
 					var onCredentialReady func(func())
 					if os.Getenv(slice6CertificateProcessEnv) == "1" {
 						onCredentialReady = func(stopCredential func()) {
@@ -375,14 +395,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			}
 		}
 	}
-	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); err != nil {
-		t.Fatal("bootstrap Vault root token revocation failed")
-	}
-	for _, name := range []string{"root-token", "bootstrap-server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem"} {
-		if err := os.Remove(filepath.Join(configDir, name)); err != nil {
-			t.Fatal("remove exact bootstrap trust material")
-		}
-	}
+	revokeBootstrapRoot()
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
 	}

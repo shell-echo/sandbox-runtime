@@ -16,6 +16,7 @@ import (
 type Ledger struct {
 	Schema       string              `json:"schema"`
 	Revision     int64               `json:"revision"`
+	QuiescedAt   *time.Time          `json:"quiesced_at,omitempty"`
 	Certificates []CertificateRecord `json:"certificates"`
 	Replays      []ReplayRecord      `json:"replays"`
 }
@@ -120,7 +121,8 @@ func (c *Controller) persist() error {
 }
 
 func (c *Controller) validateLedger() error {
-	if c.ledger.Schema != LedgerSchema || c.ledger.Revision < 1 || len(c.ledger.Certificates) > maxLedgerRecords || len(c.ledger.Replays) > maxLedgerRecords {
+	if c.ledger.Schema != LedgerSchema || c.ledger.Revision < 1 || len(c.ledger.Certificates) > maxLedgerRecords || len(c.ledger.Replays) > maxLedgerRecords ||
+		(c.ledger.QuiescedAt != nil && (c.ledger.QuiescedAt.IsZero() || c.ledger.QuiescedAt.After(c.now().UTC()))) {
 		return ErrUnavailable
 	}
 	serials := make(map[string]struct{}, len(c.ledger.Certificates))

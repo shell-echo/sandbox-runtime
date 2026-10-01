@@ -312,6 +312,9 @@ func run() (runErr error) {
 	}
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
+	quiesceSignals := make(chan os.Signal, 1)
+	signal.Notify(quiesceSignals, syscall.SIGUSR1)
+	defer signal.Stop(quiesceSignals)
 	serveContext, stopServers := context.WithCancel(context.Background())
 	defer stopServers()
 	errChannel := make(chan error, len(config.Listeners)+1)
@@ -398,7 +401,10 @@ func run() (runErr error) {
 	managerDone := make(chan struct{})
 	go func() {
 		defer close(managerDone)
-		errChannel <- manager.Run(managerContext)
+		managerErr := manager.Run(managerContext)
+		if managerContext.Err() == nil || !errors.Is(managerErr, context.Canceled) {
+			errChannel <- managerErr
+		}
 	}()
 	defer func() {
 		stopManager()
@@ -420,6 +426,24 @@ func run() (runErr error) {
 	select {
 	case <-signalContext.Done():
 		normalShutdown = true
+	case <-quiesceSignals:
+		if controller.BeginQuiesce() != nil {
+			firstErr = stageError("quiesce-ledger")
+			break
+		}
+		stopManager()
+		select {
+		case <-managerDone:
+		case <-time.After(time.Duration(config.OperationTimeoutSeconds) * time.Second):
+			firstErr = stageError("quiesce-drain")
+		}
+		if firstErr == nil {
+			select {
+			case <-signalContext.Done():
+				normalShutdown = true
+			case firstErr = <-errChannel:
+			}
+		}
 	case firstErr = <-errChannel:
 	}
 	stopManager()

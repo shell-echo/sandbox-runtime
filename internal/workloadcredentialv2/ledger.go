@@ -15,10 +15,11 @@ import (
 )
 
 type Ledger struct {
-	Schema   string         `json:"schema"`
-	Revision int64          `json:"revision"`
-	Leases   []LeaseRecord  `json:"leases"`
-	Replays  []ReplayRecord `json:"replays"`
+	Schema     string         `json:"schema"`
+	Revision   int64          `json:"revision"`
+	QuiescedAt *time.Time     `json:"quiesced_at,omitempty"`
+	Leases     []LeaseRecord  `json:"leases"`
+	Replays    []ReplayRecord `json:"replays"`
 }
 
 type LeaseRecord struct {
@@ -111,7 +112,8 @@ func saveLedger(path string, ledger Ledger) error {
 }
 
 func (c *Controller) validateLedger() error {
-	if c.ledger.Schema != LedgerSchema || c.ledger.Revision < 1 || len(c.ledger.Leases) > maxLedgerItems || len(c.ledger.Replays) > maxLedgerItems {
+	if c.ledger.Schema != LedgerSchema || c.ledger.Revision < 1 || len(c.ledger.Leases) > maxLedgerItems || len(c.ledger.Replays) > maxLedgerItems ||
+		(c.ledger.QuiescedAt != nil && (c.ledger.QuiescedAt.IsZero() || c.ledger.QuiescedAt.After(c.now().UTC()))) {
 		return ErrUnavailable
 	}
 	leaseIDs, backendIDs := map[string]struct{}{}, map[string]struct{}{}

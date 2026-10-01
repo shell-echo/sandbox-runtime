@@ -40,6 +40,8 @@ type Controller struct {
 	overlap    time.Duration
 	now        func() time.Time
 	random     io.Reader
+	quiescing  bool
+	quiesceErr error
 	ledger     Ledger
 }
 
@@ -74,6 +76,7 @@ func NewController(config ControllerConfig) (*Controller, error) {
 	if controller.validateLedger() != nil {
 		return nil, ErrUnavailable
 	}
+	controller.quiescing = controller.ledger.QuiescedAt != nil
 	return controller, nil
 }
 
@@ -83,6 +86,27 @@ func NewProductionController(config ControllerConfig) (*Controller, error) {
 	}
 	config.Random = rand.Reader
 	return NewController(config)
+}
+
+// BeginQuiesce closes new token issue and renew while retaining authenticated
+// revoke and status. Keep the listener and Vault issuer alive for the drain.
+func (c *Controller) BeginQuiesce() error {
+	if c == nil {
+		return ErrUnavailable
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.quiescing {
+		return c.quiesceErr
+	}
+	c.quiescing = true
+	now := c.now().UTC()
+	c.ledger.QuiescedAt = &now
+	if err := c.persist(); err != nil {
+		c.quiesceErr = ErrUnavailable
+		return c.quiesceErr
+	}
+	return nil
 }
 
 func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerGID uint32) (Response, error) {
@@ -96,7 +120,13 @@ func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerG
 	defer c.mu.Unlock()
 	now := c.now().UTC()
 	policy, ok := c.policies[request.PolicyID]
-	if !ok || policy.ExpectedUID != peerUID || policy.ExpectedGID != peerGID || request.Validate(policy, now) != nil || !c.consumeReplay(request.JTI, now) {
+	if !ok || policy.ExpectedUID != peerUID || policy.ExpectedGID != peerGID || request.Validate(policy, now) != nil {
+		return errorResponse(request, StatusDenied), ErrDenied
+	}
+	if c.quiescing && (request.Type == IssueType || request.Type == RenewType) {
+		return errorResponse(request, StatusDenied), ErrDenied
+	}
+	if !c.consumeReplay(request.JTI, now) {
 		return errorResponse(request, StatusDenied), ErrDenied
 	}
 	if err := c.persist(); err != nil {

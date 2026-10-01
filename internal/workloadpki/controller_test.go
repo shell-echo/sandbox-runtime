@@ -168,6 +168,116 @@ func TestControllerPersistsReplayCertificateAndRevocationAcrossRestart(t *testin
 	}
 }
 
+func TestControllerQuiesceRejectsIssueButRetainsRevocation(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	fixture.policy.ExpectedUID, fixture.policy.ExpectedGID = uint32(os.Getuid()), uint32(os.Getgid())
+	authority := &fakeCertificateAuthority{fixture: fixture}
+	controller, err := NewController(ControllerConfig{LedgerPath: filepath.Join(securePKIDirectory(t), "ledger.json"),
+		Policies: []Policy{fixture.policy}, Authority: authority, ControllerKeyID: fixture.controllerID,
+		ControllerKey: fixture.controllerPriv, Now: func() time.Time { return fixture.now },
+		MaximumActive: 2, MaximumLedgerAge: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	issue := func(id string, nonce byte) Request {
+		request, issueErr := NewIssueRequest(fixture.policy, id,
+			base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{nonce}, 32)), fixture.now.Add(30*time.Second),
+			10*time.Minute, fixture.csr, fixture.agentPrivate)
+		if issueErr != nil {
+			t.Fatal(issueErr)
+		}
+		return request
+	}
+	first := issue("quiesce-issue-1", 40)
+	if response, handleErr := controller.Handle(context.Background(), first, fixture.policy.ExpectedUID, fixture.policy.ExpectedGID); handleErr != nil {
+		t.Fatal(handleErr)
+	} else {
+		response.Destroy()
+	}
+	if controller.BeginQuiesce() != nil || controller.BeginQuiesce() != nil {
+		t.Fatal("quiesce must be idempotent")
+	}
+	if controller.ledger.QuiescedAt == nil {
+		t.Fatal("quiesce receipt was not persisted")
+	}
+	denied, err := controller.Handle(context.Background(), issue("quiesce-issue-2", 41), fixture.policy.ExpectedUID, fixture.policy.ExpectedGID)
+	if !errors.Is(err, ErrDenied) || denied.Status != StatusDenied || authority.issueCalls != 1 || len(controller.ledger.Replays) != 1 {
+		t.Fatalf("quiesced issuance = %#v, %v, calls=%d replays=%d", denied, err, authority.issueCalls, len(controller.ledger.Replays))
+	}
+	crl, err := NewRevocationsRequest(fixture.policy, "quiesce-crl-1",
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{42}, 32)), fixture.now.Add(30*time.Second), fixture.agentPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response, handleErr := controller.Handle(context.Background(), crl, fixture.policy.ExpectedUID, fixture.policy.ExpectedGID); handleErr != nil || response.Status != StatusOK {
+		t.Fatalf("quiesced CRL = %#v, %v", response, handleErr)
+	} else {
+		response.Destroy()
+	}
+	revoke, err := NewRevokeRequest(fixture.policy, "quiesce-revoke-1",
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{43}, 32)), fixture.now.Add(30*time.Second), fixture.serial, fixture.agentPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response, handleErr := controller.Handle(context.Background(), revoke, fixture.policy.ExpectedUID, fixture.policy.ExpectedGID); handleErr != nil || response.Status != StatusOK || len(authority.revokeCalls) != 1 {
+		t.Fatalf("quiesced revoke = %#v, %v, calls=%v", response, handleErr, authority.revokeCalls)
+	} else {
+		response.Destroy()
+	}
+	controller.Close()
+	restarted, err := NewController(ControllerConfig{LedgerPath: controller.ledgerPath,
+		Policies: []Policy{fixture.policy}, Authority: authority, ControllerKeyID: fixture.controllerID,
+		ControllerKey: fixture.controllerPriv, Now: func() time.Time { return fixture.now },
+		MaximumActive: 2, MaximumLedgerAge: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	if !restarted.quiescing || restarted.ledger.QuiescedAt == nil {
+		t.Fatal("restart reopened issuance after quiesce")
+	}
+	denied, err = restarted.Handle(context.Background(), issue("quiesce-issue-3", 44), fixture.policy.ExpectedUID, fixture.policy.ExpectedGID)
+	if !errors.Is(err, ErrDenied) || denied.Status != StatusDenied {
+		t.Fatalf("restarted quiesced issuance = %#v, %v", denied, err)
+	}
+}
+
+func TestControllerQuiescePersistenceFailureIsStickyAndNotAcknowledged(t *testing.T) {
+	fixture := newProtocolFixture(t)
+	fixture.policy.ExpectedUID, fixture.policy.ExpectedGID = uint32(os.Getuid()), uint32(os.Getgid())
+	directory := securePKIDirectory(t)
+	authority := &fakeCertificateAuthority{fixture: fixture}
+	controller, err := NewController(ControllerConfig{LedgerPath: filepath.Join(directory, "ledger.json"),
+		Policies: []Policy{fixture.policy}, Authority: authority, ControllerKeyID: fixture.controllerID,
+		ControllerKey: fixture.controllerPriv, Now: func() time.Time { return fixture.now },
+		MaximumActive: 2, MaximumLedgerAge: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	if err := os.Chmod(directory, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(directory, 0o700)
+	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("quiesce persistence failure = %v", err)
+	}
+	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("repeat quiesce falsely acknowledged = %v", err)
+	}
+	request, err := NewIssueRequest(fixture.policy, "quiesce-failed-issue",
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{45}, 32)), fixture.now.Add(30*time.Second),
+		10*time.Minute, fixture.csr, fixture.agentPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, err := controller.Handle(context.Background(), request, fixture.policy.ExpectedUID, fixture.policy.ExpectedGID)
+	if !errors.Is(err, ErrDenied) || denied.Status != StatusDenied || authority.issueCalls != 0 {
+		t.Fatalf("in-memory fail-closed issue = %#v, %v, calls=%d", denied, err, authority.issueCalls)
+	}
+}
+
 func TestControllerRejectsWrongPurposeCertificateBeforeLedgerCommit(t *testing.T) {
 	fixture := newProtocolFixture(t)
 	policy, private := postgresPolicyFixture(t)

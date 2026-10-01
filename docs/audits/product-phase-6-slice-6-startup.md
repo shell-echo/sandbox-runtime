@@ -855,6 +855,38 @@ or grant authorization through ingress nor WebRTC ICE/UDP/media delivery,
 all-principal seccomp/resource enforcement, or the final release graph.
 Phase 6 remains **5/15**.
 
+Checkpoint 2026-10-01 (R20 real two-controller issuance and terminal-cycle
+failure): revision `bb0451ba478f969ffcb80ce8d5887f99151614be` was frozen
+locally and all 12 role targets plus Desktop rebuilt and retained from that
+same clean source. The real file-backed non-dev Vault diagnostic loaded those
+source-bound artifacts, composed a 78-principal Profile, prepared 50 isolated
+controller socket volumes and five trust-anchor volumes, installed the scoped
+Vault token/PKI policy set, and passed production validation for all 38
+certificate policies. Both real controller PID1 processes ran. The
+certificate ledger showed active self and credential-controller managed
+leaves, and the credential controller opened its post-switch listeners.
+Stopping the credential controller first then the certificate controller
+ended with certificate PID1 `stage credential-revoke` (exit 1), proving the
+terminal mutual-revocation dependency rather than resolving it. The tagged
+test therefore failed after 198.16 seconds; exact run-labeled containers,
+networks and volumes were independently observed at zero. This is component
+diagnostic evidence only, not a passed gate.
+
+The next source change adds a durable, idempotent quiesce marker to both
+exclusive controller ledgers. A private `SIGUSR1` transition stops new
+certificate/token issuance and token renewal while authenticated revocation,
+status and fixed CRL reads remain available; a subsequent termination still
+uses the existing Close path. Focused race tests prove fail-closed issuance
+after controller reconstruction from each ledger. This code has not yet been
+rebuilt into a common source-bound candidate or exercised in the real
+two-process diagnostic. The revised diagnostic also revokes and removes the
+bootstrap root token before controller PID1 startup, after installing scoped
+roles and signing both bootstrap leaves; that ordering is not yet observed
+in a real run. The terminal pair still requires the separately
+authorized short-lived one-shot operator cleanup and exact Vault readback;
+there is no accepted 16-scenario evidence, rootless-managed-operation proof,
+release manifest or push. Phase 6 remains **5/15**.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

@@ -127,6 +127,93 @@ func TestControllerV2PersistsCASRotationRevocationAndRestart(t *testing.T) {
 	}
 }
 
+func TestControllerV2QuiesceRejectsIssueRenewButRetainsRevokeStatus(t *testing.T) {
+	now := time.Now().UTC()
+	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
+	policy, privateKey := controllerPolicy(t, controllerRegistry(t), securityprincipal.KindController,
+		"certificate_controller", "", "c", true, uid, gid)
+	backend := &fakeBackend{now: &now}
+	controller, err := NewController(ControllerConfig{LedgerPath: filepath.Join(secureDirectory(t), "ledger-v2.json"),
+		Policies: []Policy{policy}, Issuer: backend, Overlap: time.Second,
+		Now: func() time.Time { return now }, Random: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := controller.Handle(context.Background(), signedRequest(t, policy, privateKey, IssueType, "", 0,
+		5*time.Minute, now, 50), uid, gid)
+	if err != nil || issued.Status != StatusOK {
+		t.Fatalf("initial issue = %#v, %v", issued, err)
+	}
+	defer clear(issued.Credential)
+	if controller.BeginQuiesce() != nil || controller.BeginQuiesce() != nil {
+		t.Fatal("quiesce must be idempotent")
+	}
+	if controller.ledger.QuiescedAt == nil {
+		t.Fatal("quiesce receipt was not persisted")
+	}
+	for _, request := range []Request{
+		signedRequest(t, policy, privateKey, IssueType, "", 0, 5*time.Minute, now, 51),
+		signedRequest(t, policy, privateKey, RenewType, issued.LeaseID, issued.Revision, 5*time.Minute, now, 52),
+	} {
+		denied, handleErr := controller.Handle(context.Background(), request, uid, gid)
+		if !errors.Is(handleErr, ErrDenied) || denied.Status != StatusDenied || len(backend.issues) != 1 || len(controller.ledger.Replays) != 1 {
+			t.Fatalf("quiesced mutation = %#v, %v, issues=%d replays=%d", denied, handleErr, len(backend.issues), len(controller.ledger.Replays))
+		}
+	}
+	status := signedRequest(t, policy, privateKey, StatusType, issued.LeaseID, issued.Revision, 0, now, 53)
+	if response, handleErr := controller.Handle(context.Background(), status, uid, gid); handleErr != nil || response.Status != StatusOK {
+		t.Fatalf("quiesced status = %#v, %v", response, handleErr)
+	}
+	revoke := signedRequest(t, policy, privateKey, RevokeType, issued.LeaseID, issued.Revision, 0, now, 54)
+	if response, handleErr := controller.Handle(context.Background(), revoke, uid, gid); handleErr != nil || response.Status != StatusOK || len(backend.revoked) != 1 {
+		t.Fatalf("quiesced revoke = %#v, %v, backend=%v", response, handleErr, backend.revoked)
+	}
+	restarted, err := NewController(ControllerConfig{LedgerPath: controller.ledgerPath,
+		Policies: []Policy{policy}, Issuer: backend, Overlap: time.Second,
+		Now: func() time.Time { return now }, Random: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !restarted.quiescing || restarted.ledger.QuiescedAt == nil {
+		t.Fatal("restart reopened token issuance after quiesce")
+	}
+	denied, err := restarted.Handle(context.Background(), signedRequest(t, policy, privateKey,
+		IssueType, "", 0, 5*time.Minute, now, 55), uid, gid)
+	if !errors.Is(err, ErrDenied) || denied.Status != StatusDenied {
+		t.Fatalf("restarted quiesced token issue = %#v, %v", denied, err)
+	}
+}
+
+func TestControllerV2QuiescePersistenceFailureIsStickyAndNotAcknowledged(t *testing.T) {
+	now := time.Now().UTC()
+	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
+	policy, privateKey := controllerPolicy(t, controllerRegistry(t), securityprincipal.KindController,
+		"certificate_controller", "", "c", true, uid, gid)
+	backend := &fakeBackend{now: &now}
+	directory := secureDirectory(t)
+	controller, err := NewController(ControllerConfig{LedgerPath: filepath.Join(directory, "ledger-v2.json"),
+		Policies: []Policy{policy}, Issuer: backend, Overlap: time.Second,
+		Now: func() time.Time { return now }, Random: rand.Reader})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(directory, 0o700)
+	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("quiesce persistence failure = %v", err)
+	}
+	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("repeat quiesce falsely acknowledged = %v", err)
+	}
+	denied, err := controller.Handle(context.Background(), signedRequest(t, policy, privateKey,
+		IssueType, "", 0, time.Minute, now, 56), uid, gid)
+	if !errors.Is(err, ErrDenied) || denied.Status != StatusDenied || len(backend.issues) != 0 {
+		t.Fatalf("in-memory fail-closed token issue = %#v, %v, calls=%d", denied, err, len(backend.issues))
+	}
+}
+
 func TestControllerV2RejectsCrossPrincipalReplayPeerSubstitutionAndBackendLoss(t *testing.T) {
 	now := time.Now().UTC()
 	uid, gid := uint32(os.Getuid()), uint32(os.Getgid())
