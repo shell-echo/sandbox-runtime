@@ -927,6 +927,21 @@ stage codes to distinguish input, Vault client, preflight, CRL and revoke
 failures without emitting token/accessor/serial or raw remote diagnostics.
 No release manifest or count change follows.
 
+R24 source `4ebf6aba2be0a6a4e9539727fe9c3ada6d6a1b71` built a separate
+operator executable before Vault credential minting and recorded its Git
+revision/tree, Go 1.26.8 flags and SHA-256. The 208.83-second same-run real
+Vault test again reached both managed controller PID1s and both quiesce
+receipts, then failed at Docker `create` for the one-shot task, before
+delivering stdin. The gate had placed the binary under Go's system test temp
+directory, which was outside Docker Desktop's shared host tree. A bounded
+no-secret reproduction using a private sibling of the workspace confirmed
+that the fixed `20090:30090` Alpine container can create with exactly one
+read-only executable bind from that shared location. R25 changes only this
+gate-owned build path; R22 resident images remain valid under the C/R/E
+partition, and the operator's actual clean source is checked separately.
+The internal remote failure stage is still unobserved; no release evidence
+or count advancement is claimed.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

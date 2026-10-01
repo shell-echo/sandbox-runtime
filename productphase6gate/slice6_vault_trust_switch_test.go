@@ -65,7 +65,22 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	// this test creates any run-private files or short-lived Vault authority.
 	var terminalBinaryPath, terminalBinaryDigest string
 	if os.Getenv(slice6TerminalOperatorEnv) == "1" {
-		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, t.TempDir())
+		operatorSource, sourceErr := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR_SOURCE_ROOT"))
+		if sourceErr != nil || !filepath.IsAbs(operatorSource) {
+			t.Fatal("terminal operator source path unavailable")
+		}
+		// Docker Desktop shares the workspace host tree, not Go's system
+		// test temp directory. This sibling is still outside the clean source.
+		operatorDirectory, directoryErr := os.MkdirTemp(filepath.Dir(operatorSource), ".sr-p6-terminal-operator-")
+		if directoryErr != nil {
+			t.Fatal("create exact private operator build directory")
+		}
+		t.Cleanup(func() {
+			if removeErr := os.RemoveAll(operatorDirectory); removeErr != nil {
+				t.Errorf("remove exact private operator build directory: %v", removeErr)
+			}
+		})
+		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory)
 	}
 	run, err := newSlice6DockerRun()
 	if err != nil {
