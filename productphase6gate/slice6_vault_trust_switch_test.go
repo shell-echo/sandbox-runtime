@@ -295,8 +295,15 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") != "1" {
 		t.Fatal("real Vault access installation requires same-run source-bound profile composition")
 	}
+	if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" &&
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") != "1" {
+		t.Fatal("real controller private-config preparation requires same-run source-bound profile composition")
+	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
+		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
+			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
+		}
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
 			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
 		}

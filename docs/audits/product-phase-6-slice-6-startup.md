@@ -3459,3 +3459,30 @@ denial, capability probes, root-token revocation and exact labeled Docker
 cleanup were observed. No controller process, actual business KV document,
 material-agent consumer, first migration, 16-scenario result, release
 manifest or push was produced. Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-01 (same-run real controller startup file transfer):
+using the separate clean R19 source checkout and its matching private image
+candidates, the real Vault diagnostic now also prepares the two actual
+controller `private_config` named volumes from the just-composed Profile and
+peer-CRL source document. The certificate controller received the exact two
+declared files (429987 logical bytes) as UID:GID `20010:30010`; the
+credential controller received only its Profile file (418680 bytes) as
+`20057:30057`. Each one-shot UID-0 preparer ran with no network, read-only
+rootfs, only `CAP_CHOWN`, no-new-privileges, the locked seccomp policy,
+bounded memory/CPU/PIDs, no logging and a sole fresh named volume; effective
+Docker inspect fields were checked. It exited and was removed before a
+distinct non-root reader mounted the volume read-only and verified the exact
+file count, ownership, 0700/0600 modes, SHA-256 digests and write denial.
+The full same-run Vault PKI/ACL diagnostic passed again in 151.05 seconds,
+and the run-labeled container/network/volume inventories returned zero after
+cleanup. This is real input transfer for **2 of 75** Profile readers, not a
+controller launch or certificate/credential/material consumer result. The
+other 73 private file sets, both persistent ledger mounts, business KV
+documents, migrations, full topology and 16 scenarios remain unobserved.
+No release evidence or push was produced; Phase 6 remains **5/15**.
+After adding effective seccomp/no-new-privileges/no-logging inspect checks
+and clearing private archive bytes on every helper exit, the same real
+diagnostic passed again in 191.02 seconds while the full race suite was
+running. The final full race suite, tagged test compilation, ordinary and
+tagged vet, Product Contract lock and diff checks passed; exact labeled
+Docker cleanup again observed zero containers, networks and volumes.
