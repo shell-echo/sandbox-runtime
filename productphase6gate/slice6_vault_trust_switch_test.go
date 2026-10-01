@@ -189,6 +189,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
 		t.Fatalf("non-dev persistent Vault start failed: %v", err)
 	}
+	implicitVaultVolumes, err := slice6VaultImplicitVolumes(ctx, run, serverID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := run.docker(ctx, "network", "connect", "--ip", credentialVaultIP,
 		"--alias", "vault.sandbox-runtime.test", credentialCreated.NetworkID, serverID); err != nil {
 		t.Fatal("connect real Vault to exact credential-controller bridge")
@@ -437,6 +441,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	revokeBootstrapRoot()
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
+	}
+	if err := slice6CheckImplicitVolumesRemoved(ctx, run, implicitVaultVolumes); err != nil {
+		t.Fatalf("exact persistent Vault anonymous-volume cleanup: %v", err)
 	}
 	if os.Getenv(slice6CertificateProcessEnv) == "1" {
 		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance with exact Docker cleanup; final release scenarios remain unproved")

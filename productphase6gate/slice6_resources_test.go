@@ -89,7 +89,11 @@ func (run slice6DockerRun) cleanup(ctx context.Context) error {
 			var arguments []string
 			switch resource {
 			case "container":
-				arguments = []string{"rm", "-f", id}
+				// Pinned external images may declare implicit anonymous
+				// VOLUME paths. Remove only volumes attached to this exact
+				// run-labeled container; named volumes remain independently
+				// tracked and are removed in the volume phase below.
+				arguments = []string{"rm", "-f", "-v", id}
 			case "network":
 				arguments = []string{"network", "rm", id}
 			case "volume":
@@ -109,6 +113,104 @@ func (run slice6DockerRun) cleanup(ctx context.Context) error {
 		}
 	}
 	return errors.Join(failures...)
+}
+
+func slice6VaultImplicitVolumes(ctx context.Context, run slice6DockerRun, containerID string) ([]string, error) {
+	if len(containerID) != 64 || !lowerHexSlice6(containerID) {
+		return nil, errors.New("invalid exact Vault container identity")
+	}
+	inspect, err := run.docker(ctx, "inspect", containerID)
+	var containers []struct {
+		Mounts []struct {
+			Type        string `json:"Type"`
+			Name        string `json:"Name"`
+			Destination string `json:"Destination"`
+		} `json:"Mounts"`
+	}
+	if err != nil || json.Unmarshal(inspect, &containers) != nil || len(containers) != 1 {
+		return nil, errors.New("exact Vault container mounts unavailable")
+	}
+	volumes := make([]string, 0, 2)
+	destinations := map[string]bool{}
+	for _, mount := range containers[0].Mounts {
+		if mount.Type != "volume" {
+			continue
+		}
+		if len(mount.Name) != 64 || !lowerHexSlice6(mount.Name) ||
+			(mount.Destination != "/vault/file" && mount.Destination != "/vault/logs") ||
+			destinations[mount.Destination] {
+			return nil, errors.New("unknown implicit volume on exact Vault container")
+		}
+		destinations[mount.Destination] = true
+		volumeInspect, inspectErr := run.docker(ctx, "volume", "inspect", mount.Name)
+		var observed []struct {
+			Labels map[string]string `json:"Labels"`
+		}
+		if inspectErr != nil || json.Unmarshal(volumeInspect, &observed) != nil || len(observed) != 1 {
+			return nil, errors.New("exact anonymous volume metadata unavailable")
+		}
+		if _, anonymous := observed[0].Labels["com.docker.volume.anonymous"]; !anonymous {
+			return nil, errors.New("implicit Vault image volume is not marked anonymous")
+		}
+		volumes = append(volumes, mount.Name)
+	}
+	if len(volumes) != 2 || !destinations["/vault/file"] || !destinations["/vault/logs"] {
+		return nil, errors.New("Vault image did not produce its two reviewed implicit volumes")
+	}
+	return volumes, nil
+}
+
+func slice6CheckImplicitVolumesRemoved(ctx context.Context, run slice6DockerRun, volumes []string) error {
+	if len(volumes) != 2 {
+		return errors.New("exact implicit volume ownership proof is incomplete")
+	}
+	for _, volume := range volumes {
+		output, err := run.docker(ctx, "volume", "inspect", volume)
+		if err == nil || !strings.Contains(string(output), ": no such volume") {
+			return errors.New("exact anonymous volume removal is unproved")
+		}
+	}
+	return nil
+}
+
+// A pinned external image may declare VOLUME even though the gate supplies no
+// --mount argument. This opt-in real-Docker check proves that exact labeled
+// container cleanup also removes those daemon-created anonymous volumes.
+func TestPhase6Slice6AnonymousVolumeCleanup(t *testing.T) {
+	if os.Getenv(slice6LedgerEnv) != "1" {
+		t.Skip("set " + slice6LedgerEnv + "=1")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupContext, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if cleanupErr := run.cleanup(cleanupContext); cleanupErr != nil {
+			t.Errorf("exact anonymous-volume probe cleanup: %v", cleanupErr)
+		}
+	})
+	created, err := run.docker(ctx, "create", "--pull=never", "--name", "sr-p6-anon-volume-"+run.id,
+		"--label", run.label(), "--network=none", "--user=20090:30090", "--cap-drop=ALL",
+		"--security-opt=no-new-privileges:true", "--read-only", "--log-driver=none",
+		"--memory=64m", "--cpus=0.25", "--pids-limit=16", slice6VaultTestImage)
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("create exact no-secret Vault-image anonymous-volume probe")
+	}
+	volumes, err := slice6VaultImplicitVolumes(ctx, run, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := slice6CheckImplicitVolumesRemoved(ctx, run, volumes); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // This opt-in test exercises exact ownership and cleanup against the actual

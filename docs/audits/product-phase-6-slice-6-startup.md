@@ -3679,3 +3679,33 @@ older diagnostic retains its initial root token until the end and cannot be
 used as final rootless-managed-operation evidence. No managed switch, full
 16-scenario receipt, release manifest, push or count advancement is claimed;
 Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-01 (R27 real source-bound terminal operator component):
+the R22 immutable role/Desktop image candidates and a separately built clean
+R27 operator source were exercised with a file-backed non-dev Vault, complete
+78-principal Profile, and both real controller PID1 processes. Both
+controllers issued managed leaves and produced bounded quiesce ledger receipts.
+The independent one-shot operator then read back a signed complete CRL
+containing the two exact controller certificate serials, observed revocation
+of both exact target token accessors through Vault, and revoked its own
+short-lived token. The targeted real-Docker test passed in 211.00 seconds.
+This is a controller trust-switch/terminal-cleanup **component** pass, not a
+16-scenario Slice 6 release gate, deployment, evidence manifest or production
+readiness result. Phase 6 remains **5/15**. A real Vault 400 response for a
+revoked accessor uses the precisely reviewed wrapped `invalid accessor`
+error; the restricted adapter accepts that one observed shape while still
+rejecting other 400s, forbidden, missing and unavailable responses.
+
+R22 exposed an accounting gap: the pinned Vault image declares `/vault/file`
+and `/vault/logs` VOLUME paths, so Docker creates two implicit anonymous
+volumes even with only explicit bind mounts in the command. Earlier runs
+verified zero **run-labeled** containers, networks and named volumes but did
+not prove cleanup of those unlabeled implicit volumes. The R28 cleanup change
+uses `docker rm -f -v` only for the exact run-labeled container. A no-secret,
+real-Docker opt-in test captures both exact mount-to-volume associations,
+requires Docker's anonymous-volume metadata, removes that exact container,
+and checks `no such volume` for both IDs; it passed. The R28 full Vault test
+now captures the same associations for its real Vault server and will check
+their removal after its own cleanup. Earlier dangling anonymous volumes are
+retained because their exact historical container ownership is unproved;
+age, emptiness or dangling status alone is not deletion authority.
