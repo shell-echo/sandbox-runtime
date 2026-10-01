@@ -205,6 +205,13 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 		if matched := slice6TerminalStagePattern.FindSubmatch(output); len(matched) == 2 {
 			stage = string(matched[1])
 		}
+		var partial phase6terminalcleanup.Receipt
+		firstLine := bytes.SplitN(output, []byte{'\n'}, 2)[0]
+		if len(firstLine) < 16<<10 && json.Unmarshal(firstLine, &partial) == nil &&
+			partial.PlanDigest == plan.Digest && partial.RunID == run.id &&
+			regexp.MustCompile(`^[a-z][a-z-]{0,63}$`).MatchString(partial.FailureStage) {
+			stage = "execute-" + partial.FailureStage
+		}
 		t.Fatalf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
 	}
 	for _, target := range append(receipt.Certificates, receipt.Tokens...) {

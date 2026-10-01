@@ -942,6 +942,18 @@ partition, and the operator's actual clean source is checked separately.
 The internal remote failure stage is still unobserved; no release evidence
 or count advancement is claimed.
 
+R25 gate revision `c5a9888299057a628de6d7e3fc2f467721b7943f` used the
+Docker-shared private sibling for the separately source-verified operator
+binary. The real 200.04-second test passed both managed PID1 startups and
+quiesce receipts, then started the no-volume, non-root one-shot task; it did
+not produce a complete cleanup receipt. The attempted redacted stderr
+diagnostic rendered the `error` implementation's generic text instead of
+the fixed stage code, so this run establishes only an incomplete operator
+result, not which Vault operation failed. R26 fixes that formatting and
+reads a bounded partial private receipt's fixed failure stage if present.
+No root fallback, synthetic revocation or release count advancement is
+permitted.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

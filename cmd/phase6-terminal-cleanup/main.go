@@ -57,7 +57,7 @@ func main() {
 		if !errors.As(err, &stage) {
 			stage = "unknown"
 		}
-		fmt.Fprintf(os.Stderr, "phase6-terminal-cleanup: unavailable stage=%s\n", stage)
+		fmt.Fprintf(os.Stderr, "phase6-terminal-cleanup: unavailable stage=%s\n", string(stage))
 		os.Exit(1)
 	}
 }
