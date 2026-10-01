@@ -380,7 +380,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				t.Logf("same-run real-Vault certificate controller startup inputs assembled: canonical_config_bytes=%d signing_policies=%d bootstrap_chain_bytes=%d; no certificate process yet",
 					len(certificateConfig), len(composed.CertificateKeys)-1, len(certificateLeaf))
 				var terminalOperator *slice6TerminalOperatorCredential
+				var terminalBinaryPath, terminalBinaryDigest string
 				if os.Getenv(slice6TerminalOperatorEnv) == "1" {
+					terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, root)
 					prepared := slice6VaultPrepareTerminalOperator(t, ctx, run, serverID, configDir, composed.Profile, general)
 					terminalOperator = &prepared
 					defer terminalOperator.clear()
@@ -396,7 +398,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							var onTerminated func()
 							if terminalOperator != nil {
 								onTerminated = func() {
-									slice6RunTerminalOperator(t, ctx, run, composed, serverID, root,
+									slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+										terminalBinaryPath, terminalBinaryDigest,
 										management.Accessor, general, terminalOperator)
 								}
 							}

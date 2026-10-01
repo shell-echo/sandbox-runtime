@@ -893,6 +893,27 @@ and accessor. The gate now declares an operator-only container path, but its
 independent receipt and the complete 16-scenario Slice 6 gate remain unproved. There is
 no release manifest or push; Phase 6 remains **5/15**.
 
+R22 source `c5ad79d4c2ca74490f047917fbca5861abf48129` was then rebuilt
+into 12 role candidates plus Desktop and exercised against the same-run
+file-backed non-dev Vault. The 205.73-second test passed actual management
+token metadata/accessor readback, signed and read back the dedicated operator
+leaf/token, started both managed controller PID1 processes, and observed both
+durable quiesce receipts. It failed before giving the operator its stdin:
+the pinned Vault image used as the one-shot executable carrier declared
+`/vault/file` and `/vault/logs` volumes, so Docker added two anonymous
+writable volumes and the exact effective-mount check rejected the task.
+The controlled root token had already been revoked before the controllers;
+the operator token and leaf were issued but received no cleanup authority
+use. The run-labeled container/network/volume sets returned to zero, but
+unlabeled anonymous volumes may remain and **no exact zero-resource claim**
+is made for this failed run. Two dangling empty volumes created at the
+failure time were deliberately retained because timestamp and emptiness do
+not prove ownership. A separate no-secret reproduction container's two
+volumes were inspected as its exact mounts and removed with that container.
+Sandbox approved switching the finite task to the already pinned no-volume
+Alpine carrier, fixed `20090:30090` UID:GID and created-container bind-byte
+hash verification; that corrected gate has not yet passed a full Vault run.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

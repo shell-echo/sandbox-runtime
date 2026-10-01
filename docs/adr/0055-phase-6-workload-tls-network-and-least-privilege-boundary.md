@@ -2019,12 +2019,22 @@ Vault. Deleting that Vault alone proves only resource cleanup. The operator
 token then self-revokes, its mTLS key is destroyed, and any remaining
 certificate lifetime/trust boundary is reported rather than concealed.
 
-For the local Slice 6 diagnostic, the one-shot cleanup may reuse the
-already pinned Vault image as a fixed, source-digest-bound binary carrier;
-it is a finite task in the closed bootstrap/cleanup inventory, not a new
-resident Profile workload. Its sole bridge has Vault and this one task as
-members. Docker inspect must bind its non-root UID:GID, exact image and
-command digest, read-only mounts/rootfs, dropped capabilities,
+For the local Slice 6 diagnostic, the one-shot cleanup uses the already
+locked Alpine arm64 image as a fixed carrier for a separate, clean-source,
+statically built Go HTTP executable. The Vault image is unsuitable as this
+carrier because it declares two `VOLUME` paths that Docker silently turns
+into anonymous writable volumes. The finite task has a predeclared
+UID:GID of `20090:30090`, disjoint from all 78 resident principals; it is
+in the closed bootstrap/cleanup inventory, not a new resident Profile
+workload. Its sole bridge has Vault and this one task as members. Docker
+image inspect must bind the pinned OCI digest, platform, environment and
+absence of declared volumes; container inspect must bind the non-root
+identity, exact image/entrypoint and sole read-only executable bind. Before
+any secret delivery, `docker cp` reads that actual created-container bind
+and compares its SHA-256 with the clean-source build. The source revision,
+tree, Go toolchain and fixed build flags are separate from Alpine's own OCI
+identity; the binary is not claimed as an Alpine layer. Inspect also binds
+the read-only rootfs, dropped capabilities,
 no-new-privileges, seccomp and bounded memory/CPU/PIDs/time. It has no host
 publication, daemon socket, business bridge, host network, HOME, named
 volume, credential cache or log sink. The task receives its limited token,
@@ -2041,9 +2051,9 @@ acceptance in later slices.
 
 This is the approved minimal local gate boundary, not proof that an
 independent production operator, recovery or terminal-credential supply has
-passed. Those remain named release gates. The existing diagnostic still holds
-its initial root token until its final cleanup and therefore cannot satisfy
-this rule; it must be revised before final evidence. Ordinary and PostgreSQL
+passed. Those remain named release gates. Earlier diagnostics retained the
+initial root token; R21 and later revoke it before controller PID1 startup,
+but that ordering alone is not final evidence. Ordinary and PostgreSQL
 certificate signer delegation remains a separate finite Profile-bound policy:
 all 38 policies must pass the production validator, the 9 dedicated
 PostgreSQL signers cannot gain ordinary TLS issuance, and shared Provider
