@@ -61,6 +61,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
+	// Build the finite operator from its own clean source checkpoint before
+	// this test creates any run-private files or short-lived Vault authority.
+	var terminalBinaryPath, terminalBinaryDigest string
+	if os.Getenv(slice6TerminalOperatorEnv) == "1" {
+		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, t.TempDir())
+	}
 	run, err := newSlice6DockerRun()
 	if err != nil {
 		t.Fatal(err)
@@ -380,9 +386,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				t.Logf("same-run real-Vault certificate controller startup inputs assembled: canonical_config_bytes=%d signing_policies=%d bootstrap_chain_bytes=%d; no certificate process yet",
 					len(certificateConfig), len(composed.CertificateKeys)-1, len(certificateLeaf))
 				var terminalOperator *slice6TerminalOperatorCredential
-				var terminalBinaryPath, terminalBinaryDigest string
 				if os.Getenv(slice6TerminalOperatorEnv) == "1" {
-					terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, root)
 					prepared := slice6VaultPrepareTerminalOperator(t, ctx, run, serverID, configDir, composed.Profile, general)
 					terminalOperator = &prepared
 					defer terminalOperator.clear()

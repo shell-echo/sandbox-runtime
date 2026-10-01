@@ -41,6 +41,10 @@ type input struct {
 	TokenExpiresAt        time.Time `json:"token_expires_at"`
 }
 
+type cleanupStage string
+
+func (s cleanupStage) Error() string { return "terminal cleanup unavailable" }
+
 func main() {
 	if len(os.Args) != 2 || os.Args[1] != "--one-shot" {
 		fmt.Fprintln(os.Stderr, "phase6-terminal-cleanup: unavailable")
@@ -49,14 +53,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	if err := run(ctx, os.Stdin, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "phase6-terminal-cleanup: unavailable")
+		var stage cleanupStage
+		if !errors.As(err, &stage) {
+			stage = "unknown"
+		}
+		fmt.Fprintf(os.Stderr, "phase6-terminal-cleanup: unavailable stage=%s\n", stage)
 		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	if ctx == nil || reader == nil || writer == nil {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("input-boundary")
 	}
 	type readResult struct {
 		value []byte
@@ -70,18 +78,18 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	var document []byte
 	select {
 	case <-ctx.Done():
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("input-timeout")
 	case result := <-completed:
 		if result.err != nil || len(result.value) < 1 || len(result.value) > maxInputBytes {
 			clear(result.value)
-			return phase6terminalcleanup.ErrInvalid
+			return cleanupStage("input-read")
 		}
 		document = result.value
 	}
 	defer clear(document)
 	value, err := decodeInput(document)
 	if err != nil {
-		return err
+		return cleanupStage("input-decode")
 	}
 	defer func() {
 		clear(value.VaultServerCAPEM)
@@ -95,36 +103,39 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	}()
 	profile, err := phase6security.Decode(value.ProfileJSON)
 	if err != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("profile-decode")
 	}
 	sources, err := phase6security.DecodePeerCRLSources(value.PeerSourcesJSON, profile)
 	if err != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("sources-decode")
 	}
 	plan, err := phase6terminalcleanup.Build(value.RunID, profile, sources,
 		value.CertificateLedgerJSON, value.CredentialLedgerJSON, value.ManagementAccessor, time.Now().UTC())
 	if err != nil || plan.Digest != value.PlanDigest {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("plan-rebuild")
 	}
 	remote, err := phase6terminalcleanup.NewVaultRemote(phase6terminalcleanup.VaultRemoteConfig{
 		Plan: plan, Endpoint: value.VaultEndpoint, ServerCAPEM: value.VaultServerCAPEM,
 		ClientCertificate: value.ClientCertificatePEM, ClientPrivateKey: value.ClientPrivateKeyPEM,
 		Token: value.OperatorToken, TokenExpiresAt: value.TokenExpiresAt, Now: time.Now})
 	if err != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("vault-client")
 	}
 	defer remote.Close()
 	receipt, err := phase6terminalcleanup.Execute(ctx, plan, remote, time.Now)
 	encoded, encodeErr := json.Marshal(receipt)
 	if encodeErr != nil || len(encoded) > 16<<10 {
 		clear(encoded)
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("receipt-encode")
 	}
 	defer clear(encoded)
 	if _, writeErr := writer.Write(append(encoded, '\n')); writeErr != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return cleanupStage("receipt-write")
 	}
-	return err
+	if err != nil {
+		return cleanupStage("execute-" + receipt.FailureStage)
+	}
+	return nil
 }
 
 func decodeInput(document []byte) (input, error) {

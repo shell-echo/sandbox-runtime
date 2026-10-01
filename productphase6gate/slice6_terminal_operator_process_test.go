@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -27,6 +28,8 @@ import (
 const slice6TerminalOperatorEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR"
 const slice6TerminalOperatorUID = 20090
 const slice6TerminalOperatorGID = 30090
+
+var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: unavailable stage=([a-z][a-z-]{0,63})`)
 
 type slice6TerminalOperatorInput struct {
 	Protocol              string    `json:"protocol"`
@@ -49,13 +52,21 @@ type slice6TerminalOperatorInput struct {
 // The executable is a separate clean-source artifact, not an Alpine layer.
 func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot string) (string, string) {
 	t.Helper()
-	sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
+	sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR_SOURCE_ROOT"))
 	if err != nil || !filepath.IsAbs(sourceRoot) {
 		t.Fatal("terminal operator requires independent clean source checkout")
 	}
 	revisionDocument, err := exec.CommandContext(ctx, "git", "-C", sourceRoot, "rev-parse", "HEAD").Output()
 	if err != nil || verifyCleanSlice6Source(ctx, sourceRoot, strings.TrimSpace(string(revisionDocument))) != nil {
 		t.Fatal("terminal operator source is not an immutable clean revision")
+	}
+	version, err := exec.CommandContext(ctx, "go", "env", "GOVERSION").Output()
+	if err != nil || string(bytes.TrimSpace(version)) != "go1.26.8" {
+		t.Fatal("terminal operator requires the reviewed Go 1.26.8 toolchain")
+	}
+	treeDocument, err := exec.CommandContext(ctx, "git", "-C", sourceRoot, "rev-parse", "HEAD^{tree}").Output()
+	if err != nil || len(bytes.TrimSpace(treeDocument)) != 40 {
+		t.Fatal("terminal operator source tree identity unavailable")
 	}
 	binaryPath := filepath.Join(privateRoot, "phase6-terminal-cleanup")
 	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
@@ -75,7 +86,10 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot 
 	}
 	hash := sha256.Sum256(binary)
 	clear(binary)
-	return binaryPath, "sha256:" + hex.EncodeToString(hash[:])
+	digest := "sha256:" + hex.EncodeToString(hash[:])
+	t.Logf("terminal operator separate source revision=%s tree=%s toolchain=go1.26.8 build=CGO_ENABLED=0,linux/arm64,-mod=readonly,-trimpath,-buildvcs=false,-ldflags=-buildid= binary=%s",
+		strings.TrimSpace(string(revisionDocument)), strings.TrimSpace(string(treeDocument)), digest)
+	return binaryPath, digest
 }
 
 func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6DockerRun,
@@ -185,8 +199,13 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	if startErr != nil || len(output) > 16<<10 || json.Unmarshal(bytes.TrimSpace(output), &receipt) != nil ||
 		!receipt.Complete || !receipt.SelfRevoked || receipt.PlanDigest != plan.Digest ||
 		receipt.RunID != run.id || receipt.ProfileDigest != composed.Profile.ProfileDigest ||
-		len(receipt.Certificates) != 2 || len(receipt.Tokens) != 2 || receipt.IssuerCRLSHA == "" {
-		t.Fatal("terminal operator did not return an exact complete private receipt")
+		len(receipt.Certificates) != 2 || len(receipt.Tokens) != 2 ||
+		receipt.IssuerCRLSHA == "" || receipt.FailureStage != "" {
+		stage := "unknown"
+		if matched := slice6TerminalStagePattern.FindSubmatch(output); len(matched) == 2 {
+			stage = string(matched[1])
+		}
+		t.Fatalf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
 	}
 	for _, target := range append(receipt.Certificates, receipt.Tokens...) {
 		if !target.Confirmed {

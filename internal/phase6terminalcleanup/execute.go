@@ -61,6 +61,7 @@ type Receipt struct {
 	Tokens        []TargetResult `json:"tokens"`
 	SelfRevoked   bool           `json:"self_revoked"`
 	Complete      bool           `json:"complete"`
+	FailureStage  string         `json:"failure_stage,omitempty"`
 }
 
 func (p Plan) Validate() error {
@@ -114,6 +115,10 @@ func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time
 	if ctx == nil || remote == nil || now == nil || now().IsZero() || plan.Validate() != nil {
 		return Receipt{}, ErrInvalid
 	}
+	fail := func(stage string) (Receipt, error) {
+		receipt.FailureStage = stage
+		return receipt, ErrInvalid
+	}
 	for index, target := range plan.Certificates {
 		receipt.Certificates[index] = TargetResult{Kind: "certificate", TargetDigest: targetDigest("certificate", target.Serial)}
 	}
@@ -122,24 +127,24 @@ func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time
 		observed, err := remote.LookupAccessor(ctx, target.Accessor)
 		if target.State == "revoked" {
 			if !errors.Is(err, ErrAccessorAbsent) {
-				return receipt, ErrInvalid
+				return fail("token-preflight-absent")
 			}
 			continue
 		}
 		if err != nil || !tokenMatches(plan, target, observed) {
-			return receipt, ErrInvalid
+			return fail("token-preflight-bound")
 		}
 	}
 	for _, target := range plan.Certificates {
 		if target.State == "active" && remote.RevokeCertificate(ctx, target.Serial) != nil {
-			return receipt, ErrInvalid
+			return fail("certificate-revoke")
 		}
 	}
 	issuerDER, crlDER, err := remote.ReadCompleteCRL(ctx, plan.GeneralIssuerID)
 	if err != nil || len(issuerDER) == 0 || len(crlDER) == 0 {
 		clear(issuerDER)
 		clear(crlDER)
-		return receipt, ErrInvalid
+		return fail("crl-read")
 	}
 	issuerHash := sha256.Sum256(issuerDER)
 	issuerDigest := "sha256:" + hex.EncodeToString(issuerHash[:])
@@ -147,20 +152,20 @@ func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time
 	if parseErr != nil || issuerDigest != plan.GeneralIssuerDigest {
 		clear(issuerDER)
 		clear(crlDER)
-		return receipt, ErrInvalid
+		return fail("crl-issuer")
 	}
 	snapshot := workloadpki.RevocationSnapshot{DER: crlDER, ThisUpdate: list.ThisUpdate, NextUpdate: list.NextUpdate}
 	verified, verifyErr := workloadpki.VerifyCRLForIssuer(snapshot, issuerDER, now().UTC())
 	clear(issuerDER)
 	clear(crlDER)
 	if verifyErr != nil || verified.IssuerDigest() != plan.GeneralIssuerDigest {
-		return receipt, ErrInvalid
+		return fail("crl-signature")
 	}
 	for index, target := range plan.Certificates {
 		serialBytes, decodeErr := hex.DecodeString(strings.ReplaceAll(target.Serial, ":", ""))
 		if decodeErr != nil || !verified.RevokesSerial(new(big.Int).SetBytes(serialBytes)) {
 			clear(serialBytes)
-			return receipt, ErrInvalid
+			return fail("crl-target")
 		}
 		clear(serialBytes)
 		receipt.Certificates[index].Confirmed = true
@@ -169,16 +174,16 @@ func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time
 	for index, target := range plan.Tokens {
 		if target.State == "active" {
 			if remote.RevokeAccessor(ctx, target.Accessor) != nil {
-				return receipt, ErrInvalid
+				return fail("token-revoke")
 			}
 			if _, err := remote.LookupAccessor(ctx, target.Accessor); !errors.Is(err, ErrAccessorAbsent) {
-				return receipt, ErrInvalid
+				return fail("token-readback")
 			}
 		}
 		receipt.Tokens[index].Confirmed = true
 	}
 	if remote.RevokeSelf(ctx) != nil {
-		return receipt, ErrInvalid
+		return fail("operator-self-revoke")
 	}
 	receipt.SelfRevoked, receipt.Complete = true, true
 	return receipt, nil

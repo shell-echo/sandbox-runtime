@@ -914,6 +914,19 @@ Sandbox approved switching the finite task to the already pinned no-volume
 Alpine carrier, fixed `20090:30090` UID:GID and created-container bind-byte
 hash verification; that corrected gate has not yet passed a full Vault run.
 
+R23 gate revision `dca37d2` reused the unaffected R22 resident image
+candidates and verified the Alpine carrier's effective no-volume config,
+fixed non-root identity, sole read-only binary bind and actual mounted bytes
+before delivering operator stdin. A separate no-secret probe confirmed that
+this UID can execute the bound static binary under the locked seccomp policy.
+The real 203.47-second Vault run again reached two managed PID1 processes,
+both quiesce receipts and the independent operator task, but it returned no
+complete private cleanup receipt. That is a failed component test, not a
+successful revocation. A follow-up source checkpoint adds only redacted
+stage codes to distinguish input, Vault client, preflight, CRL and revoke
+failures without emitting token/accessor/serial or raw remote diagnostics.
+No release manifest or count change follows.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

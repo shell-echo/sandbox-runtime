@@ -133,20 +133,24 @@ func TestExecuteRequiresEveryRemoteReadbackBeforeSelfRevoke(t *testing.T) {
 			t.Fatalf("unconfirmed target = %+v", value)
 		}
 	}
-	for name, mutate := range map[string]func(*fakeRemote){
-		"lookup forbidden":        func(f *fakeRemote) { f.lookupErr = errors.New("403") },
-		"wrong metadata":          func(f *fakeRemote) { f.observed[plan.Tokens[0].Accessor].Metadata["lease_id"] = "other" },
-		"certificate revoke loss": func(f *fakeRemote) { f.certErr = errors.New("timeout") },
-		"CRL missing serial":      func(f *fakeRemote) { f.crlDER = nil },
-		"token revoke loss":       func(f *fakeRemote) { f.tokenErr = errors.New("timeout") },
-		"404 readback":            func(f *fakeRemote) { f.missingReadback = true },
-		"self revoke loss":        func(f *fakeRemote) { f.selfErr = errors.New("timeout") },
+	for name, test := range map[string]struct {
+		mutate func(*fakeRemote)
+		stage  string
+	}{
+		"lookup forbidden":        {func(f *fakeRemote) { f.lookupErr = errors.New("403") }, "token-preflight-bound"},
+		"wrong metadata":          {func(f *fakeRemote) { f.observed[plan.Tokens[0].Accessor].Metadata["lease_id"] = "other" }, "token-preflight-bound"},
+		"certificate revoke loss": {func(f *fakeRemote) { f.certErr = errors.New("timeout") }, "certificate-revoke"},
+		"CRL missing serial":      {func(f *fakeRemote) { f.crlDER = nil }, "crl-read"},
+		"token revoke loss":       {func(f *fakeRemote) { f.tokenErr = errors.New("timeout") }, "token-revoke"},
+		"404 readback":            {func(f *fakeRemote) { f.missingReadback = true }, "token-readback"},
+		"self revoke loss":        {func(f *fakeRemote) { f.selfErr = errors.New("timeout") }, "operator-self-revoke"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			value, fake, moment := executeFixture(t)
-			mutate(fake)
+			test.mutate(fake)
 			observed, executeErr := Execute(context.Background(), value, fake, func() time.Time { return moment })
 			if !errors.Is(executeErr, ErrInvalid) || observed.Complete || observed.SelfRevoked ||
+				observed.FailureStage != test.stage ||
 				(name != "self revoke loss" && fake.selfCalls != 0) {
 				t.Fatalf("failed cleanup falsely accepted: %+v, %v, self=%d", observed, executeErr, fake.selfCalls)
 			}

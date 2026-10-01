@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -58,7 +59,9 @@ func TestRunRejectsBoundedInputAndCancellationWithoutOutput(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
-			if err := run(test.ctx, test.reader, &output); err == nil || output.Len() != 0 {
+			var stage cleanupStage
+			if err := run(test.ctx, test.reader, &output); err == nil ||
+				!errors.As(err, &stage) || stage == "" || output.Len() != 0 {
 				t.Fatal("invalid input produced a success or a receipt")
 			}
 		})
