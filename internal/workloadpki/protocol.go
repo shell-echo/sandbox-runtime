@@ -127,7 +127,6 @@ type Response struct {
 func (p Policy) Validate() error {
 	parsed, err := url.Parse(p.URI)
 	if !namePattern.MatchString(p.ID) || p.Registry == nil || p.Registry.Validate(p.Requester) != nil || p.Registry.Validate(p.Subject) != nil ||
-		!validPrincipalDelegation(p.Requester, p.Subject) ||
 		!namePattern.MatchString(p.VaultRole) ||
 		(p.IssuerSourceID != "" && !namePattern.MatchString(p.IssuerSourceID)) ||
 		!validDNS(p.TrustDomain) || err != nil || parsed.Scheme != "spiffe" ||
@@ -138,14 +137,14 @@ func (p Policy) Validate() error {
 	}
 	switch p.Purpose {
 	case "":
-		if p.Postgres != (PostgresClientIdentity{}) {
+		if p.Postgres != (PostgresClientIdentity{}) || !validPrincipalDelegation(p.Requester, p.Subject) {
 			return ErrInvalid
 		}
 	case PostgresClientPurpose:
 		if p.Postgres.Validate() != nil || p.URI != p.Postgres.URI ||
 			len(p.DNSNames) != 0 || !slices.Equal(p.Usages, []string{"client_auth"}) ||
 			p.Postgres.MaxTTL != time.Duration(p.MaxTTLSeconds)*time.Second ||
-			p.Subject.Role != securityprincipal.RoleProvider || p.Requester.Role != securityprincipal.RoleProvider {
+			!validPostgresPrincipalDelegation(p.Requester, p.Subject, p.Postgres.OwnerDeployment) {
 			return ErrInvalid
 		}
 	default:
@@ -560,20 +559,65 @@ func validPrincipalDelegation(requester, subject securityprincipal.Principal) bo
 		kind securityprincipal.Kind
 		name string
 	}{
-		"product_tls_agent":          {securityprincipal.KindRuntimeRole, "product"},
-		"provider_tls_agent":         {securityprincipal.KindRuntimeRole, "provider"},
-		"gateway_tls_agent":          {securityprincipal.KindRuntimeRole, "gateway"},
-		"guest_tls_agent":            {securityprincipal.KindRuntimeRole, "guest"},
-		"browser_tls_agent":          {securityprincipal.KindRuntimeRole, "browser"},
-		"desktop_tls_agent":          {securityprincipal.KindRuntimeRole, "desktop"},
-		"browser_executor_tls_agent": {securityprincipal.KindExecutorBackend, "browser_executor"},
-		"desktop_executor_tls_agent": {securityprincipal.KindExecutorBackend, "desktop_executor"},
+		"product_tls_agent":                          {securityprincipal.KindRuntimeRole, "product"},
+		"provider_tls_agent":                         {securityprincipal.KindRuntimeRole, "provider"},
+		"gateway_tls_agent":                          {securityprincipal.KindRuntimeRole, "gateway"},
+		"guest_tls_agent":                            {securityprincipal.KindRuntimeRole, "guest"},
+		"browser_tls_agent":                          {securityprincipal.KindRuntimeRole, "browser"},
+		"desktop_tls_agent":                          {securityprincipal.KindRuntimeRole, "desktop"},
+		"browser_executor_tls_agent":                 {securityprincipal.KindExecutorBackend, "browser_executor"},
+		"desktop_executor_tls_agent":                 {securityprincipal.KindExecutorBackend, "desktop_executor"},
+		"browser_action_ingress_tls_agent":           {securityprincipal.KindRuntimeRole, "browser_action_ingress"},
+		"browser_action_ingress_agent_tls_agent":     {securityprincipal.KindMaterialAgent, "browser_action_ingress_agent"},
+		"gateway_agent_tls_agent":                    {securityprincipal.KindMaterialAgent, "gateway_agent"},
+		"guest_agent_tls_agent":                      {securityprincipal.KindMaterialAgent, "guest_agent"},
+		"product_migration_agent_tls_agent":          {securityprincipal.KindMaterialAgent, "product_migration_agent"},
+		"product_runtime_agent_tls_agent":            {securityprincipal.KindMaterialAgent, "product_runtime_agent"},
+		"provider_browser_runtime_agent_tls_agent":   {securityprincipal.KindMaterialAgent, "provider_runtime_agent"},
+		"provider_desktop_runtime_agent_tls_agent":   {securityprincipal.KindMaterialAgent, "provider_runtime_agent"},
+		"provider_migration_agent_tls_agent":         {securityprincipal.KindMaterialAgent, "provider_migration_agent"},
+		"provider_browser_migration_agent_tls_agent": {securityprincipal.KindMaterialAgent, "provider_browser_migration_agent"},
+		"provider_desktop_migration_agent_tls_agent": {securityprincipal.KindMaterialAgent, "provider_desktop_migration_agent"},
+		"provider_runtime_agent_tls_agent":           {securityprincipal.KindMaterialAgent, "provider_runtime_agent"},
 	}
 	if subject.Kind == securityprincipal.KindEgressBroker {
 		return requester.Name == subject.Name+"_tls_agent"
 	}
 	bound, ok := allowed[requester.Name]
 	return ok && bound.kind == subject.Kind && bound.name == subject.Name
+}
+
+// PostgreSQL-purpose delegation is intentionally separate from ordinary TLS
+// issuance. This low-level vocabulary check is not instance authorization:
+// the certificate-controller command also compares the full signed principals,
+// owner, SQL role, URI, policy, socket, UID/GID and request key with its closed
+// Profile. Browser/Desktop Provider signers share a principal name but never
+// an InstanceDigest in that final comparison.
+func validPostgresPrincipalDelegation(requester, subject securityprincipal.Principal, owner string) bool {
+	if requester.Kind != securityprincipal.KindTLSAgent ||
+		requester.Role != subject.Role || requester.Digest() == subject.Digest() {
+		return false
+	}
+	type binding struct {
+		agent string
+		kind  securityprincipal.Kind
+		name  string
+		role  securityprincipal.Role
+	}
+	allowed := map[string]binding{
+		"product-runtime":                {"product_postgres_tls_agent", securityprincipal.KindRuntimeRole, "product", securityprincipal.RoleProduct},
+		"gateway-runtime":                {"gateway_postgres_tls_agent", securityprincipal.KindRuntimeRole, "gateway", securityprincipal.RoleGateway},
+		"provider-runtime":               {"provider_postgres_tls_agent", securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+		"provider-browser-runtime":       {"provider_tls_agent", securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+		"provider-desktop-runtime":       {"provider_tls_agent", securityprincipal.KindRuntimeRole, "provider", securityprincipal.RoleProvider},
+		"product-migration-job":          {"product_migration_postgres_tls_agent", securityprincipal.KindMigrationJob, "product_migration", securityprincipal.RoleProduct},
+		"provider-migration-job":         {"provider_migration_postgres_tls_agent", securityprincipal.KindMigrationJob, "provider_migration", securityprincipal.RoleProvider},
+		"provider-browser-migration-job": {"provider_browser_migration_postgres_tls_agent", securityprincipal.KindMigrationJob, "provider_browser_migration", securityprincipal.RoleProvider},
+		"provider-desktop-migration-job": {"provider_desktop_migration_postgres_tls_agent", securityprincipal.KindMigrationJob, "provider_desktop_migration", securityprincipal.RoleProvider},
+	}
+	want, found := allowed[owner]
+	return found && requester.Name == want.agent && requester.Role == want.role &&
+		subject.Kind == want.kind && subject.Name == want.name && subject.Role == want.role
 }
 
 func decodeCanonical(document []byte, maximum int, target any) error {

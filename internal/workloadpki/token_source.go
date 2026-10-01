@@ -37,12 +37,13 @@ type CredentialTokenSourceConfig struct {
 }
 
 type CredentialTokenSource struct {
-	mu     sync.Mutex
-	client CredentialClient
-	ttl    time.Duration
-	now    func() time.Time
-	lease  CredentialLease
-	closed bool
+	mu       sync.Mutex
+	client   CredentialClient
+	ttl      time.Duration
+	now      func() time.Time
+	lease    CredentialLease
+	closed   bool
+	closeErr error
 }
 
 func NewCredentialTokenSource(config CredentialTokenSourceConfig) (*CredentialTokenSource, error) {
@@ -103,7 +104,7 @@ func (s *CredentialTokenSource) Close(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil
+		return s.closeErr
 	}
 	s.closed = true
 	if len(s.lease.Credential) == 0 {
@@ -112,7 +113,8 @@ func (s *CredentialTokenSource) Close(ctx context.Context) error {
 	err := s.client.Revoke(ctx, s.lease)
 	s.lease.Destroy()
 	s.lease = CredentialLease{}
-	return normalizeCredentialError(err)
+	s.closeErr = normalizeCredentialError(err)
+	return s.closeErr
 }
 
 func validateCredentialLease(lease CredentialLease, now time.Time, requested time.Duration) error {

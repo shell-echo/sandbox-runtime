@@ -204,18 +204,33 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 		"wrong CSR key": func(c *configDocument) {
 			c.Policies[2].AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
 		},
-		"wrong issuer":                 func(c *configDocument) { c.Policies[2].VaultRole = "other" },
-		"missing listener":             func(c *configDocument) { c.Listeners = c.Listeners[:1] },
-		"extra listener":               func(c *configDocument) { c.Listeners = append(c.Listeners, c.Listeners[2]) },
-		"wrong peer":                   func(c *configDocument) { c.Listeners[2].ExpectedClientUID++ },
-		"swapped endpoint":             func(c *configDocument) { c.Listeners[2].SocketPath = "/run/certificate-controller/other/request.sock" },
-		"wrong managed socket":         func(c *configDocument) { c.ManagedVaultTLS.ControllerSocket += "-other" },
-		"credential issuer socket":     func(c *configDocument) { c.Credential.SocketPath += "-other" },
-		"credential server UID":        func(c *configDocument) { c.Credential.ExpectedUID++ },
-		"credential directory group":   func(c *configDocument) { c.Credential.ControllerGID++ },
-		"missing PostgreSQL policy":    func(c *configDocument) { c.Policies = c.Policies[:3] },
-		"missing PostgreSQL listener":  func(c *configDocument) { c.Listeners = c.Listeners[:3] },
-		"wrong PostgreSQL purpose":     func(c *configDocument) { c.Policies[3].Purpose = "" },
+		"wrong issuer":                func(c *configDocument) { c.Policies[2].VaultRole = "other" },
+		"missing listener":            func(c *configDocument) { c.Listeners = c.Listeners[:1] },
+		"extra listener":              func(c *configDocument) { c.Listeners = append(c.Listeners, c.Listeners[2]) },
+		"wrong peer":                  func(c *configDocument) { c.Listeners[2].ExpectedClientUID++ },
+		"swapped endpoint":            func(c *configDocument) { c.Listeners[2].SocketPath = "/run/certificate-controller/other/request.sock" },
+		"wrong managed socket":        func(c *configDocument) { c.ManagedVaultTLS.ControllerSocket += "-other" },
+		"credential issuer socket":    func(c *configDocument) { c.Credential.SocketPath += "-other" },
+		"credential server UID":       func(c *configDocument) { c.Credential.ExpectedUID++ },
+		"credential directory group":  func(c *configDocument) { c.Credential.ControllerGID++ },
+		"missing PostgreSQL policy":   func(c *configDocument) { c.Policies = c.Policies[:3] },
+		"missing PostgreSQL listener": func(c *configDocument) { c.Listeners = c.Listeners[:3] },
+		"wrong PostgreSQL purpose":    func(c *configDocument) { c.Policies[3].Purpose = "" },
+		"PostgreSQL signer ordinary downgrade": func(c *configDocument) {
+			c.Policies[3].Purpose = ""
+			c.Policies[3].Postgres = nil
+			c.Policies[3].DNSNames = providerTLS.DNSNames
+			c.Policies[3].Usages = providerTLS.Usages
+		},
+		"wrong PostgreSQL owner": func(c *configDocument) {
+			c.Policies[3].Postgres.OwnerDeployment = "provider-desktop-runtime"
+		},
+		"wrong PostgreSQL URI": func(c *configDocument) {
+			c.Policies[3].URI = "spiffe://sandbox.test/provider-desktop-runtime"
+		},
+		"wrong PostgreSQL requester instance": func(c *configDocument) {
+			c.Policies[3].Requester.InstanceDigest = "other-instance"
+		},
 		"wrong PostgreSQL database":    func(c *configDocument) { c.Policies[3].Postgres.DatabaseName = "provider_desktop" },
 		"wrong PostgreSQL role":        func(c *configDocument) { c.Policies[3].Postgres.RuntimeRole = "desktop_provider_runtime" },
 		"wrong PostgreSQL CN":          func(c *configDocument) { c.Policies[3].Postgres.CommonName = "other" },

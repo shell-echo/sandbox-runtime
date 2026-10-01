@@ -42,7 +42,7 @@ func slice6VaultScopedPolicyCommandDiagnostic(t *testing.T, ctx context.Context,
 }
 
 func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice6DockerRun,
-	serverID, configDir string, profile phase6security.Profile, general, broker slice6VaultRoot) {
+	serverID, configDir string, profile phase6security.Profile, general, broker slice6VaultRoot) []byte {
 	t.Helper()
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil || len(plan) != 11 {
@@ -132,6 +132,7 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 		t.Fatal("remove exact disposable certificate test token")
 	}
 	t.Logf("real Vault KVv2 mount, 11 exact material ACLs, 12 scoped token roles, 38 issuer-pinned PKI roles, root and scoped PKI-token CSR sign/foreign CSR denial and positive/negative token capabilities passed for Profile %s; no material documents or controller process yet", profile.ProfileDigest)
+	return []byte(managementToken)
 }
 
 func slice6VaultMintManagementToken(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string) string {

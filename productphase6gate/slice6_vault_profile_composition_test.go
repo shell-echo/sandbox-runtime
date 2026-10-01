@@ -28,6 +28,8 @@ type slice6VaultComposedInputs struct {
 	PeerSourcesPath string
 	PeerSources     phase6security.PeerCRLSources
 	CertificateKeys map[string]string
+	CredentialKeys  map[string]string
+	AnchorPaths     map[string]string
 }
 
 func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root, runID string,
@@ -136,6 +138,15 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		t.Fatalf("same-run candidate failed strict Slice 6 gate input preflight: %v", err)
 	}
 	peerSourcesPath, peerSources := slice6VaultComposePeerCRLSources(t, directory, verified, general, broker)
+	materialPlan, err := phase6security.BuildSlice6DesiredMaterialAccess(verified)
+	if err != nil || len(materialPlan) != 11 {
+		t.Fatal("same-run Profile cannot derive exact credential signing clients")
+	}
+	credentialKeyNames := []string{"credential-certificate-controller"}
+	for _, entry := range materialPlan {
+		credentialKeyNames = append(credentialKeyNames, "credential-"+entry.Agent)
+	}
+	credentialKeys := writeKeys(credentialKeyNames)
 	loadedImages, err := verifySlice6LoadedImageStore(ctx, gateInput)
 	if err != nil {
 		t.Fatalf("same-run candidate image store preflight failed: %v", err)
@@ -172,7 +183,8 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	t.Logf("real-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d peer_crl_edges=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
 		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages, len(peerSources.Edges))
 	return slice6VaultComposedInputs{ProfilePath: profilePath, Profile: verified,
-		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources, CertificateKeys: input.CertificateKeys}
+		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources,
+		CertificateKeys: input.CertificateKeys, CredentialKeys: credentialKeys, AnchorPaths: anchors}
 }
 
 // The five anchor names are trust purposes, not five independent CAs. The

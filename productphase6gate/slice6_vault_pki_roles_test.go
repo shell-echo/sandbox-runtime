@@ -102,6 +102,8 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 		bareDomain := role.CommonName != "" || len(role.DNSNames) != 0
 		arguments := []string{"write", "pki/roles/" + role.Name,
 			"issuer_ref=" + role.Issuer, "allowed_uri_sans=" + role.URI,
+			"not_before_duration=30s",
+			"basic_constraints_valid_for_non_ca=true",
 			"allow_bare_domains=" + strconv.FormatBool(bareDomain), "allow_subdomains=false", "allow_ip_sans=false",
 			"allow_any_name=false", "allow_localhost=false", "allow_glob_domains=false",
 			"allow_wildcard_certificates=false", "allowed_uri_sans_template=false",
@@ -132,24 +134,26 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 		response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json", "pki/roles/"+role.Name)...)
 		var observed struct {
 			Data struct {
-				IssuerRef        string   `json:"issuer_ref"`
-				AllowedURISANs   []string `json:"allowed_uri_sans"`
-				AllowedDomains   []string `json:"allowed_domains"`
-				RequireCN        bool     `json:"require_cn"`
-				UseCSRCommonName bool     `json:"use_csr_common_name"`
-				UseCSRSANs       bool     `json:"use_csr_sans"`
-				AllowBareDomains bool     `json:"allow_bare_domains"`
-				AllowSubdomains  bool     `json:"allow_subdomains"`
-				AllowIPSANs      bool     `json:"allow_ip_sans"`
-				AllowAnyName     bool     `json:"allow_any_name"`
-				AllowLocalhost   bool     `json:"allow_localhost"`
-				AllowGlobDomains bool     `json:"allow_glob_domains"`
-				AllowWildcards   bool     `json:"allow_wildcard_certificates"`
-				URITemplate      bool     `json:"allowed_uri_sans_template"`
-				AllowedOtherSANs []string `json:"allowed_other_sans"`
-				ClientFlag       bool     `json:"client_flag"`
-				ServerFlag       bool     `json:"server_flag"`
-				MaxTTL           int64    `json:"max_ttl"`
+				IssuerRef                     string   `json:"issuer_ref"`
+				AllowedURISANs                []string `json:"allowed_uri_sans"`
+				AllowedDomains                []string `json:"allowed_domains"`
+				RequireCN                     bool     `json:"require_cn"`
+				UseCSRCommonName              bool     `json:"use_csr_common_name"`
+				UseCSRSANs                    bool     `json:"use_csr_sans"`
+				AllowBareDomains              bool     `json:"allow_bare_domains"`
+				AllowSubdomains               bool     `json:"allow_subdomains"`
+				AllowIPSANs                   bool     `json:"allow_ip_sans"`
+				AllowAnyName                  bool     `json:"allow_any_name"`
+				AllowLocalhost                bool     `json:"allow_localhost"`
+				AllowGlobDomains              bool     `json:"allow_glob_domains"`
+				AllowWildcards                bool     `json:"allow_wildcard_certificates"`
+				URITemplate                   bool     `json:"allowed_uri_sans_template"`
+				AllowedOtherSANs              []string `json:"allowed_other_sans"`
+				ClientFlag                    bool     `json:"client_flag"`
+				ServerFlag                    bool     `json:"server_flag"`
+				MaxTTL                        int64    `json:"max_ttl"`
+				NotBeforeDuration             int64    `json:"not_before_duration"`
+				BasicConstraintsValidForNonCA bool     `json:"basic_constraints_valid_for_non_ca"`
 			} `json:"data"`
 		}
 		wantDomains := role.DNSNames
@@ -167,7 +171,8 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 			observed.Data.AllowAnyName || observed.Data.AllowLocalhost || observed.Data.AllowGlobDomains ||
 			observed.Data.AllowWildcards || observed.Data.URITemplate || len(observed.Data.AllowedOtherSANs) != 0 ||
 			observed.Data.ClientFlag != role.Client || observed.Data.ServerFlag != role.Server ||
-			observed.Data.MaxTTL != role.MaxTTLSeconds {
+			observed.Data.MaxTTL != role.MaxTTLSeconds || observed.Data.NotBeforeDuration != 30 ||
+			!observed.Data.BasicConstraintsValidForNonCA {
 			t.Fatalf("installed Vault PKI role %s readback drifted", role.Name)
 		}
 	}

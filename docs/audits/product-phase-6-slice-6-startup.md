@@ -3502,3 +3502,68 @@ to zero. This proves only empty, exclusive startup storage allocation, not
 ledger creation by a controller, a persistent restart, corruption/loss
 denial, a hard volume quota or any accepted release scenario. Phase 6
 remains **5/15** with no release manifest or push.
+
+Checkpoint 2026-10-01 (real credential-controller bootstrap, still a
+diagnostic): the R19 source-bound same-run Vault/Profile test now derives 12
+distinct credential-client Ed25519 keys, creates 13 isolated restricted Unix
+socket directories and five separate root-owned trust-anchor file volumes,
+and independently checks each anchor's Profile SHA-256, 0444 file mode and
+non-root read through its eventual read-only bind. The limited 15-minute
+Vault management token, bootstrap P-256 private key and Profile-bound managed
+CSR request key enter the immutable credential-controller image only through
+the one-shot sealed FD-loader envelope; none is placed in its JSON config,
+arguments, environment, volume or log. The container uses the reviewed
+non-root UID:GID, exact private-config and ledger volumes, isolated Vault
+bridge, read-only rootfs, dropped capabilities, no-new-privileges, locked
+seccomp and Profile resource bounds. The real controller process reached its
+certificate-controller-only credential listener and created its own 0600
+`ledger.json`; an intentional pre-switch stop removed the socket inode and
+the exact labeled Docker container/network/volume inventories returned to
+zero. This passed in 158.17 seconds at the prior R19 candidate image source
+revision `ca775af31af267f34067f2b12d594984ef6a37ce`.
+
+Earlier same-run diagnostic attempts failed closed before a live listener:
+Vault's 30-second NotBefore backdate exceeded the bootstrap certificate's
+strict total-life ceiling, its default non-CA Basic Constraints setting was
+incompatible with the production validator, and a concatenated PEM chain
+lacked a separator. The operator PKI role now explicitly pins and reads back
+the 30-second backdate and non-CA Basic Constraints setting; bootstrap signing
+requests a shorter lifetime, and the exact bundle passes both
+`tls.X509KeyPair` and the production bootstrap-certificate validator before
+FD delivery. Those failures were diagnostic, not accepted evidence. The
+certificate controller has **not** started, the credential controller has
+**not** switched to a managed Vault mTLS identity or exposed its other 11
+listeners, no material agent consumed a scoped lease, and no full-topology
+16-scenario receipt or release manifest exists. Phase 6 remains **5/15**;
+there is no push or production-readiness claim from this checkpoint.
+
+Checkpoint 2026-10-01 (two-controller startup diagnostic and validator
+repair, not an accepted gate): after a corrected credential socket cleanup
+check, the same-run real R19 Vault diagnostic passed again in 182.00 seconds
+and observed zero run-labeled Docker resources. A subsequent pass also signed
+an independent certificate-controller bootstrap leaf through its exact Vault
+role and assembled a canonical 38-policy v4 config (71,719 bytes in that
+run); it did not yet start the certificate process. The opt-in two-process
+attempt prepared all 50 restricted controller socket directories and started
+the real credential process, but the real R19 certificate-controller PID1
+rejected its policy set at `certificate-policy` before managed issuance. Its
+failure run cleaned all labeled Docker containers, networks and volumes.
+
+A separate same-run production-`Policy.Validate` preflight then classified
+all 38 policies in one pass: 12 ordinary TLS and 7 PostgreSQL-purpose policies
+were rejected by the older private delegation validator; 19 were accepted.
+The two split Provider PostgreSQL signer policies happened to pass under a
+shared historical `provider_tls_agent` name and still require the final
+Profile's full instance/purpose/owner binding. A limited private policy
+repair now separates ordinary and PostgreSQL-purpose delegation and adds
+only the already approved finite relationships; focused race tests pass, but
+the corrected runtime source has not yet been frozen into a new candidate
+image or retested as a real certificate process. A separate source audit found
+a cyclic final revocation dependency between the two controllers. Sticky
+Close-result tests now preserve remote-revocation failure after local secret
+destruction; a bounded quiesce, independent short-lived operator cleanup,
+exact remote readback and production acceptance are still incomplete. The
+older diagnostic retains its initial root token until the end and cannot be
+used as final rootless-managed-operation evidence. No managed switch, full
+16-scenario receipt, release manifest, push or count advancement is claimed;
+Phase 6 remains **5/15**.

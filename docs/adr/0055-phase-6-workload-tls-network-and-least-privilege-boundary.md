@@ -1981,3 +1981,51 @@ These are source-level corrections to an unaccepted v3 candidate. The final
 78-principal topology, both controller processes, real material consumers,
 first migrations, 16 scenarios and exact cleanup remain live release gates;
 no static Profile or component test alone advances the 5/15 Phase 6 count.
+
+### Slice 6 controller termination and one-shot operator cleanup (2026-10-01)
+
+The two controllers form a terminal revocation dependency: credential
+controller revokes its managed Vault TLS certificate through certificate
+controller, while certificate controller revokes its PKI token through
+credential controller. A sequential TERM order or simultaneous TERM is not a
+proof of complete revocation. Shutdown first rejects new business work,
+issuance, renewal and admission, waits within a fixed deadline for rotation
+and in-flight operations, and preserves only the authenticated revocation and
+necessary status/CRL paths. Local key destruction is distinct from remote
+revocation confirmation. A failed remote call remains pending/unknown or
+failed in the exclusive ledger or bounded non-secret cleanup receipt; repeated
+Close must not turn the first failure into success. EOF, timeout, 403, 404 and
+an unavailable peer are not evidence of revocation. An expired result needs
+trusted issuer or token-state evidence for the exact identity and revision.
+
+The terminal cycle requires an independent, one-shot operator cleanup task
+for this run's dedicated Vault security domain. It is not a third resident
+controller or another member of the 78-principal runtime inventory. Its
+short-lived, nonrenewable, non-default, non-root orphan service token is
+prepared during controlled bootstrap, delivered only to the operator through
+an approved descriptor/in-memory boundary, and remains usable after the
+initial root token is revoked and destroyed before managed runtime acceptance.
+The cleanup identity and mTLS key are independent of both controllers and of
+the temporary first-Vault-start client. Its exact allowed operations are
+fixed-mount PKI revoke and two fixed-issuer certificate/complete-CRL readback,
+token accessor lookup/revoke, and its own final revoke-self. It cannot sign,
+create or renew tokens, read KV/Transit, alter roles/policies/issuers, list
+all objects, or gain sudo/root. Vault's PKI-revoke and accessor-revoke ACLs
+are not serial- or owner-scoped, so the operator must independently bind each
+requested serial/accessor to the run ID, Profile, issuer, subject and exact
+exclusive-ledger entry; unknown or cross-run entries fail closed. It records
+actual remote revoke and independent readback before deleting the isolated
+Vault. Deleting that Vault alone proves only resource cleanup. The operator
+token then self-revokes, its mTLS key is destroyed, and any remaining
+certificate lifetime/trust boundary is reported rather than concealed.
+
+This is the approved minimal local gate boundary, not proof that an
+independent production operator, recovery or terminal-credential supply has
+passed. Those remain named release gates. The existing diagnostic still holds
+its initial root token until its final cleanup and therefore cannot satisfy
+this rule; it must be revised before final evidence. Ordinary and PostgreSQL
+certificate signer delegation remains a separate finite Profile-bound policy:
+all 38 policies must pass the production validator, the 9 dedicated
+PostgreSQL signers cannot gain ordinary TLS issuance, and shared Provider
+principal vocabulary does not erase per-instance digest, owner, SQL role,
+key, socket, UID/GID and issuer binding.

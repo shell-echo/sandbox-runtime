@@ -107,6 +107,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	credentialControllerIP, err := phase6security.Slice6DesiredServiceEndpointAddress(credentialNetwork.Name, "workload-credential-controller")
+	if err != nil {
+		t.Fatal(err)
+	}
 	root, err := os.MkdirTemp(".", ".sr-vault-trust-switch-")
 	if err != nil {
 		t.Fatal(err)
@@ -299,14 +303,76 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") != "1" {
 		t.Fatal("real controller private-config preparation requires same-run source-bound profile composition")
 	}
+	if os.Getenv(slice6CredentialProcessEnv) == "1" &&
+		(os.Getenv(slice6ControllerPrivateConfigEnv) != "1" ||
+			os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1") {
+		t.Fatal("real credential controller process requires same-run private volumes and scoped Vault access")
+	}
+	if os.Getenv(slice6CertificateProcessEnv) == "1" && os.Getenv(slice6CredentialProcessEnv) != "1" {
+		t.Fatal("real certificate controller process requires live credential controller")
+	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
+		var socketVolumes map[string]string
+		var certificateSocketVolumes map[string]string
+		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
 			slice6PrepareControllerLedgerVolumes(t, ctx, run, composed.Profile)
+			socketVolumes = slice6PrepareCredentialControllerSocketVolumes(t, ctx, run, composed.Profile)
+			t.Logf("same-run credential controller socket allocations=%d; isolated client directories are empty and no listener is active", len(socketVolumes))
+			if os.Getenv(slice6CertificateProcessEnv) == "1" {
+				certificateSocketVolumes = slice6PrepareCertificateControllerSocketVolumes(t, ctx, run, composed.Profile, socketVolumes)
+				t.Logf("same-run combined controller socket allocations=%d; no certificate listener is active", len(certificateSocketVolumes))
+			}
+			anchorFiles = slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
+			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
 		}
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
-			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
+			managementToken := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
+			defer clear(managementToken)
+			if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
+				credentialLeaf, credentialKey := slice6VaultSignControllerBootstrap(t, ctx, run,
+					serverID, configDir, composed.Profile, general,
+					"workload-credential-controller",
+					composed.Profile.CertificateController.CredentialController.VaultRole,
+					composed.Profile.CertificateController.CredentialController.PolicyID,
+					composed.CertificateKeys[composed.Profile.CertificateController.CredentialController.RequestKeyID])
+				defer clear(credentialKey)
+				controllerConfig, buildErr := slice6BuildCredentialControllerConfig(composed, credentialLeaf)
+				if buildErr != nil {
+					t.Fatalf("same-run credential controller config assembly failed: %v", buildErr)
+				}
+				defer clear(controllerConfig)
+				t.Logf("same-run real-Vault credential controller startup inputs assembled: canonical_config_bytes=%d signing_clients=%d bootstrap_chain_bytes=%d",
+					len(controllerConfig), len(composed.CredentialKeys), len(credentialLeaf))
+				certificateLeaf, certificateKey := slice6VaultSignControllerBootstrap(t, ctx, run,
+					serverID, configDir, composed.Profile, general,
+					"certificate-controller", composed.Profile.CertificateController.ManagedVaultRole,
+					composed.Profile.CertificateController.ManagedPolicyID,
+					composed.CertificateKeys[composed.Profile.CertificateController.ManagedRequestKeyID])
+				defer clear(certificateKey)
+				certificateConfig, certificateErr := slice6BuildCertificateControllerConfig(composed, certificateLeaf)
+				if certificateErr != nil {
+					t.Fatalf("same-run certificate controller config assembly failed: %v", certificateErr)
+				}
+				defer clear(certificateConfig)
+				t.Logf("same-run real-Vault certificate controller startup inputs assembled: canonical_config_bytes=%d signing_policies=%d bootstrap_chain_bytes=%d; no certificate process yet",
+					len(certificateConfig), len(composed.CertificateKeys)-1, len(certificateLeaf))
+				if os.Getenv(slice6CredentialProcessEnv) == "1" {
+					var onCredentialReady func(func())
+					if os.Getenv(slice6CertificateProcessEnv) == "1" {
+						onCredentialReady = func(stopCredential func()) {
+							slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
+								controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
+								stopCredential)
+						}
+					}
+					slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
+						credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, managementToken,
+						credentialKey, onCredentialReady)
+				}
+			}
 		}
 	}
 	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); err != nil {
@@ -320,7 +386,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
 	}
-	t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; no managed controller process launched")
+	if os.Getenv(slice6CertificateProcessEnv) == "1" {
+		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance with exact Docker cleanup; final release scenarios remain unproved")
+	} else if os.Getenv(slice6CredentialProcessEnv) == "1" {
+		t.Log("real file-backed non-dev Vault, same-run credential controller bootstrap PID1, ledger and private socket passed with exact Docker cleanup; certificate controller, managed switch and full Slice 6 gate remain unproved")
+	} else {
+		t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; no managed controller process launched")
+	}
 }
 
 func slice6VaultFileConfig() []byte {

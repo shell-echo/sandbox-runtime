@@ -36,6 +36,7 @@ type fakeCertificateClient struct {
 	revoked          map[string]struct{}
 	issueErr         error
 	revocationErr    error
+	revokeErr        error
 	revokeCalls      []string
 	issuedPrivateKey bool
 }
@@ -127,9 +128,31 @@ func (f *fakeCertificateClient) Revocations(context.Context) (workloadpki.Revoca
 func (f *fakeCertificateClient) Revoke(_ context.Context, serial string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.revoked[serial] = struct{}{}
 	f.revokeCalls = append(f.revokeCalls, serial)
+	if f.revokeErr != nil {
+		return f.revokeErr
+	}
+	f.revoked[serial] = struct{}{}
 	return nil
+}
+
+func TestManagerCloseKeepsFailedRevocationResultAfterLocalKeyDestruction(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	manager, client := testManager(t, &now)
+	if err := manager.Bootstrap(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	client.revokeErr = errors.New("remote revocation unavailable")
+	if err := manager.Close(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if manager.current != nil || manager.previous != nil || !manager.closed || len(client.revokeCalls) != 1 {
+		t.Fatal("failed remote revocation retained a local key or did not attempt exactly once")
+	}
+	client.revokeErr = nil
+	if err := manager.Close(context.Background()); !errors.Is(err, ErrUnavailable) || len(client.revokeCalls) != 1 {
+		t.Fatalf("repeated Close() erased pending revocation: error=%v attempts=%d", err, len(client.revokeCalls))
+	}
 }
 
 func testManager(t *testing.T, now *time.Time) (*Manager, *fakeCertificateClient) {

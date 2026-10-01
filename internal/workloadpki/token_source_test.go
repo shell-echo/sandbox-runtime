@@ -14,6 +14,7 @@ type fakeCredentialClient struct {
 	renewCalls int
 	revokes    int
 	failRenew  bool
+	failRevoke bool
 	invalid    bool
 }
 
@@ -40,7 +41,36 @@ func (f *fakeCredentialClient) Renew(context.Context, CredentialLease, time.Dura
 
 func (f *fakeCredentialClient) Revoke(context.Context, CredentialLease) error {
 	f.revokes++
+	if f.failRevoke {
+		return ErrUnavailable
+	}
 	return nil
+}
+
+func TestCredentialTokenSourceCloseKeepsFailedRevocationResultAfterDestroy(t *testing.T) {
+	now := time.Now().UTC()
+	client := &fakeCredentialClient{now: &now, failRevoke: true}
+	source, err := NewCredentialTokenSource(CredentialTokenSourceConfig{
+		Client: client, TTL: 10 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := source.Token(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	token.Destroy()
+	if err := source.Close(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if !source.closed || len(source.lease.Credential) != 0 || client.revokes != 1 {
+		t.Fatal("failed remote revocation retained credential or did not attempt exactly once")
+	}
+	client.failRevoke = false
+	if err := source.Close(context.Background()); !errors.Is(err, ErrUnavailable) || client.revokes != 1 {
+		t.Fatalf("repeated Close() erased pending revocation: error=%v attempts=%d", err, client.revokes)
+	}
 }
 
 func TestCredentialTokenSourceRotatesAtTwoThirdsAndRevokesOnClose(t *testing.T) {

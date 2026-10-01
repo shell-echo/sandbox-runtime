@@ -103,6 +103,7 @@ type Manager struct {
 	nextRevocationPoll    time.Time
 	closing               bool
 	closed                bool
+	closeErr              error
 }
 
 func New(config Config) (*Manager, error) {
@@ -282,8 +283,9 @@ func (m *Manager) Close(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	if m.closed {
+		result := m.closeErr
 		m.mu.Unlock()
-		return nil
+		return result
 	}
 	if m.closing {
 		m.mu.Unlock()
@@ -307,6 +309,7 @@ func (m *Manager) Close(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	m.closed, m.closing = true, false
+	m.closeErr = result
 	m.current, m.previous = nil, nil
 	m.mu.Unlock()
 	destroyMaterial(previous)
