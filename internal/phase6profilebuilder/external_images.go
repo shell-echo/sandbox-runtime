@@ -66,6 +66,7 @@ func (s ExternalImageSupply) DescriptorProofs() map[string]string {
 }
 
 func LoadExternalImageSupply(ctx context.Context, input ExternalImageInputs) (ExternalImageSupply, error) {
+	recordCompositionExternalPass(ctx)
 	if ctx == nil || ctx.Err() != nil || !cleanAbsolute(input.SourceRoot) ||
 		(input.Platform != "linux/amd64" && input.Platform != "linux/arm64/v8") ||
 		!slices.Equal(phase6security.Slice6DesiredExternalServiceNames(),
@@ -113,6 +114,7 @@ func LoadExternalImageSupply(ctx context.Context, input ExternalImageInputs) (Ex
 // before a profile is frozen. A checked descriptor snapshot is not permission
 // to launch after the operator source or any compressed layer has changed.
 func (s ExternalImageSupply) VerifySources(ctx context.Context) error {
+	recordCompositionExternalPass(ctx)
 	if ctx == nil || ctx.Err() != nil || !cleanAbsolute(s.sourceRoot) ||
 		len(s.archives) != 4 || len(s.bindings) != 5 || len(s.descriptorProofs) != 5 {
 		return ErrInvalidExternalImageSupply

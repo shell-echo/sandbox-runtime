@@ -149,6 +149,11 @@ func validImageDigest(value string) bool {
 // clean R. Docker store/container selection remains a separate live gate.
 func LoadImageSupply(ctx context.Context, sourceRoot, sourceRevision, roleDirectory,
 	desktopCandidatePath, browserArchivePath string) (ImageSupply, error) {
+	if ctx != nil {
+		if trace, ok := ctx.Value(compositionTraceKey{}).(*compositionTrace); ok {
+			trace.imageSupplyLoads++
+		}
+	}
 	if ctx == nil || ctx.Err() != nil || !cleanAbsolute(sourceRoot) || !cleanAbsolute(roleDirectory) ||
 		!cleanAbsolute(desktopCandidatePath) || !cleanAbsolute(browserArchivePath) ||
 		len(sourceRevision) != 40 || !lowerHex(sourceRevision) ||

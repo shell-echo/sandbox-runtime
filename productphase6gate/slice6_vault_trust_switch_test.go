@@ -41,7 +41,11 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	budget := 5 * time.Minute
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
+		budget = 20 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	run, err := newSlice6DockerRun()
 	if err != nil {
@@ -243,6 +247,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if err := os.Remove(filepath.Join(configDir, name)); err != nil {
 			t.Fatal("remove exact bootstrap trust material")
 		}
+	}
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
+		slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)

@@ -20,6 +20,18 @@ platform-selected manifest digests. The three maps name, respectively, the
 five reviewed CA bundle IDs, five egress authority names, and every reviewed
 certificate request/response key ID. Names, topology and policy are selected
 by the repository; the input cannot submit a deployment-to-image or edge map.
+The five CA IDs are trust purposes, not five independent issuer requirements:
+under the reviewed two-issuer plan, `internal-server-ca` contains both the
+general and broker-only roots because the five egress brokers serve local
+mTLS edges. The other four Profile anchor bundles use the general root on
+their actual edges; the separate DNS client CA is broker-only. This mapping
+must be checked against live leaf chains and fixed issuer/CRL policy before
+release, not inferred merely from a valid Profile digest.
+The candidate finalizer now rejects any source whose exact CA DER sets drift
+from this mapping, including an absent broker root on the internal server
+purpose, broker trust on the other four purposes, duplicate/extra roots, or
+general trust in the DNS broker-client source. This is source configuration
+admission only, not proof that a running service mounted the bundle.
 
 Every source file must satisfy its individual private owner/mode and digest
 checks. The command canonicalizes neither a malformed nor a reordered input:

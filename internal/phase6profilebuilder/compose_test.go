@@ -26,3 +26,15 @@ func TestComposeSlice6CandidateProfileRejectsIncompleteSource(t *testing.T) {
 		t.Fatal("cancelled context admitted")
 	}
 }
+
+func TestCandidateProfileDiagnosticsDefensiveCopy(t *testing.T) {
+	candidate := CandidateProfile{metrics: CompositionMetrics{ImageSupplyLoads: 2,
+		ExternalArchivePasses: 2, Stages: []CompositionStage{{Name: "final_source_reopen", Duration: time.Second}}}}
+	first := candidate.Diagnostics()
+	first.Stages[0].Name = "modified"
+	second := candidate.Diagnostics()
+	if second.ImageSupplyLoads != 2 || second.ExternalArchivePasses != 2 ||
+		len(second.Stages) != 1 || second.Stages[0].Name != "final_source_reopen" {
+		t.Fatal("diagnostic stage slice aliases candidate state")
+	}
+}

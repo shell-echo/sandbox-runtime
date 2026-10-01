@@ -19,6 +19,26 @@ var ErrInvalidCandidateProfile = errors.New("invalid Phase 6 Slice 6 candidate p
 type CandidateProfile struct {
 	Profile phase6security.Profile
 	source  StaticDraft
+	metrics CompositionMetrics
+}
+
+// CompositionMetrics is local diagnostic timing, never profile or release
+// evidence. Counts reflect actual full source loaders in this Compose call.
+type CompositionMetrics struct {
+	ImageSupplyLoads      int
+	ExternalArchivePasses int
+	Stages                []CompositionStage
+}
+
+type CompositionStage struct {
+	Name     string
+	Duration time.Duration
+}
+
+func (c CandidateProfile) Diagnostics() CompositionMetrics {
+	result := c.metrics
+	result.Stages = append([]CompositionStage(nil), result.Stages...)
+	return result
 }
 
 // FreezeSlice6CandidateProfile reopens every original source through the
@@ -48,6 +68,9 @@ func (c CandidateProfile) VerifySources(ctx context.Context, now time.Time) erro
 }
 
 func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, error) {
+	if verifySlice6CandidateIssuerBundles(draft.AnchorSupply, draft.DNSClientCA) != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	image := draft.ImageSupply.DesktopCandidate
 	if image.ValidateCurrent() != nil || image.SourceRevision != draft.ImageSupply.RuntimeRevision ||
 		image.SourceTreeDigest != draft.ImageSupply.RuntimeTreeDigest || image.Platform != draft.ImageSupply.Platform ||

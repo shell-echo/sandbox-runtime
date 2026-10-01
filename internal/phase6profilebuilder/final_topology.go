@@ -89,6 +89,14 @@ func BindSlice6FinalTopologyDraftWithDNSClientCA(ctx context.Context, draft Trus
 		external.VerifySources(ctx) != nil || dns.VerifySources(now) != nil {
 		return FinalTopologyDraft{}, ErrInvalidFinalTopologyDraft
 	}
+	return bindSlice6FinalTopologyDraftWithDNSClientCA(draft, external, dns)
+}
+
+// The source-owning composition path has already opened these inputs and
+// independently reopens them once more before returning a CandidateProfile.
+// This helper retains every structural and cross-layer binding check.
+func bindSlice6FinalTopologyDraftWithDNSClientCA(draft TrustDraft,
+	external ExternalImageSupply, dns DNSClientCASupply) (FinalTopologyDraft, error) {
 	bound, err := bindSlice6FinalTopologyDraft(draft, external)
 	if err != nil {
 		return FinalTopologyDraft{}, err

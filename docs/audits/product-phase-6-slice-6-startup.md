@@ -3189,3 +3189,88 @@ environment, and stopped on pre-exec TERM without automatic restart. The real
 certificate-controller launch, held-open-input deadline, all 82 principals,
 all 16 scenarios,
 immutable evidence and push remain open. Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-01 (source-bound desired Profile, not role admission):
+all 12 repository-owned role candidates, the matching Desktop candidate,
+locked Browser archive, and four external service archives were rebuilt or
+reopened from clean runtime revision
+`142ea0c3e372178cc3cfbaf1714621cfdb21a955`. The opt-in real
+persistent-Vault trust-switch test also composed and validated an 82-principal
+desired Profile using same-run real Vault general and broker issuer CA bytes
+plus distinct run-owned authority keys. This remains a *desired* source-bound
+document: the five logical trust purposes are not five issuers. The initial
+composition diagnostic incorrectly used general-only for the internal server
+bundle; the reviewed two-issuer mapping below corrects that input. It is
+still not independently proven service-specific chains. No controller,
+credential agent, TLS agent, or 82-principal topology was launched by this
+test.
+
+| Profile trust purpose | Minimal issuer set in candidate source | Reviewed consumer/edge dependency |
+| --- | --- | --- |
+| `external-server-ca` | general | External Vault, PostgreSQL, Valkey and DNS server leaves on the 18 direct external edges. |
+| `internal-client-ca` | general | Clients on the 17 local numeric mTLS edges, including roles dialing broker servers. None of these edges has a broker as client. |
+| `internal-server-ca` | general + broker-only | Ordinary local servers plus the five `egress-role-*` broker server edges. |
+| `postgres-client-ca` | general | Dedicated PostgreSQL client leaves and exact HBA/CN/database/source checks; CA trust is not SQL authorization. |
+| `vault-client-ca` | general | Controller bootstrap/managed Vault client-leaf validation and Vault's corresponding client-CA admission on `certificate-vault`; Vault policy/role ACL remains separate. |
+| DNS broker client CA, separate from the five Profile anchors | broker-only | Five `egress-dns*` client leaves; general-client negative admission must be observed at real CoreDNS. |
+
+The table reflects the fixed two-issuer ADR and reviewed 152-edge inventory,
+not a statement that every listed service has already run or that sharing
+general CA creates separate compromise domains. The real gate must compare
+issuer UUID/DER, fixed Vault `issuer_ref`, leaf URI/SAN/EKU and peer-CRL
+source for every observed edge. A service's authorization denial must not be
+misreported as a TLS CA denial.
+The source-bound finalizer now enforces these exact CA DER sets and rejects a
+general-only internal server source, broker trust on unrelated purposes,
+duplicate/extra roots or a general DNS client CA. This closes a static
+configuration hole but still says nothing about running mounts or handshakes.
+The same-run real-Vault composition now also passes the strict Slice 6 gate
+input loader against clean R=`142ea0c3e372178cc3cfbaf1714621cfdb21a955`:
+82 principals, all 12 source-bound local-role candidates, the matching
+Desktop candidate, resource/seccomp policy and frozen scenario routes. The
+same-run preflight also inspected 14 distinct loaded Docker image identities
+against the Profile's local and locked Browser references. The tagged
+non-race run took 120.31 s and cleaned its exact Docker resources.
+This is input admission only, not a launched controller, a 16-scenario run,
+or an immutable evidence manifest.
+
+The composition path now fully loads the original image/external inputs,
+performs only private pure intermediate binds, and independently reopens all
+original sources at final candidate verification. Public Bind/Freeze and
+VerifySources boundaries remain strict. An optional diagnostic records source
+load counts and per-stage elapsed time without entering the Profile digest or
+release evidence. In one non-race Docker run the observed counts were exactly
+two full image loads and two external archive passes; image/resource load took
+26.01 s, external archives 3.49 s, Desktop broker extraction/profile
+derivation 3.06 s, and final independent source reopen 32.94 s. The whole
+corrected two-issuer Vault trust-switch plus composition and source-mutation
+test took 95.46 s and exactly cleaned its
+run-owned Docker resources. These timings are host-specific diagnostics, not
+a bootstrap deadline or deployment-capacity guarantee. The corrected
+two-issuer tagged Docker/race diagnostic passed in 668.48 s; the race tool's
+overhead must not be mistaken for production startup duration. A same-run
+negative recheck
+replaced one general-issuer anchor source with the
+other valid Vault broker CA at the same read-only mode; the frozen candidate
+rejected the changed source, and the test restored the exact run-owned bytes
+with exact cleanup. This is source-integrity evidence,
+not proof of a live service certificate chain. The still-unlaunched
+controller/agent chain, live external-service issuer mapping, 16-scenario
+gate, immutable evidence and push keep Phase 6 at **5/15**.
+
+Checkpoint 2026-10-01 (capacity restoration, still no topology launch): after
+the source-bound input/Docker-store preflight, host available space had fallen
+to 21,133,668 KiB, below the existing 21.5 GiB full-gate admission bound.
+The pinned Sandbox coordination approved one `go clean -cache` for the exact
+Go 1.26.8 `GOCACHE=/Users/echo/Library/Caches/go-build` after all active Go
+builds ended. This removed only cross-project, rebuildable compile cache
+(31,565,328 KiB before, 8 KiB immediately after); no Docker container,
+volume, image, candidate OCI archive, module download, source or evidence was
+cleaned. Actual host free space rose by 31,681,580 KiB, not assumed from
+the cache's `du` figure. The real opt-in host+Docker capacity probe then
+reported 53,784,285,184 host-available bytes versus 23,085,449,216 required,
+and 356,393,771,008 Docker-backing-available bytes versus 17,179,869,184
+required. The cleanup incurs cold Go rebuild cost and is not durable capacity
+proof: the full runner must remeasure both sides immediately before each
+writer-heavy stage and stop early on reserve loss. No topology was launched
+or Slice 6 evidence emitted.

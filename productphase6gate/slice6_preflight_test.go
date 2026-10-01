@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -171,6 +172,12 @@ func TestPhase6Slice6TopologyPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := verifySlice6LoadedImageStore(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func verifySlice6LoadedImageStore(ctx context.Context, input slice6GateInput) (int, error) {
 	inspections := make(map[string][]byte)
 	for _, principal := range input.profile.Principals {
 		if principal.ImageLocation != "local" && principal.Name != "browser-sandbox-runtime" {
@@ -182,19 +189,20 @@ func TestPhase6Slice6TopologyPreflight(t *testing.T) {
 			var err error
 			output, err = exec.CommandContext(ctx, "docker", "image", "inspect", principal.ImageReference).Output()
 			if err != nil {
-				t.Fatalf("Slice 6 exact role image is unavailable for %s", principal.Name)
+				return 0, fmt.Errorf("Slice 6 exact role image is unavailable for %s: %w", principal.Name, err)
 			}
 			inspections[key] = output
 		}
 		if verifyLoadedSlice6Image(principal, output) != nil ||
 			(principal.ImageLocation == "local" && principal.Name != "desktop-sandbox-runtime" &&
 				phase6security.VerifySlice6LocalRoleImageInspect(principal, input.sourceRevision, output) != nil) {
-			t.Fatalf("Slice 6 exact role image identity is unavailable for %s", principal.Name)
+			return 0, fmt.Errorf("Slice 6 exact role image identity is unavailable for %s", principal.Name)
 		}
 	}
 	if len(inspections) == 0 {
-		t.Fatal("Slice 6 profile has no local role candidates")
+		return 0, errors.New("Slice 6 profile has no local role candidates")
 	}
+	return len(inspections), nil
 }
 
 // This checks only the loaded store object's exact identity, including the
