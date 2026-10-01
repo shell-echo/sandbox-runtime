@@ -303,6 +303,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
+			slice6PrepareControllerLedgerVolumes(t, ctx, run, composed.Profile)
 		}
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
 			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)

@@ -3486,3 +3486,19 @@ diagnostic passed again in 191.02 seconds while the full race suite was
 running. The final full race suite, tagged test compilation, ordinary and
 tagged vet, Product Contract lock and diff checks passed; exact labeled
 Docker cleanup again observed zero containers, networks and volumes.
+
+Checkpoint 2026-10-01 (same-run empty controller ledgers): the same R19
+Vault/Profile diagnostic now also creates two distinct run-labeled local
+named volumes for `certificate-controller-ledger` and
+`credential-controller-ledger`. Their one-shot, no-network preparers only
+assign the intended controller UID:GID and 0700 directory mode; they do not
+write `ledger.json` or another file. Effective Docker rootfs, capability,
+seccomp, no-new-privileges, no-logging, resource and sole-volume settings
+were inspected. A distinct non-root read-only observer saw an empty directory
+with its own UID:GID and write denial for each. The real Vault/78-principal
+composition, two private-config volumes and full ACL/PKI diagnostic passed
+in 148.23 seconds; run-labeled containers, networks and volumes returned
+to zero. This proves only empty, exclusive startup storage allocation, not
+ledger creation by a controller, a persistent restart, corruption/loss
+denial, a hard volume quota or any accepted release scenario. Phase 6
+remains **5/15** with no release manifest or push.
