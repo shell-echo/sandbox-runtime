@@ -41,6 +41,20 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
+		sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
+		if err != nil {
+			t.Fatal("source-bound Vault composition needs a readable clean source checkout")
+		}
+		currentPath, err := filepath.Abs("..")
+		if err != nil {
+			t.Fatal("Vault diagnostic checkout path is unavailable")
+		}
+		currentRoot, err := filepath.EvalSymlinks(currentPath)
+		if err != nil || sourceRoot == currentRoot {
+			t.Fatal("source-bound Vault composition needs an independent clean checkout: this test creates run-private files in its own package directory")
+		}
+	}
 	budget := 5 * time.Minute
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		budget = 20 * time.Minute

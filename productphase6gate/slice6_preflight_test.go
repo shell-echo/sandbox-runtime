@@ -48,6 +48,43 @@ func TestPhase6Slice6ImageSupplyPreflight(t *testing.T) {
 		len(supply.LocalRoleTargets))
 }
 
+// This diagnostic separates source-image identity from the next resource
+// policy bind. It does not freeze a Profile or observe a running container.
+func TestPhase6Slice6ResourceDraftPreflight(t *testing.T) {
+	if os.Getenv(slice6ImageSupplyEnv) != "1" {
+		t.Skip("set " + slice6ImageSupplyEnv + "=1 for private resource-draft preflight")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Minute)
+	defer cancel()
+	runID, err := phase6security.NewSlice6RunID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := phase6profilebuilder.ImageDraftInputs{RunID: runID,
+		EnvironmentDigest:      "sha256:" + strings.Repeat("a", 64),
+		PrincipalProfileDigest: "sha256:" + strings.Repeat("b", 64),
+		SourceRoot:             os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"),
+		SourceRevision:         os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION"),
+		RoleCandidateDirectory: os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_ROLE_CANDIDATES"),
+		DesktopCandidatePath:   os.Getenv("SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST"),
+		BrowserArchivePath:     os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_BROWSER_ARCHIVE")}
+	images, err := phase6profilebuilder.BuildSlice6ImageDraft(ctx, inputs)
+	if err != nil {
+		t.Fatalf("source-bound image draft: %v", err)
+	}
+	if len(images.Principals) != 78 {
+		t.Fatal("incomplete image draft")
+	}
+	policy, err := phase6profilebuilder.LoadResourceSeccompSupply(inputs.SourceRoot, images.Principals[0].ImagePlatform)
+	if err != nil {
+		t.Fatalf("resource policy source: %v", err)
+	}
+	if _, _, err := policy.BindResourceSeccompDraft(images); err != nil {
+		t.Fatalf("resource policy bind: %v", err)
+	}
+	t.Log("source image and resource draft accepted; no Profile, role launch or release claim")
+}
+
 type slice6GateInput struct {
 	profilePath           string
 	sourceRoot            string

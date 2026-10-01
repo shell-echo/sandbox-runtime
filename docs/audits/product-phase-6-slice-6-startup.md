@@ -3440,3 +3440,22 @@ private file sets. It clears already-built private archives on later failure.
 This validation is exercised with synthetic document bytes; it does not
 claim that the 75 real authority/peer-role inputs have been generated or
 mounted in their final containers.
+
+Checkpoint 2026-10-01 (R19 source-bound diagnostic): source commit
+`ca775af31af267f34067f2b12d594984ef6a37ce` passed the complete race,
+vet and Product Contract lock checks. Twelve repository role images and a
+Desktop image were rebuilt and privately recorded from that revision; the
+independent image-supply preflight reopened all 12 role pairs, Desktop and
+locked Browser OCI chains. The first attempt at the real Vault composition
+failed early because the test creates run-private files under its current
+package directory, making that same checkout dirty during the source lock
+check. It left no labeled Docker container, network or volume. The test now
+rejects a same-checkout source path before side effects. With a separate clean
+R19 checkout, the same-run file-backed non-dev Vault diagnostic passed in
+155.11 seconds: the complete 78-principal Profile, 48 peer-CRL bindings, two
+real issuer roots and complete CRLs, 11 exact material ACLs, 12 scoped token
+roles, 38 issuer-pinned PKI roles, scoped/root CSR positive and foreign
+denial, capability probes, root-token revocation and exact labeled Docker
+cleanup were observed. No controller process, actual business KV document,
+material-agent consumer, first migration, 16-scenario result, release
+manifest or push was produced. Phase 6 remains **5/15**.
