@@ -3351,3 +3351,36 @@ local operator bootstrap input, provided genuine one-shot migrations and
 consumer-side reads/operations follow and all secrets/resources are precisely
 destroyed. Capability inspection alone remains insufficient. Phase 6 remains
 **5/15**.
+
+Checkpoint 2026-10-01 (corrected R18, actual Vault PKI role installation;
+component evidence only): local commit `18aec6db4620bf50c54091c7f3ebd264c7e2f5d3`
+froze the corrected 78-principal runtime source, and twelve role candidate
+archives were built from it. A clean independent R18 checkout, those exact
+archives, the pinned Browser/Desktop/external images and the same-run real
+file-backed non-dev Vault were used to recompose and reopen the final desired
+Profile. Vault was restarted across the final mTLS trust switch while the two
+issuer UUIDs and complete CRLs remained stable. The test installed and read
+back the KVv2 mount, all 11 exact material ACLs covering 18 data paths, all
+12 fixed scoped token roles and the separate certificate-controller PKI ACL.
+It then installed and read back 38 distinct PKI roles bound to the two actual
+issuer UUIDs. The roles explicitly disallow localhost, arbitrary names,
+wildcards, IP SANs, subdomains, URI templates and unreviewed OtherName SANs;
+the PostgreSQL-purpose roles are client-only even where their owning runtime
+also serves HTTPS. The managed controller CSR was signed by both the root
+bootstrap token and a real constrained certificate-controller token, while a
+different principal's CSR was rejected under both; the resulting certificate
+was checked for issuer, URI and client EKU. Vault capability probes verified
+positive own-path and negative cross-owner, metadata, PKI and generic-token
+access. The tagged Docker test passed in 148.44 s with exact run-owned Docker
+cleanup and root-token revocation. It did **not** start either controller,
+write business KV documents, run a material agent, execute the 16 scenarios,
+emit release evidence or push. Phase 6 therefore remains **5/15**.
+
+The subsequent same-run Docker repeat also attached that Vault process to
+the separate reviewed `service-workload-credential-controller-vault` isolated
+bridge at its fixed service address and exact DNS alias, independently
+observed the sole expected Vault endpoint there, and kept the existing
+`network-certificate-controller` bridge intact. The full PKI/ACL test then
+passed again in 148.56 s with exact cleanup. This establishes the two
+controller network prerequisites only; neither controller container has
+started or exercised a managed certificate exchange.

@@ -69,11 +69,27 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		len(network.ExternalServices) != 1 || network.ExternalServices[0] != "vault" {
 		t.Fatal("reviewed Vault/controller isolated bridge changed")
 	}
+	var credentialNetwork phase6security.Network
+	for _, candidate := range phase6security.Slice6DesiredFinalNetworks() {
+		if candidate.Name == "service-workload-credential-controller-vault" {
+			credentialNetwork = candidate
+		}
+	}
+	if credentialNetwork.Name == "" || !credentialNetwork.Internal ||
+		credentialNetwork.GatewayModeIPv4 != "isolated" ||
+		len(credentialNetwork.Principals) != 1 || credentialNetwork.Principals[0] != "workload-credential-controller" ||
+		len(credentialNetwork.ExternalServices) != 1 || credentialNetwork.ExternalServices[0] != "vault" {
+		t.Fatal("reviewed credential-controller/Vault isolated bridge changed")
+	}
 	vaultIP, err := phase6security.Slice6DesiredServiceEndpointAddress(network.Name, "vault")
 	if err != nil {
 		t.Fatal(err)
 	}
 	controllerIP, err := phase6security.Slice6DesiredServiceEndpointAddress(network.Name, "certificate-controller")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credentialVaultIP, err := phase6security.Slice6DesiredServiceEndpointAddress(credentialNetwork.Name, "vault")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,9 +133,14 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	credentialCreated, err := createSlice6ProfileNetwork(ctx, run, credentialNetwork)
+	if err != nil {
+		t.Fatal(err)
+	}
 	user := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 	server, err := run.docker(ctx, "run", "-d", "--pull=never", "--name", "sr-p6-vault-switch-"+run.id,
-		"--label", run.label(), "--network", created.NetworkID, "--ip", vaultIP, "--user", user,
+		"--label", run.label(), "--network", created.NetworkID, "--ip", vaultIP,
+		"--network-alias", "vault.sandbox-runtime.test", "--user", user,
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
 		"--memory=256m", "--cpus=1", "--pids-limit=64",
 		"--mount", "type=bind,source="+configDir+",target=/vault/config,readonly",
@@ -128,6 +149,18 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	serverID := strings.TrimSpace(string(server))
 	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
 		t.Fatalf("non-dev persistent Vault start failed: %v", err)
+	}
+	if _, err := run.docker(ctx, "network", "connect", "--ip", credentialVaultIP,
+		"--alias", "vault.sandbox-runtime.test", credentialCreated.NetworkID, serverID); err != nil {
+		t.Fatal("connect real Vault to exact credential-controller bridge")
+	}
+	credentialEmpty := credentialNetwork
+	credentialEmpty.Principals = nil
+	credentialObserved, err := observeSlice6ProfileNetworkWithExternal(ctx, run, credentialCreated.NetworkID,
+		credentialEmpty, serverID)
+	if err != nil || len(credentialObserved.Endpoints) != 1 ||
+		credentialObserved.Endpoints[0].IPv4Address != credentialVaultIP {
+		t.Fatal("real Vault credential-controller bridge membership drifted")
 	}
 	if err := waitSlice6VaultUninitialized(ctx, run, serverID); err != nil {
 		t.Fatal(err)
@@ -251,7 +284,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
-			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general.ID, broker.ID)
+			slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
 		}
 	}
 	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, "token", "revoke", "-self")...); err != nil {
@@ -265,7 +298,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
 	}
-	t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; managed PKI remains absent")
+	t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; no managed controller process launched")
 }
 
 func slice6VaultFileConfig() []byte {

@@ -42,7 +42,7 @@ func slice6VaultScopedPolicyCommandDiagnostic(t *testing.T, ctx context.Context,
 }
 
 func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice6DockerRun,
-	serverID, configDir string, profile phase6security.Profile, generalIssuer, brokerIssuer string) {
+	serverID, configDir string, profile phase6security.Profile, general, broker slice6VaultRoot) {
 	t.Helper()
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil || len(plan) != 11 {
@@ -68,8 +68,11 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 		}
 		slice6VaultWriteAndReadTokenRole(t, ctx, run, serverID, entry.TokenRole, entry.BackendPolicy)
 	}
-	pkiACL := slice6VaultCertificatePKIACL(t, profile, generalIssuer, brokerIssuer)
+	pkiACL := slice6VaultCertificatePKIACL(t, profile, general.ID, broker.ID)
 	slice6VaultWriteAndReadACL(t, ctx, run, serverID, configDir, "certificate-controller-pki", pkiACL)
+	pkiRoles := slice6VaultDesiredPKIRoles(t, profile, general.ID, broker.ID)
+	slice6VaultInstallPKIRoles(t, ctx, run, serverID, pkiRoles)
+	slice6VaultAssertControllerManagedSign(t, ctx, run, serverID, pkiRoles, general)
 	certificateRole := workloadcredential.Phase6TokenRole("certificate-controller-pki")
 	if certificateRole == "" {
 		t.Fatal("certificate token role missing")
@@ -77,6 +80,30 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 	slice6VaultWriteAndReadTokenRole(t, ctx, run, serverID, certificateRole, "certificate-controller-pki")
 	managementACL := slice6VaultCredentialManagementACL(plan, certificateRole)
 	slice6VaultWriteAndReadACL(t, ctx, run, serverID, configDir, "phase6-credential-management", managementACL)
+	managementToken := slice6VaultMintManagementToken(t, ctx, run, serverID)
+	writeSlice6VaultPrivateFile(t, configDir, "scope-token-management", []byte(managementToken))
+	for _, entry := range plan {
+		slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-management",
+			"auth/token/create/"+entry.TokenRole, "update")
+		slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-management",
+			"auth/token/roles/"+entry.TokenRole, "read")
+	}
+	for _, allowed := range []struct{ path, capability string }{
+		{"auth/token/create/" + certificateRole, "update"},
+		{"auth/token/roles/" + certificateRole, "read"},
+		{"auth/token/lookup-accessor", "update"},
+		{"auth/token/revoke-accessor", "update"},
+		{"auth/token/lookup-self", "read"},
+	} {
+		slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-management", allowed.path, allowed.capability)
+	}
+	for _, denied := range []string{"auth/token/create", "auth/token/create-orphan",
+		plan[0].KVDataPaths[0], "pki/sign/" + profile.CertificateController.ManagedVaultRole} {
+		slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-management", denied, "deny")
+	}
+	if err := os.Remove(filepath.Join(configDir, "scope-token-management")); err != nil {
+		t.Fatal("remove exact disposable management test token")
+	}
 	for index, entry := range plan {
 		token := slice6VaultMintScopedToken(t, ctx, run, serverID, entry.TokenRole, entry.BackendPolicy)
 		fileName := "scope-token-" + entry.Agent
@@ -99,10 +126,30 @@ func slice6VaultInstallScopedAccess(t *testing.T, ctx context.Context, run slice
 	slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-certificate",
 		"pki/sign/"+profile.CertificateController.ManagedVaultRole, "update")
 	slice6VaultRequireCapability(t, ctx, run, serverID, "scope-token-certificate", plan[0].KVDataPaths[0], "deny")
+	slice6VaultAssertScopedPKISign(t, ctx, run, serverID,
+		profile.CertificateController.ManagedVaultRole, general, "spiffe://sandbox-runtime.test/certificate-controller")
 	if err := os.Remove(filepath.Join(configDir, "scope-token-certificate")); err != nil {
 		t.Fatal("remove exact disposable certificate test token")
 	}
-	t.Logf("real Vault KVv2 mount, 11 exact material ACLs, 12 scoped token roles, separate PKI ACL and positive/negative token capabilities read back for Profile %s; no material documents or controller process yet", profile.ProfileDigest)
+	t.Logf("real Vault KVv2 mount, 11 exact material ACLs, 12 scoped token roles, 38 issuer-pinned PKI roles, root and scoped PKI-token CSR sign/foreign CSR denial and positive/negative token capabilities passed for Profile %s; no material documents or controller process yet", profile.ProfileDigest)
+}
+
+func slice6VaultMintManagementToken(t *testing.T, ctx context.Context, run slice6DockerRun, serverID string) string {
+	t.Helper()
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json", "auth/token/create-orphan",
+		"policies=phase6-credential-management", "ttl=15m", "renewable=false", "no_default_policy=true")...)
+	var issued struct {
+		Auth struct {
+			ClientToken string   `json:"client_token"`
+			Policies    []string `json:"policies"`
+			Orphan      bool     `json:"orphan"`
+		} `json:"auth"`
+	}
+	if err != nil || json.Unmarshal(response, &issued) != nil || issued.Auth.ClientToken == "" ||
+		!slices.Equal(issued.Auth.Policies, []string{"phase6-credential-management"}) || !issued.Auth.Orphan {
+		t.Fatal("real Vault limited orphan management token issuance failed")
+	}
+	return issued.Auth.ClientToken
 }
 
 func slice6VaultWriteAndReadACL(t *testing.T, ctx context.Context, run slice6DockerRun,
@@ -213,7 +260,8 @@ func slice6VaultCertificatePKIACL(t *testing.T, profile phase6security.Profile, 
 		roles = append(roles, binding.IssuerVaultRole)
 	}
 	slices.Sort(roles)
-	if len(roles) != 47 || slices.Contains(roles, "") {
+	if len(profile.TLSAgentBindings)+len(profile.PostgresClientAgents) != 36 ||
+		len(profile.PostgresClientAgents) != 9 || len(roles) != 38 || slices.Contains(roles, "") {
 		t.Fatal("incomplete exact PKI role inventory")
 	}
 	for index := 1; index < len(roles); index++ {
