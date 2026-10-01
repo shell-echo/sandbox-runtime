@@ -284,7 +284,9 @@ func exactInvalidAccessor(document []byte) bool {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&response) != nil || len(response.Errors) != 1 || response.Errors[0] != "invalid accessor" {
+	if decoder.Decode(&response) != nil || len(response.Errors) != 1 ||
+		(response.Errors[0] != "invalid accessor" &&
+			response.Errors[0] != "1 error occurred:\n\t* invalid accessor\n\n") {
 		return false
 	}
 	var trailing any

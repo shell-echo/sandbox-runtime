@@ -954,6 +954,19 @@ reads a bounded partial private receipt's fixed failure stage if present.
 No root fallback, synthetic revocation or release count advancement is
 permitted.
 
+R26 source `bbff7e00589210eb9b84074f15503d1c8364b729` returned a useful
+fixed stage after the 208.72-second real run: `execute-token-readback`.
+This proves the one-shot operator reached the independent token post-revoke
+lookup after its earlier certificate/complete-CRL work, but it is **not**
+proof that the token revocation was confirmed. A separate real non-dev mTLS
+Vault component test then observed the exact revoked-accessor response:
+authenticated HTTP 400 with one bounded error string
+`1 error occurred:\n\t* invalid accessor\n\n`. The restricted operator
+adapter had accepted only the unwrapped `invalid accessor`; R27 adds this
+one observed form and explicit negative tests, still rejecting 403, 404,
+timeouts, malformed JSON and other 400 errors. The real complete terminal
+path remains to be rerun, and Phase 6 remains **5/15**.
+
 A further component checkpoint imports raw `docker inspect` port mappings and
 requires the relay to be the sole host-published principal, with exactly two
 configured and active TCP bindings; Product/Gateway probes must have none.

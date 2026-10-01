@@ -39,9 +39,11 @@ func TestVaultAccessorAbsenceRequiresExact400Not403404OrMalformedJSON(t *testing
 		absent   bool
 	}{
 		{"exact invalid accessor", 400, `{"errors":["invalid accessor"]}`, true},
+		{"real Vault wrapped invalid accessor", 400, `{"errors":["1 error occurred:\n\t* invalid accessor\n\n"]}`, true},
 		{"forbidden", 403, `{"errors":["invalid accessor"]}`, false},
 		{"not found", 404, `{"errors":["invalid accessor"]}`, false},
 		{"wrong error", 400, `{"errors":["permission denied"]}`, false},
+		{"wrapped wrong error", 400, `{"errors":["1 error occurred:\n\t* permission denied\n\n"]}`, false},
 		{"duplicate", 400, `{"errors":["invalid accessor"],"errors":["invalid accessor"]}`, false},
 		{"unknown", 400, `{"errors":["invalid accessor"],"other":true}`, false},
 	} {

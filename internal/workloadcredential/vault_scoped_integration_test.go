@@ -262,6 +262,16 @@ path "auth/token/lookup-self" { capabilities = ["read"] }`
 		clear(document)
 		t.Fatalf("unrelated token remained active after accessor revoke: %d", status)
 	} else {
+		var denied struct {
+			Errors []string `json:"errors"`
+		}
+		if status != http.StatusBadRequest || len(document) > 4<<10 ||
+			json.Unmarshal(document, &denied) != nil || len(denied.Errors) != 1 ||
+			denied.Errors[0] != "1 error occurred:\n\t* invalid accessor\n\n" {
+			clear(document)
+			t.Fatal("real Vault revoked-accessor response no longer matches exact absence proof")
+		}
+		t.Log("real Vault revoked-accessor lookup returned exact authenticated 400 invalid-accessor response")
 		clear(document)
 	}
 	spec := credentialbackend.IssueSpec{SubjectID: "certificate_controller", SubjectDigest: scopedVaultDigest("subject"),
