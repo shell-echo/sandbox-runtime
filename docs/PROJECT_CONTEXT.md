@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-09-22
+Updated: 2026-10-03
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -238,17 +238,18 @@ Current verified state:
   deployments were removed without renumbering surviving identities or
   networks. The earlier 82-deployment source-bound candidate is historical
   component evidence and must be rebuilt before use with this topology.
-  A private 18-document exact KV ACL mapping has passed configuration tests;
-  Vault ACL installation/readback and the two-controller launch have not.
-  The added migration bridge has a real Docker
-  endpoint/cleanup diagnostic, and one real PostgreSQL 16 process on nine
-  isolated bridges passes all nine exact HBA source/login checks, denials,
-  restart and cleanup with test-local certificates; the historical
-  Provider-only PostgreSQL mTLS/SCRAM integration remains green. These
-  diagnostics are not the full
-  16-scenario Slice 6 gate: live issuance, SQL grants/HBA activation, all
-  independent processes, signed evidence and exact cleanup remain open, so
-  Phase 6 stays 5/15.
+  Real same-run Vault ACL/issuer installation, two controller PID1 processes,
+  distinct Product/Guest TLS and material agents, and a source-bound pinned
+  PostgreSQL PID1 have now passed a composed component gate. PostgreSQL used
+  its Vault-issued server leaf, exact final HBA and nine isolated bridges;
+  after mounted-leaf verification and shutdown, an independent one-shot v2
+  operator confirmed three certificate serials, two token accessors, complete
+  CRL and self-revocation, followed by zero run-labeled Docker resources.
+  The separate no-secret provisioner probe and strict PEM/mount-order tests
+  also pass. Earlier unconfirmed-leaf attempts remain explicitly recorded.
+  This does not prove Product PostgreSQL runtime DSN, nine live SQL clients,
+  all 78 principals, the 16-scenario Slice 6 release gate, signed evidence or
+  deployment. Phase 6 stays 5/15.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

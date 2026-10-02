@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
@@ -56,7 +57,7 @@ func (r ExternalPostgresRecord) Validate(profile phase6security.Profile,
 		r.SignedAt.IsZero() || now.IsZero() || r.SignedAt.After(now) ||
 		len(r.CertificatePEM) < 1 || len(r.CertificatePEM) > 16<<10 ||
 		len(r.IssuerPEM) < 1 || len(r.IssuerPEM) > 16<<10 {
-		return ErrInvalid
+		return invalidPostgresRecord("envelope")
 	}
 	var serviceFound bool
 	for _, service := range profile.External {
@@ -72,15 +73,15 @@ func (r ExternalPostgresRecord) Validate(profile phase6security.Profile,
 		}
 	}
 	if !serviceFound || !generalFound {
-		return ErrInvalid
+		return invalidPostgresRecord("profile-or-issuer")
 	}
 	leaf, err := parseExactCertificate(r.CertificatePEM)
 	if err != nil {
-		return ErrInvalid
+		return invalidPostgresRecord("leaf-pem")
 	}
 	issuer, err := parseExactCertificate(r.IssuerPEM)
 	if err != nil || leaf.CheckSignatureFrom(issuer) != nil {
-		return ErrInvalid
+		return invalidPostgresRecord("issuer-pem-or-signature")
 	}
 	issuerHash, leafHash := sha256.Sum256(issuer.Raw), sha256.Sum256(leaf.Raw)
 	if r.IssuerDigest != "sha256:"+hex.EncodeToString(issuerHash[:]) ||
@@ -97,26 +98,32 @@ func (r ExternalPostgresRecord) Validate(profile phase6security.Profile,
 		!isP256PublicKey(leaf.PublicKey) ||
 		!leaf.NotBefore.Before(leaf.NotAfter) || r.SignedAt.Before(leaf.NotBefore) ||
 		!r.SignedAt.Before(leaf.NotAfter) || leaf.NotAfter.Sub(leaf.NotBefore) > time.Hour {
-		return ErrInvalid
+		return invalidPostgresRecord("certificate-binding")
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(issuer)
 	if _, err := leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: r.DNSName,
 		CurrentTime: r.SignedAt, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err != nil {
-		return ErrInvalid
+		return invalidPostgresRecord("chain")
 	}
 	copy := r
 	copy.Digest = ""
 	encoded, err := json.Marshal(copy)
 	if err != nil {
-		return ErrInvalid
+		return invalidPostgresRecord("record-encoding")
 	}
 	hash := sha256.Sum256(append([]byte("sandbox-runtime/phase6-external-postgres-leaf/v1\x00"), encoded...))
 	clear(encoded)
 	if r.Digest != "sha256:"+hex.EncodeToString(hash[:]) {
-		return ErrInvalid
+		return invalidPostgresRecord("record-digest")
 	}
 	return nil
+}
+
+// Only a fixed stage name is exposed. Neither PEM nor configuration material
+// enters the error; errors.Is still preserves the fail-closed ErrInvalid API.
+func invalidPostgresRecord(stage string) error {
+	return fmt.Errorf("%w: external PostgreSQL record %s", ErrInvalid, stage)
 }
 
 // SealExternalPostgresRecord is used after an independently observed exact

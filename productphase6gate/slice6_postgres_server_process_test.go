@@ -29,6 +29,11 @@ type slice6PostgresEndpoint struct {
 	IP      string
 }
 
+type slice6PostgresObservedMount struct {
+	Name, Kind, Destination string
+	Writable, NoCopy        bool
+}
+
 var slice6PostgresPrivateFiles = []string{
 	"bootstrap-password", "client-ca.pem", "pg_hba.conf",
 	"server-ca.pem", "server-key.pem", "server.pem",
@@ -204,8 +209,11 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 	record := leaf.Record
 	record.MountedLeafDigest = "sha256:" + hex.EncodeToString(mountedDigest[:])
 	record, err = phase6terminalcleanup.SealExternalPostgresRecord(record)
-	if err != nil || record.Validate(composed.Profile, composed.PeerSources, time.Now().UTC()) != nil {
-		t.Fatal("actual PostgreSQL mount cannot bind v2 terminal cleanup target")
+	if err != nil {
+		t.Fatal("actual PostgreSQL mount cannot seal v2 terminal cleanup target")
+	}
+	if err := record.Validate(composed.Profile, composed.PeerSources, time.Now().UTC()); err != nil {
+		t.Fatalf("actual PostgreSQL mount cannot bind v2 terminal cleanup target: %v", err)
 	}
 	t.Logf("same-run PostgreSQL PID1 started on nine isolated bridges with exact source-bound HBA, general-issuer server leaf, read-only PG-owned key and local SQL readiness; no client SQL gate yet; leaf=%s",
 		record.LeafDigest)
@@ -415,16 +423,49 @@ func slice6VerifyPostgresProvisioner(t *testing.T, ctx context.Context, run slic
 			value.HostConfig.LogConfig.Type, value.HostConfig.RestartPolicy.Name,
 			len(value.Mounts), len(value.HostConfig.Mounts))
 	}
-	for index, expected := range []struct{ name, path string }{{configVolume, "/pg"}, {dataVolume, "/data"}} {
-		mount := value.Mounts[index]
-		declared := value.HostConfig.Mounts[index]
-		if mount.Type != "volume" || mount.Name != expected.name ||
-			mount.Destination != expected.path || !mount.RW ||
-			declared.Type != "volume" || declared.Source != expected.name ||
-			declared.Target != expected.path || !declared.VolumeOptions.NoCopy {
-			t.Fatal("PostgreSQL provisioner received an unreviewed mount")
-		}
+	// Docker inspect may report effective and declared mounts in independent
+	// orders. Bind each unique destination to the exact named volume.
+	effective := make([]slice6PostgresObservedMount, 0, len(value.Mounts))
+	for _, mount := range value.Mounts {
+		effective = append(effective, slice6PostgresObservedMount{
+			Name: mount.Name, Kind: mount.Type, Destination: mount.Destination, Writable: mount.RW})
 	}
+	declaredMounts := make([]slice6PostgresObservedMount, 0, len(value.HostConfig.Mounts))
+	for _, mount := range value.HostConfig.Mounts {
+		declaredMounts = append(declaredMounts, slice6PostgresObservedMount{
+			Name: mount.Source, Kind: mount.Type, Destination: mount.Target,
+			NoCopy: mount.VolumeOptions.NoCopy})
+	}
+	if !slice6PostgresMountsMatch(effective, declaredMounts, configVolume, dataVolume) {
+		t.Fatal("PostgreSQL provisioner received an unreviewed mount")
+	}
+}
+
+func slice6PostgresMountsMatch(effective, declared []slice6PostgresObservedMount,
+	configVolume, dataVolume string) bool {
+	if len(effective) != 2 || len(declared) != 2 {
+		return false
+	}
+	check := func(mounts []slice6PostgresObservedMount, declared bool) bool {
+		seen := make(map[string]bool, 2)
+		for _, mount := range mounts {
+			want := ""
+			switch mount.Destination {
+			case "/pg":
+				want = configVolume
+			case "/data":
+				want = dataVolume
+			}
+			if want == "" || seen[mount.Destination] || mount.Name != want ||
+				mount.Kind != "volume" || declared && !mount.NoCopy ||
+				!declared && !mount.Writable {
+				return false
+			}
+			seen[mount.Destination] = true
+		}
+		return len(seen) == 2
+	}
+	return check(effective, false) && check(declared, true)
 }
 
 func slice6ObservePostgresSuppliedVolumes(t *testing.T, ctx context.Context, run slice6DockerRun,
@@ -506,10 +547,21 @@ func slice6WaitPostgresReady(t *testing.T, parent context.Context, run slice6Doc
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
+	lastStage := "local SQL"
+	retry := func() {
+		select {
+		case <-ctx.Done():
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
 	for ctx.Err() == nil {
 		response, err := run.docker(ctx, "exec", "-u", owner, serverID, "psql", "-At",
 			"-d", "postgres", "-c", "SELECT 1")
 		if err == nil && strings.TrimSpace(string(response)) == "1" {
+			// The image's entrypoint exposes a temporary local bootstrap server
+			// before PID1 starts the configured TLS/HBA server. A successful SQL
+			// query alone is not final readiness.
+			finalSettings := true
 			for setting, want := range map[string]string{
 				"ssl": "on", "hba_file": "/pg/pg_hba.conf",
 				"ssl_min_protocol_version": "TLSv1.3", "listen_addresses": "*",
@@ -519,25 +571,33 @@ func slice6WaitPostgresReady(t *testing.T, parent context.Context, run slice6Doc
 				actual, readErr := run.docker(ctx, "exec", "-u", owner, serverID, "psql", "-At",
 					"-d", "postgres", "-c", "SHOW "+setting)
 				if readErr != nil || strings.TrimSpace(string(actual)) != want {
-					t.Fatal("PostgreSQL live SSL/HBA setting drifted")
+					lastStage = "final setting " + setting
+					finalSettings = false
+					break
 				}
+			}
+			if !finalSettings {
+				retry()
+				continue
 			}
 			count, readErr := run.docker(ctx, "exec", "-u", owner, serverID, "psql", "-At",
 				"-d", "postgres", "-c", "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL")
 			if readErr != nil || strings.TrimSpace(string(count)) != "0" {
-				t.Fatal("PostgreSQL rejected source-bound HBA")
+				lastStage = "HBA errors"
+				retry()
+				continue
 			}
 			count, readErr = run.docker(ctx, "exec", "-u", owner, serverID, "psql", "-At",
 				"-d", "postgres", "-c", "SELECT count(*) FROM pg_hba_file_rules")
 			if readErr != nil || strings.TrimSpace(string(count)) != "12" {
-				t.Fatal("PostgreSQL parsed an unexpected HBA rule count")
+				lastStage = "HBA rule count"
+				retry()
+				continue
 			}
 			return
 		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(250 * time.Millisecond):
-		}
+		lastStage = "local SQL"
+		retry()
 	}
-	t.Fatal("run-owned PostgreSQL did not reach bounded local readiness")
+	t.Fatalf("run-owned PostgreSQL did not reach bounded final readiness: %s", lastStage)
 }

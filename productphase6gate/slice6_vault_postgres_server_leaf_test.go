@@ -174,8 +174,15 @@ func slice6VaultPreparePostgresServerLeaf(t *testing.T, ctx context.Context, run
 	if err != nil || json.Unmarshal(response, &signed) != nil || signed.Data.Serial == "" {
 		t.Fatal("Vault did not issue exact PostgreSQL server certificate")
 	}
-	leaf := slice6VaultParsePEMCertificate(t, []byte(signed.Data.Certificate))
-	issuer := slice6VaultParsePEMCertificate(t, []byte(signed.Data.IssuingCA))
+	leafPEM, leaf, leafRawCanonical, err := slice6CanonicalPostgresCertificate([]byte(signed.Data.Certificate))
+	if err != nil {
+		t.Fatal("Vault returned invalid PostgreSQL server leaf PEM")
+	}
+	issuerPEM, issuer, issuerRawCanonical, err := slice6CanonicalPostgresCertificate([]byte(signed.Data.IssuingCA))
+	if err != nil {
+		t.Fatal("Vault returned invalid PostgreSQL server issuer PEM")
+	}
+	t.Logf("same-run PostgreSQL Vault PEM canonicality: leaf=%t issuer=%t; strictly one certificate each", leafRawCanonical, issuerRawCanonical)
 	now := time.Now().UTC()
 	if !bytes.Equal(issuer.Raw, general.Certificate.Raw) || leaf.CheckSignatureFrom(issuer) != nil ||
 		leaf.IsCA || !leaf.BasicConstraintsValid || leaf.Subject.String() != "" ||
@@ -201,7 +208,7 @@ func slice6VaultPreparePostgresServerLeaf(t *testing.T, ctx context.Context, run
 	certificatePath := filepath.Join(directory, "server.pem")
 	issuerPath := filepath.Join(directory, "server-ca.pem")
 	for path, content := range map[string][]byte{
-		certificatePath: []byte(signed.Data.Certificate), issuerPath: general.PEM,
+		certificatePath: leafPEM, issuerPath: issuerPEM,
 	} {
 		if err := os.WriteFile(path, content, 0o600); err != nil {
 			t.Fatal("write run-private PostgreSQL certificate material")
@@ -224,7 +231,7 @@ func slice6VaultPreparePostgresServerLeaf(t *testing.T, ctx context.Context, run
 		IssuerID: general.ID, IssuerDigest: "sha256:" + hex.EncodeToString(issuerDigest[:]),
 		URI: slice6PostgresServerURI, DNSName: slice6PostgresServerDNS,
 		Serial: serial, LeafDigest: "sha256:" + hex.EncodeToString(leafDigest[:]),
-		CertificatePEM: []byte(signed.Data.Certificate), IssuerPEM: []byte(signed.Data.IssuingCA),
+		CertificatePEM: leafPEM, IssuerPEM: issuerPEM,
 		SignedAt: now,
 	}
 	t.Logf("same-run external PostgreSQL server leaf passed exact Vault role/issuer/identity/key/EKU/chain and wrong-identity refusal; leaf_sha256=%s; no PostgreSQL process started",
@@ -232,4 +239,28 @@ func slice6VaultPreparePostgresServerLeaf(t *testing.T, ctx context.Context, run
 	return slice6PostgresServerLeaf{CertificatePath: certificatePath, KeyPath: keyPath,
 		IssuerPath: issuerPath, Serial: serial, IssuerID: general.ID,
 		LeafDigest: hex.EncodeToString(leafDigest[:]), Record: record}
+}
+
+// Vault may omit the final PEM LF. Accept only those two exact encodings of
+// one certificate, then carry the same verified DER in canonical PEM through
+// the PostgreSQL mount and independent terminal-cleanup record.
+func slice6CanonicalPostgresCertificate(document []byte) ([]byte, *x509.Certificate, bool, error) {
+	if len(document) == 0 || len(document) > 16<<10 ||
+		!bytes.HasPrefix(document, []byte("-----BEGIN CERTIFICATE-----\n")) {
+		return nil, nil, false, fmt.Errorf("invalid certificate PEM")
+	}
+	block, rest := pem.Decode(document)
+	if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 || len(rest) != 0 {
+		return nil, nil, false, fmt.Errorf("invalid certificate PEM")
+	}
+	canonical := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: block.Bytes})
+	rawCanonical := bytes.Equal(document, canonical)
+	if !rawCanonical && !bytes.Equal(document, bytes.TrimSuffix(canonical, []byte("\n"))) {
+		return nil, nil, false, fmt.Errorf("noncanonical certificate PEM")
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("invalid certificate DER")
+	}
+	return canonical, certificate, rawCanonical, nil
 }

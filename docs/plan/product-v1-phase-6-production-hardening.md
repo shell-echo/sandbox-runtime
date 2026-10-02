@@ -204,12 +204,15 @@ advance Slice 6.
 
 The initial external PostgreSQL leaf signing diagnostic is non-release:
 its v1 terminal plan did not confirm revocation of that added serial. A
-separate audit retains this exact gap. A new run must prove clean-source
-operator v2 capability *before* signing, then observe the actual PG-mounted
-leaf, stop PG, and confirm all three serials in the complete issuer CRL
-before calling this path closed. The source-bound nine-bridge PG startup and
-v2 operator wiring are in progress; no SQL role/DSN or scenario evidence is
-claimed yet.
+separate audit retains this exact gap. A later real same-run component gate
+proved clean-source operator v2 capability *before* signing, observed the
+actual non-root PostgreSQL-mounted leaf on nine isolated bridges with final
+TLS/HBA and local SQL, stopped PostgreSQL, then confirmed all three serials
+in the complete issuer CRL with two token accessors and operator self-revoke.
+The [component audit](../audits/product-phase-6-slice-6-postgres-v2-component.md)
+also retains three failed attempts whose third-leaf revocations were not
+confirmed. No Product runtime DSN, nine SQL callers, full 16-scenario gate or
+release manifest is claimed from this component result.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,
