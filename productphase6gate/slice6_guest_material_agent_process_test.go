@@ -30,7 +30,8 @@ import (
 // one exact owner-side resolve before draining and removing both sockets.
 func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, serverID, publicKeyDigest string,
-	socketVolumes, anchorFiles map[string]string) {
+	socketVolumes, anchorFiles map[string]string,
+	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
@@ -305,6 +306,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 			t.Fatalf("Guest material-agent listener timeout: state=%q attached start still pending", strings.TrimSpace(string(state)))
 		}
 	}
+	if onReady != nil {
+		onReady(delivery)
+	}
 	observerDir, err := os.MkdirTemp(".", ".sr-guest-material-observer-")
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +404,7 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		"test ! -e "+material.SocketPath+" && test ! -e "+delivery.SocketPath); err != nil {
 		t.Fatal("Guest material and break-glass listener exact socket cleanup unproved")
 	}
-	t.Log("real Guest material-agent clean drain removed both exact listeners; online break-glass delivery/consume remains unproved")
+	t.Log("real Guest material-agent clean drain removed both exact listeners")
 }
 
 // The observer has a finite, reviewed diagnostic vocabulary. Never include

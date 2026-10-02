@@ -384,7 +384,7 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 	if _, err := run.docker(ctx, "rm", replacementID); err != nil {
 		t.Fatal("remove replacement break-glass controller")
 	}
-	t.Log("real source-bound break-glass controller accepted signed submit/two approvals/issue, rejected same-JTI distinct-request replay, then a fresh replacement PID1 recovered persistent ledger/replay state and accepted a new request; delivery/consume remain open")
+	t.Log("real source-bound break-glass controller accepted signed submit/two approvals/issue, rejected same-JTI distinct-request replay, then a fresh replacement PID1 recovered persistent ledger/replay state and accepted a new request; Guest delivery/consume evidence is reported separately")
 }
 
 func slice6InspectStoppedBreakGlassController(t *testing.T, ctx context.Context, run slice6DockerRun,
@@ -596,6 +596,199 @@ func slice6FreshBreakGlassJTI(t *testing.T) string {
 	return base64.RawURLEncoding.EncodeToString(random[:])
 }
 
+// Component evidence only: the actual Guest material-agent accepts delivery,
+// signs the online consume, and uses its live Vault-backed material resolver.
+func slice6ExerciseGuestBreakGlassDelivery(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, delivery phase6security.Slice6BreakGlassSocketBinding,
+	socketVolumes map[string]string) {
+	t.Helper()
+	var control phase6security.Slice6BreakGlassSocketBinding
+	for _, candidate := range composed.Profile.BreakGlassSockets {
+		if candidate.Kind == "control" {
+			control = candidate
+		}
+	}
+	if control.ID == "" || delivery.Kind != "delivery" || delivery.TargetAgent != "guest-agent" ||
+		socketVolumes[control.SocketStorageID] == "" || socketVolumes[delivery.SocketStorageID] == "" {
+		t.Fatal("Guest break-glass control/delivery socket binding unavailable")
+	}
+	access, err := phase6security.BuildSlice6DesiredMaterialAccess(composed.Profile)
+	if err != nil {
+		t.Fatal("Guest break-glass material binding unavailable")
+	}
+	var bindingDigest string
+	for _, item := range access {
+		if item.Agent == "guest-agent" && len(item.Bindings) == 1 &&
+			item.Bindings[0].Purpose == secretref.PurposeGuestSigningKey {
+			bindingDigest = item.Bindings[0].Digest()
+		}
+	}
+	if bindingDigest == "" {
+		t.Fatal("Guest break-glass exact material binding unavailable")
+	}
+	requesterKey, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+		"break-glass-requester-a.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestIDHash := sha256.Sum256([]byte("live-delivery:" + run.id))
+	digest := func(label string) string {
+		sum := sha256.Sum256([]byte(label + ":" + run.id))
+		return "sha256:" + hex.EncodeToString(sum[:])
+	}
+	request, err := breakglass.NewSignedAccessRequest(breakglass.AccessRequest{
+		Protocol: breakglass.ProtocolID, RequestID: "bgreq_" + hex.EncodeToString(requestIDHash[:16]),
+		RequesterID: "requester-a", TargetAgentID: "guest-agent", Role: secretref.RoleGuest,
+		Purpose: secretref.PurposeGuestSigningKey, BindingDigest: bindingDigest,
+		TenantID: secretref.SystemTenant, Operation: "material.resolve",
+		ReasonDigest: digest("live-guest-reason"), TicketDigest: digest("live-guest-ticket"),
+		RequestedTTLSeconds: 120, Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+		JTI: slice6FreshBreakGlassJTI(t),
+	}, requesterKey)
+	clear(requesterKey)
+	if err != nil {
+		t.Fatal("sign distinct live Guest break-glass request")
+	}
+	controlVolume := socketVolumes[control.SocketStorageID]
+	if result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, controlVolume,
+		"live-submit", breakglass.WireRequest{Protocol: breakglass.ProtocolID,
+			Type: breakglass.SubmitType, Request: &request}, true); result.Revision != 1 {
+		t.Fatal("live Guest break-glass request did not begin at revision 1")
+	}
+	for index, approver := range []string{"approver-a", "approver-b"} {
+		key, readErr := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+			"break-glass-"+approver+".key"))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		approval, signErr := breakglass.NewSignedApproval(breakglass.Approval{
+			RequestID: request.RequestID, RequestDigest: request.RequestDigest,
+			Revision: int64(index + 1), ApproverID: approver,
+			Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+			JTI:      slice6FreshBreakGlassJTI(t),
+		}, key)
+		clear(key)
+		if signErr != nil {
+			t.Fatal("sign live Guest break-glass approval")
+		}
+		result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, controlVolume,
+			"live-"+approver, breakglass.WireRequest{Protocol: breakglass.ProtocolID,
+				Type: breakglass.ApproveType, Approval: &approval}, true)
+		if result.Revision != int64(index+2) {
+			t.Fatal("live Guest two-approver revision drift")
+		}
+	}
+	operatorKey, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+		"break-glass-operator-a.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue, err := breakglass.NewSignedCommand(breakglass.Command{
+		Type: breakglass.CommandIssue, RequestID: request.RequestID, Revision: 3,
+		ActorID: "operator-a", Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+		JTI: slice6FreshBreakGlassJTI(t),
+	}, operatorKey)
+	clear(operatorKey)
+	if err != nil {
+		t.Fatal("sign live Guest break-glass issue")
+	}
+	issued := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, controlVolume,
+		"live-issue", breakglass.WireRequest{Protocol: breakglass.ProtocolID,
+			Type: breakglass.IssueType, Command: &issue}, true)
+	if issued.Capability == nil {
+		t.Fatal("live Guest break-glass capability absent")
+	}
+	capability := *issued.Capability
+	if capability.RequestID != request.RequestID || capability.RequestDigest != request.RequestDigest ||
+		capability.TargetAgentID != "guest-agent" || capability.Role != secretref.RoleGuest ||
+		capability.Purpose != secretref.PurposeGuestSigningKey || capability.BindingDigest != bindingDigest ||
+		capability.TenantID != secretref.SystemTenant || capability.Operation != "material.resolve" ||
+		capability.MaxUses != 1 {
+		t.Fatal("live Guest break-glass issued authority drift")
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, capability.ExpiresAt)
+	if err != nil || time.Until(expiresAt) < 60*time.Second {
+		t.Fatal("live Guest break-glass capability expiry precondition failed")
+	}
+	before := slice6ReadLiveBreakGlassLedger(t, ctx, run, composed.Profile)
+	slice6AssertGuestBreakGlassRecord(t, before, capability, breakglass.StateIssued, 0)
+	deliveryVolume := socketVolumes[delivery.SocketStorageID]
+	slice6FiniteBreakGlassDeliveryTask(t, ctx, run, composed, delivery, deliveryVolume,
+		"live-deliver", capability, true)
+	after := slice6ReadLiveBreakGlassLedger(t, ctx, run, composed.Profile)
+	slice6AssertGuestBreakGlassRecord(t, after, capability, breakglass.StateConsumed, 1)
+	if after.AuditCount != before.AuditCount+1 || after.Revision != before.Revision+1 ||
+		after.AuditHead == before.AuditHead {
+		t.Fatal("online Guest consume did not commit exactly one controller audit/ledger transition")
+	}
+	if time.Until(expiresAt) < 15*time.Second {
+		t.Fatal("live Guest break-glass capability expired before replay attempt")
+	}
+	slice6FiniteBreakGlassDeliveryTask(t, ctx, run, composed, delivery, deliveryVolume,
+		"live-redeliver", capability, false)
+	replayed := slice6ReadLiveBreakGlassLedger(t, ctx, run, composed.Profile)
+	slice6AssertGuestBreakGlassRecord(t, replayed, capability, breakglass.StateConsumed, 1)
+	if replayed.Revision != after.Revision || replayed.AuditCount != after.AuditCount ||
+		replayed.AuditHead != after.AuditHead || !time.Now().Before(expiresAt) {
+		t.Fatal("same-capability replay denial lacked a live single-use ledger witness")
+	}
+	t.Log("real Guest agent consumed one delivered break-glass capability, resolved its exact Vault material, and denied a before-expiry redelivery with unchanged persistent ledger")
+}
+
+func slice6ReadLiveBreakGlassLedger(t *testing.T, ctx context.Context, run slice6DockerRun,
+	profile phase6security.Profile) breakglass.Ledger {
+	t.Helper()
+	var controller phase6security.Principal
+	for _, candidate := range profile.Principals {
+		if candidate.Name == "break-glass-controller" {
+			controller = candidate
+		}
+	}
+	if controller.UID == 0 || controller.GID == 0 {
+		t.Fatal("live break-glass controller principal unavailable")
+	}
+	_, ledgerPath, err := phase6security.Slice6ControllerLedgerMount("break-glass-controller")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "sr-p6-break-glass-live-" + run.id
+	document, err := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", controller.UID, controller.GID), name,
+		"/bin/sh", "-ec", "test -s "+ledgerPath+" && cat "+ledgerPath)
+	if err != nil || len(document) < 1 || len(document) > 8<<20 {
+		clear(document)
+		t.Fatal("live break-glass persisted ledger unavailable")
+	}
+	defer clear(document)
+	var ledger breakglass.Ledger
+	if json.Unmarshal(document, &ledger) != nil || ledger.Schema != breakglass.LedgerSchema ||
+		ledger.Revision < 1 || ledger.AuditCount < 1 || ledger.AuditHead == "" {
+		t.Fatal("live break-glass persisted ledger invalid")
+	}
+	return ledger
+}
+
+func slice6AssertGuestBreakGlassRecord(t *testing.T, ledger breakglass.Ledger,
+	capability breakglass.Capability, state string, uses int) {
+	t.Helper()
+	count := 0
+	for _, record := range ledger.Requests {
+		if record.Request.RequestID != capability.RequestID {
+			continue
+		}
+		count++
+		if record.Request.RequestDigest != capability.RequestDigest ||
+			record.Request.TargetAgentID != capability.TargetAgentID ||
+			record.Request.BindingDigest != capability.BindingDigest ||
+			record.CapabilityID != capability.CapabilityID || record.State != state ||
+			record.Uses != uses || record.ExpiresAt != capability.ExpiresAt {
+			t.Fatal("live Guest break-glass ledger record did not bind exact capability/state")
+		}
+	}
+	if count != 1 {
+		t.Fatal("live Guest break-glass ledger request cardinality drift")
+	}
+}
+
 type slice6FiniteBreakGlassResult struct {
 	Status     string                 `json:"status"`
 	Revision   int64                  `json:"revision"`
@@ -606,6 +799,33 @@ func slice6FiniteBreakGlassControlTask(t *testing.T, ctx context.Context, run sl
 	composed slice6VaultComposedInputs, control phase6security.Slice6BreakGlassSocketBinding,
 	volume, label string, wire breakglass.WireRequest, wantOK bool) slice6FiniteBreakGlassResult {
 	t.Helper()
+	if control.Kind != "control" {
+		t.Fatal("finite control task received a non-control socket")
+	}
+	return slice6FiniteBreakGlassTask(t, ctx, run, composed, control, volume, label, &wire, nil, wantOK)
+}
+
+func slice6FiniteBreakGlassDeliveryTask(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, delivery phase6security.Slice6BreakGlassSocketBinding,
+	volume, label string, capability breakglass.Capability, wantOK bool) slice6FiniteBreakGlassResult {
+	t.Helper()
+	if delivery.Kind != "delivery" || delivery.TargetAgent != capability.TargetAgentID {
+		t.Fatal("finite delivery task received a non-target socket")
+	}
+	return slice6FiniteBreakGlassTask(t, ctx, run, composed, delivery, volume, label, nil, &capability, wantOK)
+}
+
+func slice6FiniteBreakGlassTask(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, binding phase6security.Slice6BreakGlassSocketBinding,
+	volume, label string, wire *breakglass.WireRequest, capability *breakglass.Capability,
+	wantOK bool) slice6FiniteBreakGlassResult {
+	t.Helper()
+	operation, target := "deliver", binding.TargetAgent
+	if wire != nil && capability == nil && binding.Kind == "control" {
+		operation, target = wire.Type, ""
+	} else if wire != nil || capability == nil || binding.Kind != "delivery" {
+		t.Fatal("finite break-glass task operation/socket mismatch")
+	}
 	type operatorInput struct {
 		Protocol     string                  `json:"protocol"`
 		Operation    string                  `json:"operation"`
@@ -618,22 +838,22 @@ func slice6FiniteBreakGlassControlTask(t *testing.T, ctx context.Context, run sl
 		Capability   *breakglass.Capability  `json:"capability"`
 	}
 	document, err := json.Marshal(operatorInput{Protocol: "sandbox-runtime.phase6-break-glass-operator-input.v1",
-		Operation: wire.Type, SocketPath: control.SocketPath,
-		ExpectedUID: control.ServerUID, ExpectedGID: control.ServerGID, DirectoryGID: control.ClientGID,
-		Request: &wire})
+		Operation: operation, SocketPath: binding.SocketPath,
+		ExpectedUID: binding.ServerUID, ExpectedGID: binding.ServerGID, DirectoryGID: binding.ClientGID,
+		TargetAgent: target, Request: wire, Capability: capability})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(document)
 	var task phase6security.Slice6BreakGlassOperatorTask
 	for _, candidate := range composed.Profile.BreakGlassOperatorTasks {
-		if candidate.ID == control.ClientTaskID {
+		if candidate.ID == binding.ClientTaskID {
 			task = candidate
 		}
 	}
-	if task.ID == "" || task.Mount.StorageID != control.SocketStorageID ||
+	if task.ID == "" || task.Mount.StorageID != binding.SocketStorageID ||
 		task.ExecutableArtifactID != composed.Profile.BreakGlassExecutableArtifact.ID {
-		t.Fatal("finite operator control task drift")
+		t.Fatal("finite operator socket task drift")
 	}
 	name := "sr-p6-break-glass-" + label + "-" + run.id
 	created, err := run.docker(ctx, "create", "-i", "--pull=never", "--name", name, "--label", run.label(),
@@ -647,7 +867,7 @@ func slice6FiniteBreakGlassControlTask(t *testing.T, ctx context.Context, run sl
 		"--entrypoint="+task.Executable, task.ImageReference)
 	id := strings.TrimSpace(string(created))
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
-		t.Fatal("create finite break-glass submit task")
+		t.Fatal("create finite break-glass task")
 	}
 	inspect, err := run.docker(ctx, "inspect", id)
 	var observed []struct {

@@ -464,7 +464,11 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func() {
 										slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
 											slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-												guestPublicKeyDigest, guestSocketVolumes, anchorFiles)
+												guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
+												func(delivery phase6security.Slice6BreakGlassSocketBinding) {
+													slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
+														delivery, breakGlassSocketVolumes)
+												})
 										})
 									})
 								}
