@@ -3746,3 +3746,18 @@ remains **5/15**.
 The subsequent complete race/shuffle suite, ordinary and tagged vet, Product
 Contract lock verifier and diff check passed against this checkpoint; the
 run-labeled Docker container, network and volume inventories remained empty.
+
+Checkpoint 2026-10-02 (R31 Guest TLS-agent startup input): the same-run
+source-bound Vault diagnostic additionally derived the ordinary v3
+`guest-agent-tls-agent` command document from the exact frozen Profile,
+peer-CRL source digest, and its run-owned certificate request key. It checked
+the request and controller-response public-key digests against the Profile
+and validated the certificate policy before producing a 2,799-byte canonical
+configuration. The full real Vault/Guest-KV/two-controller/operator path
+passed in 209.82 seconds with exact run-owned cleanup. No Guest TLS-agent,
+material-agent or Guest process has started, so this is startup-input
+component evidence only and Phase 6 remains **5/15**. The next live process
+step is pending a closed authority check for the material and break-glass
+Unix sockets; gate-only hand-entered paths cannot replace the Profile.
+The checkpoint's complete race/shuffle suite, ordinary and tagged vet,
+Contract lock verifier, and diff check also passed.
