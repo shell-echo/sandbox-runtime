@@ -21,7 +21,7 @@ const slice6PrivateConfigPrepEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRIVATE_CONFIG
 const slice6PinnedAlpineImage = "docker.io/library/alpine@sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c"
 
 // This tests the exact one-shot root preparation mechanism with non-secret
-// fixture bytes. It is not a substitute for preparing 75 real principal file
+// fixture bytes. It is not a substitute for preparing 76 real principal file
 // sets or observing their final read-only mounts in the Slice 6 release gate.
 func TestPhase6Slice6PrivateConfigPrepRestrictedDocker(t *testing.T) {
 	if os.Getenv(slice6PrivateConfigPrepEnv) != "1" {

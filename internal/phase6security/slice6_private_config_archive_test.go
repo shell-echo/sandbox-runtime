@@ -92,7 +92,7 @@ func TestSlice6PrivateConfigArchivesRequireAllReaders(t *testing.T) {
 		files[principal.Name] = set
 	}
 	archives, err := BuildSlice6PrivateConfigArchives(profile, files)
-	if err != nil || len(archives) != 75 {
+	if err != nil || len(archives) != 76 {
 		t.Fatalf("complete reader set rejected: count=%d err=%v", len(archives), err)
 	}
 	for _, archive := range archives {

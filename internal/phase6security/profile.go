@@ -208,30 +208,34 @@ var requiredTLSAgentSubjects = map[string]string{
 }
 
 type Profile struct {
-	Protocol                string                          `json:"protocol"`
-	Version                 int                             `json:"version"`
-	Revision                string                          `json:"revision"`
-	ProfileDigest           string                          `json:"profile_digest"`
-	EnvironmentDigest       string                          `json:"environment_digest"`
-	PrincipalProfileDigest  string                          `json:"principal_profile_digest"`
-	Principals              []Principal                     `json:"principals"`
-	SandboxIdentitySlots    []SandboxIdentitySlot           `json:"sandbox_identity_slots"`
-	ProviderDatabases       []ProviderDatabaseBinding       `json:"provider_databases"`
-	PostgresServerAuth      PostgresServerAuthPolicy        `json:"postgres_server_auth"`
-	Components              []Component                     `json:"components"`
-	Networks                []Network                       `json:"networks"`
-	External                []ExternalService               `json:"external_services"`
-	TrustEdges              []TrustEdge                     `json:"trust_edges"`
-	TrustAnchors            []TrustAnchor                   `json:"trust_anchors"`
-	PublicListeners         []PublicListenerBinding         `json:"public_listeners"`
-	IngressBindings         []IngressBinding                `json:"ingress_bindings"`
-	CertificateController   CertificateControllerAuthority  `json:"certificate_controller"`
-	CredentialIssuerSockets []CredentialIssuerSocketBinding `json:"credential_issuer_sockets"`
-	MaterialSockets         []Slice6MaterialSocketBinding   `json:"material_sockets"`
-	TLSAgentBindings        []TLSAgentBinding               `json:"tls_agent_bindings"`
-	PostgresClientAgents    []PostgresClientAgentBinding    `json:"postgres_client_agents"`
-	EgressPolicies          []EgressPolicy                  `json:"egress_policies"`
-	CleanupClasses          []string                        `json:"cleanup_classes"`
+	Protocol                     string                             `json:"protocol"`
+	Version                      int                                `json:"version"`
+	Revision                     string                             `json:"revision"`
+	ProfileDigest                string                             `json:"profile_digest"`
+	EnvironmentDigest            string                             `json:"environment_digest"`
+	PrincipalProfileDigest       string                             `json:"principal_profile_digest"`
+	Principals                   []Principal                        `json:"principals"`
+	SandboxIdentitySlots         []SandboxIdentitySlot              `json:"sandbox_identity_slots"`
+	ProviderDatabases            []ProviderDatabaseBinding          `json:"provider_databases"`
+	PostgresServerAuth           PostgresServerAuthPolicy           `json:"postgres_server_auth"`
+	Components                   []Component                        `json:"components"`
+	Networks                     []Network                          `json:"networks"`
+	External                     []ExternalService                  `json:"external_services"`
+	TrustEdges                   []TrustEdge                        `json:"trust_edges"`
+	TrustAnchors                 []TrustAnchor                      `json:"trust_anchors"`
+	PublicListeners              []PublicListenerBinding            `json:"public_listeners"`
+	IngressBindings              []IngressBinding                   `json:"ingress_bindings"`
+	CertificateController        CertificateControllerAuthority     `json:"certificate_controller"`
+	CredentialIssuerSockets      []CredentialIssuerSocketBinding    `json:"credential_issuer_sockets"`
+	MaterialSockets              []Slice6MaterialSocketBinding      `json:"material_sockets"`
+	BreakGlassSockets            []Slice6BreakGlassSocketBinding    `json:"break_glass_sockets"`
+	BreakGlassOperatorTasks      []Slice6BreakGlassOperatorTask     `json:"break_glass_operator_tasks"`
+	BreakGlassKeyAuthority       Slice6BreakGlassKeyAuthority       `json:"break_glass_key_authority"`
+	BreakGlassExecutableArtifact Slice6BreakGlassExecutableArtifact `json:"break_glass_executable_artifact"`
+	TLSAgentBindings             []TLSAgentBinding                  `json:"tls_agent_bindings"`
+	PostgresClientAgents         []PostgresClientAgentBinding       `json:"postgres_client_agents"`
+	EgressPolicies               []EgressPolicy                     `json:"egress_policies"`
+	CleanupClasses               []string                           `json:"cleanup_classes"`
 }
 
 type Principal struct {
@@ -778,12 +782,25 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if len(p.MaterialSockets) > 0 && VerifySlice6MaterialSocketBindings(p) != nil {
 		return ErrInvalidProfile
 	}
+	if len(p.BreakGlassSockets) > 0 || len(p.BreakGlassOperatorTasks) > 0 {
+		if VerifySlice6BreakGlassBoundaries(p) != nil {
+			return ErrInvalidProfile
+		}
+	}
+	if p.BreakGlassKeyAuthority.ControllerKeyID != "" || len(p.BreakGlassKeyAuthority.Actors) != 0 {
+		if VerifySlice6BreakGlassKeyAuthority(p.BreakGlassKeyAuthority) != nil {
+			return ErrInvalidProfile
+		}
+	}
+	if p.BreakGlassExecutableArtifact.ID != "" && VerifySlice6BreakGlassExecutableArtifact(p) != nil {
+		return ErrInvalidProfile
+	}
 	if err := validatePostgresClientAgents(p.PostgresClientAgents, p.ProviderDatabases, p.TLSAgentBindings, p.EgressPolicies,
 		p.CertificateController, p.TrustAnchors, principals, edges); err != nil {
 		return err
 	}
 	if err := validateTLSAgentBindingsWithPostgresAndMaterial(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies,
-		p.CertificateController, p.CredentialIssuerSockets, p.MaterialSockets, principals, edges); err != nil {
+		p.CertificateController, p.CredentialIssuerSockets, p.MaterialSockets, p.BreakGlassSockets, principals, edges); err != nil {
 		return err
 	}
 	for name, service := range external {
@@ -1536,12 +1553,13 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
 	return validateTLSAgentBindingsWithPostgresAndMaterial(values, postgres, policies, controllerAuthority,
-		credentialSockets, nil, principals, edges)
+		credentialSockets, nil, nil, principals, edges)
 }
 
 func validateTLSAgentBindingsWithPostgresAndMaterial(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
 	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
-	materialSockets []Slice6MaterialSocketBinding, principals map[string]Principal, edges map[string]TrustEdge) error {
+	materialSockets []Slice6MaterialSocketBinding, breakGlassSockets []Slice6BreakGlassSocketBinding,
+	principals map[string]Principal, edges map[string]TrustEdge) error {
 	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
 	for agent, subject := range requiredTLSAgentSubjects {
 		expected[agent] = subject
@@ -1708,7 +1726,8 @@ func validateTLSAgentBindingsWithPostgresAndMaterial(values []TLSAgentBinding, p
 					return ErrInvalidProfile
 				}
 			} else if !postgresSocketMember(postgres, name, mount) && !policyStorageMember(policies, name, mount) &&
-				!slice6MaterialSocketMember(materialSockets, name, mount) {
+				!slice6MaterialSocketMember(materialSockets, name, mount) &&
+				!slice6BreakGlassSocketMember(breakGlassSockets, name, mount) {
 				return ErrInvalidProfile
 			}
 		}

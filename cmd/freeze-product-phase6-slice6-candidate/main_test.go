@@ -19,6 +19,7 @@ func TestCompositionFileRejectsUnknownDuplicateAndNoncanonicalInput(t *testing.T
 	}
 	inputPath, outputPath := filepath.Join(directory, "input.json"), filepath.Join(directory, "profile.json")
 	for _, document := range [][]byte{
+		[]byte(`{"schema_version":"sandbox-runtime.phase6-slice6-composition.v2"}`),
 		[]byte(`{"schema_version":"` + inputSchema + `","unexpected":true}`),
 		[]byte(`{"schema_version":"` + inputSchema + `","schema_version":"` + inputSchema + `"}`),
 		[]byte(`{ "schema_version": "` + inputSchema + `" }`),

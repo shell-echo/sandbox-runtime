@@ -3785,3 +3785,59 @@ The complete race/shuffle suite, ordinary and tagged vet, Product Contract
 lock verifier and diff check passed; the newly added config v2 negative test
 also passed separately. Exact `sr-material-v2-*` Docker container and volume
 inventories were empty after the live component test.
+
+Checkpoint 2026-10-02 (break-glass static and Unix v2 component boundary):
+following Sandbox's explicit ruling, the unaccepted Profile now contains
+one operator→controller control, seven agent→controller consume and seven
+operator→agent delivery sockets, plus eight finite one-shot operator tasks
+outside the 78 fixed deployment principals. Exact kind/target/UID/GID,
+operation set, path, storage, `0710+0666` modes, mount direction, first-frame
+limit, capacity, resource bound and cleanup are revalidated even after a
+Profile digest rewrite. Focused negatives reject wrong-endpoint operations,
+cross-agent target, aliased storage, extra reader, task privilege or mount
+drift. The controller's ledger and audit now share an exclusive, bounded
+persistent allocation; its private Profile file raises actual Profile readers
+from the historical 75 to 76. Explicit controller and agent v2 Unix
+constructors preserve the v1 signed business payload while refusing
+same-UID v1 transport fallback. A real Linux Docker controller component
+test passed signed submit across different UIDs, unsigned consume rejection,
+wrong-operation/peer/GID rejection, stalled connection drain and exact
+socket/container/volume cleanup. The material-agent v2 command now verifies
+both its consume and delivery endpoints against the Profile before credential
+issuance. No break-glass production controller command, complete
+actor/target public-key supply, full signed approval/issue/delivery/consume,
+restart/replay proof or 78/16 release gate is claimed. Phase 6 remains
+**5/15**; previous R22 images and Profile are not final candidates.
+
+Checkpoint 2026-10-02 (break-glass finite binary-bind correction): Sandbox
+rejected the draft Alpine-only task because that carrier lacks the named
+operator executable. The unaccepted Profile now binds one source-built static
+Linux arm64 artifact with exact revision/tree/toolchain digest/build/binary and
+carrier index/manifest/config identity. Each of eight tasks declares only a
+read-only executable file plus its sole read-only socket directory. The
+source-bound composer independently rebuilds and byte-compares the artifact;
+the dedicated command accepts bounded, canonical, pre-signed input and no
+actor private keys. Unit and static Profile tests are component evidence.
+The Profile-bound v2 controller command now checks all 11 actor public keys,
+its signer FD, eight endpoint bindings and persistent state path before
+opening the ledger/listeners; that path has not yet passed a complete live
+controller gate. A separate real Linux Docker one-shot component test passed
+pinned carrier index/selected arm64 manifest/config checks, exact two read-only
+mounts, container security policy, created-container binary readback, a
+pre-signed submit, socket disappearance, persistent ledger/audit presence
+and exact container/volume cleanup. It did not run the complete approvals,
+issue, delivery, consume, replay or restart path; no release gate or count
+advancement is claimed.
+
+Checkpoint 2026-10-02 (source-bound break-glass actor identity): composition
+input advances to v3 and now supplies 12 existing credential identity keys
+before Profile freeze, plus four external actor public keys and one controller
+signer private key. Seven nonmigration agents project their existing identity
+key as the break-glass target key. The Profile digest covers exact actor ID,
+kind, owner, key ID and public-key digest; the final static gate rejects a
+missing/duplicate/aliased actor inventory. The v2 material agent compares
+its identity FD public key to its target binding before credential issuance.
+This is source/configuration and unit evidence only; the production
+controller's full live proof and 78-deployment/16-scenario gate are still
+absent. Phase 6 stays
+**5/15**.

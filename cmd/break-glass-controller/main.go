@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	configProtocol = "sandbox-runtime.break-glass-controller-config.v1"
-	maxConfigBytes = 1 << 20
-	signingKeyFD   = 3
+	configProtocol   = "sandbox-runtime.break-glass-controller-config.v1"
+	configProtocolV2 = "sandbox-runtime.break-glass-controller-config.v2"
+	maxConfigBytes   = 1 << 20
+	signingKeyFD     = 3
 )
 
 type configDocument struct {
@@ -60,6 +61,15 @@ func run() error {
 		return breakglass.ErrUnavailable
 	}
 	defer clear(document)
+	var selector struct {
+		Protocol string `json:"protocol"`
+	}
+	if json.Unmarshal(document, &selector) != nil {
+		return breakglass.ErrUnavailable
+	}
+	if selector.Protocol == configProtocolV2 {
+		return runV2(document)
+	}
 	var config configDocument
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()

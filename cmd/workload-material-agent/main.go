@@ -73,13 +73,15 @@ type configDocument struct {
 // cannot silently fall back to the historical v1 wire protocol.
 type configDocumentV2 struct {
 	configDocument
-	SecurityProfilePath     string `json:"security_profile_path"`
-	SecurityProfileDigest   string `json:"security_profile_digest"`
-	CredentialBackendPolicy string `json:"credential_backend_policy"`
-	CredentialMaxTTLSeconds int    `json:"credential_max_ttl_seconds"`
-	VaultTLSAgentSocket     string `json:"vault_tls_agent_socket"`
-	VaultTLSAgentUID        uint32 `json:"vault_tls_agent_uid"`
-	VaultTLSAgentGID        uint32 `json:"vault_tls_agent_gid"`
+	SecurityProfilePath              string `json:"security_profile_path"`
+	SecurityProfileDigest            string `json:"security_profile_digest"`
+	CredentialBackendPolicy          string `json:"credential_backend_policy"`
+	CredentialMaxTTLSeconds          int    `json:"credential_max_ttl_seconds"`
+	VaultTLSAgentSocket              string `json:"vault_tls_agent_socket"`
+	VaultTLSAgentUID                 uint32 `json:"vault_tls_agent_uid"`
+	VaultTLSAgentGID                 uint32 `json:"vault_tls_agent_gid"`
+	BreakGlassSocketGID              uint32 `json:"break_glass_socket_gid"`
+	BreakGlassControllerDirectoryGID uint32 `json:"break_glass_controller_directory_gid"`
 }
 
 type credentialLease struct {
@@ -257,10 +259,13 @@ func run() error { //nolint:maintidx
 	if err != nil {
 		return stageError("vault-client")
 	}
-	var breakGlassServer *breakglass.AgentServer
+	var breakGlassServer interface {
+		Serve(context.Context) error
+		Close() error
+	}
 	var breakGlassDone chan error
 	if !config.Migration {
-		breakGlassServer, err = breakglass.ListenAgent(breakglass.AgentServerConfig{
+		breakGlassConfig := breakglass.AgentServerConfig{
 			SocketPath: config.BreakGlassSocket, SocketUID: config.SocketUID, SocketGID: config.SocketGID,
 			ExpectedOperatorUID: config.ExpectedOperatorUID, ExpectedOperatorGID: config.ExpectedOperatorGID,
 			ControllerSocketPath: config.BreakGlassControllerSocket, ControllerUID: config.BreakGlassControllerUID, ControllerGID: config.BreakGlassControllerGID,
@@ -279,7 +284,14 @@ func run() error { //nolint:maintidx
 				}
 				return secretref.ErrUnavailable
 			},
-		})
+		}
+		if v2 != nil {
+			breakGlassConfig.SocketGID = v2.BreakGlassSocketGID
+			breakGlassServer, err = breakglass.ListenAgentV2(breakglass.V2AgentServerConfig{
+				AgentServerConfig: breakGlassConfig, ControllerDirectoryGID: v2.BreakGlassControllerDirectoryGID})
+		} else {
+			breakGlassServer, err = breakglass.ListenAgent(breakGlassConfig)
+		}
 		if err != nil {
 			return stageError("break-glass-listen")
 		}

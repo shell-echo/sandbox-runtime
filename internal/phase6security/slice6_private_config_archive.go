@@ -20,7 +20,7 @@ type Slice6PrivateConfigArchive struct {
 	TotalBytes int64
 }
 
-// BuildSlice6PrivateConfigArchives requires all 75 actual Profile readers in
+// BuildSlice6PrivateConfigArchives requires all 76 actual Profile readers in
 // one closed handoff. A partial set is never returned; any previously built
 // archive bytes are cleared if a later deployment fails validation.
 func BuildSlice6PrivateConfigArchives(profile Profile,
@@ -34,7 +34,7 @@ func BuildSlice6PrivateConfigArchives(profile Profile,
 			wanted = append(wanted, principal.Name)
 		}
 	}
-	if len(wanted) != 75 || len(filesByDeployment) != len(wanted) {
+	if len(wanted) != 76 || len(filesByDeployment) != len(wanted) {
 		return nil, errSlice6DesiredInventory
 	}
 	result := make(map[string]Slice6PrivateConfigArchive, len(wanted))

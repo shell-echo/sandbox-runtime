@@ -13,6 +13,9 @@ func VerifySlice6FinalGateProfile(profile Profile) error {
 		VerifySlice6ControllerLedgerMounts(profile) != nil ||
 		VerifySlice6PrivateConfigMounts(profile) != nil ||
 		VerifySlice6MaterialSocketBindings(profile) != nil ||
+		VerifySlice6BreakGlassBoundaries(profile) != nil ||
+		VerifySlice6BreakGlassKeyAuthority(profile.BreakGlassKeyAuthority) != nil ||
+		VerifySlice6BreakGlassExecutableArtifact(profile) != nil ||
 		VerifySlice6DNSClientCA(profile) != nil ||
 		VerifySlice6DNSRuntimePolicy(profile) != nil ||
 		VerifySlice6DesiredImageLocations(profile) != nil ||

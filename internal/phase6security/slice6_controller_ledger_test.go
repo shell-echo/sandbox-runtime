@@ -17,6 +17,12 @@ func TestSlice6ControllerLedgersAreSeparateClosedMounts(t *testing.T) {
 			t.Fatalf("invalid %s ledger authority", owner)
 		}
 	}
+	breakGlassMount, ledgerPath, err := Slice6ControllerLedgerMount("break-glass-controller")
+	auditPath, auditErr := Slice6BreakGlassAuditPath()
+	if err != nil || auditErr != nil || breakGlassMount.ReadOnly || breakGlassMount.MaxBytes != 128<<20 ||
+		ledgerPath != breakGlassMount.Target+"/ledger.json" || auditPath != breakGlassMount.Target+"/audit.ndjson" {
+		t.Fatal("break-glass ledger and audit are not one exclusive persistent allocation")
+	}
 	if _, _, err := Slice6ControllerLedgerMount("provider-runtime"); err == nil {
 		t.Fatal("unreviewed ledger owner admitted")
 	}

@@ -20,18 +20,21 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
 )
 
-const inputSchema = "sandbox-runtime.phase6-slice6-composition.v2"
+const inputSchema = "sandbox-runtime.phase6-slice6-composition.v3"
 
 var errInvalidInput = errors.New("invalid Phase 6 Slice 6 candidate input")
 
 type compositionFile struct {
-	SchemaVersion   string                                   `json:"schema_version"`
-	Images          phase6profilebuilder.ImageDraftInputs    `json:"images"`
-	TrustAnchors    map[string]string                        `json:"trust_anchors"`
-	ExternalImages  phase6profilebuilder.ExternalImageInputs `json:"external_images"`
-	DNSClientCA     phase6profilebuilder.DNSClientCAInput    `json:"dns_client_ca"`
-	EgressKeys      map[string]string                        `json:"egress_keys"`
-	CertificateKeys map[string]string                        `json:"certificate_keys"`
+	SchemaVersion            string                                   `json:"schema_version"`
+	Images                   phase6profilebuilder.ImageDraftInputs    `json:"images"`
+	TrustAnchors             map[string]string                        `json:"trust_anchors"`
+	ExternalImages           phase6profilebuilder.ExternalImageInputs `json:"external_images"`
+	DNSClientCA              phase6profilebuilder.DNSClientCAInput    `json:"dns_client_ca"`
+	EgressKeys               map[string]string                        `json:"egress_keys"`
+	CertificateKeys          map[string]string                        `json:"certificate_keys"`
+	CredentialKeys           map[string]string                        `json:"credential_keys"`
+	BreakGlassKeys           map[string]string                        `json:"break_glass_keys"`
+	BreakGlassOperatorBinary string                                   `json:"break_glass_operator_binary"`
 }
 
 func main() {
@@ -67,7 +70,8 @@ func run(ctx context.Context, inputPath, outputPath string, now time.Time) error
 	candidate, err := phase6profilebuilder.ComposeSlice6CandidateProfile(ctx,
 		phase6profilebuilder.CompositionInputs{Images: input.Images, TrustAnchors: input.TrustAnchors,
 			ExternalImages: input.ExternalImages, DNSClientCA: input.DNSClientCA, EgressKeys: input.EgressKeys,
-			CertificateKeys: input.CertificateKeys}, now)
+			CertificateKeys: input.CertificateKeys, CredentialKeys: input.CredentialKeys,
+			BreakGlassKeys: input.BreakGlassKeys, BreakGlassOperatorBinary: input.BreakGlassOperatorBinary}, now)
 	if err != nil {
 		return err
 	}

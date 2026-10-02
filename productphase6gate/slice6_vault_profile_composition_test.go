@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ type slice6VaultComposedInputs struct {
 	PeerSources     phase6security.PeerCRLSources
 	CertificateKeys map[string]string
 	CredentialKeys  map[string]string
+	BreakGlassKeys  map[string]string
 	AnchorPaths     map[string]string
 }
 
@@ -73,11 +75,53 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		}
 		return paths
 	}
+	credentialKeys := writeKeys(phase6security.Slice6DesiredCredentialKeyIDs())
+	breakGlassKeys := make(map[string]string)
+	signingDirectory := filepath.Join(root, "break-glass-external-signers")
+	if err := os.Mkdir(signingDirectory, 0o700); err != nil {
+		t.Fatal("create separate actor signing boundary")
+	}
+	for _, id := range phase6security.Slice6DesiredBreakGlassIndependentKeyIDs() {
+		public, private, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal("generate break-glass actor identity")
+		}
+		if id == "break-glass-controller-signer" {
+			path := filepath.Join(directory, id+".key")
+			if err := os.WriteFile(path, private, 0o600); err != nil {
+				t.Fatal("write controller signer")
+			}
+			breakGlassKeys[id] = path
+		} else {
+			privatePath := filepath.Join(signingDirectory, id+".key")
+			if err := os.WriteFile(privatePath, private, 0o600); err != nil {
+				t.Fatal("write external actor signer")
+			}
+			publicPath := filepath.Join(directory, id+".pub")
+			if err := os.WriteFile(publicPath, public, 0o400); err != nil {
+				t.Fatal("write public actor key")
+			}
+			breakGlassKeys[id] = publicPath
+		}
+		clear(private)
+	}
 	identityDigest := func(domain string) string {
 		sum := sha256.Sum256([]byte(domain + "\x00" + runID))
 		return "sha256:" + hex.EncodeToString(sum[:])
 	}
 	sourceRoot := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT")
+	operatorBinary := filepath.Join(directory, "phase6-break-glass-operator")
+	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+		"-ldflags=-buildid=", "-o", operatorBinary, "./cmd/phase6-break-glass-operator")
+	build.Dir = sourceRoot
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64",
+		"GOTOOLCHAIN=local", "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off", "GOWORK=off")
+	if _, err := build.CombinedOutput(); err != nil {
+		t.Fatal("build clean-source break-glass operator")
+	}
+	if err := os.Chmod(operatorBinary, 0o555); err != nil {
+		t.Fatal("set immutable-mode operator source artifact")
+	}
 	input := phase6profilebuilder.CompositionInputs{
 		Images: phase6profilebuilder.ImageDraftInputs{
 			RunID: runID, EnvironmentDigest: identityDigest("slice6-diagnostic-environment"),
@@ -98,9 +142,12 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 			DNS: phase6profilebuilder.ExternalArchive{Path: os.Getenv("SANDBOX_RUNTIME_PHASE6_DNS_ARCHIVE"),
 				SelectedManifestDigest: os.Getenv("SANDBOX_RUNTIME_PHASE6_DNS_SELECTED")},
 		},
-		DNSClientCA:     phase6profilebuilder.DNSClientCAInput{BundlePath: brokerPath, IssuerID: broker.ID},
-		EgressKeys:      writeKeys(phase6security.Slice6DesiredEgressAuthorityNames()),
-		CertificateKeys: writeKeys(phase6security.Slice6DesiredCertificateKeyIDs()),
+		DNSClientCA:              phase6profilebuilder.DNSClientCAInput{BundlePath: brokerPath, IssuerID: broker.ID},
+		EgressKeys:               writeKeys(phase6security.Slice6DesiredEgressAuthorityNames()),
+		CertificateKeys:          writeKeys(phase6security.Slice6DesiredCertificateKeyIDs()),
+		CredentialKeys:           credentialKeys,
+		BreakGlassKeys:           breakGlassKeys,
+		BreakGlassOperatorBinary: operatorBinary,
 	}
 	candidate, err := phase6profilebuilder.ComposeSlice6CandidateProfile(ctx, input, time.Now().UTC())
 	if err != nil || candidate.Profile.Validate() != nil ||
@@ -109,7 +156,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	}
 	diagnostics := candidate.Diagnostics()
 	if diagnostics.ImageSupplyLoads != 2 || diagnostics.ExternalArchivePasses != 2 ||
-		len(diagnostics.Stages) != 9 || diagnostics.Stages[len(diagnostics.Stages)-1].Name != "final_source_reopen" {
+		len(diagnostics.Stages) != 11 || diagnostics.Stages[len(diagnostics.Stages)-1].Name != "final_source_reopen" {
 		t.Fatalf("unexpected full source verification passes: image=%d external=%d stages=%v",
 			diagnostics.ImageSupplyLoads, diagnostics.ExternalArchivePasses, diagnostics.Stages)
 	}
@@ -142,11 +189,9 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	if err != nil || len(materialPlan) != 11 {
 		t.Fatal("same-run Profile cannot derive exact credential signing clients")
 	}
-	credentialKeyNames := []string{"credential-certificate-controller"}
-	for _, entry := range materialPlan {
-		credentialKeyNames = append(credentialKeyNames, "credential-"+entry.Agent)
+	if len(credentialKeys) != len(materialPlan)+1 {
+		t.Fatal("same-run credential identities missing")
 	}
-	credentialKeys := writeKeys(credentialKeyNames)
 	loadedImages, err := verifySlice6LoadedImageStore(ctx, gateInput)
 	if err != nil {
 		t.Fatalf("same-run candidate image store preflight failed: %v", err)
@@ -184,7 +229,8 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages, len(peerSources.Edges))
 	return slice6VaultComposedInputs{ProfilePath: profilePath, Profile: verified,
 		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources,
-		CertificateKeys: input.CertificateKeys, CredentialKeys: credentialKeys, AnchorPaths: anchors}
+		CertificateKeys: input.CertificateKeys, CredentialKeys: credentialKeys,
+		BreakGlassKeys: breakGlassKeys, AnchorPaths: anchors}
 }
 
 // The five anchor names are trust purposes, not five independent CAs. The

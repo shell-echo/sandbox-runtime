@@ -13,12 +13,15 @@ var ErrInvalidComposition = errors.New("invalid Phase 6 Slice 6 profile composit
 // operator-authored profile fields or observations. This is a configuration
 // freeze only; live dependency and scenario evidence remains a separate gate.
 type CompositionInputs struct {
-	Images          ImageDraftInputs
-	TrustAnchors    map[string]string
-	ExternalImages  ExternalImageInputs
-	DNSClientCA     DNSClientCAInput
-	EgressKeys      map[string]string
-	CertificateKeys map[string]string
+	Images                   ImageDraftInputs
+	TrustAnchors             map[string]string
+	ExternalImages           ExternalImageInputs
+	DNSClientCA              DNSClientCAInput
+	EgressKeys               map[string]string
+	CertificateKeys          map[string]string
+	CredentialKeys           map[string]string
+	BreakGlassKeys           map[string]string
+	BreakGlassOperatorBinary string
 }
 
 type compositionTraceKey struct{}
@@ -108,12 +111,27 @@ func ComposeSlice6CandidateProfile(ctx context.Context, input CompositionInputs,
 		return CandidateProfile{}, compositionError("static profile fields")
 	}
 	mark("static_fields")
-	profile, err := buildSlice6CandidateProfile(static)
+	breakGlassKeys, err := LoadSlice6BreakGlassKeySupply(input.CredentialKeys, input.BreakGlassKeys)
+	if err != nil {
+		return CandidateProfile{}, compositionError("break-glass key sources")
+	}
+	keyed, err := bindSlice6BreakGlassKeyDraft(static, breakGlassKeys)
+	if err != nil {
+		return CandidateProfile{}, compositionError("break-glass key authority")
+	}
+	mark("break_glass_key_bindings")
+	artifact, err := LoadSlice6BreakGlassExecutableArtifact(ctx, static.ImageSupply, input.BreakGlassOperatorBinary)
+	if err != nil {
+		return CandidateProfile{}, compositionError("break-glass executable artifact")
+	}
+	keyed.BreakGlassExecutableArtifact, keyed.operatorBinaryPath = artifact, input.BreakGlassOperatorBinary
+	mark("break_glass_operator_artifact")
+	profile, err := buildSlice6CandidateProfile(keyed)
 	if err != nil {
 		return CandidateProfile{}, compositionError("static profile fields")
 	}
 	mark("profile_derivation")
-	candidate := CandidateProfile{Profile: profile, source: static}
+	candidate := CandidateProfile{Profile: profile, source: keyed}
 	if candidate.VerifySources(ctx, time.Now().UTC()) != nil {
 		return CandidateProfile{}, compositionError("final source freeze")
 	}

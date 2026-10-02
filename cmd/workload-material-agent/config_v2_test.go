@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +112,79 @@ func TestV2MaterialSocketConfigRequiresDistinctOwnerAndAgent(t *testing.T) {
 				t.Fatal("cross-UID material endpoint drift admitted")
 			}
 		})
+	}
+}
+
+func TestV2BreakGlassConfigBindsBothAgentDirections(t *testing.T) {
+	const agent = "guest-agent"
+	profile := phase6security.Profile{BreakGlassSockets: []phase6security.Slice6BreakGlassSocketBinding{
+		{ID: "consume", Kind: "consume", TargetAgent: agent, SocketPath: "/run/phase6/break-glass/controller/guest-agent/break-glass.sock",
+			ServerUID: 20020, ServerGID: 30020, ClientUID: 20021, ClientGID: uint32(os.Getgid())},
+		{ID: "delivery", Kind: "delivery", TargetAgent: agent, SocketPath: "/run/phase6/break-glass/agents/guest-agent/break-glass.sock",
+			ServerUID: 20021, ServerGID: uint32(os.Getgid()), ClientUID: 20091, ClientGID: 30091},
+	}}
+	config := configDocument{CredentialAgentID: agent, SocketUID: 20021,
+		BreakGlassSocket:           profile.BreakGlassSockets[1].SocketPath,
+		BreakGlassControllerSocket: profile.BreakGlassSockets[0].SocketPath,
+		BreakGlassControllerUID:    20020, BreakGlassControllerGID: 30020,
+		ExpectedOperatorUID: 20091, ExpectedOperatorGID: 30091}
+	v2 := configDocumentV2{BreakGlassSocketGID: 30091, BreakGlassControllerDirectoryGID: uint32(os.Getgid())}
+	if !validV2BreakGlassConfig(profile, config, v2) {
+		t.Fatal("exact break-glass v2 directions rejected")
+	}
+	for name, mutate := range map[string]func(*configDocument, *configDocumentV2){
+		"controller socket":          func(c *configDocument, _ *configDocumentV2) { c.BreakGlassControllerSocket += "-other" },
+		"delivery socket":            func(c *configDocument, _ *configDocumentV2) { c.BreakGlassSocket += "-other" },
+		"controller UID":             func(c *configDocument, _ *configDocumentV2) { c.BreakGlassControllerUID++ },
+		"operator UID":               func(c *configDocument, _ *configDocumentV2) { c.ExpectedOperatorUID++ },
+		"operator group":             func(_ *configDocument, v *configDocumentV2) { v.BreakGlassSocketGID++ },
+		"controller directory group": func(_ *configDocument, v *configDocumentV2) { v.BreakGlassControllerDirectoryGID++ },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changedConfig, changedV2 := config, v2
+			mutate(&changedConfig, &changedV2)
+			if validV2BreakGlassConfig(profile, changedConfig, changedV2) {
+				t.Fatal("break-glass endpoint drift admitted")
+			}
+		})
+	}
+	config.Migration = true
+	config.BreakGlassSocket, config.BreakGlassControllerSocket = "", ""
+	v2.BreakGlassSocketGID, v2.BreakGlassControllerDirectoryGID = 0, 0
+	if !validV2BreakGlassConfig(profile, config, v2) {
+		t.Fatal("migration-only absence of break-glass endpoint rejected")
+	}
+}
+
+func TestV2BreakGlassTargetUsesExistingIdentityFDKey(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(private)
+	const agent = "guest-agent"
+	actor := phase6security.Slice6BreakGlassActorKey{ID: agent, Kind: "target", Owner: agent,
+		KeyID: "credential-" + agent, PublicKeyDigest: phase6security.Slice6BreakGlassPublicKeyDigest(public)}
+	profile := phase6security.Profile{BreakGlassKeyAuthority: phase6security.Slice6BreakGlassKeyAuthority{
+		Actors: []phase6security.Slice6BreakGlassActorKey{actor}}}
+	config := configDocument{CredentialAgentID: agent}
+	if !validV2BreakGlassIdentity(profile, config, private.Public().(ed25519.PublicKey)) {
+		t.Fatal("existing credential identity did not bind break-glass target")
+	}
+	other, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validV2BreakGlassIdentity(profile, config, other) {
+		t.Fatal("substituted target signer admitted")
+	}
+	profile.BreakGlassKeyAuthority.Actors[0].KeyID = "break-glass-guest-agent"
+	if validV2BreakGlassIdentity(profile, config, public) {
+		t.Fatal("second target identity admitted")
+	}
+	config.Migration = true
+	if !validV2BreakGlassIdentity(profile, config, public) {
+		t.Fatal("migration-only no-target case rejected")
 	}
 }
 

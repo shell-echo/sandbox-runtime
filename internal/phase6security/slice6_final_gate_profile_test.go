@@ -1,6 +1,8 @@
 package phase6security
 
 import (
+	"crypto/ed25519"
+	"crypto/sha256"
 	"testing"
 )
 
@@ -33,6 +35,31 @@ func bindSyntheticSlice6DNSClientCA(t *testing.T, profile Profile) Profile {
 				profile.TrustEdges[edgeIndex].ExternalIdentityDigest = service.IdentityDigest
 			}
 		}
+		independent, credential := map[string]ed25519.PublicKey{}, map[string]ed25519.PublicKey{}
+		for _, id := range Slice6DesiredBreakGlassIndependentKeyIDs() {
+			seed := sha256.Sum256([]byte("synthetic-test-only/" + id))
+			independent[id] = ed25519.NewKeyFromSeed(seed[:]).Public().(ed25519.PublicKey)
+		}
+		for _, id := range Slice6DesiredCredentialKeyIDs() {
+			seed := sha256.Sum256([]byte("synthetic-test-only/" + id))
+			credential[id] = ed25519.NewKeyFromSeed(seed[:]).Public().(ed25519.PublicKey)
+		}
+		authority, err := BuildSlice6BreakGlassKeyAuthority(independent, credential)
+		if err != nil {
+			t.Fatal("synthetic key inventory")
+		}
+		profile.BreakGlassKeyAuthority = authority
+		profile.BreakGlassExecutableArtifact = Slice6BreakGlassExecutableArtifact{
+			ID: "break-glass-operator", SourceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			SourceTreeDigest: testDigest("synthetic-break-glass-source"), Toolchain: "go1.26.8",
+			ToolchainDigest: testDigest("synthetic-break-glass-toolchain"),
+			BuildTarget:     "./cmd/phase6-break-glass-operator", BuildParameters: Slice6BreakGlassBuildParameters,
+			Platform: "linux/arm64/v8", BinaryDigest: testDigest("synthetic-break-glass-binary"),
+			BinaryBytes: 4096, ContainerPath: "/phase6-break-glass-operator",
+			CarrierReference: slice6BreakGlassImage, CarrierIndexDigest: Slice6BreakGlassCarrierIndexDigest,
+			CarrierSelectedManifestDigest: Slice6BreakGlassCarrierManifestDigest,
+			CarrierConfigDigest:           Slice6BreakGlassCarrierConfigDigest, CarrierPlatform: "linux/arm64/v8"}
+		profile.Revision = "slice6-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		profile.ProfileDigest = profile.Digest()
 		return profile
 	}

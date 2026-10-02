@@ -24,7 +24,7 @@ const (
 // hash of Profile bytes (which would create a digest cycle).
 func Slice6PrivateConfigMount(deployment string) (Mount, bool) {
 	target, known := slice6DesiredImageTargets[deployment]
-	if !known || target == "break-glass-controller" || target == Slice6BrowserPublishedImage ||
+	if !known || target == Slice6BrowserPublishedImage ||
 		target == Slice6DesktopCandidateImage {
 		return Mount{}, false
 	}

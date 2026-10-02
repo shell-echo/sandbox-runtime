@@ -51,6 +51,10 @@ func BuildSlice6FinalExternalProfileTarget(draft Profile) (Profile, error) {
 	if err != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
+	final.Principals, final.BreakGlassSockets, final.BreakGlassOperatorTasks, err = AttachSlice6BreakGlassBoundaries(final.Principals)
+	if err != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
 	final.ProfileDigest = final.Digest()
 	if VerifySlice6DesiredFinalExternalProfile(final) != nil {
 		return Profile{}, errSlice6DesiredInventory

@@ -18,7 +18,7 @@ var ErrInvalidCandidateProfile = errors.New("invalid Phase 6 Slice 6 candidate p
 // launch receipt and cannot satisfy any of the 16 live scenarios by itself.
 type CandidateProfile struct {
 	Profile phase6security.Profile
-	source  StaticDraft
+	source  KeyedStaticDraft
 	metrics CompositionMetrics
 }
 
@@ -45,7 +45,7 @@ func (c CandidateProfile) Diagnostics() CompositionMetrics {
 // draft chain, then reads the selected Desktop image's effective broker bytes
 // before validating the complete final-gate Profile. No digest, key or
 // external identity is accepted from an operator-authored Profile document.
-func FreezeSlice6CandidateProfile(ctx context.Context, draft StaticDraft, now time.Time) (CandidateProfile, error) {
+func FreezeSlice6CandidateProfile(ctx context.Context, draft KeyedStaticDraft, now time.Time) (CandidateProfile, error) {
 	if draft.VerifySources(ctx, now) != nil {
 		return CandidateProfile{}, ErrInvalidCandidateProfile
 	}
@@ -67,7 +67,17 @@ func (c CandidateProfile) VerifySources(ctx context.Context, now time.Time) erro
 	return nil
 }
 
-func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, error) {
+func buildSlice6CandidateProfile(draft KeyedStaticDraft) (phase6security.Profile, error) {
+	if phase6security.VerifySlice6BreakGlassKeyAuthority(draft.BreakGlassKeyAuthority) != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
+	if draft.BreakGlassExecutableArtifact.ID != "break-glass-operator" ||
+		draft.BreakGlassExecutableArtifact.SourceRevision != draft.ImageSupply.RuntimeRevision ||
+		draft.BreakGlassExecutableArtifact.SourceTreeDigest != draft.ImageSupply.RuntimeTreeDigest ||
+		draft.BreakGlassExecutableArtifact.Platform != draft.ImageSupply.Platform ||
+		verifySlice6OperatorBinarySource(draft.operatorBinaryPath, draft.BreakGlassExecutableArtifact) != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	if verifySlice6CandidateIssuerBundles(draft.AnchorSupply, draft.DNSClientCA) != nil {
 		return phase6security.Profile{}, ErrInvalidCandidateProfile
 	}
@@ -116,6 +126,10 @@ func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, err
 	if err != nil {
 		return phase6security.Profile{}, ErrInvalidCandidateProfile
 	}
+	principals, breakGlassSockets, breakGlassTasks, err := phase6security.AttachSlice6BreakGlassBoundaries(principals)
+	if err != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	profile := phase6security.Profile{Protocol: phase6security.ProtocolID, Version: phase6security.Version,
 		Revision:          "slice6-" + draft.ImageSupply.RuntimeRevision,
 		EnvironmentDigest: identity.EnvironmentDigest, PrincipalProfileDigest: identity.ProfileDigest,
@@ -125,8 +139,11 @@ func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, err
 		External: draft.External, TrustEdges: draft.TrustEdges, TrustAnchors: draft.TrustAnchors,
 		PublicListeners: draft.PublicListeners, IngressBindings: draft.IngressBindings,
 		CertificateController: draft.CertificateController, CredentialIssuerSockets: draft.CredentialIssuerSockets,
-		MaterialSockets:  materialSockets,
-		TLSAgentBindings: draft.TLSAgentBindings, PostgresClientAgents: draft.PostgresClientAgents,
+		MaterialSockets: materialSockets, BreakGlassSockets: breakGlassSockets,
+		BreakGlassOperatorTasks:      breakGlassTasks,
+		BreakGlassKeyAuthority:       draft.BreakGlassKeyAuthority,
+		BreakGlassExecutableArtifact: draft.BreakGlassExecutableArtifact,
+		TLSAgentBindings:             draft.TLSAgentBindings, PostgresClientAgents: draft.PostgresClientAgents,
 		EgressPolicies: draft.EgressPolicies, CleanupClasses: draft.CleanupClasses}
 	profile.ProfileDigest = profile.Digest()
 	if profile.Validate() != nil || phase6security.VerifySlice6FinalGateProfile(profile) != nil {

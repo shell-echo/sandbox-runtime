@@ -11,7 +11,7 @@ func TestSlice6CandidateProfileRefusesSyntheticSourceChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if candidate, err := FreezeSlice6CandidateProfile(context.Background(), static, time.Now().UTC()); err == nil ||
+	if candidate, err := FreezeSlice6CandidateProfile(context.Background(), KeyedStaticDraft{StaticDraft: static}, time.Now().UTC()); err == nil ||
 		candidate.Profile.ProfileDigest != "" {
 		t.Fatal("synthetic image, resource, CA, external or authority input admitted to final profile")
 	}

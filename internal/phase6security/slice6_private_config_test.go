@@ -17,8 +17,8 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 			count++
 		}
 	}
-	if count != 75 {
-		t.Fatalf("private config consumers = %d, want 75", count)
+	if count != 76 {
+		t.Fatalf("private config consumers = %d, want 76", count)
 	}
 	for _, principal := range final.Principals {
 		mount, needed := Slice6PrivateConfigMount(principal.Name)
@@ -39,6 +39,7 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		}
 	}
 	for name, files := range map[string]string{
+		"break-glass-controller":         "profile.json",
 		"certificate-controller":         "peer-crl-sources.json,profile.json",
 		"workload-credential-controller": "profile.json",
 		"gateway-runtime":                "credential-authority.json,dependency-authority.json,peer-crl-role.json,policy-authority.json,postgres-peer-crl-role.json,profile.json",
@@ -62,6 +63,7 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		{"browser-action-ingress-runtime", Slice6StartupAuthorityFile, 16 << 10},
 		{"gateway-runtime", Slice6CredentialAuthorityFile, 64 << 10},
 		{"certificate-controller", Slice6ProfileConfigFile, 2 << 20},
+		{"break-glass-controller", Slice6ProfileConfigFile, 2 << 20},
 	} {
 		limit, ok := Slice6PrivateConfigFileLimit(value.deployment, value.filename)
 		if !ok || limit != value.limit {
@@ -71,7 +73,7 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 	if _, ok := Slice6PrivateConfigFileLimit("guest-runtime", Slice6StartupAuthorityFile); ok {
 		t.Fatal("unlisted startup authority purpose accepted")
 	}
-	for _, name := range []string{"break-glass-controller", "browser-sandbox-runtime", "desktop-sandbox-runtime", "unknown"} {
+	for _, name := range []string{"browser-sandbox-runtime", "desktop-sandbox-runtime", "unknown"} {
 		if _, ok := Slice6PrivateConfigMount(name); ok {
 			t.Fatalf("unreviewed private config consumer %s", name)
 		}

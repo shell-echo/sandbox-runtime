@@ -2085,3 +2085,52 @@ persistent state, all remaining owners need live v2 configuration, and the
 78-deployment/16-scenario evidence gate has not run. Profile v1 and the
 material-agent v2 command remain unaccepted Slice 6 drafts and can be
 tightened without a locked Provider Contract change. Phase 6 stays 5/15.
+
+### Slice 6 break-glass transport and finite operator correction (2026-10-02)
+
+The final draft Profile now binds one operator→controller control socket,
+seven agent→controller target-specific consume sockets, and seven
+operator→agent delivery sockets. All 15 have distinct storage/path/peer and
+`0710` directory plus `0666` socket layout; every principal mount has one
+server writer and only its designated non-task client reader. Eight finite,
+one-shot operator tasks are a separate Profile section, not an additional
+fixed deployment or a new business principal kind. Their reviewed identity
+`20091:30091` is distinct from all 78 principals and the terminal-cleanup
+operator `20090:30090`; they have one read-only executable-file bind plus
+one read-only socket-directory mount per task,
+network-none, non-root, read-only rootfs, dropped capabilities, NNP and
+bounded resources/duration. The live runner must still verify each actual
+task chooses exactly one authorized operation and the matching socket mount.
+
+The explicit v2 Unix constructors reuse restricted socket inode, peer,
+first-frame, drain and cleanup checks. They retain the existing signed v1
+business payload, signature domains, capability, ledger and audit schemas;
+the transport upgrade does not authorize an unsigned or wrong-target
+consume. A real Linux different-UID/GID controller component test has
+observed signed submit, wrong-endpoint/peer denial, drain and exact cleanup.
+The break-glass controller now has its own exclusive persistent ledger/audit
+allocation and private Profile input. The source-bound freeze uses 12 existing
+credential identity private-key sources, of which seven runtime agents also
+serve as target break-glass signers. It admits only four public external actor
+files and one controller-signer private source in addition; actor private
+keys stay outside the production Profile builder/controller. The closed
+11-actor digest inventory is Profile-bound and each material agent checks its
+own FD public key before credential issuance. This is **not** production
+operator acceptance: the v2 controller command and full signed
+issue→delivery→consume/replay/restart
+gate remain open. No v1 same-UID production fallback is allowed. Phase 6
+remains 5/15.
+
+Sandbox's carrier correction keeps the fixed 78 deployments and 12 local role
+image targets. The eight finite tasks share a separately clean-source-built
+static Go operator executable, not an executable allegedly present in Alpine.
+The Profile binds one artifact record: exact source revision/tree, Go version
+and toolchain digest,
+build parameters, Linux arm64 target, binary digest/size/path and pinned
+Alpine OCI index/selected manifest/config/platform. Each task authorizes only
+that read-only executable bind plus its designated read-only Unix socket
+directory. The live runner must inspect the created container and read the
+actual mounted executable bytes before sending a signed request or capability.
+No requester/approver/operator private key is mounted; the operator receives
+only bounded pre-signed input. This is a local gate packaging boundary, not a
+self-contained published OCI or cross-platform deployment claim.

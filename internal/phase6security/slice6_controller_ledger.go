@@ -8,20 +8,32 @@ import (
 const Slice6ControllerLedgerMaxBytes int64 = 20 << 20
 
 // Slice6ControllerLedgerMount is the closed persistent state allocation for
-// the two live issuers. The bootstrap operator creates only the empty volume;
+// the two live issuers and the independent break-glass authority. The bootstrap operator creates only the empty volume;
 // the corresponding non-root controller creates and replaces its ledger.
 func Slice6ControllerLedgerMount(deployment string) (Mount, string, error) {
 	var directory, storage string
+	maxBytes := Slice6ControllerLedgerMaxBytes
 	switch deployment {
 	case "certificate-controller":
 		directory, storage = "/var/lib/phase6-certificate-controller", "certificate-controller-ledger"
 	case "workload-credential-controller":
 		directory, storage = "/var/lib/phase6-credential-controller", "credential-controller-ledger"
+	case "break-glass-controller":
+		directory, storage = "/var/lib/phase6-break-glass-controller", "break-glass-controller-ledger-audit"
+		maxBytes = 128 << 20
 	default:
 		return Mount{}, "", errSlice6DesiredInventory
 	}
-	return Mount{Target: directory, Kind: "persistent_ledger", MaxBytes: Slice6ControllerLedgerMaxBytes,
+	return Mount{Target: directory, Kind: "persistent_ledger", MaxBytes: maxBytes,
 		StorageID: storage}, directory + "/ledger.json", nil
+}
+
+func Slice6BreakGlassAuditPath() (string, error) {
+	mount, _, err := Slice6ControllerLedgerMount("break-glass-controller")
+	if err != nil {
+		return "", err
+	}
+	return mount.Target + "/audit.ndjson", nil
 }
 
 // AttachSlice6ControllerLedgerMounts is used by both the synthetic final
@@ -30,7 +42,8 @@ func AttachSlice6ControllerLedgerMounts(principals []Principal) ([]Principal, er
 	result := slices.Clone(principals)
 	found := 0
 	for index := range result {
-		if result[index].Name != "certificate-controller" && result[index].Name != "workload-credential-controller" {
+		if result[index].Name != "certificate-controller" && result[index].Name != "workload-credential-controller" &&
+			result[index].Name != "break-glass-controller" {
 			continue
 		}
 		mount, _, err := Slice6ControllerLedgerMount(result[index].Name)
@@ -40,7 +53,7 @@ func AttachSlice6ControllerLedgerMounts(principals []Principal) ([]Principal, er
 		result[index].Mounts = append(slices.Clone(result[index].Mounts), mount)
 		found++
 	}
-	if found != 2 || VerifySlice6ControllerLedgerMounts(Profile{Principals: result}) != nil {
+	if found != 3 || VerifySlice6ControllerLedgerMounts(Profile{Principals: result}) != nil {
 		return nil, errSlice6DesiredInventory
 	}
 	return result, nil
@@ -49,14 +62,14 @@ func AttachSlice6ControllerLedgerMounts(principals []Principal) ([]Principal, er
 // VerifySlice6ControllerLedgerMounts rejects aliases and path nesting across
 // every principal, not just a missing mount on the two owners.
 func VerifySlice6ControllerLedgerMounts(profile Profile) error {
-	owners := []string{"certificate-controller", "workload-credential-controller"}
+	owners := []string{"break-glass-controller", "certificate-controller", "workload-credential-controller"}
 	for _, principal := range profile.Principals {
 		for _, mount := range principal.Mounts {
 			if mount.Kind != "persistent_ledger" {
 				continue
 			}
 			// Egress policy authorities have their own separately reviewed
-			// ledger allocation. The two controller ledgers are otherwise
+			// ledger allocation. The three controller ledgers are otherwise
 			// the entire approved persistent state surface for Slice 6.
 			policyAuthority := false
 			for _, spec := range slice6DesiredEgress {

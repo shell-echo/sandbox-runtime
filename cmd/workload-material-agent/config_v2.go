@@ -120,6 +120,10 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	if !materialSocketBound {
 		return nil, secretref.ErrUnavailable
 	}
+	if !validV2BreakGlassConfig(profile, config, *v2) ||
+		!validV2BreakGlassIdentity(profile, config, privateKey.Public().(ed25519.PublicKey)) {
+		return nil, secretref.ErrUnavailable
+	}
 	binding, boundController, boundAgent, err := profile.CredentialIssuerSocketForClient(agent.Name)
 	if err != nil || binding.SocketPath != config.CredentialControllerSocket ||
 		boundController.UID != controller.UID || boundController.GID != controller.GID ||
@@ -152,6 +156,55 @@ func validV2MaterialSocketConfig(binding phase6security.Slice6MaterialSocketBind
 		config.ExpectedClientUID == binding.OwnerUID && config.ExpectedClientGID == binding.OwnerGID &&
 		config.MaxConnections == binding.MaxConnections &&
 		config.OperationTimeoutSeconds >= 1 && config.OperationTimeoutSeconds <= binding.MaxOperationSeconds
+}
+
+func validV2BreakGlassConfig(profile phase6security.Profile, config configDocument, v2 configDocumentV2) bool {
+	if config.Migration {
+		return config.BreakGlassSocket == "" && config.BreakGlassControllerSocket == "" &&
+			v2.BreakGlassSocketGID == 0 && v2.BreakGlassControllerDirectoryGID == 0
+	}
+	var delivery, consume phase6security.Slice6BreakGlassSocketBinding
+	for _, binding := range profile.BreakGlassSockets {
+		if binding.TargetAgent != config.CredentialAgentID {
+			continue
+		}
+		switch binding.Kind {
+		case "delivery":
+			if delivery.ID != "" {
+				return false
+			}
+			delivery = binding
+		case "consume":
+			if consume.ID != "" {
+				return false
+			}
+			consume = binding
+		default:
+			return false
+		}
+	}
+	return delivery.ID != "" && consume.ID != "" &&
+		config.BreakGlassSocket == delivery.SocketPath &&
+		config.BreakGlassControllerSocket == consume.SocketPath &&
+		config.BreakGlassControllerUID == consume.ServerUID && config.BreakGlassControllerGID == consume.ServerGID &&
+		config.ExpectedOperatorUID == delivery.ClientUID && config.ExpectedOperatorGID == delivery.ClientGID &&
+		v2.BreakGlassSocketGID == delivery.ClientGID &&
+		v2.BreakGlassControllerDirectoryGID == consume.ClientGID &&
+		config.SocketUID == delivery.ServerUID && uint32(os.Getgid()) == consume.ClientGID
+}
+
+func validV2BreakGlassIdentity(profile phase6security.Profile, config configDocument, public ed25519.PublicKey) bool {
+	if config.Migration {
+		return true
+	}
+	for _, actor := range profile.BreakGlassKeyAuthority.Actors {
+		if actor.ID == config.CredentialAgentID {
+			return actor.Kind == "target" && actor.Owner == config.CredentialAgentID &&
+				actor.KeyID == "credential-"+config.CredentialAgentID &&
+				actor.PublicKeyDigest == phase6security.Slice6BreakGlassPublicKeyDigest(public)
+		}
+	}
+	return false
 }
 
 func validV2MaterialAccessConfig(entry phase6security.Slice6MaterialAccess, config configDocument, v2 configDocumentV2) bool {
