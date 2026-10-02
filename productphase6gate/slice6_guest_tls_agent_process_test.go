@@ -32,17 +32,25 @@ const slice6GuestTLSCPUContrastEnv = "SANDBOX_RUNTIME_PHASE6_GUEST_TLS_CPU_CONTR
 // its subject-only signer socket. The material agent is not implied here.
 func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
+	slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed, "guest-agent", "guest-agent-tls-agent",
+		"guest", socketVolumes, anchorFiles, onSignerReady)
+}
+
+func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, subjectDeployment, agentDeployment, label string,
+	socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
 	t.Helper()
 	profile := composed.Profile
-	binding, principal, subject, err := profile.TLSAgentForSubject("guest-agent")
-	if err != nil || principal.Name != "guest-agent-tls-agent" || subject.Name != "guest-agent" ||
+	binding, principal, subject, err := profile.TLSAgentForSubject(subjectDeployment)
+	if err != nil || principal.Name != agentDeployment || subject.Name != subjectDeployment ||
 		principal.ImageLocation != "local" || principal.ImageReference != principal.ImageDigest ||
 		principal.UID == 0 || principal.GID == 0 || !principal.ReadOnlyRootFilesystem ||
 		!principal.NoNewPrivileges || !slices.Equal(principal.DroppedCapabilities, []string{"ALL"}) ||
-		len(principal.Networks) != 1 || principal.Networks[0] != "network-guest-agent-tls-agent" {
-		t.Fatal("Guest TLS-agent immutable Profile identity drift")
+		len(principal.Networks) != 1 || principal.Networks[0] != "network-"+agentDeployment ||
+		(label != "guest" && label != "product" && label != "product-material") {
+		t.Fatal("ordinary TLS-agent immutable Profile identity drift")
 	}
-	cpuContrast := os.Getenv(slice6GuestTLSCPUContrastEnv) == "1"
+	cpuContrast := label == "guest" && os.Getenv(slice6GuestTLSCPUContrastEnv) == "1"
 	if cpuContrast && (principal.Resources.CPUMillis != 50 || os.Getenv(slice6GuestTLSStackEnv) == "1") {
 		t.Fatal("non-release Guest TLS-agent CPU contrast requires the frozen 50m Profile and no QUIT diagnostic")
 	}
@@ -54,7 +62,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	}
 	_, ledgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount(controller.Name)
 	if ledgerErr != nil || controller.UID != binding.ControllerUID || controller.GID != binding.ControllerGID {
-		t.Fatal("Guest TLS-agent certificate controller witness unavailable")
+		t.Fatal("ordinary TLS-agent certificate controller witness unavailable")
 	}
 	var network phase6security.Network
 	for _, candidate := range profile.Networks {
@@ -64,33 +72,33 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	}
 	if network.Name == "" || !network.Internal || network.GatewayModeIPv4 != "isolated" ||
 		!slices.Equal(network.Principals, []string{principal.Name}) || len(network.ExternalServices) != 0 {
-		t.Fatal("Guest TLS-agent dedicated network drift")
+		t.Fatal("ordinary TLS-agent dedicated network drift")
 	}
 	prefix, err := netip.ParsePrefix(network.IPv4Subnet)
 	if err != nil || prefix.Bits() != 24 || !prefix.Addr().Is4() {
-		t.Fatal("Guest TLS-agent network address drift")
+		t.Fatal("ordinary TLS-agent network address drift")
 	}
 	address := prefix.Addr().As4()
 	address[3] = 2
 	createdNetwork, err := createSlice6ProfileNetwork(ctx, run, network)
 	if err != nil {
-		t.Fatal("create Guest TLS-agent dedicated network")
+		t.Fatal("create ordinary TLS-agent dedicated network")
 	}
-	config, err := slice6BuildGuestTLSAgentConfig(composed)
+	config, err := slice6BuildOrdinaryTLSAgentConfig(composed, subjectDeployment, agentDeployment)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(config)
 	key, err := slice6ReadPrivateSigningKey(composed.CertificateKeys[binding.AgentRequestKeyID])
 	if err != nil {
-		t.Fatal("Guest TLS-agent source-bound request key unavailable")
+		t.Fatal("ordinary TLS-agent source-bound request key unavailable")
 	}
 	defer clear(key)
 	privateMount, needed := phase6security.Slice6PrivateConfigMount(principal.Name)
 	if !needed || privateMount.Target != "/run/phase6/config" ||
 		socketVolumes[binding.SocketStorageID] == "" ||
 		socketVolumes[binding.ControllerSocketStorageID] == "" {
-		t.Fatal("Guest TLS-agent private mounts unavailable")
+		t.Fatal("ordinary TLS-agent private mounts unavailable")
 	}
 	root, err := filepath.Abs("..")
 	if err != nil {
@@ -100,13 +108,13 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	seccompBytes, err := os.ReadFile(seccomp)
 	digest := sha256.Sum256(seccompBytes)
 	if err != nil || principal.SeccompDigest != "sha256:"+hex.EncodeToString(digest[:]) {
-		t.Fatal("Guest TLS-agent seccomp source drift")
+		t.Fatal("ordinary TLS-agent seccomp source drift")
 	}
 	nonce, err := phase6security.NewSlice6RunID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "sr-p6-guest-tls-live-" + run.id
+	name := "sr-p6-" + label + "-tls-live-" + run.id
 	arguments := []string{"create", "-i", "--pull=never", "--name", name, "--label", run.label(),
 		"--log-driver=none", "--network", createdNetwork.NetworkID, "--ip", netip.AddrFrom4(address).String(),
 		"--restart=no", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
@@ -124,7 +132,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	if anchorCount != 0 {
 		anchorArguments, anchorErr := slice6AnchorMountArguments(profile, principal.Name, anchorFiles)
 		if anchorErr != nil || len(anchorArguments) != 2*anchorCount {
-			t.Fatal("Guest TLS-agent trust-anchor mounts unavailable")
+			t.Fatal("ordinary TLS-agent trust-anchor mounts unavailable")
 		}
 		arguments = append(arguments, anchorArguments...)
 	}
@@ -136,7 +144,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		volume := socketVolumes[mount.StorageID]
 		if volume == "" || (mount.StorageID == binding.ControllerSocketStorageID) != mount.ReadOnly ||
 			mount.StorageID != binding.ControllerSocketStorageID && mount.StorageID != binding.SocketStorageID {
-			t.Fatal("Guest TLS-agent socket mount drift")
+			t.Fatal("ordinary TLS-agent socket mount drift")
 		}
 		value := "type=volume,src=" + volume + ",dst=" + mount.Target
 		if mount.ReadOnly {
@@ -146,7 +154,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		count++
 	}
 	if count != 2 {
-		t.Fatal("Guest TLS-agent socket count drift")
+		t.Fatal("ordinary TLS-agent socket count drift")
 	}
 	if cpuContrast {
 		arguments = append(arguments, "--label", "io.github.shell-echo.sandbox-runtime.cpu-contrast=non-release")
@@ -158,7 +166,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	created, err := run.docker(ctx, arguments...)
 	id := strings.TrimSpace(string(created))
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
-		t.Fatal("create real Guest TLS-agent process")
+		t.Fatal("create real ordinary TLS-agent process")
 	}
 	inspectDocument, err := run.docker(ctx, "inspect", id)
 	var containers []struct {
@@ -182,7 +190,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		containers[0].HostConfig.NanoCpus != slice6GuestTLSCPUMillis(principal.Resources.CPUMillis, cpuContrast)*1_000_000 ||
 		containers[0].HostConfig.Memory != principal.Resources.MemoryBytes ||
 		containers[0].HostConfig.PidsLimit != principal.Resources.PIDs {
-		t.Fatal("Guest TLS-agent created-container identity or isolation drift")
+		t.Fatal("ordinary TLS-agent created-container identity or isolation drift")
 	}
 	if cpuContrast {
 		t.Logf("NON-RELEASE Guest TLS-agent CPU-only contrast: Profile=%dm Docker request=250m; all other Profile inputs unchanged",
@@ -195,7 +203,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 	input, err := json.Marshal(envelope)
 	if err != nil || envelope.Validate(phase6fdloader.Expected{RunID: run.id, Target: imageTarget,
 		Nonce: nonce, ContainerHostname: id[:12]}) != nil {
-		t.Fatal("Guest TLS-agent private FD envelope invalid")
+		t.Fatal("ordinary TLS-agent private FD envelope invalid")
 	}
 	defer clear(input)
 	type result struct {
@@ -224,7 +232,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
 			clear(done.output)
-			t.Fatalf("Guest TLS-agent exited before signer listener: stage=%s exit=%v", stage, done.err)
+			t.Fatalf("ordinary TLS-agent exited before signer listener: stage=%s exit=%v", stage, done.err)
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
@@ -242,7 +250,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 				issued = issued || record.PolicyID == binding.IssuerPolicyID && record.State == "active"
 			}
 		}
-		if os.Getenv(slice6GuestTLSStackEnv) == "1" && strings.TrimSpace(string(state)) == "running:0" {
+		if label == "guest" && os.Getenv(slice6GuestTLSStackEnv) == "1" && strings.TrimSpace(string(state)) == "running:0" {
 			if _, signalErr := run.docker(ctx, "kill", "--signal=QUIT", id); signalErr != nil {
 				t.Fatalf("diagnostic Guest TLS-agent QUIT could not be delivered: %v", signalErr)
 			}
@@ -263,22 +271,22 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
 			clear(done.output)
-			t.Fatalf("Guest TLS-agent signer not ready: state=%q inspect=%v process=%q process_probe=%v managed_leaf=%t process_stage=%s exit=%v",
+			t.Fatalf("ordinary TLS-agent signer not ready: state=%q inspect=%v process=%q process_probe=%v managed_leaf=%t process_stage=%s exit=%v",
 				strings.TrimSpace(string(state)), stateErr, strings.TrimSpace(string(process)), processErr, issued, stage, done.err)
 		default:
-			t.Fatalf("Guest TLS-agent signer not ready: state=%q inspect=%v process=%q process_probe=%v managed_leaf=%t attached start still pending",
+			t.Fatalf("ordinary TLS-agent signer not ready: state=%q inspect=%v process=%q process_probe=%v managed_leaf=%t attached start still pending",
 				strings.TrimSpace(string(state)), stateErr, strings.TrimSpace(string(process)), processErr, issued)
 		}
 	}
 	if _, err := observeSlice6ProfileNetwork(ctx, run, createdNetwork.NetworkID, network,
 		map[string]string{principal.Name: id}); err != nil {
-		t.Fatal("Guest TLS-agent exact network membership drift")
+		t.Fatal("ordinary TLS-agent exact network membership drift")
 	}
 	ledgerDocument, err := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", controller.UID, controller.GID),
 		"sr-p6-certificate-live-"+run.id, "/bin/sh", "-ec", "cat "+ledgerPath)
 	var ledger workloadpki.Ledger
 	if err != nil || len(ledgerDocument) > 8<<20 || json.Unmarshal(ledgerDocument, &ledger) != nil {
-		t.Fatal("Guest TLS-agent managed certificate ledger witness unavailable")
+		t.Fatal("ordinary TLS-agent managed certificate ledger witness unavailable")
 	}
 	issued := false
 	for _, record := range ledger.Certificates {
@@ -287,7 +295,7 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		}
 	}
 	if !issued {
-		t.Fatal("Guest TLS-agent did not obtain its managed certificate")
+		t.Fatal("ordinary TLS-agent did not obtain its managed certificate")
 	}
 	if cpuContrast {
 		observedCPU, cpuErr := run.docker(ctx, "exec", id, "/bin/sh", "-ec", "cat /sys/fs/cgroup/cpu.max")
@@ -295,38 +303,38 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 			t.Fatalf("NON-RELEASE Guest TLS-agent CPU contrast cgroup mismatch: %q: %v", observedCPU, cpuErr)
 		}
 	}
-	t.Logf("real Guest TLS-agent managed leaf and signer socket ready after %s under Profile CPU=%dm, memory=%d, PIDs=%d",
-		time.Since(startupStarted), principal.Resources.CPUMillis, principal.Resources.MemoryBytes, principal.Resources.PIDs)
+	t.Logf("real %s TLS-agent managed leaf and signer socket ready after %s under Profile CPU=%dm, memory=%d, PIDs=%d",
+		label, time.Since(startupStarted), principal.Resources.CPUMillis, principal.Resources.MemoryBytes, principal.Resources.PIDs)
 	if onSignerReady != nil {
 		onSignerReady()
 	}
 	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-		t.Fatal("stop Guest TLS-agent")
+		t.Fatal("stop ordinary TLS-agent")
 	}
 	select {
 	case done := <-completed:
 		stage := slice6ControllerFailureStage(done.output)
 		clear(done.output)
 		if done.err != nil {
-			t.Fatalf("Guest TLS-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
+			t.Fatalf("ordinary TLS-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
 		}
 	case <-time.After(15 * time.Second):
-		t.Fatal("Guest TLS-agent did not drain")
+		t.Fatal("ordinary TLS-agent did not drain")
 	}
 	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal("remove stopped Guest TLS-agent")
+		t.Fatal("remove stopped ordinary TLS-agent")
 	}
-	if output, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-guest-tls-clean-"+run.id,
+	if output, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-tls-clean-"+run.id,
 		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
 		"--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory+",readonly",
 		"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
-		t.Fatalf("Guest TLS-agent signer socket cleanup unproved: %v: %.128s", err, output)
+		t.Fatalf("ordinary TLS-agent signer socket cleanup unproved: %v: %.128s", err, output)
 	}
 	if onSignerReady != nil {
-		t.Log("real Guest TLS-agent PID1 issued its managed certificate, served the dependent process, and cleaned the exact signer socket; dependent evidence is reported separately")
+		t.Logf("real %s TLS-agent PID1 issued its managed certificate, served the dependent process, and cleaned the exact signer socket; dependent evidence is reported separately", label)
 	} else {
-		t.Log("real Guest TLS-agent PID1 issued its managed certificate, opened the isolated signer listener and cleaned the exact socket; material-agent Vault mTLS and material read remain unproved")
+		t.Logf("real %s TLS-agent PID1 issued its managed certificate, opened the isolated signer listener and cleaned the exact socket; dependent service remains unproved", label)
 	}
 }
 

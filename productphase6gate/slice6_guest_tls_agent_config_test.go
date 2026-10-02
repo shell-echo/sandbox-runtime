@@ -17,7 +17,7 @@ import (
 // The field order matches the production workload-tls-agent v3 canonical
 // decoder. The omitted purpose/postgres fields are not part of an ordinary
 // material-agent Vault client certificate.
-type slice6GuestTLSAgentConfig struct {
+type slice6TLSAgentConfig struct {
 	Protocol                      string                      `json:"protocol"`
 	SecurityProfilePath           string                      `json:"security_profile_path"`
 	SecurityProfileDigest         string                      `json:"security_profile_digest"`
@@ -62,28 +62,33 @@ type slice6GuestTLSAgentConfig struct {
 }
 
 func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte, error) {
+	return slice6BuildOrdinaryTLSAgentConfig(composed, "guest-agent", "guest-agent-tls-agent")
+}
+
+func slice6BuildOrdinaryTLSAgentConfig(composed slice6VaultComposedInputs,
+	subjectDeployment, agentDeployment string) ([]byte, error) {
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
 		composed.PeerSources.Validate(profile) != nil {
-		return nil, errors.New("incomplete Guest TLS-agent Profile or peer sources")
+		return nil, errors.New("incomplete TLS-agent Profile or peer sources")
 	}
-	binding, agent, subject, err := profile.TLSAgentForSubject("guest-agent")
-	if err != nil || agent.Name != "guest-agent-tls-agent" || subject.Name != "guest-agent" ||
+	binding, agent, subject, err := profile.TLSAgentForSubject(subjectDeployment)
+	if err != nil || agent.Name != agentDeployment || subject.Name != subjectDeployment ||
 		agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil ||
 		subject.TLS == nil || binding.AgentRequestKeyID == "" ||
 		binding.ControllerSocketPath == "" || binding.SocketPath == "" ||
 		binding.AgentUID == 0 || binding.AgentGID == 0 || binding.SubjectUID == 0 || binding.SubjectGID == 0 {
-		return nil, errors.New("Guest TLS-agent authority binding drifted")
+		return nil, errors.New("TLS-agent authority binding drifted")
 	}
 	requestPrivate, err := slice6ReadPrivateSigningKey(composed.CertificateKeys[binding.AgentRequestKeyID])
 	if err != nil {
-		return nil, errors.New("Guest TLS-agent request key unavailable")
+		return nil, errors.New("TLS-agent request key unavailable")
 	}
 	requestPublic := slices.Clone(requestPrivate.Public().(ed25519.PublicKey))
 	clear(requestPrivate)
 	defer clear(requestPublic)
 	if phase6security.TLSAgentRequestPublicKeyDigest(requestPublic) != binding.AgentRequestKeyDigest {
-		return nil, errors.New("Guest TLS-agent request key does not match frozen Profile")
+		return nil, errors.New("TLS-agent request key does not match frozen Profile")
 	}
 	responsePrivate, err := slice6ReadPrivateSigningKey(composed.CertificateKeys[profile.CertificateController.ResponseKeyID])
 	if err != nil {
@@ -97,7 +102,7 @@ func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte,
 	}
 	registry, err := profile.PrincipalRegistry()
 	if err != nil {
-		return nil, errors.New("Guest TLS-agent principal registry invalid")
+		return nil, errors.New("TLS-agent principal registry invalid")
 	}
 	policy := workloadpki.Policy{ID: binding.IssuerPolicyID, Registry: registry,
 		Requester: *agent.AuthorizationPrincipal, Subject: *subject.AuthorizationPrincipal,
@@ -107,14 +112,14 @@ func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte,
 		ExpectedUID: binding.AgentUID, ExpectedGID: binding.AgentGID,
 		PublicKey: ed25519.PublicKey(requestPublic)}
 	if policy.Validate() != nil {
-		return nil, errors.New("Guest TLS-agent certificate policy invalid")
+		return nil, errors.New("TLS-agent certificate policy invalid")
 	}
 	requestTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
 		subject.TLS.RotateAfterSeconds)
 	if err != nil {
-		return nil, errors.New("Guest TLS-agent certificate lifetime budget invalid")
+		return nil, errors.New("TLS-agent certificate lifetime budget invalid")
 	}
-	config := slice6GuestTLSAgentConfig{
+	config := slice6TLSAgentConfig{
 		Protocol:            "sandbox-runtime.workload-tls-agent-config.v3",
 		SecurityProfilePath: "/run/phase6/config/profile.json", SecurityProfileDigest: profile.ProfileDigest,
 		PeerCRLSourcesPath: "/run/phase6/config/peer-crl-sources.json", PeerCRLSourcesDigest: composed.PeerSources.Digest(),

@@ -32,27 +32,41 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	composed slice6VaultComposedInputs, serverID, publicKeyDigest string,
 	socketVolumes, anchorFiles map[string]string,
 	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
+	slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed, serverID, publicKeyDigest,
+		"guest-agent", "guest-runtime", "guest", 67, socketVolumes, anchorFiles, onReady)
+}
+
+func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, serverID, publicKeyDigest,
+	agentDeployment, ownerDeployment, label string, expectedSockets int,
+	socketVolumes, anchorFiles map[string]string,
+	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
-		len(publicKeyDigest) != len("sha256:")+64 || len(socketVolumes) != 67 {
-		t.Fatal("Guest material-agent final source authority unavailable")
+		len(socketVolumes) != expectedSockets ||
+		(agentDeployment != "guest-agent" && agentDeployment != "product-runtime-agent") ||
+		(agentDeployment == "guest-agent" && (len(publicKeyDigest) != len("sha256:")+64 ||
+			ownerDeployment != "guest-runtime" || label != "guest" || expectedSockets != 67)) ||
+		(agentDeployment == "product-runtime-agent" && (publicKeyDigest != "" ||
+			ownerDeployment != "product-runtime" || label != "product-material" || expectedSockets != 70)) {
+		t.Fatal("runtime material-agent final source authority unavailable")
 	}
 	var agent, owner phase6security.Principal
 	for _, principal := range profile.Principals {
 		switch principal.Name {
-		case "guest-agent":
+		case agentDeployment:
 			agent = principal
-		case "guest-runtime":
+		case ownerDeployment:
 			owner = principal
 		}
 	}
-	if agent.Name != "guest-agent" || agent.Kind != "material_agent" || owner.Name != "guest-runtime" ||
+	if agent.Name != agentDeployment || agent.Kind != "material_agent" || owner.Name != ownerDeployment ||
 		agent.ImageLocation != "local" || agent.ImageReference != agent.ImageDigest ||
 		agent.UID == 0 || agent.GID == 0 || !agent.ReadOnlyRootFilesystem || !agent.NoNewPrivileges ||
 		!slices.Equal(agent.DroppedCapabilities, []string{"ALL"}) ||
-		!slices.Equal(agent.Networks, []string{"network-guest-agent", "service-guest-agent-vault"}) {
-		t.Fatal("Guest material-agent immutable identity or network drift")
+		!slices.Equal(agent.Networks, []string{"network-" + agentDeployment, "service-" + agentDeployment + "-vault"}) {
+		t.Fatal("runtime material-agent immutable identity or network drift")
 	}
 	material, err := profile.Slice6MaterialSocketForOwner(owner.Name)
 	issuer, _, _, issuerErr := profile.CredentialIssuerSocketForClient(agent.Name)
@@ -78,9 +92,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	var dedicated, service phase6security.Network
 	for _, network := range profile.Networks {
 		switch network.Name {
-		case "network-guest-agent":
+		case "network-" + agentDeployment:
 			dedicated = network
-		case "service-guest-agent-vault":
+		case "service-" + agentDeployment + "-vault":
 			service = network
 		}
 	}
@@ -114,17 +128,28 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		observed.Endpoints[0].IPv4Address != vaultIP {
 		t.Fatal("Guest material bridge initial Vault membership drift")
 	}
-	config, err := slice6BuildGuestMaterialAgentConfig(composed)
+	var role secretref.Role
+	var purposes []secretref.Purpose
+	if agentDeployment == "guest-agent" {
+		role = secretref.RoleGuest
+		purposes = []secretref.Purpose{secretref.PurposeGuestSigningKey}
+	} else {
+		role = secretref.RoleProduct
+		purposes = []secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN}
+	}
+	config, err := slice6BuildRuntimeMaterialAgentConfig(composed, agentDeployment, ownerDeployment, role, purposes)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(config)
-	key, err := slice6ReadPrivateSigningKey(composed.CredentialKeys["credential-guest-agent"])
+	key, err := slice6ReadPrivateSigningKey(composed.CredentialKeys["credential-"+agentDeployment])
 	if err != nil {
 		t.Fatal("Guest material-agent source-bound credential key unavailable")
 	}
 	defer clear(key)
-	slice6ProbeGuestSignerAsMaterialAgent(t, ctx, run, agent, tls, socketVolumes[tls.SocketStorageID], rootForSlice6GuestProbe(t))
+	if agentDeployment == "guest-agent" {
+		slice6ProbeGuestSignerAsMaterialAgent(t, ctx, run, agent, tls, socketVolumes[tls.SocketStorageID], rootForSlice6GuestProbe(t))
+	}
 	privateMount, needed := phase6security.Slice6PrivateConfigMount(agent.Name)
 	if !needed || privateMount.Target != "/run/phase6/config" {
 		t.Fatal("Guest material-agent private Profile mount unavailable")
@@ -143,7 +168,7 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := "sr-p6-guest-material-live-" + run.id
+	name := "sr-p6-" + label + "-live-" + run.id
 	arguments := []string{"create", "-i", "--pull=never", "--name", name, "--label", run.label(),
 		"--log-driver=none", "--network", createdService.NetworkID, "--ip", agentIP,
 		"--restart=no", "--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID),
@@ -309,102 +334,106 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	if onReady != nil {
 		onReady(delivery)
 	}
-	observerDir, err := os.MkdirTemp(".", ".sr-guest-material-observer-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(observerDir); err != nil {
-			t.Errorf("remove exact Guest material observer build: %v", err)
+	if agentDeployment == "guest-agent" {
+		observerDir, err := os.MkdirTemp(".", ".sr-guest-material-observer-")
+		if err != nil {
+			t.Fatal(err)
 		}
-	})
-	observer, err := filepath.Abs(filepath.Join(observerDir, "observer"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
-		"-ldflags=-buildid=", "-o", observer, "./productphase6gate/testdata/guestmaterialobserver")
-	build.Dir = root
-	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local", "GOFLAGS=")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build fixed owner-side Guest material observer: %v: %.256s", err, output)
-	}
-	access, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var binding secretref.Binding
-	for _, item := range access {
-		if item.Agent == agent.Name && len(item.Bindings) == 1 {
-			binding = item.Bindings[0]
+		t.Cleanup(func() {
+			if err := os.RemoveAll(observerDir); err != nil {
+				t.Errorf("remove exact Guest material observer build: %v", err)
+			}
+		})
+		observer, err := filepath.Abs(filepath.Join(observerDir, "observer"))
+		if err != nil {
+			t.Fatal(err)
 		}
+		build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+			"-ldflags=-buildid=", "-o", observer, "./productphase6gate/testdata/guestmaterialobserver")
+		build.Dir = root
+		build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local", "GOFLAGS=")
+		if output, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("build fixed owner-side Guest material observer: %v: %.256s", err, output)
+		}
+		access, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var binding secretref.Binding
+		for _, item := range access {
+			if item.Agent == agent.Name && len(item.Bindings) == 1 {
+				binding = item.Bindings[0]
+			}
+		}
+		if binding.Validate() != nil || binding.Purpose != secretref.PurposeGuestSigningKey {
+			t.Fatal("Guest owner-side exact material binding unavailable")
+		}
+		var activeConfig slice6MaterialAgentConfig
+		if json.Unmarshal(config, &activeConfig) != nil ||
+			activeConfig.Role != secretref.RoleGuest || activeConfig.MaxResolutions != 0 ||
+			len(activeConfig.Bindings) != 1 || activeConfig.Bindings[0] != binding ||
+			activeConfig.ExpectedClientUID != owner.UID || activeConfig.ExpectedClientGID != owner.GID {
+			t.Fatal("Guest observer and live material-agent authorization inputs disagree")
+		}
+		request, err := json.Marshal(struct {
+			SocketPath              string            `json:"socket_path"`
+			AgentUID                uint32            `json:"agent_uid"`
+			AgentGID                uint32            `json:"agent_gid"`
+			OwnerUID                uint32            `json:"owner_uid"`
+			OwnerGID                uint32            `json:"owner_gid"`
+			Binding                 secretref.Binding `json:"binding"`
+			ExpectedPublicKeyDigest string            `json:"expected_public_key_digest"`
+		}{SocketPath: material.SocketPath, ExpectedPublicKeyDigest: publicKeyDigest,
+			AgentUID: agent.UID, AgentGID: agent.GID, OwnerUID: owner.UID, OwnerGID: owner.GID, Binding: binding})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer clear(request)
+		observerArgs := []string{"run", "--rm", "-i", "--pull=never", "--name", "sr-p6-guest-material-observe-" + run.id,
+			"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", owner.UID, owner.GID),
+			"--read-only", "--cap-drop=ALL", "--security-opt", "no-new-privileges:true",
+			"--memory=64m", "--cpus=0.2", "--pids-limit=16",
+			"--mount", "type=volume,src=" + socketVolumes[material.SocketStorageID] + ",dst=" + material.SocketDirectory + ",readonly",
+			"--mount", "type=bind,src=" + observer + ",dst=/observer,readonly",
+			"--entrypoint=/observer", agent.ImageReference}
+		command := exec.CommandContext(ctx, "docker", observerArgs...)
+		command.Stdin = bytes.NewReader(request)
+		output, observeErr := command.CombinedOutput()
+		if observeErr != nil || string(output) != "guest-material-resolved=exact-vault-key\n" {
+			stage, resolveMS := slice6GuestMaterialObservationFailure(output)
+			clear(output)
+			t.Fatalf("Guest owner-side Vault-backed material resolve failed: stage=%s resolve_ms=%d exit=%v", stage, resolveMS, observeErr)
+		}
+		t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
+	} else {
+		t.Log("real Product material-agent PID1 opened owner-only and break-glass sockets through its distinct managed Vault signer; Product KVv2 resolution and runtime command remain unproved")
 	}
-	if binding.Validate() != nil || binding.Purpose != secretref.PurposeGuestSigningKey {
-		t.Fatal("Guest owner-side exact material binding unavailable")
-	}
-	var activeConfig slice6GuestMaterialAgentConfig
-	if json.Unmarshal(config, &activeConfig) != nil ||
-		activeConfig.Role != secretref.RoleGuest || activeConfig.MaxResolutions != 0 ||
-		len(activeConfig.Bindings) != 1 || activeConfig.Bindings[0] != binding ||
-		activeConfig.ExpectedClientUID != owner.UID || activeConfig.ExpectedClientGID != owner.GID {
-		t.Fatal("Guest observer and live material-agent authorization inputs disagree")
-	}
-	request, err := json.Marshal(struct {
-		SocketPath              string            `json:"socket_path"`
-		AgentUID                uint32            `json:"agent_uid"`
-		AgentGID                uint32            `json:"agent_gid"`
-		OwnerUID                uint32            `json:"owner_uid"`
-		OwnerGID                uint32            `json:"owner_gid"`
-		Binding                 secretref.Binding `json:"binding"`
-		ExpectedPublicKeyDigest string            `json:"expected_public_key_digest"`
-	}{SocketPath: material.SocketPath, ExpectedPublicKeyDigest: publicKeyDigest,
-		AgentUID: agent.UID, AgentGID: agent.GID, OwnerUID: owner.UID, OwnerGID: owner.GID, Binding: binding})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer clear(request)
-	observerArgs := []string{"run", "--rm", "-i", "--pull=never", "--name", "sr-p6-guest-material-observe-" + run.id,
-		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", owner.UID, owner.GID),
-		"--read-only", "--cap-drop=ALL", "--security-opt", "no-new-privileges:true",
-		"--memory=64m", "--cpus=0.2", "--pids-limit=16",
-		"--mount", "type=volume,src=" + socketVolumes[material.SocketStorageID] + ",dst=" + material.SocketDirectory + ",readonly",
-		"--mount", "type=bind,src=" + observer + ",dst=/observer,readonly",
-		"--entrypoint=/observer", agent.ImageReference}
-	command := exec.CommandContext(ctx, "docker", observerArgs...)
-	command.Stdin = bytes.NewReader(request)
-	output, observeErr := command.CombinedOutput()
-	if observeErr != nil || string(output) != "guest-material-resolved=exact-vault-key\n" {
-		stage, resolveMS := slice6GuestMaterialObservationFailure(output)
-		clear(output)
-		t.Fatalf("Guest owner-side Vault-backed material resolve failed: stage=%s resolve_ms=%d exit=%v", stage, resolveMS, observeErr)
-	}
-	t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
 	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-		t.Fatal("stop Guest material-agent")
+		t.Fatal("stop runtime material-agent")
 	}
 	select {
 	case done := <-completed:
 		stage := slice6ControllerFailureStage(done.output)
 		clear(done.output)
 		if done.err != nil {
-			t.Fatalf("Guest material-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
+			t.Fatalf("runtime material-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
 		}
 	case <-time.After(15 * time.Second):
-		t.Fatal("Guest material-agent did not drain")
+		t.Fatal("runtime material-agent did not drain")
 	}
 	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal("remove stopped Guest material-agent")
+		t.Fatal("remove stopped runtime material-agent")
 	}
-	if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-guest-material-clean-"+run.id,
+	if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-clean-"+run.id,
 		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID),
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
 		"--mount", "type=volume,src="+socketVolumes[material.SocketStorageID]+",dst="+material.SocketDirectory+",readonly",
 		"--mount", "type=volume,src="+socketVolumes[delivery.SocketStorageID]+",dst="+delivery.SocketDirectory+",readonly",
 		"--entrypoint=/bin/sh", agent.ImageReference, "-ec",
 		"test ! -e "+material.SocketPath+" && test ! -e "+delivery.SocketPath); err != nil {
-		t.Fatal("Guest material and break-glass listener exact socket cleanup unproved")
+		t.Fatal("runtime material and break-glass listener exact socket cleanup unproved")
 	}
-	t.Log("real Guest material-agent clean drain removed both exact listeners")
+	t.Logf("real %s material-agent clean drain removed both exact listeners", label)
 }
 
 // The observer has a finite, reviewed diagnostic vocabulary. Never include

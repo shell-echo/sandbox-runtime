@@ -193,6 +193,13 @@ principal inventory. Library checks or configuration text do not advance the
 counter. The separate Slice 6 harness is still under construction: its
 frozen 16-scenario routing plan and strict input preflight are not a successful
 full-topology run, and no Slice 6 manifest may be issued from them.
+The same-run component chain now also starts separate Product runtime and
+Product material-agent TLS signer PID1 processes with managed leaves and
+exact socket cleanup. Product material-agent configuration is preflighted
+against both required bindings, and its separate PID1 opens both restricted
+listeners, then drains with exact cleanup. Its Product KVv2 material reads
+and the Product/Guest production commands have not yet run; this does not
+advance Slice 6.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,

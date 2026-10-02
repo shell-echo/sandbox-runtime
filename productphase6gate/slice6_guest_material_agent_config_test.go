@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
@@ -16,7 +17,7 @@ import (
 
 // The field order mirrors the production v2 material-agent decoder's closed
 // canonical document. This is a private, source-derived startup input only.
-type slice6GuestMaterialAgentConfig struct {
+type slice6MaterialAgentConfig struct {
 	Protocol                         string              `json:"protocol"`
 	SocketPath                       string              `json:"socket_path"`
 	SocketUID                        uint32              `json:"socket_uid"`
@@ -124,9 +125,21 @@ func slice6PrepareGuestAgentInputs(t *testing.T, ctx context.Context, run slice6
 }
 
 func slice6BuildGuestMaterialAgentConfig(composed slice6VaultComposedInputs) ([]byte, error) {
+	return slice6BuildRuntimeMaterialAgentConfig(composed, "guest-agent", "guest-runtime", secretref.RoleGuest,
+		[]secretref.Purpose{secretref.PurposeGuestSigningKey})
+}
+
+func slice6BuildRuntimeMaterialAgentConfig(composed slice6VaultComposedInputs,
+	agentDeployment, ownerDeployment string, role secretref.Role, purposes []secretref.Purpose) ([]byte, error) {
 	profile := composed.Profile
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil {
-		return nil, errors.New("Guest material-agent Profile unavailable")
+		return nil, errors.New("material-agent Profile unavailable")
+	}
+	if (agentDeployment != "guest-agent" || ownerDeployment != "guest-runtime" || role != secretref.RoleGuest ||
+		!slices.Equal(purposes, []secretref.Purpose{secretref.PurposeGuestSigningKey})) &&
+		(agentDeployment != "product-runtime-agent" || ownerDeployment != "product-runtime" || role != secretref.RoleProduct ||
+			!slices.Equal(purposes, []secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN})) {
+		return nil, errors.New("unsupported runtime material-agent owner")
 	}
 	var access phase6security.Slice6MaterialAccess
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
@@ -134,16 +147,16 @@ func slice6BuildGuestMaterialAgentConfig(composed slice6VaultComposedInputs) ([]
 		return nil, err
 	}
 	for _, candidate := range plan {
-		if candidate.Agent == "guest-agent" {
+		if candidate.Agent == agentDeployment {
 			access = candidate
 		}
 	}
-	material, err := profile.Slice6MaterialSocketForOwner("guest-runtime")
-	issuer, controller, agent, errIssuer := profile.CredentialIssuerSocketForClient("guest-agent")
-	tlsBinding, signer, tlsSubject, errTLS := profile.TLSAgentForSubject("guest-agent")
+	material, err := profile.Slice6MaterialSocketForOwner(ownerDeployment)
+	issuer, controller, agent, errIssuer := profile.CredentialIssuerSocketForClient(agentDeployment)
+	tlsBinding, signer, tlsSubject, errTLS := profile.TLSAgentForSubject(agentDeployment)
 	var delivery, consume phase6security.Slice6BreakGlassSocketBinding
 	for _, binding := range profile.BreakGlassSockets {
-		if binding.TargetAgent == "guest-agent" {
+		if binding.TargetAgent == agentDeployment {
 			switch binding.Kind {
 			case "delivery":
 				delivery = binding
@@ -152,27 +165,32 @@ func slice6BuildGuestMaterialAgentConfig(composed slice6VaultComposedInputs) ([]
 			}
 		}
 	}
-	address, errAddress := phase6security.Slice6DesiredServiceEndpointAddress("service-guest-agent-vault", "vault")
+	serviceNetwork := "service-" + agentDeployment + "-vault"
+	address, errAddress := phase6security.Slice6DesiredServiceEndpointAddress(serviceNetwork, "vault")
 	if err != nil || errIssuer != nil || errTLS != nil || errAddress != nil ||
-		access.Agent != agent.Name || access.Owner != "guest-runtime" || access.Migration ||
-		access.Role != secretref.RoleGuest || len(access.Bindings) != 1 ||
-		access.Bindings[0].Purpose != secretref.PurposeGuestSigningKey ||
+		access.Agent != agent.Name || access.Owner != ownerDeployment || access.Migration ||
+		access.Role != role || len(access.Bindings) != len(purposes) ||
 		material.AgentDeployment != agent.Name || material.AgentUID != agent.UID ||
 		material.AgentGID != agent.GID || material.OwnerGID == agent.GID ||
 		issuer.SocketPath != access.CredentialSocket || controller.Name != "workload-credential-controller" ||
-		tlsSubject.Name != agent.Name || signer.Name != "guest-agent-tls-agent" ||
+		tlsSubject.Name != agent.Name || signer.Name != agent.Name+"-tls-agent" ||
 		delivery.ServerDeployment != agent.Name || consume.ClientDeployment != agent.Name ||
 		delivery.ClientUID == agent.UID || consume.ServerUID == agent.UID ||
-		!slices.Contains(agent.Networks, "service-guest-agent-vault") {
-		return nil, errors.New("Guest material-agent source authority drift")
+		!slices.Contains(agent.Networks, serviceNetwork) {
+		return nil, errors.New("material-agent source authority drift")
+	}
+	for index, purpose := range purposes {
+		if access.Bindings[index].Purpose != purpose {
+			return nil, errors.New("material-agent purpose ordering drift")
+		}
 	}
 	credential := secretref.Binding{Schema: secretref.BindingSchema, Kind: secretref.KindSecret,
-		Reference: "secret://phase6/credential/guest_agent", Version: "v1",
-		Purpose: secretref.PurposeWorkloadCredential, TenantID: secretref.SystemTenant, Role: secretref.RoleGuest}
+		Reference: secretref.Reference("secret://phase6/credential/" + strings.ReplaceAll(agent.Name, "-", "_")), Version: "v1",
+		Purpose: secretref.PurposeWorkloadCredential, TenantID: secretref.SystemTenant, Role: role}
 	if credential.Validate() != nil {
-		return nil, errors.New("Guest credential binding unavailable")
+		return nil, errors.New("material-agent credential binding unavailable")
 	}
-	config := slice6GuestMaterialAgentConfig{
+	config := slice6MaterialAgentConfig{
 		Protocol:   "sandbox-runtime.workload-material-agent-config.v2",
 		SocketPath: material.SocketPath, SocketUID: material.AgentUID, SocketGID: material.OwnerGID,
 		ExpectedClientUID: material.OwnerUID, ExpectedClientGID: material.OwnerGID,

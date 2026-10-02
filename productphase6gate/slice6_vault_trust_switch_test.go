@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWITCH"
@@ -40,6 +41,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if os.Getenv(slice6GuestMaterialEnv) == "1" && os.Getenv(slice6BreakGlassProcessEnv) != "1" {
 		t.Fatal("live Guest material agent requires the same-run break-glass consume listener")
+	}
+	if os.Getenv(slice6ProductTLSSignerEnv) == "1" && os.Getenv(slice6GuestMaterialEnv) != "1" {
+		t.Fatal("Product TLS signer component requires the same-run Guest/Vault controller chain")
+	}
+	if os.Getenv(slice6ProductMaterialInputsEnv) == "1" && os.Getenv(slice6ProductTLSSignerEnv) != "1" {
+		t.Fatal("Product material-agent inputs require the same-run Product TLS signer")
 	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
@@ -373,6 +380,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string
 		var guestSocketVolumes map[string]string
+		var productSocketVolumes map[string]string
+		var productMaterialSocketVolumes map[string]string
 		var guestPublicKeyDigest string
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
@@ -393,6 +402,33 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
 				guestSocketVolumes = slice6PrepareGuestAgentInputs(t, ctx, run, composed, breakGlassSocketVolumes)
 				t.Logf("same-run Guest signer/material socket allocations=2 combined=%d; exact private config readers prepared, no Guest agent launched", len(guestSocketVolumes))
+				if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
+					productSocketVolumes = slice6PrepareProductTLSAgentInputs(t, ctx, run, composed, guestSocketVolumes)
+					productTLSConfig, configErr := slice6BuildOrdinaryTLSAgentConfig(composed,
+						"product-runtime", "product-tls-agent")
+					if configErr != nil {
+						t.Fatal("Product TLS signer source-bound startup input unavailable")
+					}
+					clear(productTLSConfig)
+					t.Logf("same-run Product signer socket allocation=1 combined=%d; Product runtime process not launched", len(productSocketVolumes))
+					if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
+						productMaterialSocketVolumes = slice6PrepareProductMaterialAgentInputs(t, ctx, run, composed, productSocketVolumes)
+						materialTLSConfig, tlsErr := slice6BuildOrdinaryTLSAgentConfig(composed,
+							"product-runtime-agent", "product-runtime-agent-tls-agent")
+						if tlsErr != nil {
+							t.Fatal("Product material signer source-bound config unavailable")
+						}
+						clear(materialTLSConfig)
+						materialConfig, materialErr := slice6BuildRuntimeMaterialAgentConfig(composed,
+							"product-runtime-agent", "product-runtime", secretref.RoleProduct,
+							[]secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN})
+						if materialErr != nil {
+							t.Fatal("Product material-agent source-bound config unavailable")
+						}
+						clear(materialConfig)
+						t.Logf("same-run Product material signer/material socket allocations=2 combined=%d; material agent not launched", len(productMaterialSocketVolumes))
+					}
+				}
 			}
 			anchorFiles = slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
 			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
@@ -462,14 +498,36 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							if os.Getenv(slice6GuestMaterialEnv) == "1" {
 								onManagedReady = func() {
 									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
-										slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
-											slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-												guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
-												func(delivery phase6security.Slice6BreakGlassSocketBinding) {
-													slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
-														delivery, breakGlassSocketVolumes, restartController)
-												})
-										})
+										runGuestChain := func() {
+											slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
+												slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+													guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
+													func(delivery phase6security.Slice6BreakGlassSocketBinding) {
+														slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
+															delivery, breakGlassSocketVolumes, restartController)
+													})
+											})
+										}
+										if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
+											runProductChain := runGuestChain
+											if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
+												runProductChain = func() {
+													slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+														"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
+														productMaterialSocketVolumes, anchorFiles, func() {
+															slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																serverID, "", "product-runtime-agent", "product-runtime",
+																"product-material", 70, productMaterialSocketVolumes, anchorFiles,
+																func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+														})
+												}
+											}
+											slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+												"product-runtime", "product-tls-agent", "product",
+												productSocketVolumes, anchorFiles, runProductChain)
+										} else {
+											runGuestChain()
+										}
 									})
 								}
 							}
