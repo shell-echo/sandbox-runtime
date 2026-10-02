@@ -223,6 +223,7 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	output, startErr, overflow := slice6DockerBounded(ctx, 16<<10, nil, "start", "-a", id)
 	if startErr != nil {
 		category := slice6MigrationFailureCategory(output)
+		metadata := slice6MigrationOutputMetadata(output)
 		var commandExit *exec.ExitError
 		if category == "unknown" && !errors.As(startErr, &commandExit) {
 			category = "docker-transport"
@@ -233,12 +234,13 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 			category = "start-timeout-or-cancel"
 		}
 		clear(output)
-		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, category)
+		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, category, metadata)
 	}
+	metadata := slice6MigrationOutputMetadata(output)
 	if bytes.Contains(output, []byte("postgres://")) ||
 		bytes.Contains(output, []byte("PRIVATE KEY")) {
 		clear(output)
-		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, "private-output")
+		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, "private-output", metadata)
 	}
 	clear(output)
 	state, err, overflow := slice6DockerBounded(parent, 128, nil, "inspect", "-f",
@@ -246,7 +248,7 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	stateValue := strings.TrimSpace(string(state))
 	clear(state)
 	if err != nil || overflow || stateValue != "false|0|0" {
-		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, "exit-state")
+		return slice6ProductMigrationUnknownOutcome(run, id, postgresID, "exit-state", metadata)
 	}
 	observedState, ledgerStatus, observeErr := slice6ObserveFailedProductMigration(run, id, postgresID)
 	if observeErr != nil || observedState != "exited|0|false|0|started-set|finished-set|state-error-none" ||
@@ -257,12 +259,43 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	return nil
 }
 
-func slice6ProductMigrationUnknownOutcome(run slice6DockerRun, id, postgresID, category string) error {
+func slice6ProductMigrationUnknownOutcome(run slice6DockerRun, id, postgresID, category, metadata string) error {
 	state, ledger, observeErr := slice6ObserveFailedProductMigration(run, id, postgresID)
 	if observeErr != nil {
-		return fmt.Errorf("Product migration PID1 lacks confirmed DDL: category=%s state=%s ledger=%s observation=unconfirmed", category, state, ledger)
+		return fmt.Errorf("Product migration PID1 lacks confirmed DDL: category=%s output=%s state=%s ledger=%s observation=unconfirmed", category, metadata, state, ledger)
 	}
-	return fmt.Errorf("Product migration PID1 lacks confirmed DDL: category=%s state=%s ledger=%s", category, state, ledger)
+	return fmt.Errorf("Product migration PID1 lacks confirmed DDL: category=%s output=%s state=%s ledger=%s", category, metadata, state, ledger)
+}
+
+// Never retain process text, even when its category is unknown. These finite
+// shape/length buckets distinguish a duplicated CLI line from a closed stage
+// mismatch without projecting any content or permitting a first-line parse.
+func slice6MigrationOutputMetadata(output []byte) string {
+	length := "1-64"
+	switch {
+	case len(output) == 0:
+		length = "0"
+	case len(output) > 512:
+		length = "513-plus"
+	case len(output) > 256:
+		length = "257-512"
+	case len(output) > 128:
+		length = "129-256"
+	case len(output) > 64:
+		length = "65-128"
+	}
+	shape := "one-no-lf"
+	switch {
+	case len(output) == 0:
+		shape = "empty"
+	case bytes.ContainsAny(output, "\r\x00"):
+		shape = "control"
+	case bytes.Count(output, []byte{'\n'}) == 1 && output[len(output)-1] == '\n':
+		shape = "one-lf"
+	case bytes.Contains(output, []byte{'\n'}):
+		shape = "multi-line"
+	}
+	return shape + "/" + length
 }
 
 // Never print the CLI's raw output: it could contain DSNs or key material.

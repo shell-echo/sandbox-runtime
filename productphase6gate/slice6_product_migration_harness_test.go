@@ -34,6 +34,24 @@ func TestSlice6MigrationBoundedOutputAndClosedClassification(t *testing.T) {
 	}
 }
 
+func TestSlice6MigrationOutputMetadataIsFiniteAndContentFree(t *testing.T) {
+	for _, candidate := range []struct {
+		input, expected string
+	}{
+		{"", "empty/0"},
+		{"short", "one-no-lf/1-64"},
+		{"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n", "one-lf/65-128"},
+		{"first\nsecond\n", "multi-line/1-64"},
+		{"password=private\r\n", "control/1-64"},
+		{strings.Repeat("x", 513), "one-no-lf/513-plus"},
+	} {
+		if got := slice6MigrationOutputMetadata([]byte(candidate.input)); got != candidate.expected ||
+			strings.Contains(got, "password") || strings.Contains(got, "migration") {
+			t.Fatal("migration output metadata escaped closed shape and length buckets")
+		}
+	}
+}
+
 func TestSlice6MigrationStateRequiresActualLifecycle(t *testing.T) {
 	good := []byte(`{"Status":"exited","Running":false,"OOMKilled":false,"ExitCode":1,"Error":"","StartedAt":"2026-10-03T00:00:00Z","FinishedAt":"2026-10-03T00:00:01Z"}`)
 	state, err := slice6ClassifyMigrationState(good, []byte("0\n"))
