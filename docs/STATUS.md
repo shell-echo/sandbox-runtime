@@ -236,7 +236,7 @@ production PID1/Product security edge, all 78 live principals, 16 frozen
 scenarios, or Slice 6 release evidence. The strict final manifest has not
 been issued.
 
-Updated: 2026-09-22
+Updated: 2026-10-02
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
