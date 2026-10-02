@@ -733,6 +733,18 @@ claims.
 
 ## Product Phase 6 production-hardening discipline
 
+The Slice 6 one-shot Product/Provider migration CLI may report a fixed,
+closed `openDirectV3Postgres` startup stage when connection setup fails. The
+stage comes only from trusted branch selection, never from an underlying
+error string; unknown errors remain generic. Product/Provider runtime and
+public client errors keep their previous generic text. Do not print raw
+signer, CRL, Vault, DSN, socket, endpoint, certificate, SQL or driver errors
+while diagnosing this path. Separate guard-construction from first live pull,
+test failure cleanup and non-leakage, and rebuild the source-bound role
+candidate after any runtime change. The R8 migration failure and the R9
+diagnostic boundary are recorded in the
+[Slice 6 PostgreSQL component audit](audits/product-phase-6-slice-6-postgres-v2-component.md).
+
 Browser action-ingress external credentials have two distinct Gateway-family
 secret purposes: `action_history_witness_dsn` and
 `capacity_valkey_credentials`. The witness binding belongs only to the

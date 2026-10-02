@@ -78,22 +78,110 @@ type directV3PostgresSettings struct {
 	AfterConnect                                                   func(context.Context, *pgx.Conn) error
 }
 
+// directPostgresStage is a closed, local-only startup diagnostic. It never
+// contains a cause, endpoint, credential, path or SQL statement. Error() keeps
+// the existing generic error for Product and Provider runtime callers.
+type directPostgresStage string
+
+const (
+	postgresStageAuthority             directPostgresStage = "authority"
+	postgresStageSignerClient          directPostgresStage = "signer-client"
+	postgresStagePeerRole              directPostgresStage = "peer-role"
+	postgresStagePeerGuardConstruction directPostgresStage = "peer-guard-construction"
+	postgresStagePeerBootstrap         directPostgresStage = "peer-bootstrap"
+	postgresStageTLSClient             directPostgresStage = "TLS-client"
+	postgresStageMaterialResolve       directPostgresStage = "material-resolve"
+	postgresStageDSNBinding            directPostgresStage = "DSN-binding"
+	postgresStagePoolBinding           directPostgresStage = "pool-binding"
+	postgresStageOwnGuardConstruction  directPostgresStage = "own-guard-construction"
+	postgresStageOwnRefresh            directPostgresStage = "own-refresh"
+	postgresStagePoolCreate            directPostgresStage = "pool-create"
+	postgresStageMonitorStart          directPostgresStage = "monitor-start"
+)
+
+type directPostgresStartupError struct {
+	stage   directPostgresStage
+	message string
+}
+
+func (e *directPostgresStartupError) Error() string { return e.message }
+
+func postgresStartupError(stage directPostgresStage, message string) error {
+	return &directPostgresStartupError{stage: stage, message: message}
+}
+
+func migrationPostgresConnectError(err error) error {
+	const generic = "migration v2 PostgreSQL connection is unavailable"
+	var startup *directPostgresStartupError
+	if !errors.As(err, &startup) {
+		return errors.New(generic)
+	}
+	switch startup.stage {
+	case postgresStageAuthority, postgresStageSignerClient, postgresStagePeerRole,
+		postgresStagePeerGuardConstruction, postgresStagePeerBootstrap,
+		postgresStageTLSClient, postgresStageMaterialResolve, postgresStageDSNBinding,
+		postgresStagePoolBinding, postgresStageOwnGuardConstruction, postgresStageOwnRefresh,
+		postgresStagePoolCreate, postgresStageMonitorStart:
+		return errors.New(generic + ": stage=" + string(startup.stage))
+	default:
+		return errors.New(generic)
+	}
+}
+
+type postgresPeerStartupGuard interface {
+	Bootstrap(context.Context) error
+	Close()
+}
+
+func bootstrapPostgresPeer(ctx context.Context, guard postgresPeerStartupGuard, constructionErr error) error {
+	if constructionErr != nil || guard == nil {
+		if guard != nil {
+			guard.Close()
+		}
+		return postgresStartupError(postgresStagePeerGuardConstruction, "direct v3 PostgreSQL peer revocation evidence is unavailable")
+	}
+	if guard.Bootstrap(ctx) != nil {
+		guard.Close()
+		return postgresStartupError(postgresStagePeerBootstrap, "direct v3 PostgreSQL peer revocation evidence is unavailable")
+	}
+	return nil
+}
+
+type postgresOwnStartupGuard interface {
+	Refresh(context.Context) error
+	Close()
+}
+
+func refreshPostgresOwn(ctx context.Context, guard postgresOwnStartupGuard, constructionErr error) error {
+	if constructionErr != nil || guard == nil {
+		if guard != nil {
+			guard.Close()
+		}
+		return postgresStartupError(postgresStageOwnGuardConstruction, "direct v3 PostgreSQL client revocation evidence is unavailable")
+	}
+	if guard.Refresh(ctx) != nil {
+		guard.Close()
+		return postgresStartupError(postgresStageOwnRefresh, "direct v3 PostgreSQL client revocation evidence is unavailable")
+	}
+	return nil
+}
+
 // openDirectV3Postgres is shared by Product and the coding Provider; neither
 // may select the Browser/Desktop broker-only database path.
 func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.Profile,
 	registry *secretref.Registry, settings directV3PostgresSettings) (*pgxpool.Pool, func(), error) {
 	if ctx == nil || lifetime == nil || ctx.Err() != nil || lifetime.Err() != nil || registry == nil {
-		return nil, nil, errors.New("direct v3 PostgreSQL startup is unavailable")
+		return nil, nil, postgresStartupError(postgresStageAuthority, "direct v3 PostgreSQL startup is unavailable")
 	}
 	authority, err := profile.ResolveSlice6FinalPostgresAuthority(settings.Owner)
 	if err != nil || authority.BrokerOnly || authority.Dialer != settings.Owner ||
 		authority.SQLRole != settings.RuntimeRole || authority.Signer.SocketPath != settings.ClientAgentSocket ||
 		authority.Signer.AgentUID != settings.ClientAgentUID || authority.Signer.AgentGID != settings.ClientAgentGID {
-		return nil, nil, errors.New("direct v3 PostgreSQL authority is unavailable")
+		return nil, nil, postgresStartupError(postgresStageAuthority, "direct v3 PostgreSQL authority is unavailable")
 	}
 	_, _, _, subject, _, err := profile.PostgresClientSignerForOwner(authority.Owner)
 	if err != nil {
-		return nil, nil, errors.New("direct v3 PostgreSQL signer is unavailable")
+		return nil, nil, postgresStartupError(postgresStageSignerClient, "direct v3 PostgreSQL signer is unavailable")
 	}
 	operationTimeout := settings.OperationTimeout
 	signer, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{
@@ -101,86 +189,88 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 		ExpectedGID: settings.ClientAgentGID, RoleGID: subject.GID,
 		OperationTimeout: operationTimeout, Now: time.Now})
 	if err != nil {
-		return nil, nil, errors.New("direct v3 PostgreSQL signer is unavailable")
+		return nil, nil, postgresStartupError(postgresStageSignerClient, "direct v3 PostgreSQL signer is unavailable")
 	}
 	role, err := phase6security.VerifyPeerCRLRoleFile(settings.PeerCRLRoleFile, profile,
 		settings.PeerCRLSourceMappingDigest, settings.PeerCRLRoleDigest)
 	if err != nil {
-		return nil, nil, errors.New("direct v3 PostgreSQL peer role is unavailable")
+		return nil, nil, postgresStartupError(postgresStagePeerRole, "direct v3 PostgreSQL peer role is unavailable")
 	}
 	guard, err := phase6tls.PostgresPeerGuard(profile, phase6tls.PostgresPeerAuthority{
 		Owner: authority.Owner, PeerCRLRole: role, AgentSocket: settings.ClientAgentSocket,
 		AgentUID: settings.ClientAgentUID, AgentGID: settings.ClientAgentGID,
 		OperationTimeout: operationTimeout})
-	if err != nil || guard.Bootstrap(ctx) != nil {
-		if guard != nil {
-			guard.Close()
-		}
-		return nil, nil, errors.New("direct v3 PostgreSQL peer revocation evidence is unavailable")
+	var peerStartup postgresPeerStartupGuard
+	if guard != nil {
+		peerStartup = guard
+	}
+	if startupErr := bootstrapPostgresPeer(ctx, peerStartup, err); startupErr != nil {
+		return nil, nil, startupErr
 	}
 	direct, err := phase6egress.NewDirectPostgres(ctx, profile, authority.Owner, signer.CertificateForHandshake)
-	if err != nil {
+	if err != nil || direct == nil {
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL TLS identity is unavailable")
+		return nil, nil, postgresStartupError(postgresStageTLSClient, "direct v3 PostgreSQL TLS identity is unavailable")
 	}
 	if settings.Purpose != secretref.PurposePostgresRuntimeDSN &&
 		settings.Purpose != secretref.PurposePostgresMigrationDSN {
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL material purpose is unavailable")
+		return nil, nil, postgresStartupError(postgresStageMaterialResolve, "direct v3 PostgreSQL material purpose is unavailable")
 	}
 	material, err := registry.Resolve(ctx, settings.DSNBindingID,
 		settings.Purpose, secretref.SystemTenant)
 	if err != nil {
 		material.Destroy()
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL material is unavailable")
+		return nil, nil, postgresStartupError(postgresStageMaterialResolve, "direct v3 PostgreSQL material is unavailable")
 	}
 	poolConfig, parseErr := phase6egress.ParseBoundPostgresDSN(material.Bytes, phase6egress.BoundPostgresTarget{
 		Host: authority.ServerHost, Port: authority.ServerPort, Database: authority.Database, User: authority.SQLRole})
 	material.Destroy()
 	if parseErr != nil {
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL material does not match profile")
+		return nil, nil, postgresStartupError(postgresStageDSNBinding, "direct v3 PostgreSQL material does not match profile")
 	}
 	poolConfig.MaxConns, poolConfig.MinConns = settings.MaxConnections, settings.MinConnections
 	poolConfig.MaxConnLifetime, poolConfig.MaxConnIdleTime, poolConfig.HealthCheckPeriod =
 		30*time.Minute, 5*time.Minute, 30*time.Second
 	if err := direct.Bind(poolConfig, guard); err != nil {
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL connection is unavailable")
+		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL connection is unavailable")
 	}
 	ownGuard, err := phase6egress.NewPostgresOwnGuard(profile, settings.Owner, signer,
 		operationTimeout, time.Now)
-	if err != nil || ownGuard.Refresh(ctx) != nil {
-		if ownGuard != nil {
-			ownGuard.Close()
-		}
+	var ownStartup postgresOwnStartupGuard
+	if ownGuard != nil {
+		ownStartup = ownGuard
+	}
+	if startupErr := refreshPostgresOwn(ctx, ownStartup, err); startupErr != nil {
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL client revocation evidence is unavailable")
+		return nil, nil, startupErr
 	}
 	if err := phase6egress.BindPostgresOwnGuard(poolConfig, ownGuard); err != nil {
 		ownGuard.Close()
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL client connection guard is unavailable")
+		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL client connection guard is unavailable")
 	}
 	if settings.AfterConnect == nil {
 		ownGuard.Close()
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL connection verification is unavailable")
+		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL connection verification is unavailable")
 	}
 	poolConfig.AfterConnect = settings.AfterConnect
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		ownGuard.Close()
 		guard.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL pool is unavailable")
+		return nil, nil, postgresStartupError(postgresStagePoolCreate, "direct v3 PostgreSQL pool is unavailable")
 	}
 	stopPolling, err := guard.StartPolling(lifetime)
 	if err != nil {
 		ownGuard.Close()
 		guard.Close()
 		pool.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL revocation monitor is unavailable")
+		return nil, nil, postgresStartupError(postgresStageMonitorStart, "direct v3 PostgreSQL revocation monitor is unavailable")
 	}
 	stopOwnPolling, err := ownGuard.StartPolling(lifetime)
 	if err != nil {
@@ -188,7 +278,7 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 		ownGuard.Close()
 		guard.Close()
 		pool.Close()
-		return nil, nil, errors.New("direct v3 PostgreSQL client revocation monitor is unavailable")
+		return nil, nil, postgresStartupError(postgresStageMonitorStart, "direct v3 PostgreSQL client revocation monitor is unavailable")
 	}
 	return pool, func() { stopOwnPolling(); stopPolling(); ownGuard.Close(); guard.Close(); pool.Close() }, nil
 }

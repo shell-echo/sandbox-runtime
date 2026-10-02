@@ -319,3 +319,26 @@ and no run-private directory. Exact-ID anonymous Vault volume readback is
 again unavailable after teardown. No same-database migration replay or new
 privilege grant occurred. This is a **failed component run**, not a release
 gate or evidence manifest; Phase 6 remains **5/15**.
+
+## R9 local migration-stage diagnostic decision (2026-10-03)
+
+Sandbox approved one minimal production-internal correction after the R8
+`migration-connect` observation. `openDirectV3Postgres` now selects a closed
+stage from trusted control flow for authority, signer client, peer role,
+peer-guard construction/bootstrap, TLS client, material resolution, DSN/pool
+binding, own-guard construction/refresh, pool creation and monitor start.
+Only the local one-shot migration command projects that fixed stage. Product
+and Provider runtime callers retain their previous generic error text; no
+Provider or Product Contract, public DTO or client error gains the diagnostic.
+An unknown stage or untyped error falls back to the generic migration error.
+No raw cause, endpoint, host path, socket, SQL, DSN, credential or certificate
+identifier is formatted into the result. The existing bounded PID1 output
+limit remains in force.
+
+This changes the runtime source and invalidates R8 as evidence for the next
+attempt. The follow-up must freeze R9 source and rebuild the exact role
+candidates before issuing another real Vault/PostgreSQL attempt. The new run
+will record Vault image-created anonymous volume IDs at container creation
+and independently inspect those exact IDs after cleanup; earlier runs remain
+unconfirmed on that one point. The diagnostic is not a migration-success or
+production-readiness claim. Phase 6 remains **5/15**.

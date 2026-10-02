@@ -108,7 +108,7 @@ func runMigrationV2(parent context.Context, timeout time.Duration, value migrati
 		},
 	})
 	if err != nil {
-		return errors.New("migration v2 PostgreSQL connection is unavailable")
+		return migrationPostgresConnectError(err)
 	}
 	defer closePool()
 	if err := pool.Ping(ctx); err != nil {
