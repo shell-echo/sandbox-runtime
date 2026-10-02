@@ -174,7 +174,7 @@ real display/control and development scenarios, strict release evidence
 bundle, exact release-topology advertisement, deployment, HA, hostile
 multi-tenant isolation, and production readiness remain absent.
 
-Product v1 Phase 6 production hardening is **4/15 complete**. ADR 0051 and
+Product v1 Phase 6 production hardening is **5/15 complete**. ADR 0051 and
 the fixed plan order deployable role boundaries, production identity/storage,
 secrets/KMS, network, supply chain, recovery, observability, deployment,
 upgrade, adversarial, independent deployment, release-candidate and final
@@ -210,20 +210,27 @@ restart, bounded drain and exact cleanup. The Desktop OCI remains a
 non-release local candidate; public Product E2E, deployment and production
 readiness remain open.
 
-Slice 5 is underway and Phase 6 remains **4/15**. Product is the first
-production role moved to the scoped-secret boundary: an explicit v2 config
-rejects legacy/migration fields and selects four runtime bindings through a
-restricted role-specific Unix workload-material agent. A separate no-cache,
-one-shot migration command and agent/socket are the only path to the migration
-DSN. Strict Vault KV/TLS and real Product/PostgreSQL/TLS gates pass overlap,
-pre-migration bind and cross-purpose denial, exact bootstrap cleanup,
-agent/Vault loss, readiness closure/recovery, restart and nondisclosure. The
-local process gate records `distinct_os_uid_established=false`; production
-service-account isolation remains open. The KMS-backed recording
-vertical also passes real Vault Transit rotation/loss checks. Provider,
-Gateway, Guest, Browser and Desktop migration, the production credential
-issuer/renewal controller, all-role rotation/revocation, break-glass and the
-complete independent-process evidence gate remain open.
+Slice 5 is complete within its bounded local evidence scope. ADR 0054 fixes
+canonical scoped-secret bindings, separate one-shot migration authority,
+runtime material agents, Vault Transit recording keys, and credential
+rotation/revocation. The immutable six-role real Vault/PostgreSQL gate and its
+strict manifest pass; its local process result explicitly records
+`distinct_os_uid_established=false`. Runtime revision
+`c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`, evidence tool
+`39fd1025f6fa838325aced711d8a024a9ce5d1b6`, and manifest digest
+`sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c`
+remain the bounded acceptance identities, not deployment or HSM evidence.
+
+Slice 6 remains open at **5/15**. The clean checkpoint
+`9511b44ad2b65421d78db239bad6309f85f9ad55` passes a real Docker
+component gate twice: a source-bound Vault/PKI/controller chain, Guest TLS
+signer and material-agent, signed two-approval capability issue, restricted
+one-shot operator delivery, online Guest consume and exact Vault KVv2 use,
+then before-expiry redelivery denial with unchanged persistent ledger and
+exact container cleanup. This does not prove a consumed capability remains
+denied after another controller restart, formal Guest PID1/Product security
+edge, all 78 live principals, 16 frozen scenarios, or Slice 6 release evidence.
+The strict final manifest has not been issued.
 
 Updated: 2026-09-22
 
@@ -265,6 +272,8 @@ production readiness.
 | Product v1 Phase 6 Slice 2 | [ADR 0051](adr/0051-product-phase-6-production-hardening-order.md); [fixed 15-slice plan](plan/product-v1-phase-6-production-hardening.md); [Slice 2 record](audits/product-phase-6-slice-2.md) | Phase 6 is 2/15 complete. Production `product serve` requires TLS 1.3, a closed Ed25519 JWT key ring with overlap/revocation, distinct exact migration/runtime PostgreSQL roles, exact schema compatibility and bounded pools. Migration authority closes before listener bind; a worker continuously closes/recovers readiness on database/schema state. The real-process gate passes auth precedence, privilege denial, pool exhaustion, database loss/recovery, restart and nondisclosure. Provider and public data planes remain absent; capability is unavailable and no deployment or production-readiness claim follows |
 | Product v1 Phase 6 Slice 3 | [ADR 0051](adr/0051-product-phase-6-production-hardening-order.md); [fixed 15-slice plan](plan/product-v1-phase-6-production-hardening.md); [Slice 3 record](audits/product-phase-6-slice-3.md) | Phase 6 is 3/15 complete. Production-only `provider serve` keeps Product and `/instances` authority outside the process; requires TLS 1.3 mTLS, exact protected admission, separated PostgreSQL roles, transactional lifecycle/exec/Terminal/artifact/usage/Desktop state, exact schema checks, and bounded reconciliation; and advertises exactly one coding-shell or Desktop profile. Real PostgreSQL concurrency/fault/restart, real-process restart, coding-shell Docker lifecycle and signed Desktop broker gates pass. Product dispatch, public data planes, deployment, HA and production readiness remain later gates |
 | Product v1 Phase 6 Slice 4 | [ADR 0052](adr/0052-phase-6-executor-role-boundary.md); [fixed plan](plan/product-v1-phase-6-production-hardening.md); [Slice 4 record](audits/product-phase-6-slice-4.md); [strict evidence manifest](audits/product-phase-6-slice-4-evidence.json); runtime `78f5987fda45873e497bce6d336e29dd4a61dc74`; evidence tool `e2f4abacf03418c7b18f179c3e7459292d8626df`; manifest `sha256:d01b3c41a0094657f18b4014b0649a799ea7fcf0e4ccaf07aa82cdd2052cc0d2` | Phase 6 is 4/15 complete within the bounded local independent-process scope. Product, Gateway, Provider, Guest, Browser and Desktop run as six separate OS processes and pass 12 strict scenarios with real Chromium, real Desktop VP8/input, dependency loss, bounded reconnect/drain, replay/capacity/drift denial, broker/executor/Provider restart and exact zero-resource cleanup. Executor v2 retains Provider authority and sealed Browser/Desktop egress identities. The Desktop OCI remains a `local-candidate-non-release`; no public Product E2E, published Phase 6 artifact, deployment, HA, SLO or production-readiness claim follows. Slice 5 secret references, KMS/HSM keys, scoped credentials, rotation/revocation and break-glass audit are next |
+| Product v1 Phase 6 Slice 5 | [ADR 0054](adr/0054-phase-6-scoped-secret-and-envelope-key-boundary.md); [strict evidence manifest](audits/product-phase-6-slice-5-evidence.json); runtime `c189330c5ed0aa52c60b6b85c5cd9c6b59fbef10`; evidence tool `39fd1025f6fa838325aced711d8a024a9ce5d1b6`; manifest `sha256:e6a6fdcc299c721e1fa2c48009d98a6ca4c52d59318c507af8b68fd8596e840c` | Phase 6 is 5/15 complete for scoped material agents, one-shot migration authority, Vault Transit recording keys, credential rotation/revocation and bounded dual-control break-glass in a real six-role local gate. The gate explicitly reports `distinct_os_uid_established=false`; HSM, deployment and production readiness remain unproved. |
+| Product v1 Phase 6 Slice 6 component checkpoint | [ADR 0055](adr/0055-phase-6-workload-tls-network-and-least-privilege-boundary.md); code `9511b44ad2b65421d78db239bad6309f85f9ad55` | Clean real Docker component gate twice passed signed issue→one-shot delivery→online Guest material-agent consume/Vault KVv2 use→before-expiry replay denial with unchanged persistent ledger and exact cleanup. Full topology, formal Guest/Product security edge, 16 scenarios and strict Slice 6 evidence remain open; Phase 6 stays 5/15. |
 | Sandbox Provider Calling Standard decision | ADR 0037; `contract/specification/provider-calling-standard-v1.md`; repository-owned Contract manifest | External consumers adapt to the exact locked `sandbox-runtime` Provider Contract. The former named Agent Platform P3 migration route is retired, while caller/Provider ownership separation and historical candidate evidence remain. This standard slice adds no capability or production-readiness claim. ADR 0038 defines the generic issuer trust model; the named independent-caller qualification is recorded separately in P2.7 and deployment qualification remains open |
 | Current Provider Contract authority | Revision `720ad15c343e71f36615dc4499edd5e764178bca`; tree `343ffde0819207cf99c005096c336735dd33a735`; manifest `sha256:483111511a588b41bd40d3fef686f0b21f465bb65d3215450ebb2ccf37a5de89`; OpenAPI `sha256:5a3da5d239f83e94eff09fc75438755f834e77bce8cd1c0f91c25055bf0cba2a`; semantic rules `sha256:7953d05e65f00c68e0428b6dd4fcebef1af103f2cab2fa6b214905b2496c8785`; 71-case local Suite `sha256:78e01cc5eb176083896baf8507c551d2ee88e56b93197321702748a88949e89d`; unchanged 6-case remote Suite | Product Phase 5 Slice 1 adds Desktop Contract/projection authority only. Exact lock verification, executable Suite mapping, race/shuffle, vet, retained Product evidence, and clean-VCS Conformance are the local acceptance gates. Historical Phase 2/3/4, hosted CI, external-caller, and remote-discovery evidence retains its recorded authority and is not relabeled |
 | Application-container development deployment | Root `Dockerfile`; Docker, Apple Container, and Kubernetes bilingual guides; development Kustomize base; three smoke scripts; local runs on 2026-09-17 | Docker Engine 29.7.2 on Linux/arm64, Apple Container 1.4.1 on macOS/arm64, and kind 0.33.0 with Kubernetes 1.37.0 each passed the bounded health/create/list path with the in-memory fake runtime. Docker and Kubernetes additionally exercised numeric non-root and restricted filesystem/privilege settings; the Kubernetes run created and removed an isolated namespace, and its disposable kind cluster was removed. No application image was published. This is current-worktree application-packaging evidence only; hosted release gates, immutable multi-platform publication, protected Provider deployment, HA, hostile multi-tenancy, deployment qualification, and production readiness remain open |

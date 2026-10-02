@@ -2154,3 +2154,27 @@ actual mounted executable bytes before sending a signed request or capability.
 No requester/approver/operator private key is mounted; the operator receives
 only bounded pre-signed input. This is a local gate packaging boundary, not a
 self-contained published OCI or cross-platform deployment claim.
+
+### Slice 6 live Guest break-glass component checkpoint (2026-10-02)
+
+At clean test checkpoint `9511b44ad2b65421d78db239bad6309f85f9ad55`,
+the source-bound real Docker component gate passes the signed Guest
+`material.resolve` submit/two-distinct-approval/issue sequence through finite
+networkless operator tasks. The controller has already been replaced once and
+has recovered its persistent replay ledger. With the real Guest TLS signer and
+material-agent PID1 online, a separate operator task delivers the newly
+issued single-use capability to the exact Guest delivery socket. The agent
+signs the online consume to its target-specific controller socket and resolves
+its Profile-bound signing key through scoped real Vault KVv2. The controller
+ledger changes from `issued`/zero uses to `consumed`/one use with exactly one
+new audit entry. A second delivery before expiry is denied; ledger revision,
+audit count/head and use count remain unchanged. Both clean-checkpoint and
+pre-checkpoint Docker runs pass with exact container cleanup; full repository
+race/shuffle, vet and Product Contract lock verification pass.
+
+This is component evidence, not final Slice 6 evidence. In particular, the
+same consumed capability has not yet been re-delivered after another
+controller restart. The owner-side material observer is not the formal Guest
+production PID1, and this gate does not run the independent Product/Guest
+security edge, all 78 principal processes, the frozen 16 scenarios or a
+strict release manifest. Phase 6 remains **5/15**.
