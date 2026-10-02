@@ -15,13 +15,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6egress"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 func slice6ObserveProductIdentityMaterial(t *testing.T, ctx context.Context, run slice6DockerRun,
 	profile phase6security.Profile, agent, owner phase6security.Principal,
-	material phase6security.Slice6MaterialSocketBinding, config []byte, expectedDigest, volume, root string) {
+	material phase6security.Slice6MaterialSocketBinding, config []byte,
+	expectedDigest, expectedDSNDigest, volume, root string) {
 	t.Helper()
 	if agent.Name != "product-runtime-agent" || owner.Name != "product-runtime" ||
 		volume == "" || len(expectedDigest) != len("sha256:")+64 {
@@ -31,10 +33,11 @@ func slice6ObserveProductIdentityMaterial(t *testing.T, ctx context.Context, run
 	if err != nil {
 		t.Fatal(err)
 	}
-	var binding secretref.Binding
+	var binding, runtimeBinding secretref.Binding
 	for _, item := range access {
 		if item.Agent == agent.Name && len(item.Bindings) == 2 {
 			binding = item.Bindings[0]
+			runtimeBinding = item.Bindings[1]
 		}
 	}
 	var active slice6MaterialAgentConfig
@@ -42,7 +45,8 @@ func slice6ObserveProductIdentityMaterial(t *testing.T, ctx context.Context, run
 		json.Unmarshal(config, &active) != nil || active.Role != secretref.RoleProduct ||
 		active.ExpectedClientUID != owner.UID || active.ExpectedClientGID != owner.GID ||
 		len(active.Bindings) != 2 || active.Bindings[0] != binding ||
-		active.Bindings[1].Purpose != secretref.PurposePostgresRuntimeDSN {
+		active.Bindings[1] != runtimeBinding ||
+		runtimeBinding.Purpose != secretref.PurposePostgresRuntimeDSN {
 		t.Fatal("Product observer and live material-agent authorization inputs disagree")
 	}
 	directory, err := os.MkdirTemp(".", ".sr-product-identity-observer-")
@@ -93,10 +97,50 @@ func slice6ObserveProductIdentityMaterial(t *testing.T, ctx context.Context, run
 		clear(output)
 		t.Fatalf("Product owner-side Vault-backed key-ring resolution failed: stage=%s resolve_ms=%d exit=%v", stage, resolveMS, observeErr)
 	}
-	t.Log("real Product material-agent PID1 obtained a scoped credential, used its independent Vault signer, and served the exact KVv2 identity key-ring to a cross-UID/GID owner-only observer; PostgreSQL DSN and Product runtime remain unproved")
+	if expectedDSNDigest != "" {
+		if len(expectedDSNDigest) != len("sha256:")+64 {
+			t.Fatal("Product runtime DSN digest unavailable")
+		}
+		target := phase6egress.BoundPostgresTarget{Host: "postgres.sandbox-runtime.test",
+			Port: 5432, Database: "product", User: "product_runtime"}
+		dsnRequest, err := json.Marshal(struct {
+			SocketPath     string                            `json:"socket_path"`
+			AgentUID       uint32                            `json:"agent_uid"`
+			AgentGID       uint32                            `json:"agent_gid"`
+			OwnerUID       uint32                            `json:"owner_uid"`
+			OwnerGID       uint32                            `json:"owner_gid"`
+			Binding        secretref.Binding                 `json:"binding"`
+			ExpectedDigest string                            `json:"expected_digest"`
+			Target         *phase6egress.BoundPostgresTarget `json:"target,omitempty"`
+		}{SocketPath: material.SocketPath, AgentUID: agent.UID, AgentGID: agent.GID,
+			OwnerUID: owner.UID, OwnerGID: owner.GID, Binding: runtimeBinding,
+			ExpectedDigest: expectedDSNDigest, Target: &target})
+		if err != nil {
+			t.Fatal("encode Product runtime DSN observer authority")
+		}
+		defer clear(dsnRequest)
+		dsnCommand := exec.CommandContext(ctx, "docker", "run", "--rm", "-i", "--pull=never",
+			"--name", "sr-p6-product-dsn-observe-"+run.id, "--label", run.label(), "--network=none",
+			"--user", fmt.Sprintf("%d:%d", owner.UID, owner.GID), "--read-only", "--cap-drop=ALL",
+			"--security-opt", "no-new-privileges:true", "--memory=64m", "--cpus=0.2", "--pids-limit=16",
+			"--mount", "type=volume,src="+volume+",dst="+material.SocketDirectory+",readonly",
+			"--mount", "type=bind,src="+binary+",dst=/observer,readonly",
+			"--entrypoint=/observer", agent.ImageReference)
+		dsnCommand.Stdin = bytes.NewReader(dsnRequest)
+		dsnOutput, dsnErr := dsnCommand.CombinedOutput()
+		if dsnErr != nil || string(dsnOutput) != "product-dsn-material-resolved=exact-vault-dsn\n" {
+			stage, resolveMS := slice6ProductIdentityObservationFailure(dsnOutput)
+			clear(dsnOutput)
+			t.Fatalf("Product owner-side runtime DSN resolve failed: stage=%s resolve_ms=%d exit=%v",
+				stage, resolveMS, dsnErr)
+		}
+		t.Log("real Product material-agent served exact KVv2 runtime DSN to cross-UID/GID Product owner; strict Profile target/digest parsing passed; SQL login remains unproved")
+	} else {
+		t.Log("real Product material-agent served exact KVv2 identity key-ring to cross-UID/GID Product owner; PostgreSQL DSN and runtime remain unproved")
+	}
 }
 
-var slice6ProductIdentityObservationPattern = regexp.MustCompile(`^product-identity-observation stage=(input|identity-or-binding|parent-layout|socket-layout|client-init|resolve-canceled|resolve-deadline|resolve-revoked|resolve-expired|resolve-unavailable|material-binding|material-window|material-digest|key-ring) resolve_ms=(-1|[0-9]{1,6})\n$`)
+var slice6ProductIdentityObservationPattern = regexp.MustCompile(`^product-identity-observation stage=(input|identity-or-binding|parent-layout|socket-layout|client-init|resolve-canceled|resolve-deadline|resolve-revoked|resolve-expired|resolve-unavailable|material-binding|material-window|material-digest|key-ring|dsn) resolve_ms=(-1|[0-9]{1,6})\n$`)
 
 func slice6ProductIdentityObservationFailure(output []byte) (string, int64) {
 	match := slice6ProductIdentityObservationPattern.FindSubmatch(output)

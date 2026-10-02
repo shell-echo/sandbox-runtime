@@ -33,11 +33,11 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	socketVolumes, anchorFiles map[string]string,
 	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
 	slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed, serverID, publicKeyDigest,
-		"guest-agent", "guest-runtime", "guest", 67, socketVolumes, anchorFiles, onReady)
+		"", "guest-agent", "guest-runtime", "guest", 67, socketVolumes, anchorFiles, onReady)
 }
 
 func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, serverID, expectedDigest,
+	composed slice6VaultComposedInputs, serverID, expectedDigest, expectedDSNDigest,
 	agentDeployment, ownerDeployment, label string, expectedSockets int,
 	socketVolumes, anchorFiles map[string]string,
 	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
@@ -407,7 +407,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
 	} else {
 		slice6ObserveProductIdentityMaterial(t, ctx, run, profile, agent, owner, material,
-			config, expectedDigest, socketVolumes[material.SocketStorageID], root)
+			config, expectedDigest, expectedDSNDigest, socketVolumes[material.SocketStorageID], root)
 	}
 	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
 		t.Fatal("stop runtime material-agent")

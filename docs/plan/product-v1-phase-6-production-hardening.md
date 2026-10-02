@@ -211,8 +211,20 @@ TLS/HBA and local SQL, stopped PostgreSQL, then confirmed all three serials
 in the complete issuer CRL with two token accessors and operator self-revoke.
 The [component audit](../audits/product-phase-6-slice-6-postgres-v2-component.md)
 also retains three failed attempts whose third-leaf revocations were not
-confirmed. No Product runtime DSN, nine SQL callers, full 16-scenario gate or
-release manifest is claimed from this component result.
+confirmed. That earlier component result did not supply a Product runtime
+DSN or run nine SQL callers, the full 16-scenario gate or a release manifest.
+
+A subsequent mutable-tree same-run component test started that PostgreSQL
+server before Vault root revocation, used its local peer socket to create
+the operator-owned Product database/schema and two non-elevated SCRAM SQL
+logins, then installed distinct real migration/runtime DSNs into exact
+create-only Vault KVv2 purpose bindings. Scoped readback, cross-purpose and
+cross-owner denial, token revocation, controlled PG stop and terminal v2
+cleanup passed. A second run also proved actual Product-owner resolution
+through the live material-agent and strict fixed-target/digest parsing.
+This establishes DSN *supply and resolution*, not a PostgreSQL login: a
+separate Product migration v2 job, runtime SQL and all nine network-bound callers
+remain release work. Phase 6 remains 5/15.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,

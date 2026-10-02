@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,13 +40,13 @@ var slice6PostgresPrivateFiles = []string{
 	"server-ca.pem", "server-key.pem", "server.pem",
 }
 
-// The Vault root has already been revoked when this starts. The separate
-// provisioning container exits before the PostgreSQL server can use its
-// exclusive read-only key/config volume. This is service-start component
-// evidence until actual fixed-source SQL callers and v2 terminal cleanup run.
+// The separate provisioning container exits before PostgreSQL can use its
+// exclusive read-only key/config volume. The callback may cross the Vault
+// root-revocation boundary; it must stop this server before terminal PKI
+// cleanup. This is component evidence, not the Slice 6 release gate.
 func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, leaf slice6PostgresServerLeaf,
-	work func(phase6terminalcleanup.ExternalPostgresRecord)) {
+	work func(phase6terminalcleanup.ExternalPostgresRecord, string, func() error)) {
 	t.Helper()
 	if work == nil || phase6security.VerifySlice6DesiredFinalExternalProfile(composed.Profile) != nil ||
 		leaf.Record.RunID != run.id || leaf.Record.ProfileDigest != composed.Profile.ProfileDigest ||
@@ -130,23 +131,43 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 		"postgres", "-c", "listen_addresses=*", "-c", "ssl=on",
 		"-c", "ssl_min_protocol_version=TLSv1.3", "-c", "ssl_cert_file=/pg/server.pem",
 		"-c", "ssl_key_file=/pg/server-key.pem", "-c", "ssl_ca_file=/pg/client-ca.pem",
-		"-c", "hba_file=/pg/pg_hba.conf")
+		"-c", "hba_file=/pg/pg_hba.conf", "-c", "log_statement=none",
+		"-c", "log_min_error_statement=panic", "-c", "log_duration=off",
+		"-c", "log_min_duration_statement=-1", "-c", "log_parameter_max_length=0",
+		"-c", "log_parameter_max_length_on_error=0", "-c", "password_encryption=scram-sha-256")
 	serverID := strings.TrimSpace(string(server))
 	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
 		t.Fatal("start exact run-owned PostgreSQL server")
 	}
-	serverStopped := false
-	defer func() {
-		if serverStopped {
-			return
+	var stopAttempted bool
+	var stopError error
+	stopServer := func() error {
+		if stopAttempted {
+			return stopError
 		}
+		stopAttempted = true
 		cleanup, stop := context.WithTimeout(context.Background(), 45*time.Second)
 		defer stop()
 		if _, err := run.docker(cleanup, "stop", "-t", "10", serverID); err != nil {
-			t.Errorf("failure-path PostgreSQL stop was not confirmed: %v", err)
+			stopError = fmt.Errorf("stop exact PostgreSQL server: %w", err)
+			return stopError
 		}
-		if _, err := run.docker(cleanup, "rm", "-f", "-v", serverID); err != nil {
-			t.Errorf("failure-path exact PostgreSQL container removal was not confirmed: %v", err)
+		state, err := run.docker(cleanup, "inspect", "-f", "{{.State.Running}}", serverID)
+		if err != nil || strings.TrimSpace(string(state)) != "false" {
+			stopError = errors.New("PostgreSQL still serving after stop")
+			return stopError
+		}
+		if _, err := run.docker(cleanup, "rm", "-v", serverID); err != nil {
+			stopError = fmt.Errorf("remove exact PostgreSQL server: %w", err)
+			return stopError
+		}
+		return nil
+	}
+	defer func() {
+		if !stopAttempted {
+			if err := stopServer(); err != nil {
+				t.Errorf("failure-path PostgreSQL shutdown unconfirmed: %v", err)
+			}
 		}
 	}()
 	for _, endpoint := range endpoints[1:] {
@@ -217,18 +238,10 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 	}
 	t.Logf("same-run PostgreSQL PID1 started on nine isolated bridges with exact source-bound HBA, general-issuer server leaf, read-only PG-owned key and local SQL readiness; no client SQL gate yet; leaf=%s",
 		record.LeafDigest)
-	work(record)
-	if _, err := run.docker(parent, "stop", "-t", "10", serverID); err != nil {
-		t.Fatal("stop PostgreSQL before terminal certificate cleanup")
+	work(record, serverID, stopServer)
+	if err := stopServer(); err != nil {
+		t.Fatal("PostgreSQL shutdown before terminal certificate cleanup was not confirmed")
 	}
-	state, err := run.docker(parent, "inspect", "-f", "{{.State.Running}}", serverID)
-	if err != nil || strings.TrimSpace(string(state)) != "false" {
-		t.Fatal("PostgreSQL still serving before terminal certificate cleanup")
-	}
-	if _, err := run.docker(parent, "rm", "-v", serverID); err != nil {
-		t.Fatal("remove stopped PostgreSQL container before terminal certificate cleanup")
-	}
-	serverStopped = true
 	t.Log("same-run external PostgreSQL stopped and removed before v2 terminal certificate cleanup; named private/data volumes remain for final exact cleanup")
 }
 
@@ -566,7 +579,11 @@ func slice6WaitPostgresReady(t *testing.T, parent context.Context, run slice6Doc
 				"ssl": "on", "hba_file": "/pg/pg_hba.conf",
 				"ssl_min_protocol_version": "TLSv1.3", "listen_addresses": "*",
 				"ssl_cert_file": "/pg/server.pem", "ssl_key_file": "/pg/server-key.pem",
-				"ssl_ca_file": "/pg/client-ca.pem",
+				"ssl_ca_file":   "/pg/client-ca.pem",
+				"log_statement": "none", "log_min_error_statement": "panic",
+				"log_duration": "off", "log_min_duration_statement": "-1",
+				"log_parameter_max_length": "0", "log_parameter_max_length_on_error": "0",
+				"password_encryption": "scram-sha-256",
 			} {
 				actual, readErr := run.docker(ctx, "exec", "-u", owner, serverID, "psql", "-At",
 					"-d", "postgres", "-c", "SHOW "+setting)

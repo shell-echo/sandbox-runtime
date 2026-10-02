@@ -1,5 +1,5 @@
 // productmaterialobserver is an ephemeral, non-release Product owner-side
-// witness. It never prints or persists resolved key-ring bytes.
+// witness. It never prints or persists resolved material bytes.
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6egress"
 	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
@@ -21,13 +22,14 @@ import (
 )
 
 type input struct {
-	SocketPath     string            `json:"socket_path"`
-	AgentUID       uint32            `json:"agent_uid"`
-	AgentGID       uint32            `json:"agent_gid"`
-	OwnerUID       uint32            `json:"owner_uid"`
-	OwnerGID       uint32            `json:"owner_gid"`
-	Binding        secretref.Binding `json:"binding"`
-	ExpectedDigest string            `json:"expected_digest"`
+	SocketPath     string                            `json:"socket_path"`
+	AgentUID       uint32                            `json:"agent_uid"`
+	AgentGID       uint32                            `json:"agent_gid"`
+	OwnerUID       uint32                            `json:"owner_uid"`
+	OwnerGID       uint32                            `json:"owner_gid"`
+	Binding        secretref.Binding                 `json:"binding"`
+	ExpectedDigest string                            `json:"expected_digest"`
+	Target         *phase6egress.BoundPostgresTarget `json:"target,omitempty"`
 }
 
 func main() {
@@ -54,8 +56,16 @@ func run() (string, int64) {
 	clear(canonical)
 	if !valid || uint32(os.Getuid()) != value.OwnerUID || uint32(os.Getgid()) != value.OwnerGID ||
 		value.AgentUID == value.OwnerUID || value.AgentGID == value.OwnerGID ||
-		value.Binding.Validate() != nil || value.Binding.Purpose != secretref.PurposeIdentityKeyRing ||
+		value.Binding.Validate() != nil ||
+		(value.Binding.Purpose != secretref.PurposeIdentityKeyRing &&
+			value.Binding.Purpose != secretref.PurposePostgresRuntimeDSN) ||
 		value.Binding.Role != secretref.RoleProduct || len(value.ExpectedDigest) != len("sha256:")+64 {
+		return "identity-or-binding", -1
+	}
+	if value.Binding.Purpose == secretref.PurposeIdentityKeyRing && value.Target != nil ||
+		value.Binding.Purpose == secretref.PurposePostgresRuntimeDSN && (value.Target == nil ||
+			value.Target.Host != "postgres.sandbox-runtime.test" || value.Target.Port != 5432 ||
+			value.Target.Database != "product" || value.Target.User != "product_runtime") {
 		return "identity-or-binding", -1
 	}
 	layout := restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666,
@@ -102,10 +112,19 @@ func run() (string, int64) {
 	if "sha256:"+hex.EncodeToString(digest[:]) != value.ExpectedDigest {
 		return "material-digest", resolveMillis
 	}
-	if _, err := tokenidentity.LoadMaterial(material.Bytes, "https://identity.product.example.test",
-		"urn:shell-echo:sandbox-runtime:product-api:production", 20*time.Second, 10*time.Minute); err != nil {
-		return "key-ring", resolveMillis
+	if value.Binding.Purpose == secretref.PurposePostgresRuntimeDSN {
+		config, err := phase6egress.ParseBoundPostgresDSN(material.Bytes, *value.Target)
+		if err != nil || config == nil || config.ConnConfig == nil {
+			return "dsn", resolveMillis
+		}
+		config.ConnConfig.Password = ""
+		_, _ = fmt.Fprintln(os.Stdout, "product-dsn-material-resolved=exact-vault-dsn")
+	} else {
+		if _, err := tokenidentity.LoadMaterial(material.Bytes, "https://identity.product.example.test",
+			"urn:shell-echo:sandbox-runtime:product-api:production", 20*time.Second, 10*time.Minute); err != nil {
+			return "key-ring", resolveMillis
+		}
+		_, _ = fmt.Fprintln(os.Stdout, "product-identity-material-resolved=exact-vault-key-ring")
 	}
-	_, _ = fmt.Fprintln(os.Stdout, "product-identity-material-resolved=exact-vault-key-ring")
 	return "", resolveMillis
 }

@@ -2034,6 +2034,38 @@ These are source-level corrections to an unaccepted v3 candidate. The final
 first migrations, 16 scenarios and exact cleanup remain live release gates;
 no static Profile or component test alone advances the 5/15 Phase 6 count.
 
+The Product SQL bootstrap crosses two authorities in a fixed order. The
+controlled operator first starts the external PostgreSQL server with its
+original nine-source HBA, non-root image identity, dropped capabilities and
+final server TLS configuration while the Vault bootstrap root still exists.
+Client-certificate CRL installation and revoked-client rejection remain a
+separate live gate. Over
+the local PostgreSQL peer socket, that operator alone creates the `product`
+database and `sandbox_runtime_product` schema, revokes PUBLIC database/schema
+rights, creates separate short-lived, non-elevated SCRAM login roles, and
+verifies exact attributes and negative privileges. Password setup must use
+client-side encrypted native PostgreSQL tooling with statement, duration,
+parameter and error-statement logging suppressed and read back *before* any
+secret is sent. Plaintext SQL, argv, environment, logs and public evidence
+are not acceptable password channels. Each independently generated role DSN
+then goes to its exact, create-only Vault KVv2 purpose/owner/version binding;
+scoped readback and cross-purpose/cross-owner denial precede root revocation.
+No Product business DDL is an operator/bootstrap step.
+
+After root revocation, only the independent Product migration v2 job may
+perform the first Product DDL. Its SQL role has CONNECT on `product` and
+USAGE/CREATE on the precreated Product schema, without database CREATE,
+elevation, inheritance or membership. The runtime SQL role initially has
+CONNECT only. After successful migration, the operator must grant and
+read back only observed current-table DML, schema USAGE, and migration-ledger
+SELECT; no blanket future-table defaults, ledger write, TRUNCATE,
+REFERENCES, TRIGGER, GRANT OPTION, sequence or function rights are implied.
+Migration, signer and material-agent jobs then exit. PostgreSQL remains a
+controlled external dependency through the business-process checks and must
+be stopped and removed before one-shot terminal certificate cleanup. This
+ordering is necessary but does not itself qualify Product runtime SQL,
+nine-source egress, the 78-principal topology or the 16 release scenarios.
+
 ### Slice 6 controller termination and one-shot operator cleanup (2026-10-01)
 
 The two controllers form a terminal revocation dependency: credential

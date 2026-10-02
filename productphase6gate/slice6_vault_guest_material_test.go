@@ -218,7 +218,8 @@ func slice6VaultExecGuestMaterialToken(containerID string, arguments ...string) 
 }
 
 func slice6VaultExecMaterialToken(containerID, tokenFile string, arguments ...string) []string {
-	if tokenFile != "guest-material-scope-token" && tokenFile != "product-identity-scope-token" {
+	if tokenFile != "guest-material-scope-token" && tokenFile != "product-identity-scope-token" &&
+		tokenFile != "product-migration-dsn-scope-token" && tokenFile != "product-runtime-dsn-scope-token" {
 		return nil
 	}
 	result := []string{"exec", "-e", "VAULT_ADDR=https://127.0.0.1:8200",
@@ -232,7 +233,8 @@ func TestSlice6VaultExecMaterialTokenRejectsArbitraryFile(t *testing.T) {
 	if slice6VaultExecMaterialToken("container", "../../unreviewed", "kv", "get") != nil {
 		t.Fatal("arbitrary Vault token file reached the shell command")
 	}
-	for _, allowed := range []string{"guest-material-scope-token", "product-identity-scope-token"} {
+	for _, allowed := range []string{"guest-material-scope-token", "product-identity-scope-token",
+		"product-migration-dsn-scope-token", "product-runtime-dsn-scope-token"} {
 		if len(slice6VaultExecMaterialToken("container", allowed, "kv", "get")) == 0 {
 			t.Fatal("fixed Vault token file was not admitted")
 		}

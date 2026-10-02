@@ -246,8 +246,18 @@ Current verified state:
   operator confirmed three certificate serials, two token accessors, complete
   CRL and self-revocation, followed by zero run-labeled Docker resources.
   The separate no-secret provisioner probe and strict PEM/mount-order tests
-  also pass. Earlier unconfirmed-leaf attempts remain explicitly recorded.
-  This does not prove Product PostgreSQL runtime DSN, nine live SQL clients,
+  also pass. A further mutable-tree component run started PostgreSQL before
+  Vault root revocation, used client-side encrypted native role creation to
+  establish separate non-elevated Product migration/runtime SCRAM logins,
+  precreated only the operator-owned database/schema, and stored their real
+  DSNs in separate create-only KVv2 version-1 purpose bindings. Scoped
+  readback, cross-purpose/cross-owner denial, token revocation, controller
+  quiesce, v2 terminal PKI cleanup and exact Docker cleanup passed. A second
+  same-run component test also proved that a distinct-UID/GID Product owner
+  resolves the exact runtime DSN through the live material-agent and parses
+  its fixed target and digest without establishing a SQL connection. Earlier
+  unconfirmed-leaf attempts remain explicitly recorded. This does not prove
+  Product DSN consumption or runtime SQL, nine live SQL clients,
   all 78 principals, the 16-scenario Slice 6 release gate, signed evidence or
   deployment. Phase 6 stays 5/15.
 

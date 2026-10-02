@@ -32,6 +32,7 @@ import (
 )
 
 const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWITCH"
+const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTGRES_DSN"
 
 // This is real Docker component evidence for the operator bootstrap trust
 // cutover. It is not the managed certificate-controller/agent path or a Slice 6
@@ -56,6 +57,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			os.Getenv(slice6CertificateProcessEnv) != "1" ||
 			os.Getenv(slice6QuiesceProcessEnv) != "1") {
 		t.Fatal("external PostgreSQL server certificate requires complete same-run Product/controller chain and v2 terminal operator")
+	}
+	if os.Getenv(slice6ProductPostgresDSNEnv) == "1" && os.Getenv(slice6PostgresServerLeafEnv) != "1" {
+		t.Fatal("Product PostgreSQL DSN bootstrap requires the same-run external PostgreSQL and terminal operator")
 	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
@@ -396,8 +400,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var productMaterialSocketVolumes map[string]string
 		var guestPublicKeyDigest string
 		var productIdentityDigest string
+		var productRuntimeDSNDigest string
 		var postgresLeaf slice6PostgresServerLeaf
 		var postgresRecord *phase6terminalcleanup.ExternalPostgresRecord
+		var postgresStop func() error
 		postgresTerminalConfirmed := false
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
@@ -516,83 +522,114 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 					defer terminalOperator.clear()
 				}
 				if os.Getenv(slice6CredentialProcessEnv) == "1" {
-					// All role/PKI material and bootstrap leaves are now fixed. The
-					// controller chain must run with the orphan management token,
-					// never with the bootstrap root authority still live.
-					revokeBootstrapRoot()
-					var onCredentialReady func(func())
-					if os.Getenv(slice6CertificateProcessEnv) == "1" {
-						onCredentialReady = func(stopCredential func()) {
-							var onTerminated func()
-							var onManagedReady func()
-							if os.Getenv(slice6GuestMaterialEnv) == "1" {
-								onManagedReady = func() {
-									runWork := func() {
-										slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
-											runGuestChain := func() {
-												slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
-													slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-														guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
-														func(delivery phase6security.Slice6BreakGlassSocketBinding) {
-															slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
-																delivery, breakGlassSocketVolumes, restartController)
-														})
-												})
-											}
-											if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
-												runProductChain := runGuestChain
-												if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
-													runProductChain = func() {
-														slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
-															"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
-															productMaterialSocketVolumes, anchorFiles, func() {
-																slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
-																	serverID, productIdentityDigest, "product-runtime-agent", "product-runtime",
-																	"product-material", 70, productMaterialSocketVolumes, anchorFiles,
-																	func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+					runCredentialChain := func() {
+						// All role/PKI material and bootstrap leaves are now fixed. The
+						// controller chain must run with the orphan management token,
+						// never with the bootstrap root authority still live.
+						revokeBootstrapRoot()
+						var onCredentialReady func(func())
+						if os.Getenv(slice6CertificateProcessEnv) == "1" {
+							onCredentialReady = func(stopCredential func()) {
+								var onTerminated func()
+								var onManagedReady func()
+								if os.Getenv(slice6GuestMaterialEnv) == "1" {
+									onManagedReady = func() {
+										runWork := func() {
+											slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
+												runGuestChain := func() {
+													slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
+														slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+															guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
+															func(delivery phase6security.Slice6BreakGlassSocketBinding) {
+																slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
+																	delivery, breakGlassSocketVolumes, restartController)
 															})
-													}
+													})
 												}
-												slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
-													"product-runtime", "product-tls-agent", "product",
-													productSocketVolumes, anchorFiles, runProductChain)
-											} else {
-												runGuestChain()
-											}
-										})
-									}
-									if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
-										slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
-											func(record phase6terminalcleanup.ExternalPostgresRecord) {
-												postgresRecord = &record
-												runWork()
+												if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
+													runProductChain := runGuestChain
+													if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
+														runProductChain = func() {
+															slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+																"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
+																productMaterialSocketVolumes, anchorFiles, func() {
+																	slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																		serverID, productIdentityDigest, productRuntimeDSNDigest,
+																		"product-runtime-agent", "product-runtime",
+																		"product-material", 70, productMaterialSocketVolumes, anchorFiles,
+																		func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+																})
+														}
+													}
+													slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+														"product-runtime", "product-tls-agent", "product",
+														productSocketVolumes, anchorFiles, runProductChain)
+												} else {
+													runGuestChain()
+												}
 											})
-									} else {
-										runWork()
+										}
+										if os.Getenv(slice6ProductPostgresDSNEnv) == "1" {
+											if postgresRecord == nil || postgresStop == nil {
+												t.Fatal("Product PostgreSQL bootstrap did not complete before root revocation")
+											}
+											runWork()
+										} else if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
+											slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
+												func(record phase6terminalcleanup.ExternalPostgresRecord, _ string, _ func() error) {
+													postgresRecord = &record
+													runWork()
+												})
+										} else {
+											runWork()
+										}
 									}
 								}
-							}
-							if terminalOperator != nil {
-								onTerminated = func() {
-									if os.Getenv(slice6PostgresServerLeafEnv) == "1" && postgresRecord == nil {
-										t.Fatal("PostgreSQL leaf was not observed on stopped server before v2 cleanup")
-									}
-									slice6RunTerminalOperator(t, ctx, run, composed, serverID,
-										terminalBinaryPath, terminalBinaryDigest,
-										management.Accessor, general, terminalOperator, postgresRecord)
-									if postgresRecord != nil {
-										postgresTerminalConfirmed = true
+								if terminalOperator != nil {
+									onTerminated = func() {
+										if postgresStop != nil {
+											if err := postgresStop(); err != nil {
+												t.Fatal("Product PostgreSQL did not stop before terminal certificate cleanup")
+											}
+										}
+										if os.Getenv(slice6PostgresServerLeafEnv) == "1" && postgresRecord == nil {
+											t.Fatal("PostgreSQL leaf was not observed on stopped server before v2 cleanup")
+										}
+										slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+											terminalBinaryPath, terminalBinaryDigest,
+											management.Accessor, general, terminalOperator, postgresRecord)
+										if postgresRecord != nil {
+											postgresTerminalConfirmed = true
+										}
 									}
 								}
+								slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
+									controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
+									onManagedReady, stopCredential, onTerminated)
 							}
-							slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
-								controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
-								onManagedReady, stopCredential, onTerminated)
 						}
+						slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
+							credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, management.Token,
+							credentialKey, onCredentialReady)
 					}
-					slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
-						credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, management.Token,
-						credentialKey, onCredentialReady)
+					if os.Getenv(slice6ProductPostgresDSNEnv) == "1" {
+						slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
+							func(record phase6terminalcleanup.ExternalPostgresRecord, postgresID string, stop func() error) {
+								postgresRecord = &record
+								postgresStop = stop
+								dsns := slice6BootstrapProductPostgres(t, ctx, run, postgresID, composed.Profile)
+								defer dsns.clear()
+								slice6VaultInstallProductPostgresMaterial(t, ctx, run, serverID,
+									configDir, composed.Profile, dsns)
+								digest := sha256.Sum256(dsns.Runtime)
+								productRuntimeDSNDigest = "sha256:" + hex.EncodeToString(digest[:])
+								dsns.clear()
+								t.Log("live Product SQL roles and exact Vault KVv2 DSNs bootstrapped before root revocation")
+								runCredentialChain()
+							})
+					} else {
+						runCredentialChain()
+					}
 				}
 			}
 		}
