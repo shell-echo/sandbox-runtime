@@ -255,21 +255,29 @@ func slice6VaultWriteAndReadTokenRole(t *testing.T, ctx context.Context, run sli
 
 func slice6VaultMintScopedToken(t *testing.T, ctx context.Context, run slice6DockerRun,
 	serverID, role, policy string) string {
+	token, _ := slice6VaultMintScopedTokenWithAccessor(t, ctx, run, serverID, role, policy)
+	return token
+}
+
+func slice6VaultMintScopedTokenWithAccessor(t *testing.T, ctx context.Context, run slice6DockerRun,
+	serverID, role, policy string) (string, string) {
 	t.Helper()
 	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json", "auth/token/create/"+role,
 		"policies="+policy, "ttl=1m", "renewable=false", "no_default_policy=true")...)
+	defer clear(response)
 	var issued struct {
 		Auth struct {
 			ClientToken string   `json:"client_token"`
+			Accessor    string   `json:"accessor"`
 			Policies    []string `json:"policies"`
 			Orphan      bool     `json:"orphan"`
 		} `json:"auth"`
 	}
-	if err != nil || json.Unmarshal(response, &issued) != nil || issued.Auth.ClientToken == "" ||
+	if err != nil || json.Unmarshal(response, &issued) != nil || issued.Auth.ClientToken == "" || issued.Auth.Accessor == "" ||
 		!slices.Equal(issued.Auth.Policies, []string{policy}) || issued.Auth.Orphan {
 		t.Fatalf("real Vault scoped token issuance for %s failed", policy)
 	}
-	return issued.Auth.ClientToken
+	return issued.Auth.ClientToken, issued.Auth.Accessor
 }
 
 func slice6VaultRequireCapability(t *testing.T, ctx context.Context, run slice6DockerRun,

@@ -10,9 +10,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -96,12 +98,27 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 		t.Fatal("remove Guest bootstrap plaintext after Vault write")
 	}
 	const tokenFile = "guest-material-scope-token"
-	token := slice6VaultMintScopedToken(t, ctx, run, serverID, guest.TokenRole, guest.BackendPolicy)
+	const accessorFile = "guest-material-scope-accessor"
+	token, accessor := slice6VaultMintScopedTokenWithAccessor(t, ctx, run, serverID, guest.TokenRole, guest.BackendPolicy)
 	writeSlice6VaultPrivateFile(t, configDir, tokenFile, []byte(token))
+	writeSlice6VaultPrivateFile(t, configDir, accessorFile, []byte(accessor))
 	token = ""
 	defer func() {
-		if err := os.Remove(filepath.Join(configDir, tokenFile)); err != nil && !os.IsNotExist(err) {
-			t.Errorf("remove exact Guest scoped token file: %v", err)
+		for _, name := range []string{tokenFile, accessorFile} {
+			if err := os.Remove(filepath.Join(configDir, name)); err != nil && !os.IsNotExist(err) {
+				t.Errorf("remove exact Guest scoped credential file: %v", err)
+			}
+		}
+	}()
+	revoked := false
+	defer func() {
+		if !revoked {
+			cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := slice6VaultRevokeGuestScopedToken(cleanupContext, run, serverID, accessorFile,
+				accessor, guest.BackendPolicy); err != nil {
+				t.Errorf("failed Guest bootstrap token cleanup remained unproved: %v", err)
+			}
 		}
 	}()
 	readback, err := run.docker(ctx, slice6VaultExecGuestMaterialToken(serverID, "kv", "get", "-format=json",
@@ -144,16 +161,55 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 		t.Fatal("Guest token cross-owner KV read was not explicitly denied")
 	}
 	clear(denied)
-	revoked, revokeErr := run.docker(ctx, slice6VaultExecGuestMaterialToken(serverID, "token", "revoke", "-self")...)
-	clear(revoked)
-	if revokeErr != nil {
-		t.Fatal("Guest scoped read token self-revocation failed")
+	if err := slice6VaultRevokeGuestScopedToken(ctx, run, serverID, accessorFile,
+		accessor, guest.BackendPolicy); err != nil {
+		t.Fatal("Guest bootstrap token exact revocation/readback failed")
 	}
+	revoked = true
 	if err := os.Remove(filepath.Join(configDir, tokenFile)); err != nil {
 		t.Fatal("remove exact Guest scoped read token")
 	}
+	if err := os.Remove(filepath.Join(configDir, accessorFile)); err != nil {
+		t.Fatal("remove exact Guest scoped accessor")
+	}
 	publicDigest := sha256.Sum256(public)
-	t.Logf("real run-owned Guest Ed25519 key stored in KVv2 version 1; exact scoped read, cross-owner denial and token self-revocation passed; public key sha256:%x; no material agent or Guest consumer launched", publicDigest)
+	t.Logf("real run-owned Guest Ed25519 key stored in KVv2 version 1; exact scoped read, cross-owner denial and bootstrap token revocation/readback passed; public key sha256:%x; no material agent or Guest consumer launched", publicDigest)
+}
+
+func slice6VaultRevokeGuestScopedToken(ctx context.Context, run slice6DockerRun,
+	serverID, accessorFile, accessor, policy string) error {
+	lookup, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json",
+		"auth/token/lookup-accessor", "accessor=@/vault/config/"+accessorFile)...)
+	var observed struct {
+		Data struct {
+			Accessor string   `json:"accessor"`
+			Policies []string `json:"policies"`
+			Orphan   bool     `json:"orphan"`
+			TTL      int64    `json:"ttl"`
+		} `json:"data"`
+	}
+	valid := err == nil && len(lookup) <= 64<<10 && json.Unmarshal(lookup, &observed) == nil &&
+		observed.Data.Accessor == accessor && slices.Equal(observed.Data.Policies, []string{policy}) &&
+		!observed.Data.Orphan && observed.Data.TTL > 0 && observed.Data.TTL <= 60
+	clear(lookup)
+	if !valid {
+		return errors.New("exact Guest token accessor lookup failed")
+	}
+	result, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "auth/token/revoke-accessor",
+		"accessor=@/vault/config/"+accessorFile)...)
+	clear(result)
+	if err != nil {
+		return errors.New("exact Guest token accessor revocation failed")
+	}
+	readback, readErr := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json",
+		"auth/token/lookup-accessor", "accessor=@/vault/config/"+accessorFile)...)
+	confirmed := readErr != nil && len(readback) <= 64<<10 &&
+		bytes.Contains(readback, []byte("Code: 400")) && bytes.Contains(readback, []byte("invalid accessor"))
+	clear(readback)
+	if !confirmed {
+		return errors.New("Guest accessor revocation readback was not the exact invalid-accessor response")
+	}
+	return nil
 }
 
 func slice6VaultExecGuestMaterialToken(containerID string, arguments ...string) []string {
