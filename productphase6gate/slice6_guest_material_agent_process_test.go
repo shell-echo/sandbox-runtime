@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,6 +123,7 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		t.Fatal("Guest material-agent source-bound credential key unavailable")
 	}
 	defer clear(key)
+	slice6ProbeGuestSignerAsMaterialAgent(t, ctx, run, agent, tls, socketVolumes[tls.SocketStorageID], rootForSlice6GuestProbe(t))
 	privateMount, needed := phase6security.Slice6PrivateConfigMount(agent.Name)
 	if !needed || privateMount.Target != "/run/phase6/config" {
 		t.Fatal("Guest material-agent private Profile mount unavailable")
@@ -242,8 +244,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
+			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent exited before network join: stage=%s category=%s exit=%v", stage, category, done.err)
+			t.Fatalf("Guest material-agent exited before network join: stage=%s category=%s bootstrap_ms=%d exit=%v", stage, category, bootstrapMS, done.err)
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -283,8 +286,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
+			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent exited before listeners: stage=%s category=%s exit=%v", stage, category, done.err)
+			t.Fatalf("Guest material-agent exited before listeners: stage=%s category=%s bootstrap_ms=%d exit=%v", stage, category, bootstrapMS, done.err)
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
@@ -294,8 +298,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
+			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent listener timeout: state=%q stage=%s category=%s exit=%v", strings.TrimSpace(string(state)), stage, category, done.err)
+			t.Fatalf("Guest material-agent listener timeout: state=%q stage=%s category=%s bootstrap_ms=%d exit=%v", strings.TrimSpace(string(state)), stage, category, bootstrapMS, done.err)
 		default:
 			t.Fatalf("Guest material-agent listener timeout: state=%q attached start still pending", strings.TrimSpace(string(state)))
 		}
@@ -392,6 +397,12 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 // The only surfaced error detail is a fixed, reviewed category. Captured
 // process output may contain sensitive arguments and is never logged raw.
 func slice6MaterialFailureCategory(output []byte) string {
+	for _, category := range []string{"authority", "signer-unavailable", "context-ended", "chain", "leaf",
+		"signer-identity", "signer-challenge", "issuer", "deadline", "other"} {
+		if bytes.Contains(output, []byte("vault-mtls-signer-bootstrap-"+category+":")) {
+			return "signer-bootstrap/" + category
+		}
+	}
 	for _, category := range []string{"profile", "identity", "dependency", "endpoint", "bridge", "edge",
 		"signer-binding", "server-anchor", "client-anchor", "server-anchor-bytes",
 		"client-anchor-bytes", "anchor-roots", "signer-socket", "signer-bootstrap"} {
@@ -400,4 +411,103 @@ func slice6MaterialFailureCategory(output []byte) string {
 		}
 	}
 	return "unclassified"
+}
+
+func slice6MaterialBootstrapMillis(output []byte) int64 {
+	marker := []byte("bootstrap_ms=")
+	index := bytes.Index(output, marker)
+	if index < 0 {
+		return -1
+	}
+	remaining := output[index+len(marker):]
+	end := bytes.IndexByte(remaining, ':')
+	if end < 1 || end > 6 {
+		return -1
+	}
+	value, err := strconv.ParseInt(string(remaining[:end]), 10, 64)
+	if err != nil || value < 0 || value > 120000 {
+		return -1
+	}
+	return value
+}
+
+func TestSlice6MaterialFailureClassificationIsFinite(t *testing.T) {
+	output := []byte("secret/private/path stage vault-mtls: vault-mtls-signer-bootstrap-leaf: bootstrap_ms=1234: unavailable")
+	if category := slice6MaterialFailureCategory(output); category != "signer-bootstrap/leaf" ||
+		slice6MaterialBootstrapMillis(output) != 1234 {
+		t.Fatalf("fixed failure classification drift: %q", category)
+	}
+	if category := slice6MaterialFailureCategory([]byte("vault-mtls-secret/private/path: unavailable")); category != "unclassified" {
+		t.Fatalf("unreviewed failure category leaked: %q", category)
+	}
+}
+
+var slice6GuestSignerProbePattern = regexp.MustCompile(`^signer_probe=(ok|input|identity|socket|snapshot|certificate|key|sign) snapshot_ms=(-1|[0-9]{1,6}) certificate_ms=(-1|[0-9]{1,6}) sign_ms=(-1|[0-9]{1,6})\n$`)
+
+func rootForSlice6GuestProbe(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func slice6ProbeGuestSignerAsMaterialAgent(t *testing.T, ctx context.Context, run slice6DockerRun,
+	agent phase6security.Principal, binding phase6security.TLSAgentBinding, volume, root string) {
+	t.Helper()
+	if volume == "" || binding.SubjectUID != agent.UID || binding.SubjectGID != agent.GID {
+		t.Fatal("Guest signer diagnostic has no source-bound socket identity")
+	}
+	directory, err := os.MkdirTemp(".", ".sr-guest-signer-observer-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(directory); err != nil {
+			t.Errorf("remove exact Guest signer observer build: %v", err)
+		}
+	})
+	binary, err := filepath.Abs(filepath.Join(directory, "observer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+		"-ldflags=-buildid=", "-o", binary, "./productphase6gate/testdata/guestsignerobserver")
+	build.Dir = root
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local", "GOFLAGS=")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build fixed Guest signer observer: %v: %.256s", err, output)
+	}
+	request, err := json.Marshal(struct {
+		SocketPath string `json:"socket_path"`
+		SignerUID  uint32 `json:"signer_uid"`
+		SignerGID  uint32 `json:"signer_gid"`
+		SubjectUID uint32 `json:"subject_uid"`
+		SubjectGID uint32 `json:"subject_gid"`
+	}{binding.SocketPath, binding.AgentUID, binding.AgentGID, binding.SubjectUID, binding.SubjectGID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(request)
+	command := exec.CommandContext(ctx, "docker", "run", "--rm", "-i", "--pull=never",
+		"--name", "sr-p6-guest-signer-observe-"+run.id, "--label", run.label(), "--network=none",
+		"--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID), "--read-only", "--cap-drop=ALL",
+		"--security-opt", "no-new-privileges:true", "--memory=64m", "--cpus=0.2", "--pids-limit=16",
+		"--mount", "type=volume,src="+volume+",dst="+binding.SocketDirectory+",readonly",
+		"--mount", "type=bind,src="+binary+",dst=/observer,readonly",
+		"--entrypoint=/observer", agent.ImageReference)
+	command.Stdin = bytes.NewReader(request)
+	output, probeErr := command.CombinedOutput()
+	if len(output) > 256 || !slice6GuestSignerProbePattern.Match(output) {
+		t.Fatal("Guest signer diagnostic returned noncanonical or oversized output")
+	}
+	if probeErr != nil {
+		t.Logf("NON-RELEASE Guest signer same-UID/GID diagnostic: %s", strings.TrimSpace(string(output)))
+		return
+	}
+	if !bytes.HasPrefix(output, []byte("signer_probe=ok ")) {
+		t.Fatal("Guest signer diagnostic exited successfully without a complete round trip")
+	}
+	t.Logf("Guest signer same-UID/GID snapshot/certificate/challenge round trip: %s", strings.TrimSpace(string(output)))
 }

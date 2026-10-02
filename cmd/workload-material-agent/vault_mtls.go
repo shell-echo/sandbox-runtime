@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +20,43 @@ import (
 
 func vaultMTLSUnavailable(category string) error {
 	return fmt.Errorf("vault-mtls-%s: %w", category, secretref.ErrUnavailable)
+}
+
+func vaultMTLSBootstrapUnavailable(category string, elapsed time.Duration) error {
+	return fmt.Errorf("vault-mtls-signer-bootstrap-%s: bootstrap_ms=%d: %w",
+		category, elapsed.Milliseconds(), secretref.ErrUnavailable)
+}
+
+// remotetls intentionally returns no credential bytes or endpoints in these
+// errors. Preserve only a fixed reason category at the process boundary.
+func vaultMTLSBootstrapCategory(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+	switch err.Error() {
+	case "invalid live TLS client authority":
+		return "authority"
+	case "live TLS signer is unavailable":
+		return "signer-unavailable"
+	case "live TLS context ended":
+		return "context-ended"
+	case "live TLS chain or signer is missing", "live TLS chain is invalid", "live TLS chain differs from verified chain":
+		return "chain"
+	case "live TLS leaf is invalid":
+		return "leaf"
+	case "live TLS key is not a signer", "live TLS signer public key is invalid",
+		"live TLS signer does not match certificate", "live TLS signer key type is invalid":
+		return "signer-identity"
+	case "live TLS signer challenge is unavailable", "live TLS signer challenge failed":
+		return "signer-challenge"
+	case "live TLS issuer is not pinned":
+		return "issuer"
+	default:
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "deadline"
+		}
+		return "other"
+	}
 }
 
 // A v2 material agent has no server-only Vault fallback. Its own client leaf
@@ -136,6 +175,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 	if err != nil {
 		return nil, vaultMTLSUnavailable("signer-socket")
 	}
+	bootstrapStarted := time.Now()
 	transportTLS, err := remotetls.NewClient(remotetls.ClientOptions{
 		IssuerRoots: clientRoots, ServerRoots: serverRoots, ServerName: config.VaultServerName,
 		Identity: remotetls.Identity{URI: subject.TLS.URI, DNSNames: subject.TLS.DNSNames,
@@ -145,7 +185,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		Source: agent.CertificateForHandshake, Now: time.Now,
 	})
 	if err != nil {
-		return nil, vaultMTLSUnavailable("signer-bootstrap")
+		return nil, vaultMTLSBootstrapUnavailable(vaultMTLSBootstrapCategory(err), time.Since(bootstrapStarted))
 	}
 	transport := &http.Transport{TLSClientConfig: transportTLS, DisableKeepAlives: true,
 		TLSHandshakeTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second,
