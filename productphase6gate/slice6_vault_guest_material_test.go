@@ -28,7 +28,7 @@ const slice6GuestMaterialEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_MATERIAL"
 // path and exercises an actual scoped token. A live material agent and Guest
 // consumer are separate, still-missing release observations.
 func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slice6DockerRun,
-	serverID, configDir string, profile phase6security.Profile) {
+	serverID, configDir string, profile phase6security.Profile) string {
 	t.Helper()
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil {
@@ -174,6 +174,7 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 	}
 	publicDigest := sha256.Sum256(public)
 	t.Logf("real run-owned Guest Ed25519 key stored in KVv2 version 1; exact scoped read, cross-owner denial and bootstrap token revocation/readback passed; public key sha256:%x; no material agent or Guest consumer launched", publicDigest)
+	return "sha256:" + hex.EncodeToString(publicDigest[:])
 }
 
 func slice6VaultRevokeGuestScopedToken(ctx context.Context, run slice6DockerRun,

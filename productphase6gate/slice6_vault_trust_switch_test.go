@@ -370,6 +370,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string
 		var guestSocketVolumes map[string]string
+		var guestPublicKeyDigest string
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
@@ -397,7 +398,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			management := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
 			defer clear(management.Token)
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
-				slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
+				guestPublicKeyDigest = slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
 				guestTLSConfig, configErr := slice6BuildGuestTLSAgentConfig(composed)
 				if configErr != nil {
 					t.Fatalf("same-run Guest TLS-agent startup input failed: %v", configErr)
@@ -457,7 +458,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							var onManagedReady func()
 							if os.Getenv(slice6GuestMaterialEnv) == "1" {
 								onManagedReady = func() {
-									slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, nil)
+									slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
+										slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+											guestPublicKeyDigest, guestSocketVolumes, anchorFiles)
+									})
 								}
 							}
 							if terminalOperator != nil {
