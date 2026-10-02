@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"time"
 
@@ -25,18 +24,8 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		profile.ProfileDigest != v2.SecurityProfileDigest ||
 		phase6security.VerifySlice6PrivateConfigPath(profile, config.CredentialAgentID,
 			phase6security.Slice6ProfileConfigFile, v2.SecurityProfilePath) != nil ||
-		config.Protocol != configProtocolV2 || len(config.VaultCABundle) != 0 ||
-		uint32(os.Getuid()) != config.SocketUID || uint32(os.Getgid()) != config.SocketGID {
+		config.Protocol != configProtocolV2 || len(config.VaultCABundle) != 0 {
 		return nil, secretref.ErrUnavailable
-	}
-	groups, err := os.Getgroups()
-	if err != nil {
-		return nil, secretref.ErrUnavailable
-	}
-	for _, group := range groups {
-		if uint32(group) != config.SocketGID {
-			return nil, secretref.ErrUnavailable
-		}
 	}
 	var subject phase6security.Principal
 	var vault phase6security.ExternalService
@@ -50,8 +39,9 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 			vault = service
 		}
 	}
-	if subject.Kind != "material_agent" || subject.TLS == nil || subject.UID != config.SocketUID ||
-		subject.GID != config.SocketGID || vault.Name != "vault" || len(vault.DNSNames) != 1 ||
+	if !validV2MaterialProcessIdentity(observeV2MaterialProcessIdentity(), subject, config) ||
+		!validV2MaterialSocketInProfile(profile, config) || subject.TLS == nil ||
+		vault.Name != "vault" || len(vault.DNSNames) != 1 ||
 		config.VaultServerName != vault.DNSNames[0] {
 		return nil, secretref.ErrUnavailable
 	}
@@ -108,9 +98,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		return nil, secretref.ErrUnavailable
 	}
 	binding, signer, material, err := profile.TLSAgentForSubject(subject.Name)
-	if err != nil || signer.Name != subject.Name+"-tls-agent" || material.PrincipalDigest != subject.PrincipalDigest ||
-		v2.VaultTLSAgentSocket != binding.SocketPath || v2.VaultTLSAgentUID != binding.AgentUID ||
-		v2.VaultTLSAgentGID != binding.AgentGID || signer.UID != binding.AgentUID || signer.GID != binding.AgentGID {
+	if err != nil || !validV2VaultSignerBinding(binding, signer, material, subject, v2) {
 		return nil, secretref.ErrUnavailable
 	}
 	serverAnchor, _, err := profile.EdgeTrustAnchors(dependency.EdgeID)
@@ -158,4 +146,16 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		TLSHandshakeTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second,
 		DialContext:         (&net.Dialer{Timeout: time.Duration(config.OperationTimeoutSeconds) * time.Second}).DialContext}
 	return &http.Client{Transport: transport, Timeout: time.Duration(config.OperationTimeoutSeconds) * time.Second}, nil
+}
+
+func validV2VaultSignerBinding(binding phase6security.TLSAgentBinding, signer, material,
+	subject phase6security.Principal, v2 configDocumentV2) bool {
+	return signer.Name == subject.Name+"-tls-agent" && binding.AgentDeployment == signer.Name &&
+		binding.SubjectDeployment == subject.Name && material.Name == subject.Name &&
+		material.PrincipalDigest == subject.PrincipalDigest &&
+		binding.AgentPrincipalDigest == signer.PrincipalDigest &&
+		binding.SubjectPrincipalDigest == subject.PrincipalDigest &&
+		binding.SubjectUID == subject.UID && binding.SubjectGID == subject.GID &&
+		v2.VaultTLSAgentSocket == binding.SocketPath && v2.VaultTLSAgentUID == binding.AgentUID &&
+		v2.VaultTLSAgentGID == binding.AgentGID && signer.UID == binding.AgentUID && signer.GID == binding.AgentGID
 }

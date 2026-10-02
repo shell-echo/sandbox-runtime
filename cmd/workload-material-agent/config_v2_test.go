@@ -113,6 +113,99 @@ func TestV2MaterialSocketConfigRequiresDistinctOwnerAndAgent(t *testing.T) {
 			}
 		})
 	}
+	profile := phase6security.Profile{MaterialSockets: []phase6security.Slice6MaterialSocketBinding{binding}}
+	if !validV2MaterialSocketInProfile(profile, config) {
+		t.Fatal("unique material socket binding rejected")
+	}
+	profile.MaterialSockets = append(profile.MaterialSockets, binding)
+	if validV2MaterialSocketInProfile(profile, config) {
+		t.Fatal("duplicate material socket binding admitted")
+	}
+}
+
+func TestV2MaterialProcessIdentityUsesAgentGIDBeforeCredentialIssue(t *testing.T) {
+	subject := phase6security.Principal{Name: "guest-agent", Kind: "material_agent", UID: 20021, GID: 30021}
+	config := configDocument{CredentialAgentID: subject.Name, SocketUID: subject.UID, SocketGID: 30022}
+	valid := &v2MaterialProcessIdentity{uid: subject.UID, gid: subject.GID}
+	if !validV2MaterialProcessIdentity(valid, subject, config) ||
+		!validV2MaterialProcessIdentity(&v2MaterialProcessIdentity{uid: subject.UID, gid: subject.GID,
+			supplementary: []uint32{subject.GID}}, subject, config) {
+		t.Fatal("agent identity with distinct consumer directory group rejected")
+	}
+	for name, mutate := range map[string]func(**v2MaterialProcessIdentity, *phase6security.Principal, *configDocument){
+		"getgroups failed": func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) { *i = nil },
+		"primary uid":      func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) { (*i).uid++ },
+		"primary gid":      func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) { (*i).gid++ },
+		"consumer supplementary group": func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) {
+			(*i).supplementary = []uint32{30022}
+		},
+		"operator supplementary group": func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) {
+			(*i).supplementary = []uint32{subject.GID, 30091}
+		},
+		"root supplementary group": func(i **v2MaterialProcessIdentity, _ *phase6security.Principal, _ *configDocument) {
+			(*i).supplementary = []uint32{0}
+		},
+		"directory group substituted": func(_ **v2MaterialProcessIdentity, _ *phase6security.Principal, c *configDocument) {
+			c.SocketGID = subject.GID
+		},
+		"socket uid substituted": func(_ **v2MaterialProcessIdentity, _ *phase6security.Principal, c *configDocument) {
+			c.SocketUID++
+		},
+		"subject substituted": func(_ **v2MaterialProcessIdentity, p *phase6security.Principal, _ *configDocument) {
+			p.Name = "gateway-agent"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			identityCopy, subjectCopy, configCopy := *valid, subject, config
+			identity := &identityCopy
+			mutate(&identity, &subjectCopy, &configCopy)
+			if validV2MaterialProcessIdentity(identity, subjectCopy, configCopy) {
+				t.Fatal("v2 material process identity substitution admitted")
+			}
+		})
+	}
+}
+
+func TestV2VaultSignerBindingRejectsSubstitution(t *testing.T) {
+	subject := phase6security.Principal{Name: "guest-agent", UID: 20021, GID: 30021,
+		PrincipalDigest: "sha256:subject"}
+	signer := phase6security.Principal{Name: "guest-agent-tls-agent", UID: 20022, GID: 30022,
+		PrincipalDigest: "sha256:signer"}
+	binding := phase6security.TLSAgentBinding{AgentDeployment: signer.Name,
+		AgentPrincipalDigest: signer.PrincipalDigest, SubjectDeployment: subject.Name,
+		SubjectPrincipalDigest: subject.PrincipalDigest, AgentUID: signer.UID, AgentGID: signer.GID,
+		SubjectUID: subject.UID, SubjectGID: subject.GID,
+		SocketPath: "/run/phase6/tls/guest-agent/signer.sock"}
+	v2 := configDocumentV2{VaultTLSAgentSocket: binding.SocketPath,
+		VaultTLSAgentUID: signer.UID, VaultTLSAgentGID: signer.GID}
+	if !validV2VaultSignerBinding(binding, signer, subject, subject, v2) {
+		t.Fatal("exact Vault signer and subject binding rejected")
+	}
+	for name, mutate := range map[string]func(*phase6security.TLSAgentBinding, *phase6security.Principal, *phase6security.Principal, *configDocumentV2){
+		"signer name": func(_ *phase6security.TLSAgentBinding, s, _ *phase6security.Principal, _ *configDocumentV2) {
+			s.Name = "other-tls-agent"
+		},
+		"signer uid":  func(_ *phase6security.TLSAgentBinding, s, _ *phase6security.Principal, _ *configDocumentV2) { s.UID++ },
+		"signer gid":  func(_ *phase6security.TLSAgentBinding, s, _ *phase6security.Principal, _ *configDocumentV2) { s.GID++ },
+		"subject gid": func(_ *phase6security.TLSAgentBinding, _, p *phase6security.Principal, _ *configDocumentV2) { p.GID++ },
+		"signer socket": func(_ *phase6security.TLSAgentBinding, _, _ *phase6security.Principal, c *configDocumentV2) {
+			c.VaultTLSAgentSocket += "-other"
+		},
+		"signer config gid": func(_ *phase6security.TLSAgentBinding, _, _ *phase6security.Principal, c *configDocumentV2) {
+			c.VaultTLSAgentGID++
+		},
+		"subject digest": func(b *phase6security.TLSAgentBinding, _, _ *phase6security.Principal, _ *configDocumentV2) {
+			b.SubjectPrincipalDigest = "other"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bindingCopy, signerCopy, subjectCopy, configCopy := binding, signer, subject, v2
+			mutate(&bindingCopy, &signerCopy, &subjectCopy, &configCopy)
+			if validV2VaultSignerBinding(bindingCopy, signerCopy, subjectCopy, subjectCopy, configCopy) {
+				t.Fatal("substituted Vault signer or subject admitted")
+			}
+		})
+	}
 }
 
 func TestV2BreakGlassConfigBindsBothAgentDirections(t *testing.T) {

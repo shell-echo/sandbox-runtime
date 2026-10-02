@@ -17,6 +17,44 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadcredentialv2"
 )
 
+type v2MaterialProcessIdentity struct {
+	uid, gid      uint32
+	supplementary []uint32
+}
+
+func observeV2MaterialProcessIdentity() *v2MaterialProcessIdentity {
+	groups, err := os.Getgroups()
+	if err != nil {
+		return nil
+	}
+	identity := &v2MaterialProcessIdentity{uid: uint32(os.Getuid()), gid: uint32(os.Getgid()),
+		supplementary: make([]uint32, 0, len(groups))}
+	for _, group := range groups {
+		if group < 0 {
+			return nil
+		}
+		identity.supplementary = append(identity.supplementary, uint32(group))
+	}
+	return identity
+}
+
+// The material socket directory group belongs to the consumer, while the
+// process and its permitted supplementary groups belong only to the agent.
+func validV2MaterialProcessIdentity(identity *v2MaterialProcessIdentity,
+	subject phase6security.Principal, config configDocument) bool {
+	if identity == nil || subject.Name != config.CredentialAgentID || subject.Kind != "material_agent" ||
+		subject.UID == 0 || subject.GID == 0 || config.SocketUID != subject.UID ||
+		config.SocketGID == subject.GID || identity.uid != subject.UID || identity.gid != subject.GID {
+		return false
+	}
+	for _, group := range identity.supplementary {
+		if group != subject.GID {
+			return false
+		}
+	}
+	return true
+}
+
 func decodeCanonicalConfig(document []byte, destination any) error {
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()
@@ -78,8 +116,7 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		}
 	}
 	if agent == nil || controller == nil || agent.AuthorizationPrincipal == nil ||
-		agent.Kind != "material_agent" || agent.UID != config.SocketUID ||
-		uint32(os.Getuid()) != agent.UID || uint32(os.Getgid()) != agent.GID ||
+		agent.Kind != "material_agent" || !validV2MaterialProcessIdentity(observeV2MaterialProcessIdentity(), *agent, config) ||
 		agent.AuthorizationPrincipal.Kind != securityprincipal.KindMaterialAgent ||
 		secretref.Role(agent.AuthorizationPrincipal.Role) != config.Role ||
 		controller.UID != config.CredentialControllerUID || controller.GID != config.CredentialControllerGID ||
@@ -106,18 +143,7 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	if !accessBound {
 		return nil, secretref.ErrUnavailable
 	}
-	materialSocketBound := false
-	for _, materialSocket := range profile.MaterialSockets {
-		if materialSocket.AgentDeployment != agent.Name {
-			continue
-		}
-		if !validV2MaterialSocketConfig(materialSocket, config) {
-			return nil, secretref.ErrUnavailable
-		}
-		materialSocketBound = true
-		break
-	}
-	if !materialSocketBound {
+	if !validV2MaterialSocketInProfile(profile, config) {
 		return nil, secretref.ErrUnavailable
 	}
 	if !validV2BreakGlassConfig(profile, config, *v2) ||
@@ -156,6 +182,20 @@ func validV2MaterialSocketConfig(binding phase6security.Slice6MaterialSocketBind
 		config.ExpectedClientUID == binding.OwnerUID && config.ExpectedClientGID == binding.OwnerGID &&
 		config.MaxConnections == binding.MaxConnections &&
 		config.OperationTimeoutSeconds >= 1 && config.OperationTimeoutSeconds <= binding.MaxOperationSeconds
+}
+
+func validV2MaterialSocketInProfile(profile phase6security.Profile, config configDocument) bool {
+	found := false
+	for _, binding := range profile.MaterialSockets {
+		if binding.AgentDeployment != config.CredentialAgentID {
+			continue
+		}
+		if found || !validV2MaterialSocketConfig(binding, config) {
+			return false
+		}
+		found = true
+	}
+	return found
 }
 
 func validV2BreakGlassConfig(profile phase6security.Profile, config configDocument, v2 configDocumentV2) bool {

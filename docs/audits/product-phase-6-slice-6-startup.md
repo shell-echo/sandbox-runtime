@@ -3891,3 +3891,24 @@ an immutable Slice 6 manifest remain unproved. This is component evidence;
 Phase 6 stays **5/15**. The complete repository race/shuffle suite, ordinary
 and Slice 6 tagged vet, tagged gate compilation, Product Contract lock
 verification and diff check passed at this checkpoint.
+
+Checkpoint 2026-10-02 (material-agent v2 GID correction, component scope):
+reviewing the pending real Guest target revealed a deterministic contradiction:
+the Profile binds the material socket directory to the consumer's GID and
+requires it to differ from the agent's GID, while the v2 Vault mTLS client
+compared that directory GID to the agent process/subject GID. Sandbox confirmed
+this as an implementation defect, not a reason to weaken identity isolation.
+The v2 material agent now checks its actual primary UID/GID and all
+supplementary groups against the Profile's agent identity before first
+credential issuance, and repeats that rule before Vault client construction.
+It separately verifies the exact material socket's consumer directory GID and
+the TLS signer binding; v1 remains unchanged. Focused race/shuffle and
+negative tests cover distinct agent/consumer groups, wrong primary identity,
+extra owner/operator/root groups, source drift and signer substitution; the
+existing real Linux cross-UID/GID material socket gate passes. The R1 role
+images used above predate this correction and cannot serve as final Slice 6
+candidate artifacts. The actual Guest material-agent Vault mTLS/material
+service process, delivery/consume chain and final gate still need a rebuilt
+clean-source candidate and live observations. The complete repository
+race/shuffle suite, ordinary vet, Product Contract lock verifier and diff
+check passed after the code correction. Phase 6 remains **5/15**.

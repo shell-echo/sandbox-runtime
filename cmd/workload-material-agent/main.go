@@ -35,9 +35,11 @@ const (
 )
 
 type configDocument struct {
-	Protocol                   string              `json:"protocol"`
-	SocketPath                 string              `json:"socket_path"`
-	SocketUID                  uint32              `json:"socket_uid"`
+	Protocol   string `json:"protocol"`
+	SocketPath string `json:"socket_path"`
+	SocketUID  uint32 `json:"socket_uid"`
+	// In v2 this is the material socket directory's consumer GID, not the
+	// agent process GID. The historical v1 configuration remains unchanged.
 	SocketGID                  uint32              `json:"socket_gid"`
 	ExpectedClientUID          uint32              `json:"expected_client_uid"`
 	ExpectedClientGID          uint32              `json:"expected_client_gid"`
