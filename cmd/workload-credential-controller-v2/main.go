@@ -269,8 +269,8 @@ func run() (runErr error) {
 	vaultPair, err := workloadtlsagent.ValidateBootstrapCertificate(config.VaultClientCertificatePEM, vaultKey,
 		bootstrapRoots, managedPolicy, time.Now().UTC())
 	if err != nil || vaultPair.Leaf == nil ||
-		vaultPair.Leaf.NotAfter.Sub(vaultPair.Leaf.NotBefore) > time.Duration(config.ManagedVaultTLS.CertificateTTLSeconds)*time.Second ||
-		time.Until(vaultPair.Leaf.NotAfter) <= time.Duration(config.OperationTimeoutSeconds)*time.Second {
+		!workloadtlsagent.BootstrapWithinProfileLifetime(vaultPair.Leaf, managedPolicy.MaxTTLSeconds,
+			time.Duration(config.OperationTimeoutSeconds)*time.Second, time.Now()) {
 		workloadtlsagent.DestroyTLSCertificate(&vaultPair)
 		return stageError("vault-bootstrap-certificate")
 	}

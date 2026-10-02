@@ -31,7 +31,7 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 		AuthorizationPrincipal: &subjectIdentity, TLS: &phase6security.TLSIdentity{TrustDomain: "sandbox.test", URI: "spiffe://sandbox.test/product",
 			DNSNames: []string{"product.sandbox.test"}, Usages: []string{"client_auth", "server_auth"}, TTLSeconds: 600,
 			RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10}}
-	config := configDocument{SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
+	config := configDocument{Protocol: peerCRLConfigProtocol, SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
 		ProfileDigest: profile.PrincipalProfileDigest, AgentDeployment: binding.AgentDeployment, SubjectDeployment: binding.SubjectDeployment,
 		Requester: requester, Subject: subjectIdentity, PolicyID: binding.IssuerPolicyID, VaultRole: binding.IssuerVaultRole,
 		AgentRequestKeyID: binding.AgentRequestKeyID, AgentPublicKey: base64.RawURLEncoding.EncodeToString(requestPublic),
@@ -42,10 +42,20 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 		SignerSocket: binding.SocketPath, SignerSocketUID: binding.AgentUID, SignerSocketGID: binding.SubjectGID,
 		TrustDomain: subject.TLS.TrustDomain, URI: subject.TLS.URI, DNSNames: append([]string(nil), subject.TLS.DNSNames...),
 		Usages: append([]string(nil), subject.TLS.Usages...), MaxTTLSeconds: subject.TLS.TTLSeconds,
-		CertificateTTLSeconds: int(subject.TLS.TTLSeconds), RotateAfterSeconds: int(subject.TLS.RotateAfterSeconds),
+		CertificateTTLSeconds: 569, RotateAfterSeconds: int(subject.TLS.RotateAfterSeconds),
 		OverlapSeconds: int(subject.TLS.OverlapSeconds), RevocationMaxStalenessSeconds: int(subject.TLS.RevocationMaxStalenessSeconds)}
 	if !matchesProfileBinding(profile, binding, agent, subject, config) {
 		t.Fatal("exact profile binding rejected")
+	}
+	legacy := config
+	legacy.Protocol = configProtocol
+	legacy.CertificateTTLSeconds = int(subject.TLS.TTLSeconds)
+	if !matchesProfileBinding(profile, binding, agent, subject, legacy) {
+		t.Fatal("historical v2 binding rejected")
+	}
+	legacy.CertificateTTLSeconds = config.CertificateTTLSeconds
+	if matchesProfileBinding(profile, binding, agent, subject, legacy) {
+		t.Fatal("historical v2 request lifetime silently changed")
 	}
 	for name, change := range map[string]func(*configDocument){
 		"profile":       func(c *configDocument) { c.SecurityProfileDigest = "other" },
@@ -70,6 +80,7 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 		"DNS SAN":           func(c *configDocument) { c.DNSNames = nil },
 		"EKU":               func(c *configDocument) { c.Usages = []string{"client_auth"} },
 		"TTL":               func(c *configDocument) { c.CertificateTTLSeconds++ },
+		"old request TTL":   func(c *configDocument) { c.CertificateTTLSeconds = int(subject.TLS.TTLSeconds) },
 		"rotation":          func(c *configDocument) { c.RotateAfterSeconds++ },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -121,11 +132,16 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 		AgentUID:                    base.AgentUID, AgentGID: base.AgentGID, ExpectedRoleUID: base.SubjectUID, ExpectedRoleGID: base.SubjectGID,
 		SignerSocket: base.SocketPath, SignerSocketUID: base.AgentUID, SignerSocketGID: base.SubjectGID,
 		TrustDomain: owner.TLS.TrustDomain, URI: owner.TLS.URI, Usages: []string{"client_auth"},
-		MaxTTLSeconds: owner.TLS.TTLSeconds, CertificateTTLSeconds: int(owner.TLS.TTLSeconds),
+		MaxTTLSeconds: owner.TLS.TTLSeconds, CertificateTTLSeconds: 569,
 		RotateAfterSeconds: int(owner.TLS.RotateAfterSeconds), OverlapSeconds: int(owner.TLS.OverlapSeconds),
 		RevocationMaxStalenessSeconds: int(owner.TLS.RevocationMaxStalenessSeconds)}
 	if !matchesPostgresProfileBinding(profile, binding, target, agent, owner, config) {
 		t.Fatal("exact PostgreSQL certificate agent config rejected")
+	}
+	oldRequest := config
+	oldRequest.CertificateTTLSeconds = int(owner.TLS.TTLSeconds)
+	if matchesPostgresProfileBinding(profile, binding, target, agent, owner, oldRequest) {
+		t.Fatal("PostgreSQL v4 accepted pre-backdate request lifetime")
 	}
 	for name, change := range map[string]func(*configDocument){
 		"database":         func(c *configDocument) { c.Postgres.DatabaseName = "provider_desktop" },

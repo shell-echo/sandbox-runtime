@@ -38,9 +38,17 @@ func validateProfileConfig(profile phase6security.Profile, config configDocument
 			certificate = principal
 		}
 	}
+	if credential.TLS == nil {
+		return false
+	}
+	expectedTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(credential.TLS.TTLSeconds,
+		credential.TLS.RotateAfterSeconds)
+	if err != nil {
+		return false
+	}
 	if credential.AuthorizationPrincipal == nil || credential.TLS == nil || certificate.AuthorizationPrincipal == nil ||
 		uint32(os.Getuid()) != credential.UID || uint32(os.Getgid()) != credential.GID ||
-		int64(config.ManagedVaultTLS.CertificateTTLSeconds) != credential.TLS.TTLSeconds ||
+		int64(config.ManagedVaultTLS.CertificateTTLSeconds) != expectedTTL ||
 		int64(config.ManagedVaultTLS.RotateAfterSeconds) != credential.TLS.RotateAfterSeconds ||
 		int64(config.ManagedVaultTLS.OverlapSeconds) != credential.TLS.OverlapSeconds ||
 		int64(config.ManagedVaultTLS.RevocationMaxStalenessSeconds) != credential.TLS.RevocationMaxStalenessSeconds {

@@ -297,8 +297,18 @@ func matchesPostgresProfileBinding(profile phase6security.Profile, binding phase
 func matchesProfileBinding(profile phase6security.Profile, binding phase6security.TLSAgentBinding,
 	agent, subject phase6security.Principal, config configDocument) bool {
 	if config.SecurityProfileDigest != profile.ProfileDigest || config.EnvironmentDigest != profile.EnvironmentDigest ||
-		config.ProfileDigest != profile.PrincipalProfileDigest || config.AgentDeployment == "" || config.SubjectDeployment == "" {
+		config.ProfileDigest != profile.PrincipalProfileDigest || config.AgentDeployment == "" || config.SubjectDeployment == "" ||
+		subject.TLS == nil {
 		return false
+	}
+	expectedTTL := subject.TLS.TTLSeconds
+	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
+		var err error
+		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
+			subject.TLS.RotateAfterSeconds)
+		if err != nil {
+			return false
+		}
 	}
 	controllerPublic, controllerErr := base64.RawURLEncoding.DecodeString(config.CertificateControllerPublic)
 	requestPublic, requestErr := base64.RawURLEncoding.DecodeString(config.AgentPublicKey)
@@ -324,7 +334,7 @@ func matchesProfileBinding(profile phase6security.Profile, binding phase6securit
 		config.SignerSocketGID != binding.SubjectGID || config.TrustDomain != subject.TLS.TrustDomain ||
 		config.URI != subject.TLS.URI || !slices.Equal(config.DNSNames, subject.TLS.DNSNames) ||
 		!slices.Equal(config.Usages, subject.TLS.Usages) ||
-		config.MaxTTLSeconds != subject.TLS.TTLSeconds || int64(config.CertificateTTLSeconds) != subject.TLS.TTLSeconds ||
+		config.MaxTTLSeconds != subject.TLS.TTLSeconds || int64(config.CertificateTTLSeconds) != expectedTTL ||
 		int64(config.RotateAfterSeconds) != subject.TLS.RotateAfterSeconds || int64(config.OverlapSeconds) != subject.TLS.OverlapSeconds ||
 		int64(config.RevocationMaxStalenessSeconds) != subject.TLS.RevocationMaxStalenessSeconds {
 		return false

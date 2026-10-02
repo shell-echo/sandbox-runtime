@@ -112,6 +112,11 @@ func slice6BuildCredentialControllerConfig(composed slice6VaultComposedInputs, v
 		len(profile.CredentialIssuerSockets) != 12 || controller.UID == 0 || controller.GID == 0 {
 		return nil, errors.New("credential controller principal drift")
 	}
+	requestTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
+		controller.TLS.RotateAfterSeconds)
+	if err != nil {
+		return nil, errors.New("credential controller lifetime budget invalid")
+	}
 	responseKey, err := slice6ReadPrivateSigningKey(composed.CertificateKeys[profile.CertificateController.ResponseKeyID])
 	if err != nil || phase6security.CertificateControllerPublicKeyDigest(responseKey.Public().(ed25519.PublicKey)) !=
 		profile.CertificateController.ResponsePublicKeyDigest {
@@ -139,7 +144,7 @@ func slice6BuildCredentialControllerConfig(composed slice6VaultComposedInputs, v
 		ManagedVaultTLS: slice6CredentialManagedTLS{
 			PolicyID:                      profile.CertificateController.CredentialController.PolicyID,
 			ControllerSocket:              profile.CertificateController.CredentialController.SocketPath,
-			ControllerReadyTimeoutSeconds: 180, CertificateTTLSeconds: int(controller.TLS.TTLSeconds),
+			ControllerReadyTimeoutSeconds: 180, CertificateTTLSeconds: int(requestTTL),
 			RotateAfterSeconds: int(controller.TLS.RotateAfterSeconds), OverlapSeconds: int(controller.TLS.OverlapSeconds),
 			CheckIntervalMilliseconds: 1000, RevocationPollIntervalSeconds: 1,
 			RevocationMaxStalenessSeconds: int(controller.TLS.RevocationMaxStalenessSeconds),
@@ -275,11 +280,11 @@ func slice6VaultSignControllerBootstrap(t *testing.T, ctx context.Context, run s
 			t.Errorf("remove exact controller CSR input: %v", err)
 		}
 	})
-	// Vault backdates NotBefore by the role's audited 30 seconds. The
-	// credential command checks the complete X.509 interval against its
-	// Profile TTL, so leave one additional second for timestamp rounding.
-	bootstrapTTL := principal.TLS.TTLSeconds - 31
-	if bootstrapTTL < 60 {
+	// The bootstrap leaf obeys the same audited backdate budget as a managed
+	// certificate, while its complete X.509 interval remains Profile-bound.
+	bootstrapTTL, budgetErr := phase6security.Slice6ManagedCertificateRequestTTL(principal.TLS.TTLSeconds,
+		principal.TLS.RotateAfterSeconds)
+	if budgetErr != nil {
 		clear(keyPEM)
 		t.Fatal("credential bootstrap TTL cannot fit audited Vault backdate")
 	}

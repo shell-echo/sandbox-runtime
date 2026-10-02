@@ -102,7 +102,7 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 		bareDomain := role.CommonName != "" || len(role.DNSNames) != 0
 		arguments := []string{"write", "pki/roles/" + role.Name,
 			"issuer_ref=" + role.Issuer, "allowed_uri_sans=" + role.URI,
-			"not_before_duration=30s",
+			"not_before_duration=" + strconv.FormatInt(phase6security.Slice6VaultRoleBackdateSeconds, 10) + "s",
 			"basic_constraints_valid_for_non_ca=true",
 			"allow_bare_domains=" + strconv.FormatBool(bareDomain), "allow_subdomains=false", "allow_ip_sans=false",
 			"allow_any_name=false", "allow_localhost=false", "allow_glob_domains=false",
@@ -171,7 +171,8 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 			observed.Data.AllowAnyName || observed.Data.AllowLocalhost || observed.Data.AllowGlobDomains ||
 			observed.Data.AllowWildcards || observed.Data.URITemplate || len(observed.Data.AllowedOtherSANs) != 0 ||
 			observed.Data.ClientFlag != role.Client || observed.Data.ServerFlag != role.Server ||
-			observed.Data.MaxTTL != role.MaxTTLSeconds || observed.Data.NotBeforeDuration != 30 ||
+			observed.Data.MaxTTL != role.MaxTTLSeconds ||
+			observed.Data.NotBeforeDuration != phase6security.Slice6VaultRoleBackdateSeconds ||
 			!observed.Data.BasicConstraintsValidForNonCA {
 			t.Fatalf("installed Vault PKI role %s readback drifted", role.Name)
 		}

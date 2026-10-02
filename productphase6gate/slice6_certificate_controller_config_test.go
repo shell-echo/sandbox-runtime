@@ -136,6 +136,11 @@ func slice6BuildCertificateControllerConfig(composed slice6VaultComposedInputs,
 	if err != nil {
 		return nil, errors.New("certificate principal registry drift")
 	}
+	requestTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
+		controller.TLS.RotateAfterSeconds)
+	if err != nil {
+		return nil, errors.New("certificate controller lifetime budget invalid")
+	}
 	issuerSocket, issuerServer, issuerClient, err := profile.CredentialIssuerSocketForClient(controller.Name)
 	if err != nil || issuerServer.Name != credentialController.Name || issuerClient.Name != controller.Name {
 		return nil, errors.New("certificate credential socket drift")
@@ -158,7 +163,7 @@ func slice6BuildCertificateControllerConfig(composed slice6VaultComposedInputs,
 		ManagedVaultTLS: slice6CertificateManagedTLS{
 			PolicyID:                  profile.CertificateController.ManagedPolicyID,
 			ControllerSocket:          profile.CertificateController.SelfSocketPath,
-			CertificateTTLSeconds:     int(controller.TLS.TTLSeconds),
+			CertificateTTLSeconds:     int(requestTTL),
 			RotateAfterSeconds:        int(controller.TLS.RotateAfterSeconds),
 			OverlapSeconds:            int(controller.TLS.OverlapSeconds),
 			CheckIntervalMilliseconds: 1000, RevocationPollIntervalSeconds: 1,

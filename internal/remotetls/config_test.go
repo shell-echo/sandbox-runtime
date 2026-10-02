@@ -64,6 +64,12 @@ func newTestIssuer(t *testing.T) testIssuer {
 }
 
 func issueTestLeaf(t *testing.T, issuer testIssuer, identity Identity, serial int64) tls.Certificate {
+	now := time.Now()
+	return issueTestLeafWithValidity(t, issuer, identity, serial, now.Add(-time.Minute), now.Add(19*time.Minute))
+}
+
+func issueTestLeafWithValidity(t *testing.T, issuer testIssuer, identity Identity, serial int64,
+	notBefore, notAfter time.Time) tls.Certificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -77,9 +83,8 @@ func issueTestLeaf(t *testing.T, issuer testIssuer, identity Identity, serial in
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
 	template := &x509.Certificate{SerialNumber: big.NewInt(serial), Subject: pkix.Name{},
-		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(19 * time.Minute), BasicConstraintsValid: true,
+		NotBefore: notBefore, NotAfter: notAfter, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: usages,
 		URIs: []*url.URL{uri}, DNSNames: slices.Clone(identity.DNSNames)}
 	raw, err := x509.CreateCertificate(rand.Reader, template, issuer.certificate, &key.PublicKey, issuer.key)
@@ -87,6 +92,22 @@ func issueTestLeaf(t *testing.T, issuer testIssuer, identity Identity, serial in
 		t.Fatal(err)
 	}
 	return tls.Certificate{Certificate: [][]byte{raw, issuer.certificate.Raw}, PrivateKey: key}
+}
+
+func TestBackdatedVaultLeafObeysTotalProfileLifetime(t *testing.T) {
+	issuer := newTestIssuer(t)
+	identity := Identity{URI: testClientURI, Usages: []string{"client_auth"}, MaxTTL: 900 * time.Second}
+	now := time.Now().Truncate(time.Second)
+	valid := issueTestLeafWithValidity(t, issuer, identity, 303, now.Add(-30*time.Second), now.Add(869*time.Second))
+	leaf, err := x509.ParseCertificate(valid.Certificate[0])
+	if err != nil || validateLeaf(leaf, identity, now) != nil {
+		t.Fatal("899-second backdated leaf rejected")
+	}
+	tooLong := issueTestLeafWithValidity(t, issuer, identity, 304, now.Add(-30*time.Second), now.Add(900*time.Second))
+	leaf, err = x509.ParseCertificate(tooLong.Certificate[0])
+	if err != nil || validateLeaf(leaf, identity, now) == nil {
+		t.Fatal("930-second backdated leaf accepted against 900-second Profile ceiling")
+	}
 }
 
 func testIdentities() (Identity, Identity) {

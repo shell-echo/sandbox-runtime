@@ -357,7 +357,9 @@ func run() (runErr error) { //nolint:gocyclo
 		return stageError("managed-vault-tls-policy")
 	}
 	vaultPair, err := workloadtlsagent.ValidateBootstrapCertificate(config.VaultClientCertificatePEM, vaultTLSKey, bootstrapRoots, managedPolicy, time.Now().UTC())
-	if err != nil {
+	if err != nil || !workloadtlsagent.BootstrapWithinProfileLifetime(vaultPair.Leaf, managedPolicy.MaxTTLSeconds,
+		time.Duration(config.OperationTimeoutSeconds)*time.Second, time.Now()) {
+		workloadtlsagent.DestroyTLSCertificate(&vaultPair)
 		return stageError("vault-client-certificate")
 	}
 	defer workloadtlsagent.DestroyTLSCertificate(&vaultPair)
@@ -586,6 +588,18 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 			break
 		}
 	}
+	if controller.TLS == nil {
+		return false
+	}
+	expectedTTL := controller.TLS.TTLSeconds
+	if config.Protocol == peerCRLConfigProtocol {
+		var err error
+		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
+			controller.TLS.RotateAfterSeconds)
+		if err != nil {
+			return false
+		}
+	}
 	if controller.AuthorizationPrincipal == nil || controller.TLS == nil ||
 		uint32(os.Getuid()) != authority.UID || uint32(os.Getgid()) != authority.GID ||
 		config.ControllerKeyID != authority.ResponseKeyID ||
@@ -594,7 +608,7 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		config.Credential.Principal != *controller.AuthorizationPrincipal ||
 		config.ManagedVaultTLS.PolicyID != authority.ManagedPolicyID ||
 		config.ManagedVaultTLS.ControllerSocket != authority.SelfSocketPath ||
-		int64(config.ManagedVaultTLS.CertificateTTLSeconds) != controller.TLS.TTLSeconds ||
+		int64(config.ManagedVaultTLS.CertificateTTLSeconds) != expectedTTL ||
 		int64(config.ManagedVaultTLS.RotateAfterSeconds) != controller.TLS.RotateAfterSeconds ||
 		int64(config.ManagedVaultTLS.OverlapSeconds) != controller.TLS.OverlapSeconds ||
 		int64(config.ManagedVaultTLS.RevocationMaxStalenessSeconds) != controller.TLS.RevocationMaxStalenessSeconds ||

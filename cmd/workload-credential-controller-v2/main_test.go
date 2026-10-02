@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,25 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
+
+func TestManagedBootstrapUsesTotalProfileLifetime(t *testing.T) {
+	now := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	leaf := &x509.Certificate{NotBefore: now.Add(-30 * time.Second), NotAfter: now.Add(869 * time.Second)}
+	if !workloadtlsagent.BootstrapWithinProfileLifetime(leaf, 900, 15*time.Second, now) {
+		t.Fatal("899-second bootstrap rejected against 900-second Profile ceiling")
+	}
+	if workloadtlsagent.BootstrapWithinProfileLifetime(leaf, 869, 15*time.Second, now) {
+		t.Fatal("bootstrap compared against shorter issuance request")
+	}
+	leaf.NotAfter = leaf.NotAfter.Add(2 * time.Second)
+	if workloadtlsagent.BootstrapWithinProfileLifetime(leaf, 900, 15*time.Second, now) {
+		t.Fatal("bootstrap beyond Profile ceiling accepted")
+	}
+	leaf.NotAfter = now.Add(15 * time.Second)
+	if workloadtlsagent.BootstrapWithinProfileLifetime(leaf, 900, 15*time.Second, now) {
+		t.Fatal("bootstrap without operation-time reserve accepted")
+	}
+}
 
 func TestCredentialControllerManagedBindingRejectsPolicyKeyAndPeerDrift(t *testing.T) {
 	if os.Getuid() == 0 || os.Getgid() == 0 {
@@ -49,7 +69,7 @@ func TestCredentialControllerManagedBindingRejectsPolicyKeyAndPeerDrift(t *testi
 	valid := func() configDocument {
 		return configDocument{ControllerKeyID: "controller-key", ManagedVaultTLS: managedTLSConfig{
 			PolicyID: "managed-policy", ControllerSocket: profile.CertificateController.CredentialController.SocketPath,
-			CertificateTTLSeconds: 600, RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10},
+			CertificateTTLSeconds: 569, RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10},
 			Policies: []policyDocument{{ID: "certificate-credential", Principal: certificateIdentity,
 				Purpose: secretref.PurposeWorkloadCredential, BackendPolicy: "certificate-controller-pki",
 				MaxTTLSeconds: 300, Renewable: true, ExpectedUID: certificate.UID, ExpectedGID: certificate.GID}},
@@ -59,6 +79,11 @@ func TestCredentialControllerManagedBindingRejectsPolicyKeyAndPeerDrift(t *testi
 	}
 	if !validateProfileConfig(profile, valid(), requestPublic, controllerPublic) {
 		t.Fatal("exact managed binding rejected")
+	}
+	oldRequest := valid()
+	oldRequest.ManagedVaultTLS.CertificateTTLSeconds = 600
+	if validateProfileConfig(profile, oldRequest, requestPublic, controllerPublic) {
+		t.Fatal("pre-backdate managed request lifetime accepted")
 	}
 	for name, change := range map[string]func(*configDocument){
 		"policy removed":                 func(c *configDocument) { c.Policies = nil },

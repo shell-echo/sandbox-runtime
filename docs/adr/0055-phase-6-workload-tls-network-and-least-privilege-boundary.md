@@ -50,6 +50,26 @@ callbacks. A failed refresh retains an unexpired previous revision only until
 the safety deadline; readiness then closes and new handshakes fail closed.
 Resolved PEM is cleared after parsing.
 
+The Slice 6 Vault PKI role is installed and read back with an exact 30-second
+`not_before_duration`. Vault backdates `NotBefore` without subtracting that
+interval from a caller's requested TTL. The Profile's `TLS.TTLSeconds` and
+issuer policy `MaxTTLSeconds` remain ceilings on the *complete X.509 interval*
+(`NotAfter-NotBefore`), not merely on the issuance request. For the current
+private production TLS-agent v3/v4 and managed controller configurations, the
+request is therefore exactly Profile TTL minus the audited 30-second backdate
+and one conservative second for time granularity (900 becomes 869 seconds).
+The one-second allowance is a safety budget, not a claim about Vault's
+guaranteed rounding. A budget below 60 seconds or one that makes the frozen
+rotation window exceed two thirds of the request fails closed; neither the
+request nor Profile rotation is silently clamped. The credential controller's
+one-shot bootstrap leaf is checked against the bound Profile total-lifetime
+ceiling, not against the shorter managed issuance request, while its exact
+identity, chain, key, usages, current validity and minimum remaining operation
+time checks stay in force. Existing private historical protocol versions keep
+their previous request binding; no Provider Contract, token, credential or
+lease TTL semantics change. A differing operator PKI role backdate makes the
+real role readback fail and cannot become release evidence.
+
 The controller and agents continuously observe authoritative Vault
 revocation state. A revoked serial is rejected on a new handshake immediately,
 and connection registries drain existing connections within the profile's

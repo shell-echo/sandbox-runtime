@@ -155,7 +155,7 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			AgentPublicKey: base64.RawURLEncoding.EncodeToString(public)}
 	}
 	valid := func() configDocument {
-		return configDocument{ControllerKeyID: authority.ResponseKeyID,
+		return configDocument{Protocol: configProtocol, ControllerKeyID: authority.ResponseKeyID,
 			Credential: credentialDocument{Principal: controllerIdentity,
 				SocketPath:  profile.CredentialIssuerSockets[0].SocketPath,
 				ExpectedUID: credential.UID, ExpectedGID: credential.GID,
@@ -196,6 +196,16 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	}
 	if !validateControllerProfileConfig(profile, valid(), responsePublic, managedPublic) {
 		t.Fatal("exact controller/agent inventory rejected")
+	}
+	production := valid()
+	production.Protocol = peerCRLConfigProtocol
+	production.ManagedVaultTLS.CertificateTTLSeconds = 569
+	if !validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
+		t.Fatal("v4 managed request lifetime rejected")
+	}
+	production.ManagedVaultTLS.CertificateTTLSeconds = 600
+	if validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
+		t.Fatal("v4 accepted pre-backdate request lifetime")
 	}
 	for name, change := range map[string]func(*configDocument){
 		"missing broker policy": func(c *configDocument) { c.Policies = c.Policies[:2] },

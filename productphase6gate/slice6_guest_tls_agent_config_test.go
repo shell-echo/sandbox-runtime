@@ -109,6 +109,11 @@ func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte,
 	if policy.Validate() != nil {
 		return nil, errors.New("Guest TLS-agent certificate policy invalid")
 	}
+	requestTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
+		subject.TLS.RotateAfterSeconds)
+	if err != nil {
+		return nil, errors.New("Guest TLS-agent certificate lifetime budget invalid")
+	}
 	config := slice6GuestTLSAgentConfig{
 		Protocol:            "sandbox-runtime.workload-tls-agent-config.v3",
 		SecurityProfilePath: "/run/phase6/config/profile.json", SecurityProfileDigest: profile.ProfileDigest,
@@ -129,7 +134,7 @@ func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte,
 		SignerSocket: binding.SocketPath, SignerSocketUID: binding.AgentUID, SignerSocketGID: binding.SubjectGID,
 		ExpectedRoleUID: binding.SubjectUID, ExpectedRoleGID: binding.SubjectGID,
 		MaxConnections: 16, ReplayCapacity: 128,
-		CertificateTTLSeconds: int(subject.TLS.TTLSeconds),
+		CertificateTTLSeconds: int(requestTTL),
 		RotateAfterSeconds:    int(subject.TLS.RotateAfterSeconds), OverlapSeconds: int(subject.TLS.OverlapSeconds),
 		CheckIntervalMilliseconds: 1000, RevocationPollIntervalSeconds: 1,
 		RevocationMaxStalenessSeconds: int(subject.TLS.RevocationMaxStalenessSeconds),

@@ -113,3 +113,14 @@ func strictPEM(document []byte, expected int, allowed map[string]bool) bool {
 	}
 	return count == expected
 }
+
+// BootstrapWithinProfileLifetime checks the complete X.509 interval after
+// ValidateBootstrapCertificate verifies identity, chain, key and usages. The
+// ceiling is the bound Profile policy, not the shorter managed request TTL.
+func BootstrapWithinProfileLifetime(leaf *x509.Certificate, maxTTLSeconds int64,
+	minimumRemaining time.Duration, now time.Time) bool {
+	return leaf != nil && maxTTLSeconds >= 60 && maxTTLSeconds <= 3600 && minimumRemaining > 0 && !now.IsZero() &&
+		leaf.NotBefore.Before(leaf.NotAfter) && !now.Before(leaf.NotBefore) && now.Before(leaf.NotAfter) &&
+		leaf.NotAfter.Sub(leaf.NotBefore) <= time.Duration(maxTTLSeconds)*time.Second &&
+		leaf.NotAfter.Sub(now) > minimumRemaining
+}

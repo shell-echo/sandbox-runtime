@@ -442,7 +442,7 @@ func TestSlice6MaterialFailureClassificationIsFinite(t *testing.T) {
 	}
 }
 
-var slice6GuestSignerProbePattern = regexp.MustCompile(`^signer_probe=(ok|input|identity|socket|snapshot|certificate|key|sign) snapshot_ms=(-1|[0-9]{1,6}) certificate_ms=(-1|[0-9]{1,6}) sign_ms=(-1|[0-9]{1,6})\n$`)
+var slice6GuestSignerProbePattern = regexp.MustCompile(`^signer_probe=(ok|input|identity|socket|snapshot|certificate|key|sign) snapshot_ms=(-1|[0-9]{1,6}) certificate_ms=(-1|[0-9]{1,6}) sign_ms=(-1|[0-9]{1,6}) leaf_mask=[0-9a-f]{3} duration_ms=(-1|[0-9]{1,9}) max_ttl_ms=(-1|[0-9]{1,9})\n$`)
 
 func rootForSlice6GuestProbe(t *testing.T) string {
 	t.Helper()
@@ -456,7 +456,7 @@ func rootForSlice6GuestProbe(t *testing.T) string {
 func slice6ProbeGuestSignerAsMaterialAgent(t *testing.T, ctx context.Context, run slice6DockerRun,
 	agent phase6security.Principal, binding phase6security.TLSAgentBinding, volume, root string) {
 	t.Helper()
-	if volume == "" || binding.SubjectUID != agent.UID || binding.SubjectGID != agent.GID {
+	if volume == "" || agent.TLS == nil || binding.SubjectUID != agent.UID || binding.SubjectGID != agent.GID {
 		t.Fatal("Guest signer diagnostic has no source-bound socket identity")
 	}
 	directory, err := os.MkdirTemp(".", ".sr-guest-signer-observer-")
@@ -480,12 +480,17 @@ func slice6ProbeGuestSignerAsMaterialAgent(t *testing.T, ctx context.Context, ru
 		t.Fatalf("build fixed Guest signer observer: %v: %.256s", err, output)
 	}
 	request, err := json.Marshal(struct {
-		SocketPath string `json:"socket_path"`
-		SignerUID  uint32 `json:"signer_uid"`
-		SignerGID  uint32 `json:"signer_gid"`
-		SubjectUID uint32 `json:"subject_uid"`
-		SubjectGID uint32 `json:"subject_gid"`
-	}{binding.SocketPath, binding.AgentUID, binding.AgentGID, binding.SubjectUID, binding.SubjectGID})
+		SocketPath    string   `json:"socket_path"`
+		SignerUID     uint32   `json:"signer_uid"`
+		SignerGID     uint32   `json:"signer_gid"`
+		SubjectUID    uint32   `json:"subject_uid"`
+		SubjectGID    uint32   `json:"subject_gid"`
+		ExpectedURI   string   `json:"expected_uri"`
+		ExpectedDNS   []string `json:"expected_dns"`
+		ExpectedUsage []string `json:"expected_usage"`
+		MaxTTLSeconds int64    `json:"max_ttl_seconds"`
+	}{binding.SocketPath, binding.AgentUID, binding.AgentGID, binding.SubjectUID, binding.SubjectGID,
+		agent.TLS.URI, agent.TLS.DNSNames, agent.TLS.Usages, agent.TLS.TTLSeconds})
 	if err != nil {
 		t.Fatal(err)
 	}
