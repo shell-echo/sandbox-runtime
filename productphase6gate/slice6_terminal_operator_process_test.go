@@ -83,6 +83,11 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot 
 	if err != nil || verifyCleanSlice6Source(ctx, sourceRoot, strings.TrimSpace(string(revisionDocument))) != nil {
 		t.Fatal("terminal operator source is not an immutable clean revision")
 	}
+	profileSource, profileErr := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
+	if profileErr != nil || sourceRoot != profileSource ||
+		strings.TrimSpace(string(revisionDocument)) != os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION") {
+		t.Fatal("terminal operator source must be the exact independently clean Profile/candidate source revision")
+	}
 	version, err := exec.CommandContext(ctx, "go", "env", "GOVERSION").Output()
 	if err != nil || string(bytes.TrimSpace(version)) != "go1.26.8" {
 		t.Fatal("terminal operator requires the reviewed Go 1.26.8 toolchain")
@@ -118,21 +123,29 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot 
 func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, vaultID, binaryPath, binaryDigest, managementAccessor string,
 	general slice6VaultRoot, credential *slice6TerminalOperatorCredential,
-	externalPostgres *phase6terminalcleanup.ExternalPostgresRecord) {
+	externalPostgres *phase6terminalcleanup.ExternalPostgresRecord) (resultErr error) {
 	t.Helper()
 	if os.Getenv(slice6TerminalOperatorEnv) != "1" || credential == nil ||
 		!credential.ExpiresAt.After(time.Now().Add(90*time.Second)) ||
 		phase6security.VerifySlice6DesiredFinalExternalProfile(composed.Profile) != nil ||
 		len(vaultID) != 64 || !lowerHexSlice6(vaultID) ||
 		!strings.HasPrefix(binaryDigest, "sha256:") {
-		t.Fatal("terminal operator requires prefrozen live run authority")
+		return errors.New("terminal operator requires prefrozen live run authority")
 	}
-	ctx, cancel := context.WithTimeout(parent, 120*time.Second)
+	if parent == nil {
+		return errors.New("terminal operator parent context unavailable")
+	}
+	// Terminal revocation is independent of canceled business work. It still
+	// has the existing finite budget and short-lived credential expiry.
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	certificateLedger := slice6ReadTerminalLedger(t, ctx, run, composed.Profile, "certificate-controller")
-	credentialLedger := slice6ReadTerminalLedger(t, ctx, run, composed.Profile, "workload-credential-controller")
+	certificateLedger, certificateErr := slice6ReadTerminalLedgerResult(ctx, run, composed.Profile, "certificate-controller")
+	credentialLedger, credentialErr := slice6ReadTerminalLedgerResult(ctx, run, composed.Profile, "workload-credential-controller")
 	defer clear(certificateLedger)
 	defer clear(credentialLedger)
+	if certificateErr != nil || credentialErr != nil {
+		return errors.Join(certificateErr, credentialErr)
+	}
 	var plan phase6terminalcleanup.Plan
 	var err error
 	if externalPostgres != nil {
@@ -143,15 +156,15 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 			certificateLedger, credentialLedger, managementAccessor, time.Now().UTC())
 	}
 	if err != nil || plan.Validate() != nil {
-		t.Fatal("independently read quiesced ledgers cannot bind the exact terminal cleanup plan")
+		return errors.New("independently read quiesced ledgers cannot bind the exact terminal cleanup plan")
 	}
 	profileJSON, err := json.Marshal(composed.Profile)
 	if err != nil {
-		t.Fatal("encode exact operator Profile input")
+		return errors.New("encode exact operator Profile input")
 	}
 	peerJSON, err := json.Marshal(composed.PeerSources)
 	if err != nil {
-		t.Fatal("encode exact operator peer source input")
+		return errors.New("encode exact operator peer source input")
 	}
 	inputProtocol := "sandbox-runtime.phase6-terminal-cleanup-input.v1"
 	if externalPostgres != nil {
@@ -168,31 +181,67 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	encoded, err := json.Marshal(input)
 	if err != nil || len(encoded) > 18<<20 {
 		clear(encoded)
-		t.Fatal("bounded terminal operator envelope unavailable")
+		return errors.New("bounded terminal operator envelope unavailable")
 	}
 	defer clear(encoded)
-	if slice6HashTerminalBinary(t, binaryPath) != binaryDigest {
-		t.Fatal("terminal operator binary changed after source build")
+	if hash, hashErr := slice6HashTerminalBinaryResult(binaryPath); hashErr != nil || hash != binaryDigest {
+		return errors.New("terminal operator binary changed after source build")
 	}
 	operatorNetworkName := "sr-p6-terminal-only-" + run.id
 	networkDocument, err := run.docker(ctx, "network", "create", "--driver=bridge", "--internal",
 		"--opt=com.docker.network.bridge.gateway_mode_ipv4=isolated", "--label", run.label(), operatorNetworkName)
 	networkID := strings.TrimSpace(string(networkDocument))
 	if err != nil || len(networkID) != 64 || !lowerHexSlice6(networkID) {
-		t.Fatal("create isolated Vault-only terminal operator network")
+		return errors.New("create isolated Vault-only terminal operator network")
 	}
+	var containerID string
+	vaultConnected := false
+	receiptConfirmed := false
+	defer func() {
+		cleanup := &slice6CleanupSequence{stages: []slice6CleanupStage{
+			{"remove-terminal-container", func(ctx context.Context) error {
+				if containerID == "" {
+					return nil
+				}
+				if _, err := run.docker(ctx, "rm", "-f", containerID); err != nil {
+					return errors.New("remove exact terminal operator task")
+				}
+				return nil
+			}},
+			{"disconnect-terminal-vault", func(ctx context.Context) error {
+				if !vaultConnected {
+					return nil
+				}
+				if _, err := run.docker(ctx, "network", "disconnect", networkID, vaultID); err != nil {
+					return errors.New("remove Vault from terminal-only network")
+				}
+				return nil
+			}},
+			{"remove-terminal-network", func(ctx context.Context) error {
+				if _, err := run.docker(ctx, "network", "rm", networkID); err != nil {
+					return errors.New("remove exact terminal-only network")
+				}
+				return nil
+			}},
+		}}
+		resultErr = errors.Join(resultErr, cleanup.Run())
+		if resultErr == nil && receiptConfirmed {
+			t.Logf("one-shot terminal operator confirmed %d certs, two token accessors, complete CRL and self-revoke; source-bound binary %s; private receipt plan=%s", len(plan.Certificates), binaryDigest, plan.Digest)
+		}
+	}()
 	if _, err := run.docker(ctx, "network", "connect", "--alias", "vault.sandbox-runtime.test",
 		networkID, vaultID); err != nil {
-		t.Fatal("attach sole Vault endpoint to terminal operator network")
+		return errors.New("attach sole Vault endpoint to terminal operator network")
 	}
+	vaultConnected = true
 	root, err := filepath.Abs("..")
 	if err != nil {
-		t.Fatal(err)
+		return errors.New("terminal operator source checkout unavailable")
 	}
 	seccompPath := filepath.Join(root, "profiles", "phase6", "security", "go-controller-agent-seccomp-arm64.json")
 	seccompDocument, err := os.ReadFile(seccompPath)
 	if err != nil {
-		t.Fatal("read locked terminal operator seccomp")
+		return errors.New("read locked terminal operator seccomp")
 	}
 	seccompHash := sha256.Sum256(seccompDocument)
 	var controllerSeccompDigest string
@@ -202,14 +251,17 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 		}
 	}
 	if controllerSeccompDigest != "sha256:"+hex.EncodeToString(seccompHash[:]) {
-		t.Fatal("terminal operator seccomp differs from reviewed controller profile")
+		return errors.New("terminal operator seccomp differs from reviewed controller profile")
 	}
 	for _, principal := range composed.Profile.Principals {
 		if principal.UID == slice6TerminalOperatorUID || principal.GID == slice6TerminalOperatorGID {
-			t.Fatal("finite operator identity aliases a resident Profile principal")
+			return errors.New("finite operator identity aliases a resident Profile principal")
 		}
 	}
-	carrierID := slice6VerifyTerminalCarrier(t, ctx, run)
+	carrierID, carrierErr := slice6VerifyTerminalCarrierResult(ctx, run)
+	if carrierErr != nil {
+		return carrierErr
+	}
 	identity := fmt.Sprintf("%d:%d", slice6TerminalOperatorUID, slice6TerminalOperatorGID)
 	containerName := "sr-p6-terminal-cleanup-" + run.id
 	created, err := run.docker(ctx, "create", "-i", "--pull=never", "--name", containerName,
@@ -219,19 +271,26 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 		"--read-only", "--memory=128m", "--cpus=0.5", "--pids-limit=32",
 		"--mount", "type=bind,src="+binaryPath+",dst=/phase6-terminal-cleanup,readonly",
 		"--entrypoint=/phase6-terminal-cleanup", slice6PinnedAlpineImage, "--one-shot")
-	containerID := strings.TrimSpace(string(created))
+	containerID = strings.TrimSpace(string(created))
 	if err != nil || len(containerID) != 64 || !lowerHexSlice6(containerID) {
-		t.Fatal("create restricted terminal operator task")
+		return errors.New("create restricted terminal operator task")
 	}
-	slice6VerifyTerminalContainer(t, ctx, run, containerID, networkID, identity,
-		binaryPath, seccompPath, carrierID)
-	slice6VerifyTerminalMountedBinary(t, ctx, containerID, binaryPath, binaryDigest)
+	if err := slice6VerifyTerminalContainerResult(ctx, run, containerID, networkID, identity,
+		binaryPath, seccompPath, carrierID); err != nil {
+		return err
+	}
+	if err := slice6VerifyTerminalMountedBinaryResult(ctx, containerID, binaryPath, binaryDigest); err != nil {
+		return err
+	}
 	attached := exec.CommandContext(ctx, "docker", "start", "-a", "-i", containerID)
 	attached.Stdin = bytes.NewReader(encoded)
 	output, startErr := attached.CombinedOutput()
 	defer clear(output)
-	slice6VerifyTerminalNetwork(t, ctx, run, networkID, vaultID, containerID)
+	networkErr := slice6VerifyTerminalNetworkResult(ctx, run, networkID, vaultID, containerID)
 	receipt, decodeErr := phase6terminalcleanup.DecodeReceipt(output)
+	if networkErr != nil {
+		return networkErr
+	}
 	if startErr != nil || decodeErr != nil ||
 		!receipt.Complete || !receipt.SelfRevoked || receipt.PlanDigest != plan.Digest ||
 		receipt.RunID != run.id || receipt.ProfileDigest != composed.Profile.ProfileDigest ||
@@ -247,23 +306,24 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 			regexp.MustCompile(`^[a-z][a-z-]{0,63}$`).MatchString(partial.FailureStage) {
 			stage = "execute-" + partial.FailureStage
 		}
-		t.Fatalf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
+		return fmt.Errorf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
 	}
-	if _, err := run.docker(ctx, "rm", containerID); err != nil {
-		t.Fatal("remove exact completed terminal operator task")
-	}
-	if _, err := run.docker(ctx, "network", "disconnect", networkID, vaultID); err != nil {
-		t.Fatal("remove Vault from terminal-only network")
-	}
-	if _, err := run.docker(ctx, "network", "rm", networkID); err != nil {
-		t.Fatal("remove exact terminal-only network")
-	}
-	t.Logf("one-shot terminal operator confirmed %d certs, two token accessors, complete CRL and self-revoke; source-bound binary %s; private receipt plan=%s", len(plan.Certificates), binaryDigest, plan.Digest)
+	receiptConfirmed = true
+	return nil
 }
 
 func slice6ReadTerminalLedger(t *testing.T, ctx context.Context, run slice6DockerRun,
 	profile phase6security.Profile, owner string) []byte {
 	t.Helper()
+	document, err := slice6ReadTerminalLedgerResult(ctx, run, profile, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return document
+}
+
+func slice6ReadTerminalLedgerResult(ctx context.Context, run slice6DockerRun,
+	profile phase6security.Profile, owner string) ([]byte, error) {
 	var principal phase6security.Principal
 	for _, value := range profile.Principals {
 		if value.Name == owner {
@@ -272,7 +332,7 @@ func slice6ReadTerminalLedger(t *testing.T, ctx context.Context, run slice6Docke
 	}
 	_, ledgerPath, err := phase6security.Slice6ControllerLedgerMount(owner)
 	if err != nil || principal.UID == 0 || principal.GID == 0 {
-		t.Fatal("unknown exclusive terminal ledger owner")
+		return nil, errors.New("unknown exclusive terminal ledger owner")
 	}
 	volume := "sr-p6-ledger-" + owner + "-" + run.id
 	identity := fmt.Sprintf("%d:%d", principal.UID, principal.GID)
@@ -283,13 +343,21 @@ func slice6ReadTerminalLedger(t *testing.T, ctx context.Context, run slice6Docke
 		"/bin/sh", "-ec", "test \"$(stat -c '%u:%g:%a' /ledger/ledger.json)\" = '"+identity+":600' && test -z \"$(find /ledger -mindepth 1 -maxdepth 1 ! -name ledger.json)\" && cat /ledger/ledger.json")
 	if err != nil || len(document) < 1 || len(document) > 8<<20 || filepath.Base(ledgerPath) != "ledger.json" {
 		clear(document)
-		t.Fatal("independent exact quiesced ledger read failed")
+		return nil, errors.New("independent exact quiesced ledger read failed")
 	}
-	return document
+	return document, nil
 }
 
 func slice6VerifyTerminalCarrier(t *testing.T, ctx context.Context, run slice6DockerRun) string {
 	t.Helper()
+	id, err := slice6VerifyTerminalCarrierResult(ctx, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func slice6VerifyTerminalCarrierResult(ctx context.Context, run slice6DockerRun) (string, error) {
 	document, err := run.docker(ctx, "image", "inspect", slice6PinnedAlpineImage)
 	var images []struct {
 		ID           string   `json:"Id"`
@@ -309,30 +377,38 @@ func slice6VerifyTerminalCarrier(t *testing.T, ctx context.Context, run slice6Do
 		len(images[0].Config.Volumes) != 0 ||
 		!slices.Equal(images[0].Config.Env, []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}) ||
 		len(images[0].Config.Entrypoint) != 0 || !slices.Equal(images[0].Config.Cmd, []string{"/bin/sh"}) {
-		t.Fatal("pinned Alpine carrier platform, config or no-volume boundary drift")
+		return "", errors.New("pinned Alpine carrier platform, config or no-volume boundary drift")
 	}
 	lockedDigest := strings.TrimPrefix(slice6PinnedAlpineImage, "docker.io/library/")
 	if !slices.Contains(images[0].RepoDigests, lockedDigest) {
-		t.Fatal("terminal carrier OCI repository digest not selected")
+		return "", errors.New("terminal carrier OCI repository digest not selected")
 	}
-	return images[0].ID
+	return images[0].ID, nil
 }
 
 func slice6HashTerminalBinary(t *testing.T, path string) string {
 	t.Helper()
+	digest, err := slice6HashTerminalBinaryResult(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return digest
+}
+
+func slice6HashTerminalBinaryResult(path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 ||
 		info.Size() < 1 || info.Size() > 32<<20 {
-		t.Fatal("terminal operator executable is not a bounded immutable-mode file")
+		return "", errors.New("terminal operator executable is not a bounded immutable-mode file")
 	}
 	document, err := os.ReadFile(path)
 	if err != nil || int64(len(document)) != info.Size() {
 		clear(document)
-		t.Fatal("terminal operator executable changed during read")
+		return "", errors.New("terminal operator executable changed during read")
 	}
 	digest := sha256.Sum256(document)
 	clear(document)
-	return "sha256:" + hex.EncodeToString(digest[:])
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 // docker cp resolves the bind inside the exact created container, not merely
@@ -341,32 +417,49 @@ func slice6HashTerminalBinary(t *testing.T, path string) string {
 func slice6VerifyTerminalMountedBinary(t *testing.T, ctx context.Context,
 	containerID, binaryPath, expectedDigest string) {
 	t.Helper()
+	if err := slice6VerifyTerminalMountedBinaryResult(ctx, containerID, binaryPath, expectedDigest); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func slice6VerifyTerminalMountedBinaryResult(ctx context.Context,
+	containerID, binaryPath, expectedDigest string) error {
 	archive, err := exec.CommandContext(ctx, "docker", "cp", containerID+":/phase6-terminal-cleanup", "-").Output()
 	if err != nil || len(archive) < 1 || len(archive) > 33<<20 {
 		clear(archive)
-		t.Fatal("read exact terminal operator bind from created container")
+		return errors.New("read exact terminal operator bind from created container")
 	}
 	defer clear(archive)
 	reader := tar.NewReader(bytes.NewReader(archive))
 	header, err := reader.Next()
 	if err != nil || header.Name != "phase6-terminal-cleanup" || header.Typeflag != tar.TypeReg ||
 		header.Size < 1 || header.Size > 32<<20 || header.Mode&0o777 != 0o555 {
-		t.Fatal("terminal operator bind archive type, mode or size drift")
+		return errors.New("terminal operator bind archive type, mode or size drift")
 	}
 	hash := sha256.New()
 	if count, copyErr := io.CopyN(hash, reader, header.Size); copyErr != nil || count != header.Size {
-		t.Fatal("terminal operator bind archive content truncated")
+		return errors.New("terminal operator bind archive content truncated")
 	}
+	hostDigest, hashErr := slice6HashTerminalBinaryResult(binaryPath)
 	if _, err := reader.Next(); !errors.Is(err, io.EOF) ||
 		"sha256:"+hex.EncodeToString(hash.Sum(nil)) != expectedDigest ||
-		slice6HashTerminalBinary(t, binaryPath) != expectedDigest {
-		t.Fatal("actual terminal operator executable differs from source-bound digest")
+		hashErr != nil || hostDigest != expectedDigest {
+		return errors.New("actual terminal operator executable differs from source-bound digest")
 	}
+	return nil
 }
 
 func slice6VerifyTerminalContainer(t *testing.T, ctx context.Context, run slice6DockerRun,
 	id, networkID, identity, binaryPath, seccompPath, carrierID string) {
 	t.Helper()
+	if err := slice6VerifyTerminalContainerResult(ctx, run, id, networkID, identity,
+		binaryPath, seccompPath, carrierID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func slice6VerifyTerminalContainerResult(ctx context.Context, run slice6DockerRun,
+	id, networkID, identity, binaryPath, seccompPath, carrierID string) error {
 	document, err := run.docker(ctx, "inspect", id)
 	var observed []struct {
 		Image  string `json:"Image"`
@@ -404,13 +497,13 @@ func slice6VerifyTerminalContainer(t *testing.T, ctx context.Context, run slice6
 	}
 	if err != nil || json.Unmarshal(document, &observed) != nil || len(observed) != 1 ||
 		observed[0].Image != carrierID {
-		t.Fatal("terminal operator image identity drift")
+		return errors.New("terminal operator image identity drift")
 	}
 	container := observed[0]
 	seccompSource, readErr := os.ReadFile(seccompPath)
 	var compactSeccomp bytes.Buffer
 	if readErr != nil || json.Compact(&compactSeccomp, seccompSource) != nil {
-		t.Fatal("canonicalize terminal operator seccomp")
+		return errors.New("canonicalize terminal operator seccomp")
 	}
 	if container.Config.Image != slice6PinnedAlpineImage || container.Config.User != identity ||
 		!slices.Equal(container.Config.Entrypoint, []string{"/phase6-terminal-cleanup"}) ||
@@ -424,18 +517,26 @@ func slice6VerifyTerminalContainer(t *testing.T, ctx context.Context, run slice6
 		len(container.Mounts) != 1 || container.Mounts[0].Type != "bind" ||
 		container.Mounts[0].Source != binaryPath || container.Mounts[0].Destination != "/phase6-terminal-cleanup" ||
 		container.Mounts[0].RW {
-		t.Fatal("terminal operator effective task bounds drift")
+		return errors.New("terminal operator effective task bounds drift")
 	}
 	if !slices.Equal(container.Config.Env, []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}) ||
 		!slices.Contains(container.HostConfig.SecurityOpt, "no-new-privileges:true") ||
 		!slices.Contains(container.HostConfig.SecurityOpt, "seccomp="+compactSeccomp.String()) {
-		t.Fatal("terminal operator environment or security options drift")
+		return errors.New("terminal operator environment or security options drift")
 	}
+	return nil
 }
 
 func slice6VerifyTerminalNetwork(t *testing.T, ctx context.Context, run slice6DockerRun,
 	networkID, vaultID, operatorID string) {
 	t.Helper()
+	if err := slice6VerifyTerminalNetworkResult(ctx, run, networkID, vaultID, operatorID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func slice6VerifyTerminalNetworkResult(ctx context.Context, run slice6DockerRun,
+	networkID, vaultID, operatorID string) error {
 	document, err := run.docker(ctx, "network", "inspect", networkID)
 	var observed []struct {
 		Internal   bool                       `json:"Internal"`
@@ -447,11 +548,12 @@ func slice6VerifyTerminalNetwork(t *testing.T, ctx context.Context, run slice6Do
 		observed[0].Options["com.docker.network.bridge.gateway_mode_ipv4"] != "isolated" ||
 		(len(observed[0].Containers) != 1 && len(observed[0].Containers) != 2) ||
 		observed[0].Containers[vaultID] == nil {
-		t.Fatal("terminal operator bridge has unexpected members or isolation")
+		return errors.New("terminal operator bridge has unexpected members or isolation")
 	}
 	for id := range observed[0].Containers {
 		if id != vaultID && id != operatorID {
-			t.Fatal("terminal operator bridge contains an unknown endpoint")
+			return errors.New("terminal operator bridge contains an unknown endpoint")
 		}
 	}
+	return nil
 }

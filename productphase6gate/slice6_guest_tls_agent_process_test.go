@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -326,32 +327,60 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	}
 	t.Logf("real %s TLS-agent managed leaf and signer socket ready after %s under Profile CPU=%dm, memory=%d, PIDs=%d",
 		label, time.Since(startupStarted), principal.Resources.CPUMillis, principal.Resources.MemoryBytes, principal.Resources.PIDs)
+	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
+		{"stop-ordinary-tls-agent", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "stop", "--time", "10", id); err != nil {
+				return errors.New("ordinary TLS-agent stop unconfirmed")
+			}
+			return nil
+		}},
+		{"drain-ordinary-tls-agent", func(cleanup context.Context) error {
+			select {
+			case done := <-completed:
+				stage := slice6ControllerFailureStage(done.output)
+				clear(done.output)
+				if done.err != nil {
+					return fmt.Errorf("ordinary TLS-agent drain unconfirmed: stage=%s", stage)
+				}
+				return nil
+			case <-time.After(15 * time.Second):
+				return errors.New("ordinary TLS-agent did not drain")
+			case <-cleanup.Done():
+				return errors.New("ordinary TLS-agent cleanup deadline ended")
+			}
+		}},
+		{"remove-ordinary-tls-agent", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "rm", "-f", id); err != nil {
+				return errors.New("ordinary TLS-agent removal unconfirmed")
+			}
+			return nil
+		}},
+		{"verify-ordinary-tls-socket", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-tls-clean-"+run.id,
+				"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
+				"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+				"--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory+",readonly",
+				"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
+				return errors.New("ordinary TLS-agent exact signer socket cleanup unproved")
+			}
+			return nil
+		}},
+	}}
+	reported := false
+	defer func() {
+		if !reported {
+			if err := sequence.Run(); err != nil {
+				t.Errorf("failure-path ordinary TLS-agent cleanup: %v", err)
+			}
+		}
+	}()
 	if onSignerReady != nil {
 		onSignerReady()
 	}
-	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-		t.Fatal("stop ordinary TLS-agent")
+	if err := sequence.Run(); err != nil {
+		t.Errorf("ordinary TLS-agent cleanup: %v", err)
 	}
-	select {
-	case done := <-completed:
-		stage := slice6ControllerFailureStage(done.output)
-		clear(done.output)
-		if done.err != nil {
-			t.Fatalf("ordinary TLS-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
-		}
-	case <-time.After(15 * time.Second):
-		t.Fatal("ordinary TLS-agent did not drain")
-	}
-	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal("remove stopped ordinary TLS-agent")
-	}
-	if output, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-tls-clean-"+run.id,
-		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
-		"--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory+",readonly",
-		"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
-		t.Fatalf("ordinary TLS-agent signer socket cleanup unproved: %v: %.128s", err, output)
-	}
+	reported = true
 	if onSignerReady != nil {
 		t.Logf("real %s TLS-agent PID1 issued its managed certificate, served the dependent process, and cleaned the exact signer socket; dependent evidence is reported separately", label)
 	} else {

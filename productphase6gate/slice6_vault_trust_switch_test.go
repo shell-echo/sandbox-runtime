@@ -67,9 +67,14 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			os.Getenv(slice6ProductPostgresDSNEnv) != "1") {
 		t.Fatal("Product migration PID1 requires same-run PostgreSQL, private inputs and both signers")
 	}
+	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" && os.Getenv(slice6ProductMigrationJobEnv) != "1" {
+		t.Fatal("controlled pre-DDL failure requires the real Product migration chain")
+	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
+	var migrationFailure error
+	var terminalFailure error
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
 		if err != nil {
@@ -558,10 +563,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 						// controller chain must run with the orphan management token,
 						// never with the bootstrap root authority still live.
 						revokeBootstrapRoot()
-						var onCredentialReady func(func())
+						var onCredentialReady func(func() error)
 						if os.Getenv(slice6CertificateProcessEnv) == "1" {
-							onCredentialReady = func(stopCredential func()) {
-								var onTerminated func()
+							onCredentialReady = func(stopCredential func() error) {
+								var onTerminated func() error
 								var onManagedReady func()
 								if os.Getenv(slice6GuestMaterialEnv) == "1" {
 									onManagedReady = func() {
@@ -588,7 +593,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																		serverID, productIdentityDigest, productRuntimeDSNDigest,
 																		"product-runtime-agent", "product-runtime",
 																		"product-material", 70, productMaterialSocketVolumes, anchorFiles,
-																		func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+																		func(phase6security.Slice6BreakGlassSocketBinding) error {
+																			runGuestChain()
+																			return nil
+																		})
 																})
 														}
 													}
@@ -612,23 +620,34 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 														migrationWork := func() {
 															if os.Getenv(slice6ProductMigrationJobEnv) == "1" {
 																if postgresServerID == "" {
-																	t.Fatal("Product migration has no live same-run PostgreSQL server")
+																	migrationFailure = errors.New("Product migration has no live same-run PostgreSQL server")
+																	return
 																}
-																slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																migrationFailure = slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
 																	serverID, "", "", "product-migration-agent", "product-migration-job",
 																	"product-migration-material", 73, productMigrationSocketVolumes, anchorFiles,
-																	func(phase6security.Slice6BreakGlassSocketBinding) {
-																		slice6RunProductMigrationJob(t, ctx, run, composed,
+																	func(phase6security.Slice6BreakGlassSocketBinding) error {
+																		return slice6RunProductMigrationJob(t, ctx, run, composed,
 																			postgresServerID, productMigrationSocketVolumes, anchorFiles)
 																	})
+																if migrationFailure != nil {
+																	return
+																}
 															}
 														}
 														slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 															"product-migration-job", "product-migration-postgres-tls-agent", "product-migration-postgres",
 															productMigrationSocketVolumes, anchorFiles, migrationWork)
 													})
+												if migrationFailure != nil {
+													return
+												}
 												if os.Getenv(slice6ProductMigrationJobEnv) == "1" {
-													slice6VerifyProductMigrationReadback(t, ctx, run, postgresServerID)
+													if err := slice6VerifyProductMigrationReadback(ctx, postgresServerID); err != nil {
+														migrationFailure = err
+														return
+													}
+													t.Log("real Product migration v2 ledger, current table ownership and post-DDL grants read back from the same PostgreSQL process")
 												}
 												dependent()
 											}
@@ -651,21 +670,26 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 									}
 								}
 								if terminalOperator != nil {
-									onTerminated = func() {
+									onTerminated = func() error {
 										if postgresStop != nil {
 											if err := postgresStop(); err != nil {
-												t.Fatal("Product PostgreSQL did not stop before terminal certificate cleanup")
+												terminalFailure = errors.Join(terminalFailure,
+													errors.New("Product PostgreSQL did not stop before terminal certificate cleanup"))
 											}
 										}
 										if os.Getenv(slice6PostgresServerLeafEnv) == "1" && postgresRecord == nil {
-											t.Fatal("PostgreSQL leaf was not observed on stopped server before v2 cleanup")
+											terminalFailure = errors.Join(terminalFailure,
+												errors.New("PostgreSQL leaf was not observed on stopped server before v2 cleanup"))
 										}
-										slice6RunTerminalOperator(t, ctx, run, composed, serverID,
-											terminalBinaryPath, terminalBinaryDigest,
-											management.Accessor, general, terminalOperator, postgresRecord)
-										if postgresRecord != nil {
+										if terminalFailure == nil {
+											terminalFailure = slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+												terminalBinaryPath, terminalBinaryDigest,
+												management.Accessor, general, terminalOperator, postgresRecord)
+										}
+										if postgresRecord != nil && terminalFailure == nil {
 											postgresTerminalConfirmed = true
 										}
+										return terminalFailure
 									}
 								}
 								slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
@@ -710,6 +734,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if err := slice6CheckImplicitVolumesRemoved(ctx, run, implicitVaultVolumes); err != nil {
 		t.Fatalf("exact persistent Vault anonymous-volume cleanup: %v", err)
+	}
+	if migrationFailure != nil {
+		t.Errorf("Product migration attempt failed after strict terminal and exact Docker cleanup: %v", migrationFailure)
+	}
+	if terminalFailure != nil {
+		t.Errorf("strict terminal cleanup remained unconfirmed after exact Docker cleanup: %v", terminalFailure)
 	}
 	if os.Getenv(slice6CertificateProcessEnv) == "1" {
 		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance with exact Docker cleanup; final release scenarios remain unproved")

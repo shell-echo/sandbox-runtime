@@ -4,13 +4,12 @@ package productphase6gate
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
-	"testing"
 
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 )
@@ -32,57 +31,138 @@ var slice6ProductMigrationFiles = [...]string{
 	"0014_product_phase6_browser_handoff_binding.sql",
 }
 
-// This operator-only readback runs after the one-shot migration PID1 exits.
-// It never retries DDL: an unknown migration outcome must be inspected here
-// before any new attempt. Runtime grants are made only after exact ledger and
-// object ownership have been observed.
-func slice6VerifyProductMigrationReadback(t *testing.T, ctx context.Context, run slice6DockerRun, postgresID string) {
-	t.Helper()
+var slice6ProductCreateTablePattern = regexp.MustCompile(`(?m)^CREATE TABLE sandbox_runtime_product\.([a-z][a-z0-9_]*) \($`)
+var slice6ProductTableIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// Verification and post-success authorization are deliberately separate from
+// failure observation. This runs only after the one-shot PID1 exited zero.
+func slice6VerifyProductMigrationReadback(ctx context.Context, postgresID string) error {
 	if productpostgres.CurrentSchemaVersion() != int64(len(slice6ProductMigrationFiles)) ||
 		len(postgresID) != 64 || !lowerHexSlice6(postgresID) {
-		t.Fatal("Product migration source or PostgreSQL identity drift")
+		return errors.New("Product migration source or PostgreSQL identity drift")
 	}
-	root, err := filepath.Abs("..")
+	ledgerStatus, err := slice6ObserveProductMigrationDatabase(ctx, postgresID)
+	if err != nil || ledgerStatus != "ledger-and-catalog-exact" {
+		return errors.New("Product migration ledger or ownership is not exact")
+	}
+	expectedTables, err := slice6FrozenProductMigrationTables(ctx)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
-	expected := make([]string, 0, len(slice6ProductMigrationFiles))
-	for index, name := range slice6ProductMigrationFiles {
-		source, readErr := os.ReadFile(filepath.Join(root, "product", "adapter", "postgres", "migrations", name))
-		if readErr != nil || len(source) == 0 {
-			t.Fatal("frozen Product migration SQL source unavailable")
+	actualNames, err := slice6ProductMigrationCatalogQuery(ctx, postgresID, "table-names")
+	if err != nil || !slices.Equal(strings.Split(actualNames, ","), expectedTables) {
+		return errors.New("Product current table set differs from frozen R8 SQL")
+	}
+	preGrant, err := slice6ProductMigrationCatalogQuery(ctx, postgresID, "runtime-schema-before")
+	if err != nil || preGrant != "false|false" {
+		return errors.New("Product runtime SQL role had pre-migration schema authority")
+	}
+	if err := slice6GrantProductRuntimeCurrentTables(ctx, postgresID, expectedTables); err != nil {
+		return err
+	}
+	postGrant, err := slice6ProductMigrationCatalogQuery(ctx, postgresID, "runtime-grants-after")
+	if err != nil || postGrant != "true" {
+		return errors.New("Product current-table runtime grants did not read back exactly")
+	}
+	return nil
+}
+
+func slice6FrozenProductMigrationTables(ctx context.Context) ([]string, error) {
+	sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
+	if err != nil || !absoluteCleanSlice6Path(sourceRoot) ||
+		verifyCleanSlice6Source(ctx, sourceRoot, os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION")) != nil {
+		return nil, errors.New("frozen Product migration table source unavailable")
+	}
+	var names []string
+	for _, file := range slice6ProductMigrationFiles {
+		document, readErr := os.ReadFile(filepath.Join(sourceRoot, "product", "adapter", "postgres", "migrations", file))
+		if readErr != nil || len(document) == 0 || len(document) > 1<<20 {
+			clear(document)
+			return nil, errors.New("frozen Product migration table SQL unavailable")
 		}
-		digest := sha256.Sum256(source)
-		expected = append(expected, fmt.Sprintf("%d|sha256:%s", index+1, hex.EncodeToString(digest[:])))
+		for _, match := range slice6ProductCreateTablePattern.FindAllSubmatch(document, -1) {
+			names = append(names, string(match[1]))
+		}
+		clear(document)
 	}
-	ledger, err := run.docker(ctx, "exec", "-u", "70:70", postgresID,
-		"psql", "-X", "-w", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "product", "-At",
-		"-c", "SELECT version::text||'|'||digest FROM sandbox_runtime_product.schema_migrations ORDER BY version")
-	if err != nil || strings.TrimSpace(string(ledger)) != strings.Join(expected, "\n") {
-		clear(ledger)
-		t.Fatal("Product migration PID1 ledger is not the exact frozen 14-file SQL source")
+	slices.Sort(names)
+	if len(names) != 29 {
+		return nil, errors.New("frozen Product migration table count drift")
 	}
-	clear(ledger)
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND pg_catalog.pg_get_userbyid(c.relowner)<>'product_migrator'", "0")
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND c.relname<>'schema_migrations'", "29")
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT has_schema_privilege('product_runtime','sandbox_runtime_product','USAGE'),has_schema_privilege('product_runtime','sandbox_runtime_product','CREATE')", "f|f")
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT count(*) FROM pg_catalog.pg_stat_activity WHERE usename='product_migrator'", "0")
-	for _, statement := range []string{
-		"GRANT USAGE ON SCHEMA sandbox_runtime_product TO product_runtime",
-		"GRANT SELECT ON sandbox_runtime_product.schema_migrations TO product_runtime",
-		"GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA sandbox_runtime_product TO product_runtime",
-		"REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_product.schema_migrations FROM product_runtime",
-		"ALTER DEFAULT PRIVILEGES FOR ROLE product_migrator IN SCHEMA sandbox_runtime_product GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO product_runtime",
-	} {
-		slice6ProductSQLExec(t, ctx, run, postgresID, "product", statement)
+	for index := 1; index < len(names); index++ {
+		if names[index] == names[index-1] {
+			return nil, errors.New("frozen Product migration table name duplicate")
+		}
 	}
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT has_schema_privilege('product_runtime','sandbox_runtime_product','USAGE'),has_schema_privilege('product_runtime','sandbox_runtime_product','CREATE'),has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','SELECT'),has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')", "t|f|t|f")
-	slice6ProductSQLExpect(t, ctx, run, postgresID, "product",
-		"SELECT bool_and(has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'SELECT') AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'INSERT') AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'UPDATE') AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'DELETE')) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND c.relname<>'schema_migrations'", "t")
-	t.Log("real Product migration v2 PID1 ledger, SQL ownership, zero active migration login and post-DDL runtime grants read back from the same PostgreSQL process")
+	return names, nil
+}
+
+const slice6ProductRuntimeRightsExpression = `
+has_schema_privilege('product_runtime','sandbox_runtime_product','USAGE')
+AND NOT has_schema_privilege('product_runtime','sandbox_runtime_product','CREATE')
+AND has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','SELECT')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','INSERT')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','UPDATE')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','DELETE')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','TRUNCATE')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','REFERENCES')
+AND NOT has_table_privilege('product_runtime','sandbox_runtime_product.schema_migrations','TRIGGER')
+AND (SELECT count(*)=29 AND bool_and(
+    has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'SELECT')
+    AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'INSERT')
+    AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'UPDATE')
+    AND has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'DELETE')
+    AND NOT has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'TRUNCATE')
+    AND NOT has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'REFERENCES')
+    AND NOT has_table_privilege('product_runtime',format('%I.%I',n.nspname,c.relname),'TRIGGER'))
+  FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND c.relname<>'schema_migrations')
+AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+  CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault('r',c.relowner))) a
+  JOIN pg_catalog.pg_roles r ON r.oid=a.grantee
+  WHERE n.nspname='sandbox_runtime_product' AND c.relkind='r' AND r.rolname='product_runtime' AND a.is_grantable)
+AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n
+  CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl,acldefault('n',n.nspowner))) a
+  JOIN pg_catalog.pg_roles r ON r.oid=a.grantee
+  WHERE n.nspname='sandbox_runtime_product' AND r.rolname='product_runtime' AND a.is_grantable)
+AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_default_acl d
+  WHERE d.defaclrole=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='product_migrator')
+    AND (d.defaclnamespace=0 OR d.defaclnamespace=(SELECT oid FROM pg_catalog.pg_namespace WHERE nspname='sandbox_runtime_product')))`
+
+func slice6GrantProductRuntimeCurrentTables(ctx context.Context, postgresID string, tables []string) error {
+	input, err := slice6BuildProductRuntimeCurrentTableGrant(tables)
+	if err != nil {
+		return err
+	}
+	defer clear(input)
+	output, err, overflow := slice6DockerBounded(ctx, 4096, input, "exec", "-i", "-u", "70:70", postgresID,
+		"psql", "-X", "-w", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "product", "-f", "-")
+	defer clear(output)
+	if err != nil || overflow || len(strings.TrimSpace(string(output))) != 0 {
+		return errors.New("single-transaction Product current-table grant or negative check failed")
+	}
+	return nil
+}
+
+func slice6BuildProductRuntimeCurrentTableGrant(tables []string) ([]byte, error) {
+	if len(tables) != 29 || !slices.IsSorted(tables) {
+		return nil, errors.New("Product current-table grant set unavailable")
+	}
+	var script strings.Builder
+	script.WriteString("BEGIN;\nSET LOCAL statement_timeout='3000ms';\nSET LOCAL lock_timeout='1000ms';\n")
+	script.WriteString("GRANT USAGE ON SCHEMA sandbox_runtime_product TO product_runtime;\n")
+	script.WriteString("GRANT SELECT ON sandbox_runtime_product.schema_migrations TO product_runtime;\n")
+	for index, table := range tables {
+		if !slice6ProductTableIdentifierPattern.MatchString(table) || table == "schema_migrations" ||
+			index > 0 && table == tables[index-1] {
+			return nil, errors.New("Product current-table grant identifier invalid")
+		}
+		script.WriteString("GRANT SELECT,INSERT,UPDATE,DELETE ON sandbox_runtime_product.")
+		script.WriteString(table)
+		script.WriteString(" TO product_runtime;\n")
+	}
+	script.WriteString("DO $$ BEGIN IF NOT (")
+	script.WriteString(slice6ProductRuntimeRightsExpression)
+	script.WriteString(") THEN RAISE EXCEPTION 'Product post-grant privilege drift'; END IF; END $$;\nCOMMIT;\n")
+	return []byte(script.String()), nil
 }

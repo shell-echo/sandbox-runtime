@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,7 +33,7 @@ const slice6QuiesceProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_QUIESCE_PROCESS"
 // or a proof that final shutdown's cyclic revocations are ordered safely.
 func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, bootstrapKey []byte, onManagedReady func(), stopCredential func(), onTerminated func()) {
+	config, bootstrapKey []byte, onManagedReady func(), stopCredential func() error, onTerminated func() error) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -241,68 +242,103 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		t.Fatal("two-controller managed issuance and credential listener were not observed in time")
 	}
 	t.Log("real certificate controller PID1 issued self and credential managed leaves; credential controller opened post-switch listeners; final shutdown ordering not yet proven")
+	credentialLedgerMount, credentialLedgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("workload-credential-controller")
+	if ledgerErr != nil || credentialLedgerMount.Target == "" {
+		t.Fatal("credential controller ledger mount unavailable")
+	}
+	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
+		{"quiesce-controllers", func(cleanup context.Context) error {
+			if os.Getenv(slice6QuiesceProcessEnv) != "1" {
+				return nil
+			}
+			var failure error
+			for _, target := range []string{"sr-p6-credential-live-" + run.id, id} {
+				if _, err := run.docker(cleanup, "kill", "--signal=USR1", target); err != nil {
+					failure = errors.Join(failure, errors.New("controller quiesce signal unconfirmed"))
+				}
+			}
+			for _, witness := range []struct {
+				id   string
+				uid  uint32
+				gid  uint32
+				path string
+			}{
+				{"sr-p6-credential-live-" + run.id, credentialPrincipal.UID, credentialPrincipal.GID, credentialLedgerPath},
+				{id, principal.UID, principal.GID, ledgerPath},
+			} {
+				quiesced := false
+				for attempt := 0; attempt < 50 && cleanup.Err() == nil; attempt++ {
+					document, readErr := run.docker(cleanup, "exec", "--user", fmt.Sprintf("%d:%d", witness.uid, witness.gid),
+						witness.id, "/bin/sh", "-ec", "cat "+witness.path)
+					var ledger struct {
+						QuiescedAt *time.Time `json:"quiesced_at"`
+					}
+					if readErr == nil && len(document) <= 8<<20 && json.Unmarshal(document, &ledger) == nil && ledger.QuiescedAt != nil {
+						quiesced = true
+						break
+					}
+					time.Sleep(200 * time.Millisecond)
+				}
+				if !quiesced {
+					failure = errors.Join(failure, errors.New("controller quiesce receipt unconfirmed"))
+				}
+			}
+			if failure == nil {
+				t.Log("both real controller PID1 processes persisted quiesce receipts before terminal shutdown")
+			}
+			return failure
+		}},
+		{"stop-credential-controller", func(context.Context) error { return stopCredential() }},
+		{"stop-certificate-controller", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "stop", "-t", "5", id); err != nil {
+				return errors.New("certificate controller stop unconfirmed")
+			}
+			return nil
+		}},
+		{"drain-certificate-controller", func(cleanup context.Context) error {
+			select {
+			case result := <-completed:
+				stage := slice6ControllerFailureStage(result.output)
+				clear(result.output)
+				if result.err != nil {
+					if onTerminated == nil || stage != "credential-revoke" {
+						return fmt.Errorf("certificate controller drain unconfirmed: stage=%s", stage)
+					}
+					t.Log("quiesced certificate controller retained a sticky terminal credential-revoke failure; independent operator cleanup required")
+				}
+				return nil
+			case <-time.After(20 * time.Second):
+				return errors.New("certificate controller attached start did not drain")
+			case <-cleanup.Done():
+				return errors.New("certificate controller cleanup deadline ended")
+			}
+		}},
+		{"terminal-operator", func(context.Context) error {
+			if onTerminated != nil {
+				return onTerminated()
+			}
+			return nil
+		}},
+		{"remove-certificate-controller", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "rm", "-f", id); err != nil {
+				return errors.New("certificate controller removal unconfirmed")
+			}
+			return nil
+		}},
+	}}
+	reported := false
+	defer func() {
+		if !reported {
+			if err := sequence.Run(); err != nil {
+				t.Errorf("failure-path certificate/controller/terminal cleanup: %v", err)
+			}
+		}
+	}()
 	if onManagedReady != nil {
 		onManagedReady()
 	}
-	if os.Getenv(slice6QuiesceProcessEnv) == "1" {
-		for _, target := range []string{"sr-p6-credential-live-" + run.id, id} {
-			if _, err := run.docker(ctx, "kill", "--signal=USR1", target); err != nil {
-				t.Fatal("signal controller quiesce")
-			}
-		}
-		credentialLedgerMount, credentialLedgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("workload-credential-controller")
-		if ledgerErr != nil || credentialLedgerMount.Target == "" {
-			t.Fatal("credential controller ledger mount unavailable")
-		}
-		for _, witness := range []struct {
-			id   string
-			uid  uint32
-			gid  uint32
-			path string
-		}{
-			{"sr-p6-credential-live-" + run.id, credentialPrincipal.UID, credentialPrincipal.GID, credentialLedgerPath},
-			{id, principal.UID, principal.GID, ledgerPath},
-		} {
-			quiesced := false
-			for attempt := 0; attempt < 50 && ctx.Err() == nil; attempt++ {
-				document, readErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", witness.uid, witness.gid),
-					witness.id, "/bin/sh", "-ec", "cat "+witness.path)
-				var ledger struct {
-					QuiescedAt *time.Time `json:"quiesced_at"`
-				}
-				if readErr == nil && len(document) <= 8<<20 && json.Unmarshal(document, &ledger) == nil && ledger.QuiescedAt != nil {
-					quiesced = true
-					break
-				}
-				time.Sleep(200 * time.Millisecond)
-			}
-			if !quiesced {
-				t.Fatal("controller did not persist quiesce receipt")
-			}
-		}
-		t.Log("both real controller PID1 processes persisted quiesce receipts before terminal shutdown")
+	if err := sequence.Run(); err != nil {
+		t.Errorf("certificate/controller/terminal cleanup: %v", err)
 	}
-	stopCredential()
-	if _, err := run.docker(ctx, "stop", "-t", "5", id); err != nil {
-		t.Fatal("stop real certificate controller diagnostic")
-	}
-	select {
-	case result := <-completed:
-		stage := slice6ControllerFailureStage(result.output)
-		clear(result.output)
-		if result.err != nil {
-			if onTerminated == nil || stage != "credential-revoke" {
-				t.Fatalf("certificate controller did not shut down cleanly after credential controller: stage=%s exit=%v", stage, result.err)
-			}
-			t.Log("quiesced certificate controller retained a sticky terminal credential-revoke failure; independent operator cleanup required")
-		}
-	case <-time.After(20 * time.Second):
-		t.Fatal("certificate controller attached start did not drain")
-	}
-	if onTerminated != nil {
-		onTerminated()
-	}
-	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal("remove stopped certificate controller diagnostic")
-	}
+	reported = true
 }

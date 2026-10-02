@@ -154,3 +154,168 @@ Both issues were reported for architecture review. Until the v2 command and
 its source-bound candidate image are corrected and the live job completes,
 this continuation is **not** a migration, SQL login, release gate or evidence
 manifest. Phase 6 remains **5/15**.
+
+## Failed R8 pre-DDL diagnostic (2026-10-03)
+
+The first clean-source R8 (`e98fdf93e87358e682acd3e7ee89118a5f992314`)
+Product migration attempt, run `741fed5403cdf6c8ee0e92d3adac1934`, is
+permanently **failed / revocation-unconfirmed**. The run composed a real
+Vault-backed Profile, started external PostgreSQL, bootstrapped the distinct
+Product SQL roles and KVv2 DSNs, and reached managed readiness for the
+Product migration material and PostgreSQL TLS signers. Before launching the
+migration job or issuing Product business DDL, a new pre-DDL observation
+mistakenly reused a Vault-only network helper, which hardcodes `vault` as the
+external member; the PostgreSQL bridge instead has `postgres`. Existing
+PostgreSQL startup had already observed all nine bridges correctly. This was
+a diagnostic harness bug, not evidence that the PostgreSQL service bridge
+was absent.
+
+The external PostgreSQL certificate was issued by general issuer
+`4eb19270-0ebc-eaee-3d2b-18c3a7bdaf7f`, serial
+`47:27:a6:a2:65:6d:8c:8f:3f:e7:63:6d:d1:29:0a:e2:01:49:de:8d`, leaf DER
+`sha256:8acc0e0a9c238eec6fa1880b64fc442d1f921c9a29904e334c609bfd6c2f1b33`.
+The certificate controller had also issued its own and the credential
+controller's managed leaves, plus the two migration signer leaves; their
+serials were not retained in the bounded public test log. Workload-scoped
+credentials and temporary Vault token accessors were used; the bootstrap
+root was revoked before the managed chain, but this failure did not produce
+a final three-certificate/two-accessor terminal receipt or complete CRL.
+No remote revocation of those managed leaves is claimed.
+
+The failure bypassed normal dependent-process/controller shutdown and the
+terminal operator. The test's run-label cleanup reported success. An
+independent post-run read-only query found zero containers, networks and
+named volumes under this exact run label; the run-private
+`.sr-vault-trust-switch-*` directory was absent from the package directory.
+Vault's image-created anonymous volume identifiers were held only in the
+terminated test process; its `docker rm -v` cleanup was invoked, but a
+separate exact-ID anonymous-volume readback was skipped on this failure
+path, so that class is not independently confirmed. Physical deletion and
+eventual certificate expiry are not remote revocation. The old issuer and
+secrets will not be recreated or used to manufacture a retroactive receipt.
+
+## Controlled pre-DDL failure and terminal continuation (2026-10-03)
+
+The next real-Docker/Vault/PostgreSQL run, `f2d81cef978fb03f3cc9080cd3f6f419`,
+used the frozen R8 candidate/Profile source revision
+`e98fdf93e87358e682acd3e7ee89118a5f992314` and a terminal operator
+built independently from that **same** clean checkout. It was intentionally
+failed after the Product migration material path verified the exact
+PostgreSQL bridge member and before creating the migration PID1 or applying
+business DDL. The test failed with `controlled pre-DDL Product migration
+failure`; it must not be counted as a green migration gate.
+
+The failure propagated through the dependent-process teardown. Both migration
+TLS signer sockets were observed cleaned. Both controller PID1 processes
+persisted quiesce receipts; the credential controller was stopped before the
+certificate controller. The certificate controller retained the known sticky
+`credential-revoke` exit, so the independent terminal operator ran. Its
+private receipt confirmed three certificate revocations, two token-accessor
+revocations, the complete CRL and self-revocation, with plan digest
+`sha256:74f13d61e56c5d92b4fbdd6fa701e9b6cfdfec3099cdb2ead4d59461b3e1ba49`.
+The PostgreSQL PID1 stopped and was removed before terminal certificate
+cleanup. Exact run-label cleanup reported success; a separate read-only
+post-run query found no containers, networks or named volumes under the run
+label, and no `.sr-vault-trust-switch-*` directory. The image-created
+anonymous Vault volume IDs were not retained for a separate ID-based readback;
+their independent post-run state is therefore unconfirmed.
+
+This closes the specific terminal-bypass failure demonstrated by the first
+R8 attempt, not the normal migration or 16-scenario release gate. No release
+manifest was generated. Phase 6 remains **5/15**.
+
+## Normal R8 migration attempt: DDL outcome unknown (2026-10-03)
+
+A fresh-issuer/fresh-PostgreSQL run `6a772dcba60fc814b3d57c7adfe80cbf`
+reached both migration-purpose TLS signer listeners and launched the
+independent migration attempt. The attached Docker start returned an error.
+The then-current harness cleared raw output and reported only that PID1 did
+not provide a confirmed successful DDL result. It did **not** retain bounded
+process-state classification or inspect the SQL ledger before PostgreSQL
+teardown. Consequently neither the process startup stage nor DDL commit
+outcome is established. No same-database replay occurred; the database was
+removed during exact cleanup. Later diagnostic changes cannot retroactively
+fill this evidence gap.
+
+Both signer sockets cleaned, both controller quiesce receipts persisted, and
+PostgreSQL stopped before the same-source R8 terminal operator. Its private
+receipt confirmed three certificates, two accessors, complete CRL and
+self-revocation with plan digest
+`sha256:4ed433f5c67cccc2755822f5bdf41b418020b92500ac192dc8dd06c573f7161d`;
+the independently built operator digest was
+`sha256:f11aece71e588f185f20323caabd79041b9ae05ffd7a2912d304b882945ceb60`.
+The run-labeled cleanup reported success. Separate read-only Docker queries
+found no exact-run containers, networks or named volumes and no run-private
+`.sr-vault-trust-switch-*` directory. The anonymous Vault volume class again
+lacks independent exact-ID post-run readback.
+
+Architecture review found an additional latent flaw in the not-yet-reached
+success readback: its default-future-table grant exceeded the approved
+current-table-only Product SQL bootstrap boundary. The mutable gate harness
+must separate read-only failure observation from successful verification and
+atomic current-table grants before any further real signing run. This
+attempt is permanently **failed / DDL-outcome-unknown**, not a migration
+component pass or release evidence. Phase 6 remains **5/15**.
+
+## Test-only diagnostic and grant boundary before another issuer
+
+The mutable gate harness now keeps Docker start output under a hard shared
+stdout/stderr cap and maps only single-line, exact known errors to public
+stage names. It reads Docker's bounded `State` and restart count, classifying
+status, exit/OOM, started/finished presence and a closed State.Error class;
+raw daemon/process error text is neither logged nor emitted. Every post-start
+failure branch attempts a bounded, explicit `BEGIN READ ONLY` catalog/ledger
+observation before PostgreSQL teardown. This separates absent ledger, zero
+commits, partial or inconsistent digest rows, exact R8 14-file ledger,
+unavailable database, and active migration login. An absent ledger is not
+interpreted as proof that no DDL was attempted. Unknown results are never
+automatically replayed on the same database.
+
+The success path no longer grants `ALL TABLES` and never changes default
+privileges. It checks the frozen R8 SQL's exact 29 table names, the 14 source
+digests, object ownership and zero migration connections, then grants schema
+USAGE, ledger SELECT and current-table SELECT/INSERT/UPDATE/DELETE only in one
+transaction. A SQL assertion rejects ledger write, schema CREATE,
+TRUNCATE/REFERENCES/TRIGGER, grant options and Product migrator default ACLs
+before commit; post-commit rights are read back under a separate read-only
+transaction. A disposable no-network PostgreSQL 16 Alpine syntax probe
+verified both the missing-table rollback and successful exact-table grant,
+and verified the bounded zero-ledger/catalog readback. The probe container
+was removed. Tagged Slice 6 race tests, focused core/config/material/egress
+race tests, tagged vet, full `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, the Product Contract lock verifier and `git diff --check`
+passed at this harness checkpoint.
+
+These are harness/audit changes only. The R8 candidate images and clean
+source remain frozen; no new issuer or database was created for this
+diagnostic repair. No normal Product migration success or release manifest is
+claimed. Phase 6 remains **5/15**.
+
+## Instrumented R8 migration connection failure (2026-10-03)
+
+Fresh run `cc1ad1011c390330b51bbccc78826ca5` retained the same clean R8
+candidate source and same-source terminal binary. Its Product migration PID1
+actually started and exited with code 1, OOM=false, restart count 0,
+started/finished timestamps set and empty Docker State.Error. The process's
+single-line exact whitelisted error was `migration v2 PostgreSQL connection is
+unavailable`; the bounded public category is `migration-connect`. Before
+PostgreSQL teardown, independent explicit READ ONLY catalog SQL found the
+precreated Product schema, no `schema_migrations` relation and zero ordinary
+Product business tables. This proves no committed migration was observed in
+that database, **not** that the process never attempted connection or DDL.
+The underlying `openDirectV3Postgres` substage remains unknown because the
+production command intentionally collapses it to one safe error.
+
+Both purpose-specific TLS signers cleaned their sockets, both controllers
+persisted quiesce receipts and PostgreSQL stopped before terminal cleanup.
+The private terminal receipt again confirmed three certificates, two token
+accessors, complete CRL and self-revocation, plan
+`sha256:ac682db7407550de5388592062fb699560a53b629b40a32d773a424cc12a60be`,
+with independent R8 operator binary
+`sha256:f11aece71e588f185f20323caabd79041b9ae05ffd7a2912d304b882945ceb60`.
+Docker event metadata recovered the exact run ID after the test; independent
+post-run queries found zero labeled containers, networks and named volumes,
+and no run-private directory. Exact-ID anonymous Vault volume readback is
+again unavailable after teardown. No same-database migration replay or new
+privilege grant occurred. This is a **failed component run**, not a release
+gate or evidence manifest; Phase 6 remains **5/15**.

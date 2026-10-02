@@ -32,7 +32,7 @@ const slice6CredentialProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CREDENTIAL_PRO
 // separate certificate controller is also running and able to sign its CSR.
 func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, managementToken, bootstrapKey []byte, onBootstrapReady func(stopCredential func())) {
+	config, managementToken, bootstrapKey []byte, onBootstrapReady func(stopCredential func() error)) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -201,52 +201,77 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 	}
 	t.Log("real R19 credential controller PID1 reached private certificate-client listener and created its own ledger; managed PKI switch not yet proven")
 	stopped := false
-	stopCredential := func() {
-		t.Helper()
-		if stopped {
-			t.Fatal("credential controller diagnostic stopped twice")
-		}
-		if _, err := run.docker(ctx, "stop", "-t", "5", id); err != nil {
-			t.Fatal("stop real credential controller diagnostic")
-		}
-		select {
-		case result := <-completed:
-			// Before the peer exists, a deliberate TERM can report managed-client
-			// unavailable. After the peer exists, shutdown must be clean.
-			if result.err != nil && (onBootstrapReady != nil ||
-				!bytes.Contains(result.output, []byte("stage managed-client"))) {
-				clear(result.output)
-				t.Fatal("real credential controller failed outside expected pre-switch cancellation")
+	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
+		{"stop-credential-controller", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "stop", "-t", "5", id); err != nil {
+				return errors.New("credential controller stop unconfirmed")
 			}
-			clear(result.output)
-		case <-time.After(15 * time.Second):
-			t.Fatal("real credential controller attached start did not drain")
-		}
-		if _, err := run.docker(ctx, "rm", id); err != nil {
-			t.Fatal("remove stopped credential controller diagnostic")
-		}
-		if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--network=none",
-			"--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), "--cap-drop=ALL", "--read-only",
-			"--mount", "type=volume,src="+ledgerVolume+",dst=/ledger,readonly", slice6PinnedAlpineImage,
-			"/bin/sh", "-ec", "test -f /ledger/ledger.json && test -z \"$(find /ledger -mindepth 1 -maxdepth 1 ! -name ledger.json)\""); err != nil {
-			t.Fatal("credential controller ledger ownership or exact file cleanup failed")
-		}
-		if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--network=none",
-			"--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), "--cap-drop=ALL", "--read-only",
-			"--mount", "type=volume,src="+socketVolumes[bootstrapStorageID]+",dst=/socket,readonly",
-			slice6PinnedAlpineImage, "/bin/sh", "-ec", "test -z \"$(ls -A /socket)\""); err != nil {
-			t.Fatal("credential controller socket inode cleanup failed")
-		}
+			return nil
+		}},
+		{"drain-credential-controller", func(cleanup context.Context) error {
+			select {
+			case result := <-completed:
+				// Before the peer exists, deliberate TERM may report a
+				// managed-client failure; after it exists shutdown must be clean.
+				failed := result.err != nil && (onBootstrapReady != nil ||
+					!bytes.Contains(result.output, []byte("stage managed-client")))
+				clear(result.output)
+				if failed {
+					return errors.New("credential controller drain unconfirmed")
+				}
+				return nil
+			case <-time.After(15 * time.Second):
+				return errors.New("credential controller drain timed out")
+			case <-cleanup.Done():
+				return errors.New("credential controller cleanup deadline ended")
+			}
+		}},
+		{"remove-credential-controller", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "rm", "-f", id); err != nil {
+				return errors.New("credential controller removal unconfirmed")
+			}
+			return nil
+		}},
+		{"verify-credential-ledger", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "run", "--rm", "--pull=never", "--network=none",
+				"--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), "--cap-drop=ALL", "--read-only",
+				"--mount", "type=volume,src="+ledgerVolume+",dst=/ledger,readonly", slice6PinnedAlpineImage,
+				"/bin/sh", "-ec", "test -f /ledger/ledger.json && test -z \"$(find /ledger -mindepth 1 -maxdepth 1 ! -name ledger.json)\""); err != nil {
+				return errors.New("credential controller ledger cleanup unconfirmed")
+			}
+			return nil
+		}},
+		{"verify-credential-socket", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "run", "--rm", "--pull=never", "--network=none",
+				"--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), "--cap-drop=ALL", "--read-only",
+				"--mount", "type=volume,src="+socketVolumes[bootstrapStorageID]+",dst=/socket,readonly",
+				slice6PinnedAlpineImage, "/bin/sh", "-ec", "test -z \"$(ls -A /socket)\""); err != nil {
+				return errors.New("credential controller socket cleanup unconfirmed")
+			}
+			return nil
+		}},
+	}}
+	stopCredential := func() error {
 		stopped = true
+		return sequence.Run()
 	}
+	defer func() {
+		if !stopped {
+			if err := stopCredential(); err != nil {
+				t.Errorf("failure-path credential controller cleanup: %v", err)
+			}
+		}
+	}()
 	if onBootstrapReady != nil {
 		onBootstrapReady(stopCredential)
 	}
 	if !stopped {
-		stopCredential()
+		if err := stopCredential(); err != nil {
+			t.Errorf("credential controller cleanup: %v", err)
+		}
 	}
 	if ctx.Err() != nil {
-		t.Fatal(errors.New("credential controller diagnostic context expired"))
+		t.Error("credential controller diagnostic context expired")
 	}
 }
 
