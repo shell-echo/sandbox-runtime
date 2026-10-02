@@ -31,6 +31,13 @@ func (p Profile) ResolveSlice6FinalPostgresAuthority(owner string) (Slice6Postgr
 	if VerifySlice6DesiredFinalExternalProfile(p) != nil {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
+	return p.resolveSlice6FinalPostgresAuthorityValidated(owner)
+}
+
+// This private projection is valid only after the complete final external
+// authority check on the same, unmodified Profile value. Public resolution
+// always performs that check itself.
+func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Slice6PostgresAuthority, error) {
 	var rule Slice6PostgresHBARule
 	rules, err := Slice6DesiredFinalSharedPostgresHBARules()
 	if err != nil {
@@ -45,7 +52,7 @@ func (p Profile) ResolveSlice6FinalPostgresAuthority(owner string) (Slice6Postgr
 	if rule.Owner == "" {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
-	signer, signerTarget, _, _, _, err := p.PostgresClientSignerForOwner(owner)
+	signer, signerTarget, _, _, _, err := p.postgresClientSignerForOwnerValidated(owner)
 	if err != nil || signerTarget.DatabaseName != rule.Database || signerTarget.SQLRole != rule.SQLRole ||
 		signerTarget.Migration != rule.Migration {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
@@ -104,7 +111,7 @@ func (p Profile) ResolveSlice6FinalPostgresAuthority(owner string) (Slice6Postgr
 		selected.ExternalIdentityDigest != service.IdentityDigest {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
-	serverAnchor, clientAnchor, err := p.EdgeTrustAnchors(selected.ID)
+	serverAnchor, clientAnchor, err := p.edgeTrustAnchorsValidated(selected.ID)
 	if err != nil || serverAnchor.ID != "external-server-ca" || clientAnchor.ID != "" {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}

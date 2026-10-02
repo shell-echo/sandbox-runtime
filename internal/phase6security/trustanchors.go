@@ -183,6 +183,11 @@ func (p Profile) EdgeTrustAnchors(edgeID string) (TrustAnchor, TrustAnchor, erro
 	if p.Validate() != nil {
 		return TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
+	return p.edgeTrustAnchorsValidated(edgeID)
+}
+
+// Only call for a locally held Profile already validated at this boundary.
+func (p Profile) edgeTrustAnchorsValidated(edgeID string) (TrustAnchor, TrustAnchor, error) {
 	for _, edge := range p.TrustEdges {
 		if edge.ID != edgeID || edge.Authentication != "mtls" {
 			continue

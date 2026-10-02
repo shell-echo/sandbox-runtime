@@ -32,7 +32,7 @@ const slice6QuiesceProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_QUIESCE_PROCESS"
 // or a proof that final shutdown's cyclic revocations are ordered safely.
 func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, bootstrapKey []byte, stopCredential func(), onTerminated func()) {
+	config, bootstrapKey []byte, onManagedReady func(), stopCredential func(), onTerminated func()) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -241,6 +241,9 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		t.Fatal("two-controller managed issuance and credential listener were not observed in time")
 	}
 	t.Log("real certificate controller PID1 issued self and credential managed leaves; credential controller opened post-switch listeners; final shutdown ordering not yet proven")
+	if onManagedReady != nil {
+		onManagedReady()
+	}
 	if os.Getenv(slice6QuiesceProcessEnv) == "1" {
 		for _, target := range []string{"sr-p6-credential-live-" + run.id, id} {
 			if _, err := run.docker(ctx, "kill", "--signal=USR1", target); err != nil {

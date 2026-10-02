@@ -438,10 +438,24 @@ func slice6ExerciseBreakGlassControlChain(t *testing.T, ctx context.Context, run
 		sum := sha256.Sum256([]byte(value))
 		return "sha256:" + hex.EncodeToString(sum[:])
 	}
+	materialAccess, err := phase6security.BuildSlice6DesiredMaterialAccess(composed.Profile)
+	if err != nil {
+		t.Fatal("break-glass target material binding unavailable")
+	}
+	var guestBindingDigest string
+	for _, access := range materialAccess {
+		if access.Agent == "guest-agent" && len(access.Bindings) == 1 &&
+			access.Bindings[0].Purpose == secretref.PurposeGuestSigningKey {
+			guestBindingDigest = access.Bindings[0].Digest()
+		}
+	}
+	if guestBindingDigest == "" {
+		t.Fatal("break-glass Guest binding unavailable")
+	}
 	request, err := breakglass.NewSignedAccessRequest(breakglass.AccessRequest{
 		Protocol: breakglass.ProtocolID, RequestID: "bgreq_" + run.id, RequesterID: "requester-a",
 		TargetAgentID: "guest-agent", Role: secretref.RoleGuest, Purpose: secretref.PurposeGuestSigningKey,
-		BindingDigest: digest("slice6-break-glass-binding-" + run.id), TenantID: secretref.SystemTenant,
+		BindingDigest: guestBindingDigest, TenantID: secretref.SystemTenant,
 		Operation: "material.resolve", ReasonDigest: digest("slice6-break-glass-reason-" + run.id),
 		TicketDigest: digest("slice6-break-glass-ticket-" + run.id), RequestedTTLSeconds: 60,
 		Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),

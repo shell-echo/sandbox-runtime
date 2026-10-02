@@ -116,6 +116,24 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		sources[source.ID] = source
 	}
 	used := make(map[string]bool, len(sources))
+	// A PostgreSQL logical peer is the only exceptional outbound edge that
+	// needs the complete final external authority. Resolve that authority once
+	// for this already validated, locally unchanged Profile snapshot instead of
+	// revalidating the entire 78-principal graph for each peer-CRL edge.
+	postgresPeers := make(map[string]bool)
+	if peerCRLNeedsFinalPostgresAuthority(p, profile) && VerifySlice6DesiredFinalExternalProfile(profile) == nil {
+		principals := make(map[string]Principal, len(profile.Principals))
+		for _, principal := range profile.Principals {
+			principals[principal.Name] = principal
+		}
+		for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+			authority, err := profile.resolveSlice6FinalPostgresAuthorityValidated(target.SubjectDeployment)
+			principal := principals[target.SubjectDeployment]
+			if err == nil && principal.Name == target.SubjectDeployment && principal.PrincipalDigest != "" {
+				postgresPeers[authority.PeerEdgeID+"/"+principal.PrincipalDigest] = true
+			}
+		}
+	}
 	previous = ""
 	for _, binding := range p.Edges {
 		key := binding.EdgeID + "/" + binding.LocalPrincipalDigest + "/" + binding.Direction
@@ -132,7 +150,7 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 			}
 		}
 		postgresPeer := edge.ClientAnchorID == "" && binding.Direction == "outbound" &&
-			profile.IsSlice6FinalPostgresPeerEdge(edge.ID, binding.LocalPrincipalDigest)
+			postgresPeers[edge.ID+"/"+binding.LocalPrincipalDigest]
 		dnsPeer := edge.ClientAnchorID == "" &&
 			profile.IsSlice6DNSPeerEdge(edge.ID, binding.LocalPrincipalDigest, binding.Direction)
 		if edge.ID == "" || edge.Authentication != "mtls" ||
@@ -167,6 +185,31 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		}
 	}
 	return nil
+}
+
+// This is only a cheap trigger. It grants nothing: a positive exceptional
+// peer still requires the complete final external verification and the exact
+// resolved owner authority in PeerCRLSources.Validate above.
+func peerCRLNeedsFinalPostgresAuthority(sources PeerCRLSources, profile Profile) bool {
+	targetDigests := make(map[string]bool, len(Slice6DesiredFinalPostgresSignerTargets()))
+	for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
+		for _, principal := range profile.Principals {
+			if principal.Name == target.SubjectDeployment && principal.PrincipalDigest != "" {
+				targetDigests[principal.PrincipalDigest] = true
+			}
+		}
+	}
+	for _, binding := range sources.Edges {
+		if binding.Direction != "outbound" || !targetDigests[binding.LocalPrincipalDigest] {
+			continue
+		}
+		for _, edge := range profile.TrustEdges {
+			if edge.ID == binding.EdgeID && edge.ClientAnchorID == "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func localAgentOwnsEdge(profile Profile, localName, principalDigest string) bool {

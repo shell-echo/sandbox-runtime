@@ -175,6 +175,12 @@ func (p Profile) PostgresClientSignerForOwner(owner string) (PostgresClientAgent
 	if p.Validate() != nil {
 		return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
 	}
+	return p.postgresClientSignerForOwnerValidated(owner)
+}
+
+// The caller must have validated this exact, unchanged Profile snapshot.
+// Keeping this private avoids giving ordinary callers a skip-validation path.
+func (p Profile) postgresClientSignerForOwnerValidated(owner string) (PostgresClientAgentBinding, Slice6PostgresSignerTarget, Principal, Principal, TrustAnchor, error) {
 	var target Slice6PostgresSignerTarget
 	for _, candidate := range Slice6DesiredFinalPostgresSignerTargets() {
 		if candidate.SubjectDeployment == owner {

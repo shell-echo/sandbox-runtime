@@ -369,6 +369,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var socketVolumes map[string]string
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string
+		var guestSocketVolumes map[string]string
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
@@ -385,6 +386,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			}
 			breakGlassSocketVolumes = slice6PrepareBreakGlassSocketVolumes(t, ctx, run, composed.Profile, priorSockets)
 			t.Logf("same-run break-glass socket allocations=15 combined=%d; no break-glass listener is active", len(breakGlassSocketVolumes))
+			if os.Getenv(slice6GuestMaterialEnv) == "1" {
+				guestSocketVolumes = slice6PrepareGuestAgentInputs(t, ctx, run, composed, breakGlassSocketVolumes)
+				t.Logf("same-run Guest signer/material socket allocations=2 combined=%d; exact private config readers prepared, no Guest agent launched", len(guestSocketVolumes))
+			}
 			anchorFiles = slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
 			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
 		}
@@ -399,6 +404,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				}
 				t.Logf("same-run Guest TLS-agent canonical v3 config assembled: bytes=%d; signer process not yet launched", len(guestTLSConfig))
 				clear(guestTLSConfig)
+				guestMaterialConfig, materialConfigErr := slice6BuildGuestMaterialAgentConfig(composed)
+				if materialConfigErr != nil {
+					t.Fatalf("same-run Guest material-agent startup input failed: %v", materialConfigErr)
+				}
+				t.Logf("same-run Guest material-agent canonical v2 config assembled: bytes=%d; agent process not yet launched", len(guestMaterialConfig))
+				clear(guestMaterialConfig)
 			}
 			if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 				credentialLeaf, credentialKey := slice6VaultSignControllerBootstrap(t, ctx, run,
@@ -443,6 +454,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 					if os.Getenv(slice6CertificateProcessEnv) == "1" {
 						onCredentialReady = func(stopCredential func()) {
 							var onTerminated func()
+							var onManagedReady func()
+							if os.Getenv(slice6GuestMaterialEnv) == "1" {
+								onManagedReady = func() {
+									slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, nil)
+								}
+							}
 							if terminalOperator != nil {
 								onTerminated = func() {
 									slice6RunTerminalOperator(t, ctx, run, composed, serverID,
@@ -452,7 +469,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							}
 							slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
 								controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
-								stopCredential, onTerminated)
+								onManagedReady, stopCredential, onTerminated)
 						}
 					}
 					slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
@@ -771,33 +788,46 @@ func waitSlice6VaultInitializedSealed(ctx context.Context, run slice6DockerRun, 
 func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, networkID, controllerIP, vaultIP,
 	user, directory, suffix, serverCA, clientCert, clientKey string, wantSuccess bool) {
 	t.Helper()
-	arguments := []string{"create", "--pull=never", "--name", "sr-p6-vault-" + suffix + "-" + run.id,
-		"--label", run.label(), "--network", networkID, "--ip", controllerIP, "--user", user,
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
-		"--memory=96m", "--cpus=0.5", "--pids-limit=16",
-		"--mount", "type=bind,source=" + directory + ",target=/probe,readonly",
-		slice6VaultTestImage, "status", "-address=https://" + vaultIP + ":8200",
-		"-ca-cert=/probe/" + serverCA, "-client-cert=/probe/" + clientCert,
-		"-client-key=/probe/" + clientKey, "-tls-server-name=vault.sandbox-runtime.test"}
-	created, err := run.docker(ctx, arguments...)
-	id := strings.TrimSpace(string(created))
-	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
-		t.Fatal("final-trust controller-address probe creation failed")
+	maxAttempts := 1
+	if !wantSuccess {
+		maxAttempts = 3 // A reset/broken pipe alone is ambiguous; require an explicit TLS error.
 	}
-	response, err := run.docker(ctx, "start", "-a", id)
-	if wantSuccess {
-		if err != nil || !strings.Contains(string(response), "Sealed          false") {
-			t.Fatalf("final-trust controller-address probe failed: %v: %.512s", err, response)
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		arguments := []string{"create", "--pull=never", "--name", fmt.Sprintf("sr-p6-vault-%s-%d-%s", suffix, attempt, run.id),
+			"--label", run.label(), "--network", networkID, "--ip", controllerIP, "--user", user,
+			"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+			"--memory=96m", "--cpus=0.5", "--pids-limit=16",
+			"--mount", "type=bind,source=" + directory + ",target=/probe,readonly",
+			slice6VaultTestImage, "status", "-address=https://" + vaultIP + ":8200",
+			"-ca-cert=/probe/" + serverCA, "-client-cert=/probe/" + clientCert,
+			"-client-key=/probe/" + clientKey, "-tls-server-name=vault.sandbox-runtime.test"}
+		created, err := run.docker(ctx, arguments...)
+		id := strings.TrimSpace(string(created))
+		if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+			t.Fatal("final-trust controller-address probe creation failed")
 		}
-	} else if err == nil || strings.Contains(string(response), "Sealed          false") ||
-		!(strings.Contains(string(response), "certificate required") ||
-			strings.Contains(string(response), "connection reset by peer") ||
+		response, probeErr := run.docker(ctx, "start", "-a", id)
+		if _, removeErr := run.docker(ctx, "rm", id); removeErr != nil {
+			t.Fatal(fmt.Errorf("remove exact Vault probe: %w", removeErr))
+		}
+		if wantSuccess {
+			if probeErr != nil || !strings.Contains(string(response), "Sealed          false") {
+				t.Fatalf("final-trust controller-address probe failed: %v: %.512s", probeErr, response)
+			}
+			return
+		}
+		if probeErr == nil || strings.Contains(string(response), "Sealed          false") {
+			t.Fatalf("temporary-trust probe unexpectedly succeeded: %v: %.512s", probeErr, response)
+		}
+		if strings.Contains(string(response), "certificate required") ||
 			strings.Contains(string(response), "unknown authority") ||
 			strings.Contains(string(response), "unknown certificate authority") ||
-			strings.Contains(string(response), "bad certificate")) {
-		t.Fatalf("temporary-trust probe was not attributable to TLS rejection: %v: %.512s", err, response)
-	}
-	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal(fmt.Errorf("remove exact Vault probe: %w", err))
+			strings.Contains(string(response), "bad certificate") {
+			return
+		}
+		if attempt+1 == maxAttempts {
+			t.Fatalf("temporary-trust probe was not attributable to TLS rejection after %d attempts: %v: %.512s",
+				maxAttempts, probeErr, response)
+		}
 	}
 }
