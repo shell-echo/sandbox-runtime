@@ -418,3 +418,112 @@ reporting. The full post-E `go test -race -shuffle=on -count=1 ./...`,
 `git diff --check` passed before the next issuer. If a new run
 still yields `unknown`, stop and investigate those non-secret capture buckets;
 do not repeat the same setup.
+
+## E-observed R9 peer-bootstrap failure (2026-10-03)
+
+The single Sandbox-approved repeat, run
+`a2f6f59c68af29a2e6e57d188eae5018`, used the unchanged R9 runtime
+candidate source `e3d0e96ef885546a8f74d7a3a59d566a5ace8337` and the
+E-only observer at `d6d3fe3cf57f4ccb387d359bd783dc632e646584`.
+Its real Vault/Profile identity was
+`sha256:e26f471af790a91b30cd02cd1b4458a2b52a5c40ef78ec1c9cc02f42cda6c209`.
+The Product migration PID1 started and exited 1 with OOM=false, no restart,
+start/finish timestamps and no Docker State error. The exact fixed output
+classification was `migration-connect-peer-bootstrap`, and only the finite
+shape/length `one-lf/65-128` was retained. This identifies the first live
+PostgreSQL peer-CRL bootstrap guard boundary; it does **not** identify whether
+the failure was socket admission, client/controller request, Vault response,
+bounded timeout, binding, signed CRL verification or freshness. No raw
+process output or credential was retained.
+The frozen desired TLS values for this role are 10-second connection drain
+and 30-second maximum CRL staleness; `derivePeerCRLBudget` caps the complete
+first pull at 2 seconds. That bound is confirmed source configuration, **not**
+evidence that this failure was a timeout, and it was not relaxed.
+
+Read-only SQL before PostgreSQL teardown found the precreated Product schema,
+no `schema_migrations` relation and zero business tables. No committed
+migration was observed, but no claim is made that the process never attempted
+a connection or DDL. Both signer sockets were cleaned, both controller PID1
+processes quiesced, PostgreSQL stopped, and the independent terminal operator
+confirmed three certificate serials, two token accessors, complete CRL and
+self-revocation with private plan
+`sha256:bc6b8a30a178eeba1e58bb1731c84801f181b5bb5b6ce8ebdbb9516cf719ba0f`.
+The server-leaf DER digest was
+`sha256:767d665bf41068ff051555a57e36c8be5403c67eb905a35fcecb386663f1c37c`.
+The two Vault image-created anonymous volume IDs were captured at creation
+and their exact-ID post-cleanup absence check passed. An independent post-run
+query found zero run-labeled containers, networks and named volumes.
+
+This failed component run has been reported to Sandbox for the next
+architectural/diagnostic boundary decision. It does not advance the 16-scenario
+Slice 6 release gate or issue a manifest. Phase 6 remains **5/15**.
+
+## Offline peer-CRL diagnosis and cancellation repair (2026-10-03)
+
+Sandbox allowed one finite no-new-issuer diagnosis after run
+`a2f6f59c68af29a2e6e57d188eae5018`. The original run's internal agent,
+controller and Vault timing/status were not retained and cannot be recovered
+from the terminal cleanup. The observed stage alone does not distinguish a
+socket failure, signed-request/source mismatch, controller queue delay, Vault
+read, CRL verification or freshness rejection.
+
+The closed final-Profile fixture was checked for all nine logical PostgreSQL
+signer owners: each exact outbound edge, local subject, external server
+anchor and general-issuer digest resolved its single fixed source; mutations
+of edge, subject, direction, anchor and issuer were denied. This is synthetic
+Profile binding evidence, not a reconstruction of the cleaned run. The
+real-gate composer source inspection selects its `general` Vault issuer for
+the PostgreSQL logical server edge, not the separate PostgreSQL client
+issuer. Agent/controller request and response code binds Profile, source
+mapping, edge/direction, issuer, nonce, deadline and signed CRL. Both Unix
+hops enforce local socket identity and bounded operation/cancellation. These
+checks make a simple static tuple swap less likely; they do not exclude a
+same-run runtime/config or timing failure.
+
+A controlled fake-issuer diagnostic blocked certificate issuance after the
+controller had persisted its nonce. It confirmed the controller mutex stayed
+held across the external call. A second ordinary CRL request passed its
+initial context check, was then canceled while queued, and returned success
+after the issuer was released because the fake authority ignored cancellation.
+The deliberately failing diagnostic reported
+`queued CRL continued after context cancellation: <nil>`; it was removed
+before the retained regressions. This proves the controller's pre-admission
+cancellation gap, not that production Vault returned success or that it
+caused R9's peer-bootstrap failure.
+
+The full `PeerCRLSources.AuthorizedSourceID` path on an Apple M4 local test
+host averaged 41.28 ms/op, 59,865,776 B/op and 400,694 allocs/op over three
+non-race benchmark iterations of a synthetic final Profile. Agent and
+controller both run source authorization on a pull. This is a local cost
+sample, not a restricted-container latency distribution or proof that the
+fixed 2-second budget was exceeded. No production timeout was widened.
+
+Sandbox approved a single-slot, context-aware controller admission permit
+while preserving the original serialized replay persistence, authority I/O,
+ledger mutation and quiesce order. The code now checks caller cancellation
+and a locally parseable, in-range claimed request deadline before admission and again when
+the permit is received. Reaping and quiesce accept lifecycle contexts; server
+stop cancels both queued handlers and its reaper before controller key/policy
+destruction. Focused race regressions cover v1/v2 queued cancellation and
+expiry, simultaneous permit/cancel readiness, unchanged replay state,
+subsequent permit use, quiesce/reap cancellation, server close, repeated
+close and exact socket removal. Existing tests retain quiesce persistence
+failure/restart and signed normal/invalid peer-CRL response coverage. This
+repair keeps external I/O serialized, so it is not a throughput fix.
+
+The R9 candidate image/manifests predate this source repair. Until a new
+clean-source candidate is frozen, the complete required source checks and
+real same-run gate pass, no migration success, Product runtime readiness,
+16-scenario release gate, strict evidence manifest or production safety is
+claimed. If the next single approved real run again stops at peer-bootstrap,
+the current stage cannot by itself be interpreted as a regression of the
+permit repair or as permission for repeated issuer-consuming retries. Phase 6
+remains **5/15**.
+
+After the repair, `go test -race -shuffle=on -count=1 ./...`, `go vet ./...`,
+the tagged Slice 6 race/vet package checks, Product Contract lock verifier,
+and `git diff --check` passed. The tagged Docker
+`TestDockerDistinctUIDTwoAgentCertificateController` passed with its pinned
+Alpine image; a separate query found no `p6-pki-` test containers or volumes.
+These are source, component and socket-isolation results, not a new
+source-bound Product migration or release observation.

@@ -72,6 +72,18 @@ func (s *Server) Serve(ctx context.Context) error {
 		return ErrUnavailable
 	}
 	defer s.stopServer()
+	reapContext, stopReap := context.WithCancel(ctx)
+	defer stopReap()
+	reapStopDone := make(chan struct{})
+	go func() {
+		defer close(reapStopDone)
+		select {
+		case <-reapContext.Done():
+		case <-s.stop:
+			stopReap()
+		}
+	}()
+	defer func() { stopReap(); <-reapStopDone }()
 	watcherDone := make(chan struct{})
 	go func() {
 		defer close(watcherDone)
@@ -79,13 +91,13 @@ func (s *Server) Serve(ctx context.Context) error {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-reapContext.Done():
 				s.stopServer()
 				return
 			case <-s.stop:
 				return
 			case <-ticker.C:
-				_ = s.controller.Reap()
+				_ = s.controller.Reap(reapContext)
 			}
 		}
 	}()
@@ -110,7 +122,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			go func() {
 				defer s.tracker.Done(connection)
 				defer func() { <-s.capacity }()
-				s.handle(ctx, connection)
+				s.handle(reapContext, connection)
 			}()
 		default:
 			_ = connection.Close()

@@ -195,7 +195,7 @@ func TestControllerQuiesceRejectsIssueButRetainsRevocation(t *testing.T) {
 	} else {
 		response.Destroy()
 	}
-	if controller.BeginQuiesce() != nil || controller.BeginQuiesce() != nil {
+	if controller.BeginQuiesce(context.Background()) != nil || controller.BeginQuiesce(context.Background()) != nil {
 		t.Fatal("quiesce must be idempotent")
 	}
 	if controller.ledger.QuiescedAt == nil {
@@ -260,10 +260,10 @@ func TestControllerQuiescePersistenceFailureIsStickyAndNotAcknowledged(t *testin
 		t.Fatal(err)
 	}
 	defer os.Chmod(directory, 0o700)
-	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+	if err := controller.BeginQuiesce(context.Background()); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("quiesce persistence failure = %v", err)
 	}
-	if err := controller.BeginQuiesce(); !errors.Is(err, ErrUnavailable) {
+	if err := controller.BeginQuiesce(context.Background()); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("repeat quiesce falsely acknowledged = %v", err)
 	}
 	request, err := NewIssueRequest(fixture.policy, "quiesce-failed-issue",

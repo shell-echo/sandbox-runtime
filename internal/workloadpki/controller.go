@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
@@ -57,7 +56,7 @@ type ControllerConfig struct {
 }
 
 type Controller struct {
-	mu               sync.Mutex
+	permit           chan struct{}
 	ledgerPath       string
 	policies         map[string]Policy
 	authority        CertificateAuthority
@@ -95,9 +94,10 @@ func NewController(config ControllerConfig) (*Controller, error) {
 			return nil, ErrUnavailable
 		}
 	}
-	controller := &Controller{ledgerPath: config.LedgerPath, policies: make(map[string]Policy, len(config.Policies)), authority: config.Authority,
+	controller := &Controller{permit: make(chan struct{}, 1), ledgerPath: config.LedgerPath, policies: make(map[string]Policy, len(config.Policies)), authority: config.Authority,
 		controllerKeyID: config.ControllerKeyID, controllerKey: append(ed25519.PrivateKey(nil), config.ControllerKey...), now: config.Now,
 		maximumActive: config.MaximumActive, maximumLedgerAge: config.MaximumLedgerAge}
+	controller.permit <- struct{}{}
 	if config.PeerCRLProfile != nil {
 		profileDocument, err := json.Marshal(config.PeerCRLProfile)
 		if err != nil {
@@ -173,12 +173,11 @@ func (c *Controller) Close() {
 // BeginQuiesce closes issuance while retaining authenticated revocation and
 // fixed-issuer CRL reads. The caller must keep the listener and Vault authority
 // alive until those operations have drained or terminal cleanup takes over.
-func (c *Controller) BeginQuiesce() error {
-	if c == nil {
-		return ErrUnavailable
+func (c *Controller) BeginQuiesce(ctx context.Context) error {
+	if err := c.acquire(ctx); err != nil {
+		return err
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer c.release()
 	if c.quiescing {
 		return c.quiesceErr
 	}
@@ -193,14 +192,10 @@ func (c *Controller) BeginQuiesce() error {
 }
 
 func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerGID uint32) (Response, error) {
-	if c == nil || ctx == nil {
-		return Response{}, ErrUnavailable
-	}
-	if err := ctx.Err(); err != nil {
+	if err := c.acquireRequest(ctx, request.Deadline); err != nil {
 		return Response{}, err
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer c.release()
 	now := c.now().UTC()
 	policy, known := c.policies[request.PolicyID]
 	if !known || policy.ExpectedUID != peerUID || policy.ExpectedGID != peerGID || request.Validate(policy, now) != nil {
@@ -208,6 +203,9 @@ func (c *Controller) Handle(ctx context.Context, request Request, peerUID, peerG
 	}
 	if c.quiescing && request.Type == IssueType {
 		return c.errorResponse(request, StatusDenied, ErrDenied)
+	}
+	if err := ctx.Err(); err != nil {
+		return Response{}, err
 	}
 	if !c.consumeReplay(request.Nonce, request.Deadline, now) {
 		return c.errorResponse(request, StatusDenied, ErrDenied)
@@ -324,12 +322,14 @@ func (c *Controller) revoke(ctx context.Context, request Request, policy Policy,
 		IssuerRevision: c.ledger.Certificates[index].IssuerRevision, Serial: request.Serial, Revoked: true})
 }
 
-func (c *Controller) Reap() error {
-	if c == nil {
-		return ErrUnavailable
+func (c *Controller) Reap(ctx context.Context) error {
+	if err := c.acquire(ctx); err != nil {
+		return err
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer c.release()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	now := c.now().UTC()
 	changed := false
 	for index := range c.ledger.Certificates {
@@ -352,6 +352,49 @@ func (c *Controller) Reap() error {
 		return c.persist()
 	}
 	return nil
+}
+
+// The single permit preserves the controller's existing serialized replay,
+// authority and ledger transaction. Unlike a mutex wait, admission can stop
+// before any mutation when the caller's deadline or cancellation fires.
+func (c *Controller) acquire(ctx context.Context) error {
+	if c == nil || c.permit == nil || ctx == nil {
+		return ErrUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.permit:
+		if err := ctx.Err(); err != nil {
+			c.release()
+			return err
+		}
+		return nil
+	}
+}
+
+// A parseable, locally valid request deadline also bounds permit waiting.
+// This preliminary deadline is never authorization: signature, peer identity
+// and current validity are still checked under the acquired permit.
+func (c *Controller) acquireRequest(ctx context.Context, deadlineValue string) error {
+	if c == nil || ctx == nil || c.now == nil {
+		return ErrUnavailable
+	}
+	deadline, err := parseTime(deadlineValue)
+	now := c.now().UTC()
+	if err != nil || !deadline.After(now) || deadline.After(now.Add(time.Minute)) {
+		return c.acquire(ctx)
+	}
+	waitContext, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return c.acquire(waitContext)
+}
+
+func (c *Controller) release() {
+	c.permit <- struct{}{}
 }
 
 func (c *Controller) consumeReplay(nonce, deadlineValue string, now time.Time) bool {

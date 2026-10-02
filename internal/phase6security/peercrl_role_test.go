@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func completePeerCRLSources(t *testing.T, profile Profile) PeerCRLSources {
+func completePeerCRLSources(t testing.TB, profile Profile) PeerCRLSources {
 	t.Helper()
 	vaultDigest := ""
 	for _, external := range profile.External {

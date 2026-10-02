@@ -50,6 +50,40 @@ func TestFinalPostgresPeerCRLSourceAndRoleArePurposeBound(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var subjectDigest string
+			for _, principal := range profile.Principals {
+				if principal.Name == target.SubjectDeployment {
+					subjectDigest = principal.PrincipalDigest
+				}
+			}
+			sourceID, err := sources.AuthorizedSourceID(profile, authority.PeerEdgeID,
+				subjectDigest, "outbound", authority.ServerAnchor.ID, testDigest("postgres-server-issuer"))
+			if err != nil || sourceID != "postgres-server-peer" {
+				t.Fatalf("fixed external PostgreSQL source = %q, %v", sourceID, err)
+			}
+			if target.SubjectDeployment == "product-runtime" {
+				for _, changed := range []struct {
+					name          string
+					edgeID        string
+					subjectDigest string
+					direction     string
+					anchorID      string
+					issuerDigest  string
+				}{
+					{name: "edge", edgeID: "certificate-vault", subjectDigest: subjectDigest, direction: "outbound", anchorID: authority.ServerAnchor.ID, issuerDigest: testDigest("postgres-server-issuer")},
+					{name: "subject", edgeID: authority.PeerEdgeID, subjectDigest: testDigest("other-subject"), direction: "outbound", anchorID: authority.ServerAnchor.ID, issuerDigest: testDigest("postgres-server-issuer")},
+					{name: "direction", edgeID: authority.PeerEdgeID, subjectDigest: subjectDigest, direction: "inbound", anchorID: authority.ServerAnchor.ID, issuerDigest: testDigest("postgres-server-issuer")},
+					{name: "anchor", edgeID: authority.PeerEdgeID, subjectDigest: subjectDigest, direction: "outbound", anchorID: "internal-server-ca", issuerDigest: testDigest("postgres-server-issuer")},
+					{name: "issuer", edgeID: authority.PeerEdgeID, subjectDigest: subjectDigest, direction: "outbound", anchorID: authority.ServerAnchor.ID, issuerDigest: testDigest("postgres-client-issuer")},
+				} {
+					t.Run(changed.name, func(t *testing.T) {
+						if sourceID, err := sources.AuthorizedSourceID(profile, changed.edgeID, changed.subjectDigest,
+							changed.direction, changed.anchorID, changed.issuerDigest); err == nil || sourceID != "" {
+							t.Fatalf("changed binding resolved source %q, %v", sourceID, err)
+						}
+					})
+				}
+			}
 			role, err := DerivePostgresPeerCRLRoleDocument(profile, sources, target.SubjectDeployment)
 			if err != nil || len(role.Edges) != 1 || role.Edges[0].EdgeID != authority.PeerEdgeID ||
 				role.Edges[0].PeerAnchorID != "external-server-ca" {
@@ -204,4 +238,43 @@ func sortPeerCRLTestEdges(edges []PeerCRLEdgeBinding) {
 		}
 		return 0
 	})
+}
+
+// This measures the full source-authorization path, including its repeated
+// final-profile verification. It is a local cost sample, not a gate budget.
+func BenchmarkFinalPostgresAuthorizedSourceID(b *testing.B) {
+	profile, err := BuildSlice6FinalExternalProfileTarget(validProfile())
+	if err != nil {
+		b.Fatal(err)
+	}
+	authority, err := profile.ResolveSlice6FinalPostgresAuthority("product-runtime")
+	if err != nil {
+		b.Fatal(err)
+	}
+	var subjectDigest string
+	for _, principal := range profile.Principals {
+		if principal.Name == "product-runtime" {
+			subjectDigest = principal.PrincipalDigest
+		}
+	}
+	sources := completePeerCRLSources(b, profile)
+	sources.Sources = append(sources.Sources, PeerCRLSource{ID: "postgres-server-peer",
+		Mount: "postgres-server-pki", IssuerID: "b26eab8a-482b-4fb1-a232-24235775b5fb",
+		IssuerDigest: testDigest("postgres-server-issuer")})
+	sources.Edges = append(sources.Edges, PeerCRLEdgeBinding{EdgeID: authority.PeerEdgeID,
+		LocalPrincipalDigest: subjectDigest, Direction: "outbound",
+		PeerAnchorID: authority.ServerAnchor.ID, SourceID: "postgres-server-peer"})
+	sortPeerCRLTestEdges(sources.Edges)
+	if err := sources.Validate(profile); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		id, err := sources.AuthorizedSourceID(profile, authority.PeerEdgeID,
+			subjectDigest, "outbound", authority.ServerAnchor.ID, testDigest("postgres-server-issuer"))
+		if err != nil || id != "postgres-server-peer" {
+			b.Fatalf("source = %q, %v", id, err)
+		}
+	}
 }

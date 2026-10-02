@@ -247,11 +247,10 @@ func (c *Controller) HandlePeerCRL(ctx context.Context, request PeerCRLRequest, 
 	if c == nil || ctx == nil || c.peerCRLProfile == nil || c.peerCRLSources == nil {
 		return PeerCRLResponse{}, ErrUnavailable
 	}
-	if err := ctx.Err(); err != nil {
+	if err := c.acquireRequest(ctx, request.Deadline); err != nil {
 		return PeerCRLResponse{}, err
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer c.release()
 	now := c.now().UTC()
 	policy, known := c.policies[request.PolicyID]
 	if !known || policy.ExpectedUID != peerUID || policy.ExpectedGID != peerGID ||
@@ -262,6 +261,9 @@ func (c *Controller) HandlePeerCRL(ctx context.Context, request PeerCRLRequest, 
 		request.LocalPrincipalDigest, request.Direction, request.PeerAnchorID, request.IssuerDigest)
 	if err != nil || sourceID != request.SourceID {
 		return c.peerCRLError(request, StatusDenied, ErrDenied)
+	}
+	if err := ctx.Err(); err != nil {
+		return PeerCRLResponse{}, err
 	}
 	if !c.consumeReplay(request.Nonce, request.Deadline, now) {
 		return c.peerCRLError(request, StatusDenied, ErrDenied)

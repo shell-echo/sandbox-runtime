@@ -423,6 +423,9 @@ func run() (runErr error) { //nolint:gocyclo
 		}
 	}
 	if len(listenerPairs) != len(peerPairs) || managedListener.SocketPath == "" {
+		for _, active := range servers {
+			_ = active.Close()
+		}
 		return stageError("listener-coverage")
 	}
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -520,7 +523,10 @@ func run() (runErr error) { //nolint:gocyclo
 	case <-signalContext.Done():
 		normalShutdown = true
 	case <-quiesceSignals:
-		if controller.BeginQuiesce() != nil {
+		quiesceContext, quiesceCancel := context.WithTimeout(signalContext, time.Duration(config.OperationTimeoutSeconds)*time.Second)
+		quiesceErr := controller.BeginQuiesce(quiesceContext)
+		quiesceCancel()
+		if quiesceErr != nil {
 			firstErr = stageError("quiesce-ledger")
 			break
 		}

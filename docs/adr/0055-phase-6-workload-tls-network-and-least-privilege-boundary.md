@@ -2292,3 +2292,45 @@ and source checks are component checks only. A clean-source rebuild, actual
 cross-UID process/SQL migration, exact SQL ledger/grant readback, terminal
 cleanup and the full Slice 6 release scenarios remain necessary. Phase 6
 remains **5/15** until those gates pass.
+
+### Slice 6 certificate-controller cancellation admission (2026-10-03)
+
+The first source-bound Product migration PID1 reached PostgreSQL peer-CRL
+bootstrap and exited before a confirmed connection or DDL. That observed
+stage does not identify a root cause. Offline inspection found a separate,
+reproducible controller flaw: certificate issuance, ordinary revocation reads,
+peer-CRL reads, revocation writes, ledger reaping and quiesce all used one
+mutex, held across external PKI operations. A request canceled while waiting
+for that mutex could still consume a replay nonce and invoke its authority
+after admission. A controlled blocked-issuer test reproduced a canceled CRL
+returning success with a fake authority that ignores cancellation. It does not
+establish that production Vault behaved that way or that this caused the
+observed migration failure.
+
+The approved correction replaces that mutex with one context-aware,
+single-slot permit. It retains the prior serialized replay persistence,
+authority I/O, issuance/revocation ledger mutation, response signing and
+quiesce ordering; it does not create parallel PKI operations, a queue worker,
+cache, retry, or wider timeout. Request admission is bounded by its caller
+context and a locally parseable, in-range claimed request deadline; exact signature,
+peer and current-time validation still occur after admission. Cancellation
+before transaction admission cannot consume a nonce, persist a ledger change
+or call the authority. Cancellation after a nonce is persisted or an external
+mutation begins is not rollback authorization: the existing replay and
+compensation rules remain in force, and no automatic replay is introduced.
+
+`BeginQuiesce` receives the existing operation/lifecycle context; server
+reaping and handlers receive a context canceled by server stop as well as
+caller stop. The production command stops and waits for all listeners,
+handlers and reapers before clearing the controller's signing key and policy
+map. Quiesce success remains the persisted receipt; failed persistence stays
+sticky and fail-closed for issuance while valid revocation and CRL reads
+remain available. The permit channel is not closed on shutdown. Reversal, if
+needed, is a normal source commit reverting this admission correction, not a
+ledger, wire-protocol or Profile schema rewrite.
+
+This is a safety/cancellation repair, not a throughput optimization or proof
+that the 2-second PostgreSQL peer-CRL bootstrap budget is adequate under the
+full process graph. Source-bound builds, race/shuffle and vet, Contract lock,
+real same-run gate, exact cleanup, and its strict evidence manifest remain
+separate acceptance requirements. Phase 6 remains **5/15**.
