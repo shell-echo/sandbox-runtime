@@ -3861,3 +3861,33 @@ cleanup; Docker resources returned to zero. The production break-glass v2
 controller, finite signed approval/issue/delivery/consume chain, role graph,
 16 scenarios and strict Slice 6 manifest were **not** run or produced. This
 is a diagnostic checkpoint only; Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-02 (real break-glass controller and finite control chain):
+the independent clean source `1f2c8b3cd536b5e045681372f6d6cb6c2f1e28b4`
+supplied the exact local controller/operator candidate binaries to a same-run
+real Vault/Profile preparation. A separate break-glass-controller container,
+running as the Profile's `20000:30000` identity with a sealed FD 3 signer,
+opened all eight v2 control/consume listeners on its distinct restricted
+socket volumes and created its own persistent ledger and audit. Each of seven
+finite, networkless operator invocations was a separate `20091:30091`
+container with only the Profile-bound read-only executable and the designated
+read-only control socket mount; the test inspected the created container and
+rehashed its actual mounted executable before passing pre-signed input. The
+real controller accepted a requester submit, two different signed approvers
+at exact revisions and a signed one-use capability issue. It rejected a
+different, correctly signed request that reused the submit JTI, excluding
+duplicate request ID as the explanation. After stopping and removing that
+controller container, a separate non-root, read-only observer found the
+ledger and audit present and all eight controller sockets absent. A new
+container ID and startup nonce, with the same exclusive persistent allocation,
+then loaded the ledger, rejected a new correctly signed request reusing the
+recent issue JTI, accepted a fresh request/JTI, and again closed all eight
+sockets on stop. The complete real Vault/controller diagnostic passed in
+248.76 seconds; the run-owned `sr-p6-` Docker container and volume inventories
+were empty afterward. The target material agent was not started, so
+capability delivery, online target consume, one-use replay after consume,
+controller/agent concurrent failure, the 78-deployment/16-scenario gate and
+an immutable Slice 6 manifest remain unproved. This is component evidence;
+Phase 6 stays **5/15**. The complete repository race/shuffle suite, ordinary
+and Slice 6 tagged vet, tagged gate compilation, Product Contract lock
+verification and diff check passed at this checkpoint.

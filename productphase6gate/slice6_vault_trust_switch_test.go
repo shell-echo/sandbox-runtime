@@ -340,6 +340,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		(os.Getenv(slice6CertificateProcessEnv) != "1" || os.Getenv(slice6QuiesceProcessEnv) != "1") {
 		t.Fatal("terminal operator requires two real quiesced controller processes")
 	}
+	if os.Getenv(slice6BreakGlassProcessEnv) == "1" &&
+		(os.Getenv(slice6ControllerPrivateConfigEnv) != "1" || os.Getenv(slice6CertificateProcessEnv) != "1") {
+		t.Fatal("break-glass v2 process requires complete same-run controller socket and private-volume supply")
+	}
 	if os.Getenv(slice6GuestMaterialEnv) == "1" &&
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
 		t.Fatal("real Guest material requires same-run scoped Vault access")
@@ -364,6 +368,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
 		var socketVolumes map[string]string
 		var certificateSocketVolumes map[string]string
+		var breakGlassSocketVolumes map[string]string
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
@@ -378,7 +383,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			if len(certificateSocketVolumes) != 0 {
 				priorSockets = certificateSocketVolumes
 			}
-			breakGlassSocketVolumes := slice6PrepareBreakGlassSocketVolumes(t, ctx, run, composed.Profile, priorSockets)
+			breakGlassSocketVolumes = slice6PrepareBreakGlassSocketVolumes(t, ctx, run, composed.Profile, priorSockets)
 			t.Logf("same-run break-glass socket allocations=15 combined=%d; no break-glass listener is active", len(breakGlassSocketVolumes))
 			anchorFiles = slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
 			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
@@ -455,6 +460,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 						credentialKey, onCredentialReady)
 				}
 			}
+		}
+		if os.Getenv(slice6BreakGlassProcessEnv) == "1" {
+			revokeBootstrapRoot()
+			slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes)
 		}
 	}
 	revokeBootstrapRoot()

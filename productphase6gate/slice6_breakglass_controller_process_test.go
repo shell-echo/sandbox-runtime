@@ -1,0 +1,696 @@
+//go:build phase6slice6gate
+
+package productphase6gate
+
+import (
+	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/breakglass"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
+)
+
+const slice6BreakGlassProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_BREAK_GLASS_PROCESS"
+
+type slice6BreakGlassActorDocument struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	PublicKey string `json:"public_key"`
+}
+
+type slice6BreakGlassConfigDocument struct {
+	Protocol              string                          `json:"protocol"`
+	SecurityProfilePath   string                          `json:"security_profile_path"`
+	SecurityProfileDigest string                          `json:"security_profile_digest"`
+	LedgerPath            string                          `json:"ledger_path"`
+	AuditPath             string                          `json:"audit_path"`
+	MaxTTLSeconds         int                             `json:"max_ttl_seconds"`
+	Actors                []slice6BreakGlassActorDocument `json:"actors"`
+}
+
+func slice6BuildBreakGlassControllerInput(composed slice6VaultComposedInputs) ([]byte, ed25519.PrivateKey, error) {
+	profile := composed.Profile
+	if phase6security.VerifySlice6FinalGateProfile(profile) != nil || len(profile.BreakGlassKeyAuthority.Actors) != 11 {
+		return nil, nil, fmt.Errorf("break-glass Profile authority unavailable")
+	}
+	_, ledgerPath, err := phase6security.Slice6ControllerLedgerMount("break-glass-controller")
+	if err != nil {
+		return nil, nil, err
+	}
+	auditPath, err := phase6security.Slice6BreakGlassAuditPath()
+	if err != nil {
+		return nil, nil, err
+	}
+	config := slice6BreakGlassConfigDocument{Protocol: "sandbox-runtime.break-glass-controller-config.v2",
+		SecurityProfilePath:   "/run/phase6/config/" + phase6security.Slice6ProfileConfigFile,
+		SecurityProfileDigest: profile.ProfileDigest, LedgerPath: ledgerPath, AuditPath: auditPath,
+		MaxTTLSeconds: 900}
+	for _, binding := range profile.BreakGlassKeyAuthority.Actors {
+		var public ed25519.PublicKey
+		if binding.Kind == "target" {
+			private, readErr := slice6ReadPrivateSigningKey(composed.CredentialKeys[binding.KeyID])
+			if readErr != nil {
+				return nil, nil, readErr
+			}
+			public = bytes.Clone(private.Public().(ed25519.PublicKey))
+			clear(private)
+		} else {
+			path := composed.BreakGlassKeys[binding.KeyID]
+			info, statErr := os.Lstat(path)
+			if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o400 || info.Size() != ed25519.PublicKeySize {
+				return nil, nil, fmt.Errorf("unsafe break-glass actor public source")
+			}
+			public, err = os.ReadFile(path)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if phase6security.Slice6BreakGlassPublicKeyDigest(public) != binding.PublicKeyDigest {
+			clear(public)
+			return nil, nil, fmt.Errorf("break-glass actor source digest drift")
+		}
+		kind := binding.Kind
+		if kind == "target" {
+			kind = breakglass.ActorTarget
+		}
+		config.Actors = append(config.Actors, slice6BreakGlassActorDocument{ID: binding.ID, Kind: kind,
+			PublicKey: base64.RawURLEncoding.EncodeToString(public)})
+		clear(public)
+	}
+	private, err := slice6ReadPrivateSigningKey(composed.BreakGlassKeys[profile.BreakGlassKeyAuthority.ControllerKeyID])
+	if err != nil {
+		return nil, nil, err
+	}
+	if phase6security.Slice6BreakGlassPublicKeyDigest(private.Public().(ed25519.PublicKey)) !=
+		profile.BreakGlassKeyAuthority.ControllerPublicKeyDigest {
+		clear(private)
+		return nil, nil, fmt.Errorf("break-glass controller signing source drift")
+	}
+	document, err := json.Marshal(config)
+	if err != nil || len(document) > 1<<20 {
+		clear(private)
+		return nil, nil, fmt.Errorf("break-glass controller config unavailable")
+	}
+	return document, private, nil
+}
+
+func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, socketVolumes map[string]string) {
+	t.Helper()
+	profile := composed.Profile
+	if len(socketVolumes) != 65 || phase6security.VerifySlice6BreakGlassBoundaries(profile) != nil {
+		t.Fatal("complete break-glass socket supply unavailable")
+	}
+	var principal phase6security.Principal
+	for _, candidate := range profile.Principals {
+		if candidate.Name == "break-glass-controller" {
+			principal = candidate
+			break
+		}
+	}
+	if principal.Name == "" || principal.ImageLocation != "local" ||
+		principal.ImageReference != principal.ImageDigest || principal.UID == 0 || principal.GID == 0 ||
+		!principal.ReadOnlyRootFilesystem || !principal.NoNewPrivileges ||
+		!slices.Equal(principal.DroppedCapabilities, []string{"ALL"}) {
+		t.Fatal("break-glass controller principal drift")
+	}
+	var network phase6security.Network
+	for _, candidate := range profile.Networks {
+		if candidate.Name == "network-break-glass-controller" {
+			network = candidate
+		}
+	}
+	if network.Name == "" || !network.Internal || network.GatewayModeIPv4 != "isolated" ||
+		!slices.Equal(network.Principals, []string{"break-glass-controller"}) || len(network.ExternalServices) != 0 {
+		t.Fatal("break-glass controller isolated network drift")
+	}
+	createdNetwork, err := createSlice6ProfileNetwork(ctx, run, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, key, err := slice6BuildBreakGlassControllerInput(composed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(config)
+	defer clear(key)
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seccompPath := filepath.Join(root, "profiles", "phase6", "security", "go-controller-agent-seccomp-arm64.json")
+	seccompBytes, err := os.ReadFile(seccompPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seccompDigest := sha256.Sum256(seccompBytes)
+	if principal.SeccompDigest != "sha256:"+hex.EncodeToString(seccompDigest[:]) {
+		t.Fatal("break-glass controller seccomp digest drift")
+	}
+	_, ledgerPath, _ := phase6security.Slice6ControllerLedgerMount(principal.Name)
+	privateMount, needed := phase6security.Slice6PrivateConfigMount(principal.Name)
+	if !needed || privateMount.Target != "/run/phase6/config" {
+		t.Fatal("break-glass controller private-config mount drift")
+	}
+	nonce, err := phase6security.NewSlice6RunID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "sr-p6-break-glass-live-" + run.id
+	arguments := []string{"create", "-i", "--pull=never", "--name", name,
+		"--label", run.label(), "--log-driver=none", "--network", createdNetwork.NetworkID,
+		"--restart=no", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccompPath,
+		"--read-only", "--memory", strconv.FormatInt(principal.Resources.MemoryBytes, 10),
+		"--cpus", strconv.FormatFloat(float64(principal.Resources.CPUMillis)/1000, 'f', 3, 64),
+		"--pids-limit", strconv.FormatInt(principal.Resources.PIDs, 10),
+		"--mount", "type=volume,src=sr-p6-config-" + principal.Name + "-" + run.id + ",dst=" + privateMount.Target + ",readonly",
+		"--mount", "type=volume,src=sr-p6-ledger-" + principal.Name + "-" + run.id + ",dst=" + filepath.Dir(ledgerPath)}
+	control := phase6security.Slice6BreakGlassSocketBinding{}
+	serverSockets := 0
+	for _, binding := range profile.BreakGlassSockets {
+		if binding.ServerDeployment != principal.Name {
+			continue
+		}
+		if socketVolumes[binding.SocketStorageID] == "" {
+			t.Fatal("break-glass controller socket volume omitted")
+		}
+		arguments = append(arguments, "--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory)
+		if binding.Kind == "control" {
+			control = binding
+		}
+		serverSockets++
+	}
+	if serverSockets != 8 || control.ID == "" {
+		t.Fatal("break-glass controller endpoint count drift")
+	}
+	arguments = append(arguments, "-e", "SR_PHASE6_FD_RUN_ID="+run.id,
+		"-e", "SR_PHASE6_FD_TARGET=break-glass-controller", "-e", "SR_PHASE6_FD_NONCE="+nonce,
+		principal.ImageReference)
+	created, err := run.docker(ctx, arguments...)
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("create real break-glass controller failed")
+	}
+	verifyCreated := func(containerID string) {
+		inspect, err := run.docker(ctx, "inspect", containerID)
+		var containers []struct {
+			Image  string `json:"Image"`
+			Config struct {
+				Image, User string
+				Entrypoint  []string
+			} `json:"Config"`
+			HostConfig struct {
+				ReadonlyRootfs, Privileged bool
+				NetworkMode                string
+			} `json:"HostConfig"`
+			Mounts []struct {
+				Type        string
+				Source      string
+				Name        string
+				Destination string
+				RW          bool
+			} `json:"Mounts"`
+		}
+		if err != nil || json.Unmarshal(inspect, &containers) != nil || len(containers) != 1 ||
+			containers[0].Image != principal.ImageDigest || containers[0].Config.Image != principal.ImageReference ||
+			containers[0].Config.User != fmt.Sprintf("%d:%d", principal.UID, principal.GID) ||
+			!slices.Equal(containers[0].Config.Entrypoint, []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand}) ||
+			!containers[0].HostConfig.ReadonlyRootfs || containers[0].HostConfig.Privileged ||
+			containers[0].HostConfig.NetworkMode != createdNetwork.NetworkID || len(containers[0].Mounts) != 10 {
+			t.Fatal("break-glass controller created-container identity or mount count drift")
+		}
+		expectedMounts := map[string]struct {
+			name string
+			rw   bool
+		}{
+			privateMount.Target:      {"sr-p6-config-" + principal.Name + "-" + run.id, false},
+			filepath.Dir(ledgerPath): {"sr-p6-ledger-" + principal.Name + "-" + run.id, true},
+		}
+		for _, binding := range profile.BreakGlassSockets {
+			if binding.ServerDeployment == principal.Name {
+				expectedMounts[binding.SocketDirectory] = struct {
+					name string
+					rw   bool
+				}{socketVolumes[binding.SocketStorageID], true}
+			}
+		}
+		if len(expectedMounts) != 10 {
+			t.Fatal("break-glass controller expected mount inventory drift")
+		}
+		for _, mount := range containers[0].Mounts {
+			wanted, found := expectedMounts[mount.Destination]
+			if !found || mount.Type != "volume" || mount.Name != wanted.name || mount.RW != wanted.rw {
+				t.Fatal("break-glass controller effective mount drift")
+			}
+			delete(expectedMounts, mount.Destination)
+		}
+		if len(expectedMounts) != 0 {
+			t.Fatal("break-glass controller omitted a required mount")
+		}
+	}
+	verifyCreated(id)
+	envelope := phase6fdloader.Envelope{Protocol: phase6fdloader.ProtocolID, RunID: run.id,
+		Target: "break-glass-controller", ContainerID: id, Nonce: nonce,
+		Config: bytes.Clone(config), Files: []phase6fdloader.PrivateFile{{FD: 3, Data: bytes.Clone(key)}}}
+	defer envelope.Destroy()
+	encoded, err := json.Marshal(envelope)
+	if err != nil || envelope.Validate(phase6fdloader.Expected{RunID: run.id, Target: envelope.Target,
+		Nonce: nonce, ContainerHostname: id[:12]}) != nil {
+		t.Fatal("break-glass controller sealed FD envelope invalid")
+	}
+	defer clear(encoded)
+	type startResult struct {
+		output []byte
+		err    error
+	}
+	startAndAwait := func(containerID string, document []byte) chan startResult {
+		completed := make(chan startResult, 1)
+		startupInput := bytes.Clone(document)
+		go func() {
+			command := exec.CommandContext(ctx, "docker", "start", "-a", "-i", containerID)
+			command.Stdin = bytes.NewReader(startupInput)
+			output, startErr := command.CombinedOutput()
+			clear(startupInput)
+			completed <- startResult{output: output, err: startErr}
+		}()
+		deadline := time.Now().Add(30 * time.Second)
+		ready := false
+		for time.Now().Before(deadline) && ctx.Err() == nil {
+			probe := "set -eu; test -s " + ledgerPath
+			for _, binding := range profile.BreakGlassSockets {
+				if binding.ServerDeployment == principal.Name {
+					probe += "; test -S " + binding.SocketPath
+				}
+			}
+			if _, probeErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), containerID,
+				"/bin/sh", "-ec", probe); probeErr == nil {
+				ready = true
+				break
+			}
+			select {
+			case result := <-completed:
+				t.Fatalf("real break-glass controller exited before eight listeners: %v: %.256s", result.err, result.output)
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+		if !ready {
+			t.Fatal("real break-glass controller eight listeners and ledger not ready")
+		}
+		if _, err := observeSlice6ProfileNetwork(ctx, run, createdNetwork.NetworkID, network,
+			map[string]string{principal.Name: containerID}); err != nil {
+			t.Fatal("real break-glass controller network membership drift")
+		}
+		return completed
+	}
+	stopAndDrain := func(containerID string, completed chan startResult) {
+		if _, err := run.docker(ctx, "stop", "--time", "10", containerID); err != nil {
+			t.Fatal("stop real break-glass controller")
+		}
+		select {
+		case result := <-completed:
+			if result.err != nil {
+				t.Fatalf("break-glass controller did not exit cleanly: %v: %.256s", result.err, result.output)
+			}
+		case <-time.After(15 * time.Second):
+			t.Fatal("break-glass controller did not drain after stop")
+		}
+	}
+	completed := startAndAwait(id, encoded)
+	seed := slice6ExerciseBreakGlassControlChain(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID])
+	stopAndDrain(id, completed)
+	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
+	if _, err := run.docker(ctx, "rm", id); err != nil {
+		t.Fatal("remove first break-glass controller before replacement")
+	}
+	var restartRandom [16]byte
+	if _, err := rand.Read(restartRandom[:]); err != nil {
+		t.Fatal(err)
+	}
+	restartNonce := hex.EncodeToString(restartRandom[:])
+	nonceReplaced := false
+	for index, argument := range arguments {
+		if argument == "SR_PHASE6_FD_NONCE="+nonce {
+			arguments[index] = "SR_PHASE6_FD_NONCE=" + restartNonce
+			nonceReplaced = true
+		}
+	}
+	if !nonceReplaced || restartNonce == nonce {
+		t.Fatal("break-glass replacement nonce did not change")
+	}
+	replaced, err := run.docker(ctx, arguments...)
+	replacementID := strings.TrimSpace(string(replaced))
+	if err != nil || len(replacementID) != 64 || !lowerHexSlice6(replacementID) || replacementID == id {
+		t.Fatal("create independent replacement break-glass controller")
+	}
+	verifyCreated(replacementID)
+	replacementEnvelope := phase6fdloader.Envelope{Protocol: phase6fdloader.ProtocolID, RunID: run.id,
+		Target: "break-glass-controller", ContainerID: replacementID, Nonce: restartNonce,
+		Config: bytes.Clone(config), Files: []phase6fdloader.PrivateFile{{FD: 3, Data: bytes.Clone(key)}}}
+	defer replacementEnvelope.Destroy()
+	replacementInput, err := json.Marshal(replacementEnvelope)
+	if err != nil || replacementEnvelope.Validate(phase6fdloader.Expected{RunID: run.id,
+		Target: replacementEnvelope.Target, Nonce: restartNonce, ContainerHostname: replacementID[:12]}) != nil {
+		t.Fatal("replacement controller FD envelope invalid")
+	}
+	defer clear(replacementInput)
+	replacementCompleted := startAndAwait(replacementID, replacementInput)
+	slice6ExerciseBreakGlassRestart(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID], seed)
+	stopAndDrain(replacementID, replacementCompleted)
+	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
+	if _, err := run.docker(ctx, "rm", replacementID); err != nil {
+		t.Fatal("remove replacement break-glass controller")
+	}
+	t.Log("real source-bound break-glass controller accepted signed submit/two approvals/issue, rejected same-JTI distinct-request replay, then a fresh replacement PID1 recovered persistent ledger/replay state and accepted a new request; delivery/consume remain open")
+}
+
+func slice6InspectStoppedBreakGlassController(t *testing.T, ctx context.Context, run slice6DockerRun,
+	profile phase6security.Profile, principal phase6security.Principal, ledgerPath string,
+	socketVolumes map[string]string) {
+	t.Helper()
+	auditPath, err := phase6security.Slice6BreakGlassAuditPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments := []string{"run", "--rm", "--pull=never", "--name", "sr-p6-break-glass-stopped-" + run.id,
+		"--label", run.label(), "--log-driver=none", "--network=none", "--restart=no",
+		"--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), "--cap-drop=ALL",
+		"--security-opt", "no-new-privileges:true", "--read-only", "--memory=64m", "--cpus=0.1",
+		"--pids-limit=16", "--mount", "type=volume,src=sr-p6-ledger-" + principal.Name + "-" + run.id +
+			",dst=" + filepath.Dir(ledgerPath) + ",readonly"}
+	probe := "set -eu; test -s " + ledgerPath + "; test -s " + auditPath
+	serverSockets := 0
+	for _, binding := range profile.BreakGlassSockets {
+		if binding.ServerDeployment != principal.Name {
+			continue
+		}
+		volume := socketVolumes[binding.SocketStorageID]
+		if volume == "" {
+			t.Fatal("stopped controller socket volume missing")
+		}
+		arguments = append(arguments, "--mount", "type=volume,src="+volume+",dst="+binding.SocketDirectory+",readonly")
+		probe += "; test ! -e " + binding.SocketPath
+		serverSockets++
+	}
+	if serverSockets != 8 {
+		t.Fatal("stopped controller endpoint count drift")
+	}
+	arguments = append(arguments, "--entrypoint=/bin/sh", principal.ImageReference, "-ec", probe)
+	if output, err := run.docker(ctx, arguments...); err != nil {
+		t.Fatalf("stopped controller persisted state or eight socket cleanup failed: %v: %.256s", err, output)
+	}
+}
+
+type slice6BreakGlassRestartSeed struct {
+	request   breakglass.AccessRequest
+	replayJTI string
+}
+
+func slice6ExerciseBreakGlassControlChain(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, control phase6security.Slice6BreakGlassSocketBinding, volume string) slice6BreakGlassRestartSeed {
+	t.Helper()
+	requesterKey, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory, "break-glass-requester-a.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var random [32]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		t.Fatal(err)
+	}
+	digest := func(value string) string {
+		sum := sha256.Sum256([]byte(value))
+		return "sha256:" + hex.EncodeToString(sum[:])
+	}
+	request, err := breakglass.NewSignedAccessRequest(breakglass.AccessRequest{
+		Protocol: breakglass.ProtocolID, RequestID: "bgreq_" + run.id, RequesterID: "requester-a",
+		TargetAgentID: "guest-agent", Role: secretref.RoleGuest, Purpose: secretref.PurposeGuestSigningKey,
+		BindingDigest: digest("slice6-break-glass-binding-" + run.id), TenantID: secretref.SystemTenant,
+		Operation: "material.resolve", ReasonDigest: digest("slice6-break-glass-reason-" + run.id),
+		TicketDigest: digest("slice6-break-glass-ticket-" + run.id), RequestedTTLSeconds: 60,
+		Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+		JTI:      base64.RawURLEncoding.EncodeToString(random[:]),
+	}, requesterKey)
+	if err != nil {
+		clear(requesterKey)
+		t.Fatal(err)
+	}
+	replay := request
+	replayID := sha256.Sum256([]byte("replay:" + run.id))
+	replay.RequestID = "bgreq_" + hex.EncodeToString(replayID[:16])
+	replay.Deadline = time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano)
+	replay, err = breakglass.NewSignedAccessRequest(replay, requesterKey)
+	clear(requesterKey)
+	if err != nil || replay.RequestID == request.RequestID || replay.RequestDigest == request.RequestDigest ||
+		replay.JTI != request.JTI {
+		t.Fatal("distinct signed request did not preserve replay nonce")
+	}
+	if result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "submit",
+		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &request}, true); result.Revision != 1 || result.Capability != nil {
+		t.Fatal("signed requester submit did not create revision 1")
+	}
+	slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "replay",
+		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &replay}, false)
+	for index, approver := range []string{"approver-a", "approver-b"} {
+		key, readErr := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+			"break-glass-"+approver+".key"))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		approval, signErr := breakglass.NewSignedApproval(breakglass.Approval{RequestID: request.RequestID,
+			RequestDigest: request.RequestDigest, Revision: int64(index + 1), ApproverID: approver,
+			Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+			JTI:      slice6FreshBreakGlassJTI(t)}, key)
+		clear(key)
+		if signErr != nil {
+			t.Fatal(signErr)
+		}
+		result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume,
+			approver, breakglass.WireRequest{Protocol: breakglass.ProtocolID,
+				Type: breakglass.ApproveType, Approval: &approval}, true)
+		if result.Revision != int64(index+2) || result.Capability != nil {
+			t.Fatal("two-person approval revision drift")
+		}
+	}
+	operatorKey, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+		"break-glass-operator-a.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue, err := breakglass.NewSignedCommand(breakglass.Command{Type: breakglass.CommandIssue,
+		RequestID: request.RequestID, Revision: 3, ActorID: "operator-a",
+		Deadline: time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano),
+		JTI:      slice6FreshBreakGlassJTI(t)}, operatorKey)
+	clear(operatorKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "issue",
+		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.IssueType, Command: &issue}, true)
+	if issued.Revision != 0 || issued.Capability == nil ||
+		issued.Capability.RequestID != request.RequestID ||
+		issued.Capability.RequestDigest != request.RequestDigest ||
+		issued.Capability.TargetAgentID != request.TargetAgentID ||
+		issued.Capability.BindingDigest != request.BindingDigest || issued.Capability.MaxUses != 1 {
+		t.Fatal("issued break-glass capability drift")
+	}
+	return slice6BreakGlassRestartSeed{request: request, replayJTI: issue.JTI}
+}
+
+func slice6ExerciseBreakGlassRestart(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, control phase6security.Slice6BreakGlassSocketBinding, volume string,
+	seed slice6BreakGlassRestartSeed) {
+	t.Helper()
+	if seed.request.RequestID == "" || seed.replayJTI == "" || seed.replayJTI == seed.request.JTI {
+		t.Fatal("replacement controller replay seed invalid")
+	}
+	key, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
+		"break-glass-requester-a.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed := seed.request
+	replayID := sha256.Sum256([]byte("restart-replay:" + run.id))
+	replayed.RequestID = "bgreq_" + hex.EncodeToString(replayID[:16])
+	replayed.JTI = seed.replayJTI
+	replayed.Deadline = time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano)
+	replayed, err = breakglass.NewSignedAccessRequest(replayed, key)
+	if err != nil {
+		clear(key)
+		t.Fatal(err)
+	}
+	fresh := seed.request
+	freshID := sha256.Sum256([]byte("restart-fresh:" + run.id))
+	fresh.RequestID = "bgreq_" + hex.EncodeToString(freshID[:16])
+	fresh.JTI = slice6FreshBreakGlassJTI(t)
+	fresh.Deadline = time.Now().Add(45 * time.Second).UTC().Format(time.RFC3339Nano)
+	fresh, err = breakglass.NewSignedAccessRequest(fresh, key)
+	clear(key)
+	if err != nil || replayed.RequestID == seed.request.RequestID ||
+		fresh.RequestID == seed.request.RequestID || fresh.RequestID == replayed.RequestID ||
+		fresh.JTI == replayed.JTI {
+		t.Fatal("replacement controller fresh and replay requests not distinct")
+	}
+	slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "restart-replay",
+		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &replayed}, false)
+	result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "restart-submit",
+		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &fresh}, true)
+	if result.Revision != 1 || result.Capability != nil {
+		t.Fatal("replacement controller did not accept fresh signed request")
+	}
+}
+
+func slice6FreshBreakGlassJTI(t *testing.T) string {
+	t.Helper()
+	var random [32]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		t.Fatal(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(random[:])
+}
+
+type slice6FiniteBreakGlassResult struct {
+	Status     string                 `json:"status"`
+	Revision   int64                  `json:"revision"`
+	Capability *breakglass.Capability `json:"capability"`
+}
+
+func slice6FiniteBreakGlassControlTask(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, control phase6security.Slice6BreakGlassSocketBinding,
+	volume, label string, wire breakglass.WireRequest, wantOK bool) slice6FiniteBreakGlassResult {
+	t.Helper()
+	type operatorInput struct {
+		Protocol     string                  `json:"protocol"`
+		Operation    string                  `json:"operation"`
+		SocketPath   string                  `json:"socket_path"`
+		ExpectedUID  uint32                  `json:"expected_uid"`
+		ExpectedGID  uint32                  `json:"expected_gid"`
+		DirectoryGID uint32                  `json:"directory_gid"`
+		TargetAgent  string                  `json:"target_agent"`
+		Request      *breakglass.WireRequest `json:"request"`
+		Capability   *breakglass.Capability  `json:"capability"`
+	}
+	document, err := json.Marshal(operatorInput{Protocol: "sandbox-runtime.phase6-break-glass-operator-input.v1",
+		Operation: wire.Type, SocketPath: control.SocketPath,
+		ExpectedUID: control.ServerUID, ExpectedGID: control.ServerGID, DirectoryGID: control.ClientGID,
+		Request: &wire})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(document)
+	var task phase6security.Slice6BreakGlassOperatorTask
+	for _, candidate := range composed.Profile.BreakGlassOperatorTasks {
+		if candidate.ID == control.ClientTaskID {
+			task = candidate
+		}
+	}
+	if task.ID == "" || task.Mount.StorageID != control.SocketStorageID ||
+		task.ExecutableArtifactID != composed.Profile.BreakGlassExecutableArtifact.ID {
+		t.Fatal("finite operator control task drift")
+	}
+	name := "sr-p6-break-glass-" + label + "-" + run.id
+	created, err := run.docker(ctx, "create", "-i", "--pull=never", "--name", name, "--label", run.label(),
+		"--log-driver=none", "--network=none", "--restart=no", "--user", fmt.Sprintf("%d:%d", task.UID, task.GID),
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+		"--memory", strconv.FormatInt(task.MemoryBytes, 10),
+		"--cpus", strconv.FormatFloat(float64(task.CPUMillis)/1000, 'f', 3, 64),
+		"--pids-limit", strconv.Itoa(task.PIDs),
+		"--mount", "type=bind,src="+composed.BreakGlassOperatorBinary+",dst="+task.Executable+",readonly",
+		"--mount", "type=volume,src="+volume+",dst="+task.Mount.Target+",readonly",
+		"--entrypoint="+task.Executable, task.ImageReference)
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("create finite break-glass submit task")
+	}
+	inspect, err := run.docker(ctx, "inspect", id)
+	var observed []struct {
+		Image  string `json:"Image"`
+		Config struct {
+			User       string
+			Entrypoint []string
+		} `json:"Config"`
+		HostConfig struct {
+			NetworkMode                string
+			ReadonlyRootfs, Privileged bool
+		} `json:"HostConfig"`
+		Mounts []struct {
+			Type        string
+			Source      string
+			Name        string
+			Destination string
+			RW          bool
+		} `json:"Mounts"`
+	}
+	if err != nil || json.Unmarshal(inspect, &observed) != nil || len(observed) != 1 ||
+		observed[0].Image != phase6security.Slice6BreakGlassCarrierIndexDigest ||
+		observed[0].Config.User != fmt.Sprintf("%d:%d", task.UID, task.GID) ||
+		!slices.Equal(observed[0].Config.Entrypoint, []string{task.Executable}) ||
+		observed[0].HostConfig.NetworkMode != "none" || !observed[0].HostConfig.ReadonlyRootfs ||
+		observed[0].HostConfig.Privileged || len(observed[0].Mounts) != 2 {
+		t.Fatal("finite break-glass task created-container policy drift")
+	}
+	seenBinary, seenSocket := false, false
+	for _, mount := range observed[0].Mounts {
+		if mount.RW {
+			t.Fatal("finite break-glass task gained a writable mount")
+		}
+		if mount.Type == "bind" && mount.Source == composed.BreakGlassOperatorBinary && mount.Destination == task.Executable {
+			seenBinary = true
+		}
+		if mount.Type == "volume" && mount.Name == volume && mount.Destination == task.Mount.Target {
+			seenSocket = true
+		}
+	}
+	if !seenBinary || !seenSocket {
+		t.Fatal("finite break-glass task mount source or target drift")
+	}
+	readback := filepath.Join(filepath.Dir(composed.ProfilePath), "break-glass-mounted-"+label+"-"+run.id)
+	if _, err := run.docker(ctx, "cp", id+":"+task.Executable, readback); err != nil {
+		t.Fatal("read finite task mounted executable before signed request")
+	}
+	mountedInfo, err := os.Lstat(readback)
+	if err != nil || !mountedInfo.Mode().IsRegular() || mountedInfo.Mode().Perm() != 0o555 ||
+		mountedInfo.Size() != composed.Profile.BreakGlassExecutableArtifact.BinaryBytes {
+		t.Fatal("finite task mounted executable mode or size drift")
+	}
+	mounted, err := os.ReadFile(readback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mountedDigest := sha256.Sum256(mounted)
+	clear(mounted)
+	if "sha256:"+hex.EncodeToString(mountedDigest[:]) != composed.Profile.BreakGlassExecutableArtifact.BinaryDigest {
+		t.Fatal("finite task mounted executable digest drift")
+	}
+	start := exec.CommandContext(ctx, "docker", "start", "-a", "-i", id)
+	start.Stdin = bytes.NewReader(document)
+	response, err := start.CombinedOutput()
+	var result slice6FiniteBreakGlassResult
+	if wantOK {
+		if err != nil || json.Unmarshal(bytes.TrimSpace(response), &result) != nil || result.Status != "ok" {
+			t.Fatalf("finite signed %s through real controller failed: %v (output bytes %d)", label, err, len(response))
+		}
+	} else if err == nil || string(bytes.TrimSpace(response)) != "break-glass operator unavailable" {
+		t.Fatalf("finite signed %s was not denied: %v (output bytes %d)", label, err, len(response))
+	}
+	if _, err := run.docker(ctx, "rm", id); err != nil {
+		t.Fatal("remove finite one-shot task")
+	}
+	return result
+}

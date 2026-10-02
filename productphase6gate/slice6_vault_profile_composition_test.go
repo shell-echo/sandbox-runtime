@@ -24,14 +24,16 @@ import (
 // while the same-run real Vault issuers are still live. It does not launch the
 // controller or prove that all five external services use these trust roots.
 type slice6VaultComposedInputs struct {
-	ProfilePath     string
-	Profile         phase6security.Profile
-	PeerSourcesPath string
-	PeerSources     phase6security.PeerCRLSources
-	CertificateKeys map[string]string
-	CredentialKeys  map[string]string
-	BreakGlassKeys  map[string]string
-	AnchorPaths     map[string]string
+	ProfilePath               string
+	Profile                   phase6security.Profile
+	PeerSourcesPath           string
+	PeerSources               phase6security.PeerCRLSources
+	CertificateKeys           map[string]string
+	CredentialKeys            map[string]string
+	BreakGlassKeys            map[string]string
+	AnchorPaths               map[string]string
+	BreakGlassOperatorBinary  string
+	BreakGlassSignerDirectory string
 }
 
 func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root, runID string,
@@ -230,7 +232,8 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	return slice6VaultComposedInputs{ProfilePath: profilePath, Profile: verified,
 		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources,
 		CertificateKeys: input.CertificateKeys, CredentialKeys: credentialKeys,
-		BreakGlassKeys: breakGlassKeys, AnchorPaths: anchors}
+		BreakGlassKeys: breakGlassKeys, AnchorPaths: anchors,
+		BreakGlassOperatorBinary: operatorBinary, BreakGlassSignerDirectory: signingDirectory}
 }
 
 // The five anchor names are trust purposes, not five independent CAs. The
