@@ -340,6 +340,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		(os.Getenv(slice6CertificateProcessEnv) != "1" || os.Getenv(slice6QuiesceProcessEnv) != "1") {
 		t.Fatal("terminal operator requires two real quiesced controller processes")
 	}
+	if os.Getenv(slice6GuestMaterialEnv) == "1" &&
+		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
+		t.Fatal("real Guest material requires same-run scoped Vault access")
+	}
 	rootRevoked := false
 	revokeBootstrapRoot := func() {
 		t.Helper()
@@ -376,6 +380,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
 			management := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
 			defer clear(management.Token)
+			if os.Getenv(slice6GuestMaterialEnv) == "1" {
+				slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
+			}
 			if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 				credentialLeaf, credentialKey := slice6VaultSignControllerBootstrap(t, ctx, run,
 					serverID, configDir, composed.Profile, general,

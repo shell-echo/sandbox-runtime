@@ -3705,7 +3705,20 @@ uses `docker rm -f -v` only for the exact run-labeled container. A no-secret,
 real-Docker opt-in test captures both exact mount-to-volume associations,
 requires Docker's anonymous-volume metadata, removes that exact container,
 and checks `no such volume` for both IDs; it passed. The R28 full Vault test
-now captures the same associations for its real Vault server and will check
-their removal after its own cleanup. Earlier dangling anonymous volumes are
+captures the same associations for its real Vault server and checks their
+removal after its own cleanup. Earlier dangling anonymous volumes are
 retained because their exact historical container ownership is unproved;
 age, emptiness or dangling status alone is not deletion authority.
+
+R28 subsequently passed the full real source-bound Vault/two-controller/
+one-shot operator path in 223.78 seconds. The test captured the two exact
+anonymous volume IDs from the running Vault server's Docker mounts, confirmed
+their anonymous metadata, and after labeled cleanup required Docker's
+`no such volume` response for both. Managed issuance, both persisted quiesce
+receipts, complete CRL with both target serials, both target accessor
+revocation readbacks and operator self-revocation also passed. At this
+checkpoint the complete `go test -race -shuffle=on -count=1 ./...` run, ordinary
+and tagged `go vet`, Product Contract lock verifier, and diff check passed.
+This proves same-run component cleanup only; historical unowned volumes and
+the full 78-deployment/16-scenario gate remain outside the claim. Phase 6
+remains **5/15**.
