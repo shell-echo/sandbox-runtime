@@ -110,6 +110,38 @@ func slice6PrepareCertificateControllerSocketVolumes(t *testing.T, ctx context.C
 	return result
 }
 
+// The break-glass control, consume and delivery sockets are fifteen distinct
+// allocations. The eight finite operator tasks do not own these directories;
+// each server owns its directory and the Profile names one client mount.
+func slice6PrepareBreakGlassSocketVolumes(t *testing.T, ctx context.Context,
+	run slice6DockerRun, profile phase6security.Profile, existing map[string]string) map[string]string {
+	t.Helper()
+	if phase6security.VerifySlice6BreakGlassBoundaries(profile) != nil || len(profile.BreakGlassSockets) != 15 {
+		t.Fatal("incomplete same-run break-glass socket inventory")
+	}
+	result := make(map[string]string, len(existing)+len(profile.BreakGlassSockets))
+	for storageID, volume := range existing {
+		if storageID == "" || volume == "" {
+			t.Fatal("existing socket allocation missing")
+		}
+		result[storageID] = volume
+	}
+	for _, binding := range profile.BreakGlassSockets {
+		if binding.SocketStorageID == "" || result[binding.SocketStorageID] != "" ||
+			binding.DirectoryMode != 0o710 || binding.ServerUID == 0 || binding.ClientGID == 0 ||
+			binding.ServerUID == binding.ClientUID || binding.ServerGID == binding.ClientGID {
+			t.Fatal("break-glass socket owner or storage alias")
+		}
+		result[binding.SocketStorageID] = slice6PrepareOneControllerSocketVolume(t, ctx, run,
+			binding.SocketStorageID, binding.SocketDirectory, binding.ServerUID, binding.ClientGID,
+			binding.DirectoryMode)
+	}
+	if len(result) != len(existing)+15 {
+		t.Fatal("break-glass socket allocation count drift")
+	}
+	return result
+}
+
 func slice6PrepareOneControllerSocketVolume(t *testing.T, ctx context.Context, run slice6DockerRun,
 	storageID, directory string, uid, gid, directoryMode uint32) string {
 	t.Helper()

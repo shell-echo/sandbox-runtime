@@ -3841,3 +3841,23 @@ This is source/configuration and unit evidence only; the production
 controller's full live proof and 78-deployment/16-scenario gate are still
 absent. Phase 6 stays
 **5/15**.
+
+Checkpoint 2026-10-02 (same-run break-glass storage preflight): clean source
+`1f2c8b3cd536b5e045681372f6d6cb6c2f1e28b4` produced 12/12
+independently verified local-role OCI candidates and a matching arm64 Desktop
+candidate. The strict image-supply and resource-draft preflights passed, as
+did the real Desktop broker/executor-v2/Provider candidate chain. In a real
+file-backed non-dev Vault run, the complete source-bound 78-principal Profile
+was composed and reopened; the live test prepared three separate controller
+private-config volumes, three empty persistent ledgers (the break-glass ledger
+and audit share their exclusive 128 MiB allocation), 50 certificate/credential
+socket allocations, 15 additional break-glass control/consume/delivery socket
+allocations, and five trust-anchor allocations. Each new break-glass socket
+volume was created empty with its declared server UID, sole client GID and
+`0710` directory mode, observed read-only, and removed with the run. In the
+same run, both existing controller PID1 processes reached managed issuance,
+quiesced, and the independent terminal operator completed its confirmed
+cleanup; Docker resources returned to zero. The production break-glass v2
+controller, finite signed approval/issue/delivery/consume chain, role graph,
+16 scenarios and strict Slice 6 manifest were **not** run or produced. This
+is a diagnostic checkpoint only; Phase 6 remains **5/15**.

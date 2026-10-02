@@ -19,8 +19,8 @@ import (
 
 const slice6ControllerPrivateConfigEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CONTROLLER_PRIVATE_CONFIG"
 
-// These are same-run, source-bound inputs for the two real controller UIDs.
-// This does not launch either controller or claim a release scenario.
+// These are same-run, source-bound inputs for the three controller UIDs.
+// This does not launch a controller or claim a release scenario.
 func slice6PrepareControllerPrivateConfigs(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs) {
 	t.Helper()
@@ -43,6 +43,9 @@ func slice6PrepareControllerPrivateConfigs(t *testing.T, ctx context.Context, ru
 			phase6security.Slice6PeerCRLSourcesFile: peerBytes,
 		}},
 		{"workload-credential-controller", map[string][]byte{
+			phase6security.Slice6ProfileConfigFile: profileBytes,
+		}},
+		{"break-glass-controller", map[string][]byte{
 			phase6security.Slice6ProfileConfigFile: profileBytes,
 		}},
 	} {

@@ -25,9 +25,13 @@ func slice6PrepareControllerLedgerVolumes(t *testing.T, ctx context.Context, run
 		t.Fatal("controller ledger allocations are not closed")
 	}
 	storage := make(map[string]bool)
-	for _, deployment := range []string{"certificate-controller", "workload-credential-controller"} {
+	for _, deployment := range []string{"certificate-controller", "workload-credential-controller", "break-glass-controller"} {
 		mount, ledgerPath, err := phase6security.Slice6ControllerLedgerMount(deployment)
-		if err != nil || mount.ReadOnly || mount.MaxBytes != phase6security.Slice6ControllerLedgerMaxBytes ||
+		maxBytes := phase6security.Slice6ControllerLedgerMaxBytes
+		if deployment == "break-glass-controller" {
+			maxBytes = 128 << 20
+		}
+		if err != nil || mount.ReadOnly || mount.MaxBytes != maxBytes ||
 			storage[mount.StorageID] || ledgerPath != mount.Target+"/ledger.json" {
 			t.Fatal("controller persistent ledger identity is unavailable or shared")
 		}

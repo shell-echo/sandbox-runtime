@@ -374,6 +374,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				certificateSocketVolumes = slice6PrepareCertificateControllerSocketVolumes(t, ctx, run, composed.Profile, socketVolumes)
 				t.Logf("same-run combined controller socket allocations=%d; no certificate listener is active", len(certificateSocketVolumes))
 			}
+			priorSockets := socketVolumes
+			if len(certificateSocketVolumes) != 0 {
+				priorSockets = certificateSocketVolumes
+			}
+			breakGlassSocketVolumes := slice6PrepareBreakGlassSocketVolumes(t, ctx, run, composed.Profile, priorSockets)
+			t.Logf("same-run break-glass socket allocations=15 combined=%d; no break-glass listener is active", len(breakGlassSocketVolumes))
 			anchorFiles = slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
 			t.Logf("same-run trust-anchor allocations=%d; one root-owned read-only file per Profile storage ID, exact digests and non-root bind reads", len(anchorFiles))
 		}
