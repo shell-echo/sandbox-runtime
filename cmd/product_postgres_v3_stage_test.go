@@ -3,10 +3,14 @@ package cmd
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/logger"
+	"github.com/spf13/cobra"
 )
 
 func TestMigrationPostgresConnectStagesAreClosedAndLocal(t *testing.T) {
@@ -117,5 +121,31 @@ func TestDirectPostgresGuardFailureStagesAndExactCleanup(t *testing.T) {
 				t.Fatal("successful startup closed active guard")
 			}
 		})
+	}
+}
+
+func TestMigrationStageRootCLIPrintsOneClosedLine(t *testing.T) {
+	const marker = "SANDBOX_RUNTIME_TEST_MIGRATION_STAGE_ROOT_CLI"
+	if os.Getenv(marker) == "1" {
+		rootCmd.AddCommand(&cobra.Command{Use: "migration-stage-envelope-fixture",
+			PersistentPreRunE: func(*cobra.Command, []string) error {
+				return logger.Init(logger.Options{Level: logger.InfoLevel})
+			},
+			RunE: func(*cobra.Command, []string) error {
+				return migrationPostgresConnectError(postgresStartupError(postgresStagePeerBootstrap,
+					"private cause must never print"))
+			}})
+		rootCmd.SetArgs([]string{"migration-stage-envelope-fixture"})
+		Execute() // Exercises Cobra suppression, errors.Join, logger.Sync and Fprintln.
+		t.Fatal("the failing root CLI returned successfully")
+	}
+	command := exec.Command(os.Args[0], "-test.run=^TestMigrationStageRootCLIPrintsOneClosedLine$")
+	command.Env = append(os.Environ(), marker+"=1")
+	output, err := command.CombinedOutput()
+	defer clear(output)
+	var exited *exec.ExitError
+	if !errors.As(err, &exited) || exited.ExitCode() != 1 ||
+		string(output) != "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n" {
+		t.Fatal("root CLI produced a duplicate, extra or unclassified migration error line")
 	}
 }

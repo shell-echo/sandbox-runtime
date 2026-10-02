@@ -1,0 +1,177 @@
+//go:build phase6slice6gate
+
+package productphase6gate
+
+import (
+	"context"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+// This is the E-only producer/consumer gate for the frozen runtime source.
+// It derives the stage set from R9's actual Go declaration and verifies the
+// formatter's switch before checking the independent bounded observer.
+func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
+	root := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT")
+	revision := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION")
+	if root == "" && revision == "" {
+		t.Skip("set the exact clean runtime source and revision for producer-consumer validation")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	if root == "" || revision == "" || verifyCleanSlice6Source(ctx, root, revision) != nil {
+		t.Fatal("frozen runtime producer source is unavailable")
+	}
+	path := filepath.Join(root, "cmd", "product_postgres_v3.go")
+	source, err := os.ReadFile(path)
+	if err != nil || len(source) == 0 || len(source) > 64<<10 {
+		t.Fatal("bounded frozen migration producer is unavailable")
+	}
+	stages, err := slice6FrozenMigrationStageSet(source)
+	if err != nil || len(stages) != 13 {
+		t.Fatalf("frozen migration stage set is not closed: %v", err)
+	}
+	for _, stage := range stages {
+		line := "migration v2 PostgreSQL connection is unavailable: stage=" + stage
+		want := "migration-connect-" + stage
+		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != want {
+			t.Fatalf("frozen producer stage %q is not observable: %q", stage, got)
+		}
+		for _, bad := range []string{
+			"prefix " + line, line + " suffix", line + "\n" + line,
+			line + "\r\n", line + "\x00", line + "\npassword=private\n",
+		} {
+			if got := slice6MigrationFailureCategory([]byte(bad)); got != "unknown" {
+				t.Fatalf("noncanonical stage output admitted: %q", got)
+			}
+		}
+	}
+	for _, bad := range []string{
+		"migration v2 PostgreSQL connection is unavailable: stage=unknown",
+		"migration v2 PostgreSQL connection is unavailable: stage=tls-client",
+		"migration v2 PostgreSQL connection is unavailable: stage=dsn-binding",
+		"migration v2 PostgreSQL connection is unavailable: stage=authority authority",
+		strings.Repeat("x", 513),
+		"postgres://role:password@hidden.example/db",
+	} {
+		if got := slice6MigrationFailureCategory([]byte(bad)); got != "unknown" {
+			t.Fatalf("unreviewed migration output admitted: %q", got)
+		}
+	}
+	if got := slice6MigrationFailureCategory([]byte("migration v2 PostgreSQL connection is unavailable\n")); got != "migration-connect" {
+		t.Fatal("legacy generic migration category regressed")
+	}
+}
+
+func slice6FrozenMigrationStageSet(source []byte) ([]string, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), "product_postgres_v3.go", source, 0)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[string]string)
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range group.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok || len(value.Names) != 1 || !strings.HasPrefix(value.Names[0].Name, "postgresStage") {
+				continue
+			}
+			if len(value.Values) != 1 {
+				return nil, errors.New("migration stage has no exact literal")
+			}
+			literal, ok := value.Values[0].(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				return nil, errors.New("migration stage is not a string literal")
+			}
+			decoded, decodeErr := strconv.Unquote(literal.Value)
+			if decodeErr != nil || decoded == "" || len(decoded) > 48 || values[value.Names[0].Name] != "" {
+				return nil, errors.New("migration stage literal is invalid")
+			}
+			values[value.Names[0].Name] = decoded
+		}
+	}
+	if len(values) != 13 {
+		return nil, errors.New("migration stage constant count drift")
+	}
+	var switchNames []string
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "migrationPostgresConnectError" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			statement, ok := node.(*ast.SwitchStmt)
+			if !ok {
+				return true
+			}
+			tag, ok := statement.Tag.(*ast.SelectorExpr)
+			if !ok || tag.Sel.Name != "stage" {
+				return true
+			}
+			for _, item := range statement.Body.List {
+				clause := item.(*ast.CaseClause)
+				for _, expression := range clause.List {
+					name, ok := expression.(*ast.Ident)
+					if !ok {
+						switchNames = append(switchNames, "invalid")
+						continue
+					}
+					switchNames = append(switchNames, name.Name)
+				}
+			}
+			return false
+		})
+	}
+	if len(switchNames) != len(values) ||
+		strings.Count(string(source), `generic + ": stage=" + string(startup.stage)`) != 1 ||
+		strings.Count(string(source), `generic = "migration v2 PostgreSQL connection is unavailable"`) != 1 {
+		return nil, errors.New("migration stage formatter is not the reviewed closed projection")
+	}
+	seen := make(map[string]bool, len(values))
+	seenValues := make(map[string]bool, len(values))
+	stages := make([]string, 0, len(values))
+	for _, name := range switchNames {
+		stage := values[name]
+		if stage == "" || seen[name] || seenValues[stage] {
+			return nil, errors.New("migration stage formatter drift")
+		}
+		seen[name] = true
+		seenValues[stage] = true
+		stages = append(stages, stage)
+	}
+	return stages, nil
+}
+
+func TestSlice6MigrationStageUsesActualBoundedCapture(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	for _, candidate := range []struct {
+		stdout, stderr, category string
+	}{
+		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n", "migration-connect-peer-bootstrap"},
+		{"extra stdout\n", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n", "unknown"},
+		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\nsecond line\n", "unknown"},
+		{"", "password=private\n", "unknown"},
+	} {
+		command := exec.CommandContext(ctx, "sh", "-c", "printf '%s' \"$1\"; printf '%s' \"$2\" >&2; exit 1",
+			"stage-capture", candidate.stdout, candidate.stderr)
+		captured, err, overflow := slice6CaptureBounded(command, 16<<10, nil)
+		if err == nil || overflow || slice6MigrationFailureCategory(captured) != candidate.category {
+			clear(captured)
+			t.Fatal("actual bounded stdout/stderr collector lost its closed stage category")
+		}
+		clear(captured)
+	}
+}

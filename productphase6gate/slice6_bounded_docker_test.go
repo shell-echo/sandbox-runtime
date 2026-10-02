@@ -35,8 +35,14 @@ func slice6DockerBounded(ctx context.Context, limit int, stdin []byte, arguments
 	if ctx == nil || limit < 1 || limit > 64<<10 || len(arguments) == 0 {
 		return nil, errors.New("bounded Docker diagnostic input invalid"), false
 	}
+	return slice6CaptureBounded(exec.CommandContext(ctx, "docker", arguments...), limit, stdin)
+}
+
+func slice6CaptureBounded(command *exec.Cmd, limit int, stdin []byte) ([]byte, error, bool) {
+	if command == nil || limit < 1 || limit > 64<<10 {
+		return nil, errors.New("bounded diagnostic command is invalid"), false
+	}
 	output := &slice6BoundedOutput{limit: limit}
-	command := exec.CommandContext(ctx, "docker", arguments...)
 	if stdin != nil {
 		command.Stdin = bytes.NewReader(stdin)
 	}
