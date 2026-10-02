@@ -227,7 +227,12 @@ func NewGatewayApplicationGraph(ctx context.Context, cfg *config.DataPlaneProces
 		if !v3 {
 			purposes = append(purposes, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey, secretref.PurposeCABundle)
 		}
-		registry, err = rolematerials.New(cfg.Materials, secretref.RoleGateway, purposes, true, time.Now)
+		if v3 {
+			registry, err = rolematerials.NewSlice6ForDeployment(cfg.Materials, "gateway-runtime",
+				securityProfile, secretref.RoleGateway, purposes, true, time.Now)
+		} else {
+			registry, err = rolematerials.New(cfg.Materials, secretref.RoleGateway, purposes, true, time.Now)
+		}
 		if err != nil {
 			return ApplicationGraph{}, errors.New("construct Gateway material registry")
 		}

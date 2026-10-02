@@ -69,6 +69,46 @@ func TestSlice6PrivateConfigArchiveExactCanonicalFiles(t *testing.T) {
 	}
 }
 
+func TestSlice6CoreStartupConfigArchiveIsClosedAndBounded(t *testing.T) {
+	profile, err := BuildSlice6FinalExternalProfileTarget(reviewedSlice6ImageFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileBytes, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{
+		Slice6ProfileConfigFile:       profileBytes,
+		Slice6PostgresPeerCRLRoleFile: []byte(`{"role":"fixture"}`),
+		Slice6StartupConfigFile:       []byte("[application]\nmode='production'\n"),
+	}
+	archive, err := BuildSlice6PrivateConfigArchive(profile, "product-migration-job", files)
+	if err != nil || len(archive.Digests) != 3 {
+		t.Fatalf("core startup private archive rejected: %v", err)
+	}
+	clear(archive.Archive)
+	for name, mutate := range map[string]func(map[string][]byte){
+		"missing": func(set map[string][]byte) { delete(set, Slice6StartupConfigFile) },
+		"extra":   func(set map[string][]byte) { set["unreviewed.toml"] = []byte("x") },
+		"oversized": func(set map[string][]byte) {
+			set[Slice6StartupConfigFile] = bytes.Repeat([]byte("x"), (64<<10)+1)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := make(map[string][]byte, len(files)+1)
+			for file, value := range files {
+				candidate[file] = value
+			}
+			mutate(candidate)
+			if invalid, err := BuildSlice6PrivateConfigArchive(profile, "product-migration-job", candidate); err == nil {
+				clear(invalid.Archive)
+				t.Fatal("core startup archive admitted drift")
+			}
+		})
+	}
+}
+
 func TestSlice6PrivateConfigArchivesRequireAllReaders(t *testing.T) {
 	profile, err := BuildSlice6FinalExternalProfileTarget(reviewedSlice6ImageFixture(t))
 	if err != nil {

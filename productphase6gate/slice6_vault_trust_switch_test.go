@@ -61,6 +61,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv(slice6ProductPostgresDSNEnv) == "1" && os.Getenv(slice6PostgresServerLeafEnv) != "1" {
 		t.Fatal("Product PostgreSQL DSN bootstrap requires the same-run external PostgreSQL and terminal operator")
 	}
+	if os.Getenv(slice6ProductMigrationJobEnv) == "1" &&
+		(os.Getenv(slice6ProductMigrationSignersEnv) != "1" ||
+			os.Getenv(slice6ProductMigrationInputsEnv) != "1" ||
+			os.Getenv(slice6ProductPostgresDSNEnv) != "1") {
+		t.Fatal("Product migration PID1 requires same-run PostgreSQL, private inputs and both signers")
+	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
@@ -405,6 +411,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var postgresLeaf slice6PostgresServerLeaf
 		var postgresClientCRL []byte
 		var postgresRecord *phase6terminalcleanup.ExternalPostgresRecord
+		var postgresServerID string
 		var postgresStop func() error
 		postgresTerminalConfirmed := false
 		var anchorFiles map[string]string
@@ -593,6 +600,39 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 												}
 											})
 										}
+										if os.Getenv(slice6ProductMigrationSignersEnv) == "1" {
+											if len(productMigrationSocketVolumes) != 73 {
+												t.Fatal("Product migration signers require all source-bound private inputs")
+											}
+											dependent := runWork
+											runWork = func() {
+												slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+													"product-migration-agent", "product-migration-agent-tls-agent", "product-migration-material",
+													productMigrationSocketVolumes, anchorFiles, func() {
+														migrationWork := func() {
+															if os.Getenv(slice6ProductMigrationJobEnv) == "1" {
+																if postgresServerID == "" {
+																	t.Fatal("Product migration has no live same-run PostgreSQL server")
+																}
+																slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																	serverID, "", "", "product-migration-agent", "product-migration-job",
+																	"product-migration-material", 73, productMigrationSocketVolumes, anchorFiles,
+																	func(phase6security.Slice6BreakGlassSocketBinding) {
+																		slice6RunProductMigrationJob(t, ctx, run, composed,
+																			postgresServerID, productMigrationSocketVolumes, anchorFiles)
+																	})
+															}
+														}
+														slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+															"product-migration-job", "product-migration-postgres-tls-agent", "product-migration-postgres",
+															productMigrationSocketVolumes, anchorFiles, migrationWork)
+													})
+												if os.Getenv(slice6ProductMigrationJobEnv) == "1" {
+													slice6VerifyProductMigrationReadback(t, ctx, run, postgresServerID)
+												}
+												dependent()
+											}
+										}
 										if os.Getenv(slice6ProductPostgresDSNEnv) == "1" {
 											if postgresRecord == nil || postgresStop == nil {
 												t.Fatal("Product PostgreSQL bootstrap did not complete before root revocation")
@@ -600,8 +640,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 											runWork()
 										} else if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
 											slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf, postgresClientCRL,
-												func(record phase6terminalcleanup.ExternalPostgresRecord, _ string, _ func() error) {
+												func(record phase6terminalcleanup.ExternalPostgresRecord, postgresID string, _ func() error) {
 													postgresRecord = &record
+													postgresServerID = postgresID
 													runWork()
 												})
 										} else {
@@ -640,6 +681,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 						slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf, postgresClientCRL,
 							func(record phase6terminalcleanup.ExternalPostgresRecord, postgresID string, stop func() error) {
 								postgresRecord = &record
+								postgresServerID = postgresID
 								postgresStop = stop
 								dsns := slice6BootstrapProductPostgres(t, ctx, run, postgresID, composed.Profile)
 								defer dsns.clear()

@@ -28,7 +28,7 @@ func authorityFixture(t *testing.T) authority {
 		PeerCRLSourceMappingDigest: digest, ListenAddress: "10.26.0.3:8443",
 		ProviderOrigin: "wss://10.26.1.3:8443/private/browser", ProviderAudience: "browser-provider-1",
 		TLSAgentSocket: "/run/phase6/ingress-tls-agent.sock", TLSAgentUID: 2001, TLSAgentGID: 2002,
-		MaterialProvider: materialProviderDocument{Type: "unix-workload-material.v1", Alias: "ingress-vault",
+		MaterialProvider: materialProviderDocument{Type: "unix-workload-material.v2", Alias: "ingress-vault",
 			SocketPath: "/run/phase6/ingress-material-agent.sock", ExpectedUID: 3001, ExpectedGID: 3002,
 			OperationTimeoutSeconds: 2},
 		MaterialBindings: []materialBindingDocument{
@@ -100,12 +100,18 @@ func TestDecodeAuthorityClosedCanonical(t *testing.T) {
 
 func TestValidateMaterialBoundaryDeniesSameRoleSwaps(t *testing.T) {
 	base := authorityFixture(t)
-	profile := phase6security.Profile{Principals: []phase6security.Principal{{Name: "browser-action-ingress-agent", UID: 3001, GID: 3002}}}
+	profile := phase6security.Profile{Principals: []phase6security.Principal{{Name: "browser-action-ingress-agent", UID: 3001, GID: 3002}},
+		MaterialSockets: []phase6security.Slice6MaterialSocketBinding{{AgentDeployment: "browser-action-ingress-agent",
+			OwnerDeployment: "browser-action-ingress-runtime", AgentUID: 3001, AgentGID: 3002,
+			OwnerUID: 3003, OwnerGID: 3004, SocketPath: base.MaterialProvider.SocketPath,
+			MaxOperationSeconds: 30}}}
 	if err := validateMaterialBoundary(profile, base); err != nil {
 		t.Fatalf("exact ingress bindings rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*authority){
 		"Gateway agent":       func(a *authority) { a.MaterialProvider.ExpectedUID = 4001 },
+		"legacy material":     func(a *authority) { a.MaterialProvider.Type = "unix-workload-material.v1" },
+		"alternate socket":    func(a *authority) { a.MaterialProvider.SocketPath = "/run/phase6/other.sock" },
 		"Gateway capacity ID": func(a *authority) { a.CapacityBindingID = "witness" },
 		"witness as capacity": func(a *authority) { a.MaterialBindings[0].Document = a.MaterialBindings[1].Document },
 	} {

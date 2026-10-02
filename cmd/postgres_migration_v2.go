@@ -10,6 +10,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6egress"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 	providerpostgres "github.com/shell-echo/sandbox-runtime/provider/adapter/postgres"
@@ -53,7 +54,10 @@ func runProductMigrationV2(cmdContext context.Context, cfg *config.ProductMigrat
 		PeerCRLSourceMappingDigest: cfg.Postgres.PeerCRLSourceMappingDigest,
 		MaxConnections:             cfg.Postgres.MaxConnections}
 	return runMigrationV2(cmdContext, time.Duration(cfg.Postgres.StartupTimeoutSeconds)*time.Second,
-		value, func() (*secretref.Registry, error) { return newProductMigrationMaterialRegistry(cfg.Materials) },
+		value, func(profile phase6security.Profile) (*secretref.Registry, error) {
+			return rolematerials.NewSlice6ForDeployment(cfg.Materials, value.Owner, profile,
+				secretref.RoleProduct, []secretref.Purpose{secretref.PurposePostgresMigrationDSN}, false, time.Now)
+		},
 		productpostgres.ApplyMigrationsPrecreatedSchema, productpostgres.VerifyMigrationRole)
 }
 
@@ -66,12 +70,15 @@ func runProviderMigrationV2(cmdContext context.Context, cfg *config.ProviderMigr
 		PeerCRLSourceMappingDigest: cfg.Postgres.PeerCRLSourceMappingDigest,
 		MaxConnections:             cfg.Postgres.MaxConnections}
 	return runMigrationV2(cmdContext, time.Duration(cfg.Postgres.StartupTimeoutSeconds)*time.Second,
-		value, func() (*secretref.Registry, error) { return newProviderMigrationMaterialRegistry(cfg.Materials) },
+		value, func(profile phase6security.Profile) (*secretref.Registry, error) {
+			return rolematerials.NewSlice6ForDeployment(cfg.Materials, value.Owner, profile,
+				secretref.RoleProvider, []secretref.Purpose{secretref.PurposePostgresMigrationDSN}, false, time.Now)
+		},
 		providerpostgres.ApplyMigrationsPrecreatedSchema, providerpostgres.VerifyMigrationRole)
 }
 
 func runMigrationV2(parent context.Context, timeout time.Duration, value migrationV2Authority,
-	newRegistry func() (*secretref.Registry, error), apply func(context.Context, *pgxpool.Pool) error,
+	newRegistry func(phase6security.Profile) (*secretref.Registry, error), apply func(context.Context, *pgxpool.Pool) error,
 	verify func(context.Context, *pgxpool.Pool, string) error) error {
 	if parent == nil || parent.Err() != nil || timeout < time.Second || timeout > time.Minute ||
 		newRegistry == nil || apply == nil || verify == nil {
@@ -83,7 +90,7 @@ func runMigrationV2(parent context.Context, timeout time.Duration, value migrati
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	registry, err := newRegistry()
+	registry, err := newRegistry(profile)
 	if err != nil {
 		return errors.New("migration v2 material registry is unavailable")
 	}

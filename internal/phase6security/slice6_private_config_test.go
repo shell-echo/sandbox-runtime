@@ -12,13 +12,20 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		t.Fatalf("final private config plan absent: %v", err)
 	}
 	count := 0
+	startupConfigs := 0
 	for _, principal := range final.Principals {
-		if _, needed := Slice6PrivateConfigMount(principal.Name); needed {
+		if mount, needed := Slice6PrivateConfigMount(principal.Name); needed {
 			count++
+			if slices.Contains(strings.Split(mount.PrivateFiles, ","), Slice6StartupConfigFile) {
+				startupConfigs++
+			}
 		}
 	}
 	if count != 76 {
 		t.Fatalf("private config consumers = %d, want 76", count)
+	}
+	if startupConfigs != 12 {
+		t.Fatalf("core startup-config consumers = %d, want 12", startupConfigs)
 	}
 	for _, principal := range final.Principals {
 		mount, needed := Slice6PrivateConfigMount(principal.Name)
@@ -42,8 +49,8 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		"break-glass-controller":         "profile.json",
 		"certificate-controller":         "peer-crl-sources.json,profile.json",
 		"workload-credential-controller": "profile.json",
-		"gateway-runtime":                "credential-authority.json,dependency-authority.json,peer-crl-role.json,policy-authority.json,postgres-peer-crl-role.json,profile.json",
-		"product-migration-job":          "postgres-peer-crl-role.json,profile.json",
+		"gateway-runtime":                "credential-authority.json,dependency-authority.json,peer-crl-role.json,policy-authority.json,postgres-peer-crl-role.json,profile.json,startup-config.toml",
+		"product-migration-job":          "postgres-peer-crl-role.json,profile.json,startup-config.toml",
 		"gateway-postgres-tls-agent":     "peer-crl-sources.json,profile.json",
 		"public-ingress-relay":           "profile.json,startup-authority.json",
 	} {
@@ -62,6 +69,7 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		{"public-ingress-relay", Slice6StartupAuthorityFile, 16 << 10},
 		{"browser-action-ingress-runtime", Slice6StartupAuthorityFile, 16 << 10},
 		{"gateway-runtime", Slice6CredentialAuthorityFile, 64 << 10},
+		{"product-migration-job", Slice6StartupConfigFile, 64 << 10},
 		{"certificate-controller", Slice6ProfileConfigFile, 2 << 20},
 		{"break-glass-controller", Slice6ProfileConfigFile, 2 << 20},
 	} {
@@ -73,6 +81,9 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 	if _, ok := Slice6PrivateConfigFileLimit("guest-runtime", Slice6StartupAuthorityFile); ok {
 		t.Fatal("unlisted startup authority purpose accepted")
 	}
+	if _, ok := Slice6PrivateConfigFileLimit("certificate-controller", Slice6StartupConfigFile); ok {
+		t.Fatal("non-core startup TOML purpose accepted")
+	}
 	for _, name := range []string{"browser-sandbox-runtime", "desktop-sandbox-runtime", "unknown"} {
 		if _, ok := Slice6PrivateConfigMount(name); ok {
 			t.Fatalf("unreviewed private config consumer %s", name)
@@ -83,7 +94,9 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		VerifySlice6PrivateConfigPath(final, "certificate-controller", Slice6PeerCRLSourcesFile,
 			Slice6PrivateConfigDirectory+"/peer-crl-sources.json") != nil ||
 		VerifySlice6PrivateConfigPath(final, "gateway-runtime", Slice6PostgresPeerCRLRoleFile,
-			Slice6PrivateConfigDirectory+"/postgres-peer-crl-role.json") != nil {
+			Slice6PrivateConfigDirectory+"/postgres-peer-crl-role.json") != nil ||
+		VerifySlice6PrivateConfigPath(final, "product-migration-job", Slice6StartupConfigFile,
+			Slice6PrivateConfigDirectory+"/startup-config.toml") != nil {
 		t.Fatal("exact private config paths rejected")
 	}
 	for _, denied := range []struct{ deployment, file, path string }{
@@ -91,6 +104,8 @@ func TestSlice6PrivateConfigPlanBindsOnlyActualReaders(t *testing.T) {
 		{"certificate-controller", Slice6ProfileConfigFile, "/tmp/profile.json"},
 		{"gateway-runtime", Slice6PostgresPeerCRLRoleFile, Slice6PrivateConfigDirectory + "/peer-crl-role.json"},
 		{"browser-sandbox-runtime", Slice6ProfileConfigFile, Slice6PrivateConfigDirectory + "/profile.json"},
+		{"certificate-controller", Slice6StartupConfigFile, Slice6PrivateConfigDirectory + "/startup-config.toml"},
+		{"product-migration-job", Slice6StartupConfigFile, "/tmp/startup-config.toml"},
 	} {
 		if VerifySlice6PrivateConfigPath(final, denied.deployment, denied.file, denied.path) == nil {
 			t.Fatalf("unreviewed private config path admitted for %s", denied.deployment)

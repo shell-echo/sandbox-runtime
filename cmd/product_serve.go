@@ -138,7 +138,8 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	}
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials, productConfig.SchemaVersion)
+	materialRegistry, err := newProductRuntimeMaterialRegistry(productConfig.Materials,
+		productConfig.SchemaVersion, securityProfile)
 	if err != nil {
 		return err
 	}
@@ -355,10 +356,16 @@ func openProductPostgresMaterial(ctx context.Context, raw []byte, maxConnections
 	return pool, nil
 }
 
-func newProductRuntimeMaterialRegistry(materials config.ProductMaterialsConfig, schema string) (*secretref.Registry, error) {
+func newProductRuntimeMaterialRegistry(materials config.ProductMaterialsConfig, schema string,
+	profile phase6security.Profile) (*secretref.Registry, error) {
 	purposes := []secretref.Purpose{secretref.PurposePostgresRuntimeDSN, secretref.PurposeIdentityKeyRing}
 	if schema == config.ProductProductionSchemaV2 {
 		purposes = append(purposes, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey)
+	} else if schema == config.ProductProductionSchemaV3 {
+		return rolematerials.NewSlice6ForDeployment(materials, "product-runtime", profile,
+			secretref.RoleProduct, purposes, true, time.Now)
+	} else {
+		return nil, errors.New("unsupported Product runtime material schema")
 	}
 	return newProductAgentRegistry(materials, purposes, true)
 }

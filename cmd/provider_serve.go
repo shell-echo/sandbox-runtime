@@ -74,23 +74,25 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
-	var codingProfile phase6security.Profile
+	var securityProfile phase6security.Profile
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
-		if err := preflightProviderV3Serve(providerConfig); err != nil {
+		var err error
+		securityProfile, err = preflightProviderV3Serve(providerConfig)
+		if err != nil {
 			return err
 		}
 	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
 		var err error
-		codingProfile, err = preflightProviderCodingV3Postgres(providerConfig)
+		securityProfile, err = preflightProviderCodingV3Postgres(providerConfig)
 		if err != nil {
 			return err
 		}
 	}
 	startupContext, cancelStartup := context.WithTimeout(cmd.Context(), time.Duration(providerConfig.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer cancelStartup()
-	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig.Materials, providerConfig.SchemaVersion)
+	materialRegistry, err := newProviderRuntimeMaterialRegistry(providerConfig, securityProfile)
 	if err != nil {
 		return err
 	}
@@ -100,10 +102,10 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	var databaseAuthority providerV3DatabaseAuthority
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
-		runtimePool, poolClose, databaseAuthority, err = openProviderV3Postgres(startupContext, cmd.Context(), providerConfig, materialRegistry)
+		runtimePool, poolClose, databaseAuthority, err = openProviderV3Postgres(startupContext, cmd.Context(), providerConfig, securityProfile, materialRegistry)
 	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
-		runtimePool, poolClose, err = openProviderCodingV3Postgres(startupContext, cmd.Context(), providerConfig, codingProfile, materialRegistry)
+		runtimePool, poolClose, err = openProviderCodingV3Postgres(startupContext, cmd.Context(), providerConfig, securityProfile, materialRegistry)
 	} else {
 		runtimePool, err = openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
 		if err == nil {
@@ -810,16 +812,32 @@ func openProviderPostgresMaterial(ctx context.Context, raw []byte, maxConnection
 	return pool, nil
 }
 
-func newProviderRuntimeMaterialRegistry(materials config.RoleMaterialsConfig, schema string) (*secretref.Registry, error) {
+func newProviderRuntimeMaterialRegistry(cfg *config.ProviderProcessConfig,
+	profile phase6security.Profile) (*secretref.Registry, error) {
+	if cfg == nil {
+		return nil, errors.New("Provider runtime material schema is unavailable")
+	}
+	materials, schema := cfg.Materials, cfg.SchemaVersion
 	allowed := []secretref.Purpose{secretref.PurposePostgresRuntimeDSN, secretref.PurposeAdmissionVerification}
 	switch schema {
 	case config.ProviderProductionSchemaV2:
 		allowed = append(allowed, secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey,
 			secretref.PurposeCABundle, secretref.PurposeExecutorClientKey, secretref.PurposeExecutorBridgeKey)
 	case config.ProviderProductionSchemaV3:
-		// Browser uses only runtime DSN/admission material; the Desktop
-		// candidate also needs its distinct broker statement signing key.
-		allowed = append(allowed, secretref.PurposeExecutorBridgeKey)
+		owner := ""
+		switch cfg.Profile {
+		case config.ProviderProcessCodingShellProfile:
+			owner = "provider-runtime"
+		case config.ProviderProcessBrowserProfile:
+			owner = "provider-browser-runtime"
+		case config.ProviderProcessDesktopProfile:
+			owner = "provider-desktop-runtime"
+			allowed = append(allowed, secretref.PurposeExecutorBridgeKey)
+		default:
+			return nil, errors.New("unsupported Provider v3 material owner")
+		}
+		return rolematerials.NewSlice6ForDeployment(materials, owner, profile,
+			secretref.RoleProvider, allowed, true, time.Now)
 	default:
 		return nil, errors.New("unsupported Provider runtime material schema")
 	}

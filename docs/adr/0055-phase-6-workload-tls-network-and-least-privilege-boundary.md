@@ -2260,3 +2260,35 @@ material observer is not the formal Guest production PID1, and this gate does
 not run the independent Product/Guest
 security edge, all 78 principal processes, the frozen 16 scenarios or a
 strict release manifest. Phase 6 remains **5/15**.
+
+### Slice 6 core startup and material-registry correction (2026-10-03)
+
+Sandbox selected the existing per-role `private_config` volume as the sole
+carrier for a non-secret `startup-config.toml` in each of the twelve core
+deployments (eight runtime roles and four migration jobs). Its file manifest
+and 64 KiB per-file bound are closed by the same Profile/private-archive
+validator as the other role files. The core entrypoint must read the exact
+`/run/phase6/config/startup-config.toml` after validating its Profile and
+actual process UID/GID, owner/file mode, role and command, before logger or
+external work. It parses those same bytes without an environment override or
+fallback; an alternate path, extra role/section or unknown key fails. Legacy
+`config.Load` remains unchanged for non-Slice-6 deployments. No additional
+volume, network, FD, generic configuration framework or secret-bearing TOML
+is authorized by this decision.
+
+The previously identified v2/v3 material-registry gap is corrected at each
+confirmed production entry point: Product and Provider migration jobs,
+Product/Provider/Gateway runtime, and Browser action ingress. Each receives
+its already preflight-validated Profile, exact deployment owner and purpose
+set; the explicit `unix-workload-material.v2` constructor checks owner and
+agent socket/UID/GID/directory group, binding inventory and cache policy.
+The older v1/v2 paths retain their prior constructor and cannot silently
+gain cross-UID v2 transport. Guest was already on the explicit v2 path;
+Browser/Desktop executor roles use only the TLS signer and do not gain a
+material registry.
+
+These source changes invalidate earlier local role candidates. Focused tests
+and source checks are component checks only. A clean-source rebuild, actual
+cross-UID process/SQL migration, exact SQL ledger/grant readback, terminal
+cleanup and the full Slice 6 release scenarios remain necessary. Phase 6
+remains **5/15** until those gates pass.

@@ -171,7 +171,11 @@ func validNumericAddressFromOrigin(origin string) bool {
 	return validNumericAddress(origin[6 : len(origin)-len(suffix)])
 }
 
-func (a authority) materials() config.RoleMaterialsConfig {
+func (a authority) materials(profile phase6security.Profile) (config.RoleMaterialsConfig, error) {
+	bound, err := ingressMaterialBinding(profile)
+	if err != nil {
+		return config.RoleMaterialsConfig{}, errors.New("Browser action ingress material socket is unavailable")
+	}
 	provider := a.MaterialProvider
 	bindings := make([]config.RoleMaterialBindingConfig, len(a.MaterialBindings))
 	for index, value := range a.MaterialBindings {
@@ -180,8 +184,9 @@ func (a authority) materials() config.RoleMaterialsConfig {
 	return config.RoleMaterialsConfig{Provider: config.RoleMaterialProviderConfig{
 		Type: provider.Type, Alias: provider.Alias, SocketPath: provider.SocketPath,
 		ExpectedUID: provider.ExpectedUID, ExpectedGID: provider.ExpectedGID,
+		DirectoryGID:            int64(bound.OwnerGID),
 		OperationTimeoutSeconds: provider.OperationTimeoutSeconds, CacheSeconds: provider.CacheSeconds,
-	}, Bindings: bindings}
+	}, Bindings: bindings}, nil
 }
 
 func serve(ctx context.Context, a authority, authorityPath string) error { //nolint:cyclop
@@ -201,7 +206,11 @@ func serve(ctx context.Context, a authority, authorityPath string) error { //nol
 	if err := validateMaterialBoundary(profile, a); err != nil {
 		return err
 	}
-	registry, err := rolematerials.NewForDeployment(a.materials(), "browser-action-ingress-runtime", secretref.RoleGateway,
+	materials, err := a.materials(profile)
+	if err != nil {
+		return err
+	}
+	registry, err := rolematerials.NewSlice6ForDeployment(materials, "browser-action-ingress-runtime", profile, secretref.RoleGateway,
 		[]secretref.Purpose{secretref.PurposeCapacityValkeyCredentials, secretref.PurposeActionHistoryWitnessDSN}, false, time.Now)
 	if err != nil {
 		return errors.New("Browser action ingress material registry unavailable")
@@ -341,17 +350,28 @@ func serve(ctx context.Context, a authority, authorityPath string) error { //nol
 }
 
 func validateMaterialBoundary(profile phase6security.Profile, a authority) error {
+	bound, boundErr := ingressMaterialBinding(profile)
 	var agent phase6security.Principal
 	for _, candidate := range profile.Principals {
 		if candidate.Name == "browser-action-ingress-agent" {
 			agent = candidate
 		}
 	}
-	if agent.Name == "" || a.MaterialProvider.ExpectedUID != int64(agent.UID) ||
+	if boundErr != nil || bound.AgentDeployment != agent.Name || agent.Name != "browser-action-ingress-agent" ||
+		a.MaterialProvider.Type != config.UnixWorkloadMaterialProviderV2 ||
+		a.MaterialProvider.SocketPath != bound.SocketPath ||
+		a.MaterialProvider.ExpectedUID != int64(bound.AgentUID) ||
+		a.MaterialProvider.ExpectedGID != int64(bound.AgentGID) ||
+		a.MaterialProvider.OperationTimeoutSeconds > bound.MaxOperationSeconds ||
+		a.MaterialProvider.ExpectedUID != int64(agent.UID) ||
 		a.MaterialProvider.ExpectedGID != int64(agent.GID) {
 		return errors.New("Browser action ingress material agent principal mismatch")
 	}
-	bindings, err := a.materials().DecodeBindings(secretref.RoleGateway)
+	materials, err := a.materials(profile)
+	if err != nil {
+		return err
+	}
+	bindings, err := materials.DecodeBindings(secretref.RoleGateway)
 	if err != nil || len(bindings) != 2 ||
 		bindings[a.CapacityBindingID].Purpose != secretref.PurposeCapacityValkeyCredentials ||
 		bindings[a.WitnessBindingID].Purpose != secretref.PurposeActionHistoryWitnessDSN ||
@@ -360,6 +380,26 @@ func validateMaterialBoundary(profile phase6security.Profile, a authority) error
 		return errors.New("Browser action ingress material bindings are invalid")
 	}
 	return nil
+}
+
+// This local projection is used only after serve has verified the complete
+// Profile; the production registry independently repeats full validation.
+func ingressMaterialBinding(profile phase6security.Profile) (phase6security.Slice6MaterialSocketBinding, error) {
+	var found phase6security.Slice6MaterialSocketBinding
+	for _, binding := range profile.MaterialSockets {
+		if binding.OwnerDeployment != "browser-action-ingress-runtime" {
+			continue
+		}
+		if found.OwnerDeployment != "" || binding.AgentDeployment != "browser-action-ingress-agent" ||
+			binding.SocketPath == "" || binding.OwnerGID == binding.AgentGID {
+			return phase6security.Slice6MaterialSocketBinding{}, errors.New("Browser action ingress material socket is invalid")
+		}
+		found = binding
+	}
+	if found.OwnerDeployment == "" {
+		return phase6security.Slice6MaterialSocketBinding{}, errors.New("Browser action ingress material socket is missing")
+	}
+	return found, nil
 }
 
 func ingressTLSPrincipals(profile phase6security.Profile) (phase6security.Principal, phase6security.Principal, error) {

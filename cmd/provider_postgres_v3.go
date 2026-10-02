@@ -32,25 +32,25 @@ type providerV3DatabaseAuthority struct {
 // preflightProviderV3Serve binds every file/profile fact available without a
 // network connection. It is intentionally before registry construction and
 // the first Provider database/broker dial; the live checks remain mandatory.
-func preflightProviderV3Serve(cfg *config.ProviderProcessConfig) error {
+func preflightProviderV3Serve(cfg *config.ProviderProcessConfig) (phase6security.Profile, error) {
 	if cfg == nil || cfg.Validate() != nil || cfg.SchemaVersion != config.ProviderProductionSchemaV3 {
-		return errors.New("Provider v3 configuration is unavailable")
+		return phase6security.Profile{}, errors.New("Provider v3 configuration is unavailable")
 	}
 	profile, err := loadProviderSecurityProfile(cfg)
 	if err != nil {
-		return err
+		return phase6security.Profile{}, err
 	}
 	if _, err := phase6security.VerifyPeerCRLRoleFile(cfg.Transport.PeerCRLRoleFile, profile,
 		cfg.Transport.PeerCRLSourceMappingDigest, cfg.Transport.PeerCRLRoleDigest); err != nil {
-		return errors.New("Provider v3 peer revocation authority is unavailable")
+		return phase6security.Profile{}, errors.New("Provider v3 peer revocation authority is unavailable")
 	}
 	authority, err := providerV3DatabaseBinding(cfg, profile)
 	if err != nil {
-		return err
+		return phase6security.Profile{}, err
 	}
 	contract, _, _, _, _, err := profile.ProductProviderInstanceBoundary(authority.owner)
 	if err != nil || contract.TargetAddress != cfg.Transport.Address.Addr() {
-		return errors.New("Provider v3 Contract boundary does not match profile")
+		return phase6security.Profile{}, errors.New("Provider v3 Contract boundary does not match profile")
 	}
 	switch cfg.Profile {
 	case config.ProviderProcessBrowserProfile:
@@ -59,28 +59,28 @@ func preflightProviderV3Serve(cfg *config.ProviderProcessConfig) error {
 			browserimage.VerifySeccompProfile(cfg.Browser.Docker.SeccompPath, manifest.Security.SeccompProfile.Digest) != nil ||
 			browserimage.LockedPublication().Validate() != nil ||
 			cfg.Browser.Docker.Image != browserimage.LockedPublication().Image() {
-			return errors.New("Provider Browser pinned image source is unavailable")
+			return phase6security.Profile{}, errors.New("Provider Browser pinned image source is unavailable")
 		}
 		private := "wss://" + cfg.Transport.Private.Address.Addr() + browsergateway.PrivateV2Path
 		if _, _, _, _, _, err := profile.BrowserActionIngressProviderBoundary(private); err != nil {
-			return errors.New("Provider Browser private boundary does not match profile")
+			return phase6security.Profile{}, errors.New("Provider Browser private boundary does not match profile")
 		}
 		parsed, _ := url.Parse(cfg.Browser.ExecutorURL)
 		if _, _, _, _, _, err := profile.PrivateRoleAttachBoundary("browser", parsed.Host); err != nil {
-			return errors.New("Provider Browser attach boundary does not match profile")
+			return phase6security.Profile{}, errors.New("Provider Browser attach boundary does not match profile")
 		}
 	case config.ProviderProcessDesktopProfile:
 		manifest, manifestErr := desktopimage.Load(cfg.Desktop.Docker.CandidateManifestPath)
 		if manifestErr != nil || manifest.ProfileID != desktopimage.ProfileID {
-			return errors.New("Provider Desktop pinned image source is unavailable")
+			return phase6security.Profile{}, errors.New("Provider Desktop pinned image source is unavailable")
 		}
 		private := "wss://" + cfg.Transport.Private.Address.Addr() + "/desktop"
 		if _, _, _, _, _, err := profile.GatewayProviderInstanceBoundary(authority.owner, private); err != nil {
-			return errors.New("Provider Desktop private boundary does not match profile")
+			return phase6security.Profile{}, errors.New("Provider Desktop private boundary does not match profile")
 		}
 		parsed, _ := url.Parse(cfg.Desktop.ExecutorURL)
 		if _, _, _, _, _, err := profile.PrivateRoleAttachBoundary("desktop", parsed.Host); err != nil {
-			return errors.New("Provider Desktop attach boundary does not match profile")
+			return phase6security.Profile{}, errors.New("Provider Desktop attach boundary does not match profile")
 		}
 		candidate, err := desktopcandidate.LoadCurrent(cfg.Desktop.LocalCandidateManifestFile)
 		if err != nil || candidate.ImageDigest != cfg.Desktop.Docker.Image ||
@@ -88,25 +88,25 @@ func preflightProviderV3Serve(cfg *config.ProviderProcessConfig) error {
 			manifest.Source.Manifests[candidate.Platform].Digest != candidate.BaseImageDigest ||
 			(candidate.Platform != "linux/"+cfg.Desktop.Architecture &&
 				!(cfg.Desktop.Architecture == "arm64" && candidate.Platform == "linux/arm64/v8")) {
-			return errors.New("Provider Desktop current local candidate is unavailable")
+			return phase6security.Profile{}, errors.New("Provider Desktop current local candidate is unavailable")
 		}
 		plan, err := profile.ProjectSandboxIdentityPlan(authority.template, authority.owner, authority.capacity)
 		if err != nil {
-			return errors.New("Provider Desktop candidate slot plan is unavailable")
+			return phase6security.Profile{}, errors.New("Provider Desktop candidate slot plan is unavailable")
 		}
 		var accounts desktopcandidate.AccountAllowlist
 		if json.Unmarshal([]byte(candidate.WorkloadAccounts), &accounts) != nil || accounts.Validate() != nil {
-			return errors.New("Provider Desktop candidate accounts are unavailable")
+			return phase6security.Profile{}, errors.New("Provider Desktop candidate accounts are unavailable")
 		}
 		for _, slot := range plan.Slots {
 			if !accounts.Supports(slot.WorkloadUID, slot.WorkloadGID) {
-				return errors.New("Provider Desktop candidate does not cover the slot plan")
+				return phase6security.Profile{}, errors.New("Provider Desktop candidate does not cover the slot plan")
 			}
 		}
 	default:
-		return errors.New("Provider v3 sandbox profile is unavailable")
+		return phase6security.Profile{}, errors.New("Provider v3 sandbox profile is unavailable")
 	}
-	return nil
+	return profile, nil
 }
 
 func providerV3DatabaseBinding(cfg *config.ProviderProcessConfig, profile phase6security.Profile) (providerV3DatabaseAuthority, error) {
@@ -158,13 +158,9 @@ func providerV3DatabaseBinding(cfg *config.ProviderProcessConfig, profile phase6
 // broker, own workload TLS agent and purpose-bound DSN before constructing a
 // pgx pool. No failed check falls back to the legacy direct-URL opener.
 func openProviderV3Postgres(ctx context.Context, lifetime context.Context, cfg *config.ProviderProcessConfig,
-	registry *secretref.Registry) (*pgxpool.Pool, func(), providerV3DatabaseAuthority, error) {
+	profile phase6security.Profile, registry *secretref.Registry) (*pgxpool.Pool, func(), providerV3DatabaseAuthority, error) {
 	if ctx == nil || lifetime == nil || registry == nil || ctx.Err() != nil || lifetime.Err() != nil {
 		return nil, nil, providerV3DatabaseAuthority{}, errors.New("Provider v3 database startup is unavailable")
-	}
-	profile, err := loadProviderSecurityProfile(cfg)
-	if err != nil {
-		return nil, nil, providerV3DatabaseAuthority{}, err
 	}
 	authority, err := providerV3DatabaseBinding(cfg, profile)
 	if err != nil {

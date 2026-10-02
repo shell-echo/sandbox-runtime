@@ -13,6 +13,7 @@ const (
 	Slice6PeerCRLSourcesFile      = "peer-crl-sources.json"
 	Slice6PeerCRLRoleFile         = "peer-crl-role.json"
 	Slice6PostgresPeerCRLRoleFile = "postgres-peer-crl-role.json"
+	Slice6StartupConfigFile       = "startup-config.toml"
 	Slice6StartupAuthorityFile    = "startup-authority.json"
 	Slice6CredentialAuthorityFile = "credential-authority.json"
 	Slice6DependencyAuthorityFile = "dependency-authority.json"
@@ -29,6 +30,9 @@ func Slice6PrivateConfigMount(deployment string) (Mount, bool) {
 		return Mount{}, false
 	}
 	files := []string{Slice6ProfileConfigFile}
+	if target == "core" {
+		files = append(files, Slice6StartupConfigFile)
+	}
 	switch target {
 	case "workload-tls-agent", "certificate-controller":
 		files = append(files, Slice6PeerCRLSourcesFile)
@@ -72,6 +76,8 @@ func Slice6PrivateConfigFileLimit(deployment, filename string) (int64, bool) {
 			return 64 << 10, true
 		}
 		return 16 << 10, true
+	case Slice6StartupConfigFile:
+		return 64 << 10, true
 	case Slice6CredentialAuthorityFile, Slice6DependencyAuthorityFile, Slice6PolicyAuthorityFile:
 		return 64 << 10, true
 	default:

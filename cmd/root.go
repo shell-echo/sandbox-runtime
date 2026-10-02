@@ -35,7 +35,7 @@ isolated Linux sandbox instances.`,
 	// `--help` or a bare invocation (the root has no RunE), so those never touch
 	// the log file.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := config.Load(configPath); err != nil {
+		if err := loadCommandConfig(cmd, configPath); err != nil {
 			return err
 		}
 		return logger.Init(config.Logger.Options)

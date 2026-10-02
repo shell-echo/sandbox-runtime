@@ -12,6 +12,7 @@ import (
 )
 
 const slice6ProductMigrationInputsEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_MIGRATION_INPUTS"
+const slice6ProductMigrationSignersEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_MIGRATION_SIGNERS"
 
 // Prepare the migration job's three new Unix listeners independently of the
 // runtime sockets. The fourth private reader is the one-shot job itself.
@@ -75,6 +76,11 @@ func slice6PrepareProductMigrationInputs(t *testing.T, ctx context.Context, run 
 	defer clear(profileBytes)
 	defer clear(peerBytes)
 	defer clear(roleBytes)
+	startupConfig, err := slice6BuildProductMigrationJobConfig(composed)
+	if err != nil {
+		t.Fatal("Product migration job source-bound startup config unavailable")
+	}
+	defer clear(startupConfig)
 	for _, target := range []struct {
 		deployment string
 		files      map[string][]byte
@@ -91,6 +97,7 @@ func slice6PrepareProductMigrationInputs(t *testing.T, ctx context.Context, run 
 		{job.Name, map[string][]byte{
 			phase6security.Slice6ProfileConfigFile:       profileBytes,
 			phase6security.Slice6PostgresPeerCRLRoleFile: roleBytes,
+			phase6security.Slice6StartupConfigFile:       startupConfig,
 		}},
 	} {
 		archive, buildErr := phase6security.BuildSlice6PrivateConfigArchive(profile, target.deployment, target.files)

@@ -15,9 +15,11 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -82,6 +84,76 @@ func Load(path string) error {
 		}
 	}
 
+	return loadViper(v)
+}
+
+var phase6CoreSections = map[string]string{
+	"product-runtime":                "product_process",
+	"gateway-runtime":                "gateway_process",
+	"provider-runtime":               "provider_process",
+	"provider-browser-runtime":       "provider_process",
+	"provider-desktop-runtime":       "provider_process",
+	"guest-runtime":                  "guest_process",
+	"browser-runtime-role":           "browser_process",
+	"desktop-runtime-role":           "desktop_process",
+	"product-migration-job":          "product_migration",
+	"provider-migration-job":         "provider_migration",
+	"provider-browser-migration-job": "provider_migration",
+	"provider-desktop-migration-job": "provider_migration",
+}
+
+// LoadPhase6CoreBytes parses only the already admitted, exact startup TOML
+// bytes. It never reopens a path, inherits environment overrides or falls
+// back to the ordinary default config file. The outer command is responsible
+// for proving the Profile, file ownership and running deployment first.
+func LoadPhase6CoreBytes(document []byte, deployment string) error {
+	section, known := phase6CoreSections[deployment]
+	if !known || len(document) == 0 || len(document) > 64<<10 {
+		return errors.New("Phase 6 core startup configuration is unavailable")
+	}
+	for _, variable := range os.Environ() {
+		if strings.HasPrefix(variable, envPrefix+"_") {
+			return errors.New("Phase 6 core startup environment overrides are forbidden")
+		}
+	}
+	v := newViper()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		return fmt.Errorf("read Phase 6 core startup config: %w", err)
+	}
+	sections := v.AllSettings()
+	if _, ok := sections["application"]; !ok {
+		return errors.New("Phase 6 core application section is missing")
+	}
+	if _, ok := sections[section]; !ok {
+		return errors.New("Phase 6 core role section is missing")
+	}
+	for name, value := range sections {
+		if name != "application" && name != "logger" && name != "phase6_dependencies" && name != section {
+			return errors.New("Phase 6 core config contains another role or unknown section")
+		}
+		if _, ok := value.(map[string]any); !ok {
+			return errors.New("Phase 6 core config section is malformed")
+		}
+	}
+	version := map[string]string{
+		"product_process":    ProductProductionSchemaV3,
+		"provider_process":   ProviderProductionSchemaV3,
+		"gateway_process":    DataPlaneProductionSchemaV3,
+		"guest_process":      DataPlaneProductionSchemaV3,
+		"browser_process":    DataPlaneProductionSchemaV3,
+		"desktop_process":    DataPlaneProductionSchemaV3,
+		"product_migration":  ProductMigrationSchemaV2,
+		"provider_migration": ProviderMigrationSchemaV2,
+	}[section]
+	if v.GetString("application.mode") != string(ApplicationProductionMode) ||
+		v.GetString(section+".schema_version") != version || !v.GetBool(section+".enabled") {
+		return errors.New("Phase 6 core role schema or application mode is invalid")
+	}
+	return loadViper(v)
+}
+
+func loadViper(v *viper.Viper) error {
 	// Parse and validate every section first; only if all succeed do we apply
 	// the commits.
 	commits := make([]commit, 0, len(loaders))
