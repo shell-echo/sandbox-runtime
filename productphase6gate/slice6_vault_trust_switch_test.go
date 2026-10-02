@@ -461,13 +461,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							var onManagedReady func()
 							if os.Getenv(slice6GuestMaterialEnv) == "1" {
 								onManagedReady = func() {
-									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func() {
+									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
 										slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
 											slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
 												guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
 												func(delivery phase6security.Slice6BreakGlassSocketBinding) {
 													slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
-														delivery, breakGlassSocketVolumes)
+														delivery, breakGlassSocketVolumes, restartController)
 												})
 										})
 									})

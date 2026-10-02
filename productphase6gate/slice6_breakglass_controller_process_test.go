@@ -112,7 +112,7 @@ func slice6BuildBreakGlassControllerInput(composed slice6VaultComposedInputs) ([
 }
 
 func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, socketVolumes map[string]string, onReady func()) {
+	composed slice6VaultComposedInputs, socketVolumes map[string]string, onReady func(restart func())) {
 	t.Helper()
 	profile := composed.Profile
 	if len(socketVolumes) != 65 || phase6security.VerifySlice6BreakGlassBoundaries(profile) != nil {
@@ -340,48 +340,63 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 	if _, err := run.docker(ctx, "rm", id); err != nil {
 		t.Fatal("remove first break-glass controller before replacement")
 	}
-	var restartRandom [16]byte
-	if _, err := rand.Read(restartRandom[:]); err != nil {
-		t.Fatal(err)
-	}
-	restartNonce := hex.EncodeToString(restartRandom[:])
-	nonceReplaced := false
-	for index, argument := range arguments {
-		if argument == "SR_PHASE6_FD_NONCE="+nonce {
-			arguments[index] = "SR_PHASE6_FD_NONCE=" + restartNonce
-			nonceReplaced = true
+	previousNonce, previousID := nonce, id
+	startReplacement := func() (string, chan startResult) {
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			t.Fatal(err)
 		}
+		newNonce := hex.EncodeToString(random[:])
+		replaced := false
+		for index, argument := range arguments {
+			if argument == "SR_PHASE6_FD_NONCE="+previousNonce {
+				arguments[index] = "SR_PHASE6_FD_NONCE=" + newNonce
+				replaced = true
+			}
+		}
+		if !replaced || newNonce == previousNonce {
+			t.Fatal("break-glass replacement nonce did not change")
+		}
+		created, createErr := run.docker(ctx, arguments...)
+		containerID := strings.TrimSpace(string(created))
+		if createErr != nil || len(containerID) != 64 || !lowerHexSlice6(containerID) || containerID == previousID {
+			t.Fatal("create independent replacement break-glass controller")
+		}
+		verifyCreated(containerID)
+		envelope := phase6fdloader.Envelope{Protocol: phase6fdloader.ProtocolID, RunID: run.id,
+			Target: "break-glass-controller", ContainerID: containerID, Nonce: newNonce,
+			Config: bytes.Clone(config), Files: []phase6fdloader.PrivateFile{{FD: 3, Data: bytes.Clone(key)}}}
+		defer envelope.Destroy()
+		input, marshalErr := json.Marshal(envelope)
+		if marshalErr != nil || envelope.Validate(phase6fdloader.Expected{RunID: run.id,
+			Target: envelope.Target, Nonce: newNonce, ContainerHostname: containerID[:12]}) != nil {
+			t.Fatal("replacement controller FD envelope invalid")
+		}
+		defer clear(input)
+		ready := startAndAwait(containerID, input)
+		previousNonce, previousID = newNonce, containerID
+		return containerID, ready
 	}
-	if !nonceReplaced || restartNonce == nonce {
-		t.Fatal("break-glass replacement nonce did not change")
-	}
-	replaced, err := run.docker(ctx, arguments...)
-	replacementID := strings.TrimSpace(string(replaced))
-	if err != nil || len(replacementID) != 64 || !lowerHexSlice6(replacementID) || replacementID == id {
-		t.Fatal("create independent replacement break-glass controller")
-	}
-	verifyCreated(replacementID)
-	replacementEnvelope := phase6fdloader.Envelope{Protocol: phase6fdloader.ProtocolID, RunID: run.id,
-		Target: "break-glass-controller", ContainerID: replacementID, Nonce: restartNonce,
-		Config: bytes.Clone(config), Files: []phase6fdloader.PrivateFile{{FD: 3, Data: bytes.Clone(key)}}}
-	defer replacementEnvelope.Destroy()
-	replacementInput, err := json.Marshal(replacementEnvelope)
-	if err != nil || replacementEnvelope.Validate(phase6fdloader.Expected{RunID: run.id,
-		Target: replacementEnvelope.Target, Nonce: restartNonce, ContainerHostname: replacementID[:12]}) != nil {
-		t.Fatal("replacement controller FD envelope invalid")
-	}
-	defer clear(replacementInput)
-	replacementCompleted := startAndAwait(replacementID, replacementInput)
+	replacementID, replacementCompleted := startReplacement()
 	slice6ExerciseBreakGlassRestart(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID], seed)
 	// The replay record has a one-minute lifetime. Check it immediately
 	// across the restart, then run the slower Guest dependency chain while
 	// the replacement controller remains live for delivery/consume.
-	if onReady != nil {
-		onReady()
+	currentID, currentCompleted := replacementID, replacementCompleted
+	restart := func() {
+		stopAndDrain(currentID, currentCompleted)
+		slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
+		if _, err := run.docker(ctx, "rm", currentID); err != nil {
+			t.Fatal("remove consumed-capability controller before replacement")
+		}
+		currentID, currentCompleted = startReplacement()
 	}
-	stopAndDrain(replacementID, replacementCompleted)
+	if onReady != nil {
+		onReady(restart)
+	}
+	stopAndDrain(currentID, currentCompleted)
 	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
-	if _, err := run.docker(ctx, "rm", replacementID); err != nil {
+	if _, err := run.docker(ctx, "rm", currentID); err != nil {
 		t.Fatal("remove replacement break-glass controller")
 	}
 	t.Log("real source-bound break-glass controller accepted signed submit/two approvals/issue, rejected same-JTI distinct-request replay, then a fresh replacement PID1 recovered persistent ledger/replay state and accepted a new request; Guest delivery/consume evidence is reported separately")
@@ -600,8 +615,11 @@ func slice6FreshBreakGlassJTI(t *testing.T) string {
 // signs the online consume, and uses its live Vault-backed material resolver.
 func slice6ExerciseGuestBreakGlassDelivery(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, delivery phase6security.Slice6BreakGlassSocketBinding,
-	socketVolumes map[string]string) {
+	socketVolumes map[string]string, restartController func()) {
 	t.Helper()
+	if restartController == nil {
+		t.Fatal("live Guest break-glass controller restart unavailable")
+	}
 	var control phase6security.Slice6BreakGlassSocketBinding
 	for _, candidate := range composed.Profile.BreakGlassSockets {
 		if candidate.Kind == "control" {
@@ -721,6 +739,13 @@ func slice6ExerciseGuestBreakGlassDelivery(t *testing.T, ctx context.Context, ru
 		after.AuditHead == before.AuditHead {
 		t.Fatal("online Guest consume did not commit exactly one controller audit/ledger transition")
 	}
+	restartController()
+	recovered := slice6ReadLiveBreakGlassLedger(t, ctx, run, composed.Profile)
+	slice6AssertGuestBreakGlassRecord(t, recovered, capability, breakglass.StateConsumed, 1)
+	if recovered.Revision != after.Revision || recovered.AuditCount != after.AuditCount ||
+		recovered.AuditHead != after.AuditHead {
+		t.Fatal("replacement controller did not recover exact consumed-capability ledger")
+	}
 	if time.Until(expiresAt) < 15*time.Second {
 		t.Fatal("live Guest break-glass capability expired before replay attempt")
 	}
@@ -728,11 +753,11 @@ func slice6ExerciseGuestBreakGlassDelivery(t *testing.T, ctx context.Context, ru
 		"live-redeliver", capability, false)
 	replayed := slice6ReadLiveBreakGlassLedger(t, ctx, run, composed.Profile)
 	slice6AssertGuestBreakGlassRecord(t, replayed, capability, breakglass.StateConsumed, 1)
-	if replayed.Revision != after.Revision || replayed.AuditCount != after.AuditCount ||
-		replayed.AuditHead != after.AuditHead || !time.Now().Before(expiresAt) {
+	if replayed.Revision != recovered.Revision || replayed.AuditCount != recovered.AuditCount ||
+		replayed.AuditHead != recovered.AuditHead || !time.Now().Before(expiresAt) {
 		t.Fatal("same-capability replay denial lacked a live single-use ledger witness")
 	}
-	t.Log("real Guest agent consumed one delivered break-glass capability, resolved its exact Vault material, and denied a before-expiry redelivery with unchanged persistent ledger")
+	t.Log("real Guest agent consumed one delivered break-glass capability and resolved exact Vault material; a new controller PID1 recovered consumed/1 and denied before-expiry redelivery with unchanged ledger")
 }
 
 func slice6ReadLiveBreakGlassLedger(t *testing.T, ctx context.Context, run slice6DockerRun,
