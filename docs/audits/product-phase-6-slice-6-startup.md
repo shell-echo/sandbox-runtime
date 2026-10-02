@@ -3722,3 +3722,24 @@ and tagged `go vet`, Product Contract lock verifier, and diff check passed.
 This proves same-run component cleanup only; historical unowned volumes and
 the full 78-deployment/16-scenario gate remain outside the claim. Phase 6
 remains **5/15**.
+
+Checkpoint 2026-10-02 (R29/R30 first run-owned business KV material):
+R29 added a Guest-specific, create-only KVv2 write of a freshly generated
+Ed25519 signing key, with exact binding digest, version, revision, rotation
+window and SHA-256 envelope. A short-lived `guest-agent-kv` token actually
+read back KV version 1 and the exact key; a cross-owner Gateway path returned
+explicit permission denial. R29 then failed closed because that deliberately
+KV-read-only token had no `auth/token/revoke-self` authority. Sandbox chose to
+keep the production ACL unchanged and perform this diagnostic token's exact
+accessor revocation through the controlled bootstrap, before root destruction
+and before the managed controller chain. R30 implements that narrower cleanup:
+the accessor is read back with its sole expected policy, revoked through a
+file-fed bootstrap call, and independently read back as Vault's `400 invalid
+accessor`; no token or accessor appears in a command argument or log. The
+real source-bound Vault/Guest-KV/two-controller/one-shot-operator test passed
+in 219.56 seconds, including managed issuance, both quiesce receipts,
+complete CRL, two target accessor revocations and exact same-run Docker plus
+implicit-volume cleanup. The Guest key is genuine run-owned material, but no
+material-agent or Guest process consumed it yet; this is not a Slice 6 release
+scenario, immutable evidence bundle, push or count advancement. Phase 6
+remains **5/15**.
