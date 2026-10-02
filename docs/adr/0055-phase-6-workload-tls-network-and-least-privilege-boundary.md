@@ -2136,10 +2136,9 @@ files and one controller-signer private source in addition; actor private
 keys stay outside the production Profile builder/controller. The closed
 11-actor digest inventory is Profile-bound and each material agent checks its
 own FD public key before credential issuance. This is **not** production
-operator acceptance: the v2 controller command and full signed
-issue→delivery→consume/replay/restart
-gate remain open. No v1 same-UID production fallback is allowed. Phase 6
-remains 5/15.
+operator acceptance: the component issue→delivery→consume/replay/restart
+observations below do not replace the full-topology release gate. No v1
+same-UID production fallback is allowed. Phase 6 remains 5/15.
 
 Sandbox's carrier correction keeps the fixed 78 deployments and 12 local role
 image targets. The eight finite tasks share a separately clean-source-built
@@ -2168,13 +2167,17 @@ signs the online consume to its target-specific controller socket and resolves
 its Profile-bound signing key through scoped real Vault KVv2. The controller
 ledger changes from `issued`/zero uses to `consumed`/one use with exactly one
 new audit entry. A second delivery before expiry is denied; ledger revision,
-audit count/head and use count remain unchanged. Both clean-checkpoint and
-pre-checkpoint Docker runs pass with exact container cleanup; full repository
+audit count/head and use count remain unchanged. Clean checkpoint
+`f18c931d0652c5c5d2e61c5e0c42460420b317a3` then stops and removes that
+controller, launches a third real PID1 against the same exclusive ledger,
+and observes recovered `consumed`/one use before the still-online Guest agent
+re-delivers the identical, unexpired capability. The replacement rejects it
+without changing ledger revision, audit count/head or use count. Dirty and
+clean-checkpoint Docker runs pass with exact container cleanup; full repository
 race/shuffle, vet and Product Contract lock verification pass.
 
-This is component evidence, not final Slice 6 evidence. In particular, the
-same consumed capability has not yet been re-delivered after another
-controller restart. The owner-side material observer is not the formal Guest
-production PID1, and this gate does not run the independent Product/Guest
+This is component evidence, not final Slice 6 evidence. The owner-side
+material observer is not the formal Guest production PID1, and this gate does
+not run the independent Product/Guest
 security edge, all 78 principal processes, the frozen 16 scenarios or a
 strict release manifest. Phase 6 remains **5/15**.
