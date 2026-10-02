@@ -342,3 +342,79 @@ will record Vault image-created anonymous volume IDs at container creation
 and independently inspect those exact IDs after cleanup; earlier runs remain
 unconfirmed on that one point. The diagnostic is not a migration-success or
 production-readiness claim. Phase 6 remains **5/15**.
+
+## R9 migration output classification failure (2026-10-03)
+
+R9 runtime source `e3d0e96ef885546a8f74d7a3a59d566a5ace8337` passed the full
+race/shuffle suite, vet, tagged Slice 6 tests and Product Contract verifier.
+All twelve repository role candidates and the Desktop local candidate were
+rebuilt from that clean source; the independent image-supply and resource
+draft preflights passed. Fresh real run
+`6dbaedac069722a749f243e80f47eaca` composed the 78-principal Profile,
+Vault issuers/KVv2, controller processes, nine-bridge PostgreSQL and scoped
+Product SQL roles/material. Its Product migration PID1 started and exited 1,
+with OOM=false, restart count 0, start/finish timestamps and no Docker State
+error. Before PostgreSQL teardown, read-only SQL observed the precreated
+schema, no `schema_migrations` relation and zero business tables. This is no
+observed committed migration, not proof that no connection or DDL was tried.
+
+The test-only failure observer still recognized only the old exact
+`migration v2 PostgreSQL connection is unavailable` line; the newly approved
+CLI's closed `: stage=...` form was absent from its allowed set. The observed
+category was `unknown`, while bounded raw process output was cleared and the
+container removed. Therefore this is a proven producer/consumer compatibility
+gap, **not** proof that this particular process actually emitted a stage
+line. The run did not establish the specific connection substage and cannot
+be retrospectively reclassified from its process-state/SQL observations.
+Sandbox approved a test-observer-only repair and one further run after
+producer/consumer consistency and CLI output-boundary checks.
+
+Both migration signer sockets were cleaned, both controller PID1 processes
+quiesced, PostgreSQL stopped, and the independent terminal operator confirmed
+three certificate serials, two token accessors, complete CRL and
+self-revocation under private plan
+`sha256:509ab25e56472bf618df5ce97e1a2e019d9d156f03f61e774afcef3c50d5b54a`.
+The run captured the Vault image's two anonymous volume IDs at creation and
+the exact-ID post-cleanup check passed. A separate post-run query found no
+run-labeled containers, networks or named volumes. The non-secret PostgreSQL
+leaf digest was
+`sha256:fb4d2b52c337d2918bcb28e00035945e029f0472fe3497cc6c2bb363d7a29587`.
+No release manifest was emitted. Phase 6 remains **5/15**.
+
+## E-only stage-observer repair before one approved repeat (2026-10-03)
+
+Sandbox approved a strictly test-observer-only correction, not a new runtime
+or issuer path. Commits `7577cf0bb029f83f07c05e9347461a5b9831ab68`
+and `e5ffb8d3def38162f239340ca414847d1d52e38e` change only `_test.go`
+files. The runtime source stays frozen at R9
+`e3d0e96ef885546a8f74d7a3a59d566a5ace8337`; the clean candidate checkout
+is detached at that revision. The E checkout has only this audit update
+uncommitted while recording the result. R9 role manifests and Desktop candidate
+remain in separate private 0700 directories; neither was rebuilt for the
+E-only change. Representative candidate identities are the Product core
+image `sha256:165ff49f1f4010270b33a11b6799ddc2ee33d491814cc125fac5111b0be69462`,
+Product role manifest
+`sha256:8e0d253898446fd04b71afea7cfcd28f966825b06744b77a444a997ed65cf63e`,
+and Desktop image/manifest
+`sha256:72572fdcd7c36523ceb9469b148378e55477fc686b5508ea32068bb883e695a0` /
+`sha256:30b8fef0e210dc6c0be8fd79e2a253c02985bfa9b0f65760af451bfe67229dae`.
+The other eleven role identities remain in their independently verified R9
+private manifests, rather than being substituted with a later source build.
+
+The observer now accepts only the thirteen complete, case-sensitive fixed
+stage lines plus its prior generic line. A tagged test extracts the actual
+closed stage constants and formatter switch from the clean R9 source, verifies
+the exact thirteen-to-thirteen mapping, then checks that each line survives
+the independent observer. An actual bounded stdout/stderr capture path passes
+one fixed line and rejects extra combined output; a local CLI subprocess
+checks Cobra suppression, `errors.Join`, initialized `logger.Sync`, and a
+single `Fprintln` line without an issuer. Unknown values, casing drift,
+prefix/suffix, multiple lines, CR/NUL, oversized and credential-like samples
+remain `unknown`; no raw output is retained. Focused tagged race tests and
+cmd race tests passed. The harness now keeps only fixed output-shape and
+length buckets on any failed migration; it clears the raw bytes before
+reporting. The full post-E `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, tagged Slice 6 race/vet, Product Contract verifier and
+`git diff --check` passed before the next issuer. If a new run
+still yields `unknown`, stop and investigate those non-secret capture buckets;
+do not repeat the same setup.
