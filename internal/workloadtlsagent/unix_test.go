@@ -1,6 +1,7 @@
 package workloadtlsagent
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -114,6 +115,9 @@ func TestUnixClientUsesRemoteSignerForTLSHandshake(t *testing.T) {
 	certificate, err := fixture.client.Certificate(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if certificate.Leaf == nil || !bytes.Equal(certificate.Leaf.Raw, certificate.Certificate[0]) {
+		t.Fatal("remote TLS leaf aliases a destroyed snapshot instead of retained DER")
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(fixture.issuer.ca)

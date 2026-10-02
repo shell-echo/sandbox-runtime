@@ -289,8 +289,12 @@ func (c *Client) Certificate(ctx context.Context) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, ErrUnavailable
 	}
-	return tls.Certificate{Certificate: cloneDER(snapshot.CertificateDER), PrivateKey: &RemoteSigner{client: c,
-		generation: snapshot.Generation, publicKey: publicKey}, Leaf: mustParseCertificate(snapshot.CertificateDER[0])}, nil
+	chain, leaf, err := retainedCertificateChain(snapshot.CertificateDER)
+	if err != nil {
+		return tls.Certificate{}, ErrUnavailable
+	}
+	return tls.Certificate{Certificate: chain, PrivateKey: &RemoteSigner{client: c,
+		generation: snapshot.Generation, publicKey: publicKey}, Leaf: leaf}, nil
 }
 
 // CertificateForHandshake binds signing to the TLS handshake lifetime. The
@@ -470,7 +474,20 @@ func publicKeysEqual(first, second any) bool {
 	return firstOK && secondOK && firstKey.Equal(secondKey)
 }
 
-func mustParseCertificate(document []byte) *x509.Certificate {
-	certificate, _ := x509.ParseCertificate(document)
-	return certificate
+// Parse Leaf from the retained chain. x509.Certificate.Raw can alias the
+// input DER, so parsing the temporary Snapshot before Destroy would return a
+// zeroed Leaf.Raw even though Certificate[0] remained valid.
+func retainedCertificateChain(snapshotDER [][]byte) ([][]byte, *x509.Certificate, error) {
+	if len(snapshotDER) == 0 {
+		return nil, nil, ErrUnavailable
+	}
+	chain := cloneDER(snapshotDER)
+	leaf, err := x509.ParseCertificate(chain[0])
+	if err != nil {
+		for _, document := range chain {
+			clear(document)
+		}
+		return nil, nil, ErrUnavailable
+	}
+	return chain, leaf, nil
 }

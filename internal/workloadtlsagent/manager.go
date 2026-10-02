@@ -225,8 +225,12 @@ func (m *Manager) Certificate() (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, ErrUnavailable
 	}
-	return tls.Certificate{Certificate: cloneDER(snapshot.CertificateDER), PrivateKey: &managerSigner{manager: m,
-		generation: snapshot.Generation, publicKey: publicKey}, Leaf: mustParseCertificate(snapshot.CertificateDER[0])}, nil
+	chain, leaf, err := retainedCertificateChain(snapshot.CertificateDER)
+	if err != nil {
+		return tls.Certificate{}, ErrUnavailable
+	}
+	return tls.Certificate{Certificate: chain, PrivateKey: &managerSigner{manager: m,
+		generation: snapshot.Generation, publicKey: publicKey}, Leaf: leaf}, nil
 }
 
 type managerSigner struct {

@@ -1,6 +1,7 @@
 package workloadtlsagent
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -223,6 +224,9 @@ func TestManagerUsesSeparatePostgresClientCSRAndSigner(t *testing.T) {
 	certificate, err := manager.Certificate()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if certificate.Leaf == nil || !bytes.Equal(certificate.Leaf.Raw, certificate.Certificate[0]) {
+		t.Fatal("managed TLS leaf aliases a destroyed snapshot instead of retained DER")
 	}
 	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
 	if err != nil || workloadpki.ValidatePostgresClientLeaf(leaf, postgres, now) != nil {
