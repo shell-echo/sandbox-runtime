@@ -398,10 +398,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var guestSocketVolumes map[string]string
 		var productSocketVolumes map[string]string
 		var productMaterialSocketVolumes map[string]string
+		var productMigrationSocketVolumes map[string]string
 		var guestPublicKeyDigest string
 		var productIdentityDigest string
 		var productRuntimeDSNDigest string
 		var postgresLeaf slice6PostgresServerLeaf
+		var postgresClientCRL []byte
 		var postgresRecord *phase6terminalcleanup.ExternalPostgresRecord
 		var postgresStop func() error
 		postgresTerminalConfirmed := false
@@ -449,6 +451,26 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 						}
 						clear(materialConfig)
 						t.Logf("same-run Product material signer/material socket allocations=2 combined=%d; material agent not launched", len(productMaterialSocketVolumes))
+						if os.Getenv(slice6ProductMigrationInputsEnv) == "1" {
+							productMigrationSocketVolumes = slice6PrepareProductMigrationInputs(t, ctx, run, composed, productMaterialSocketVolumes)
+							migrationTLSConfig, tlsErr := slice6BuildOrdinaryTLSAgentConfig(composed,
+								"product-migration-agent", "product-migration-agent-tls-agent")
+							if tlsErr != nil {
+								t.Fatal("Product migration material signer source-bound config unavailable")
+							}
+							clear(migrationTLSConfig)
+							migrationMaterialConfig, materialErr := slice6BuildProductMigrationMaterialAgentConfig(composed)
+							if materialErr != nil {
+								t.Fatal("Product migration material-agent source-bound config unavailable")
+							}
+							clear(migrationMaterialConfig)
+							migrationPostgresConfig, postgresErr := slice6BuildProductMigrationPostgresSignerConfig(composed)
+							if postgresErr != nil {
+								t.Fatal("Product migration PostgreSQL signer source-bound config unavailable")
+							}
+							clear(migrationPostgresConfig)
+							t.Logf("same-run Product migration signer/material/PostgreSQL socket allocations=3 combined=%d; migration job not launched", len(productMigrationSocketVolumes))
+						}
 					}
 				}
 			}
@@ -461,6 +483,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
 				postgresLeaf = slice6VaultPreparePostgresServerLeaf(t, ctx, run, serverID, root,
 					configDir, composed.Profile, general, management.Token)
+				postgresClientCRL = slice6VaultReadPostgresClientCRL(t, ctx, run, serverID, general)
+				defer clear(postgresClientCRL)
 				t.Cleanup(func() {
 					if !postgresTerminalConfirmed {
 						t.Errorf("external PostgreSQL leaf remains unconfirmed for v2 terminal revoke: run=%s issuer=%s serial=%s leaf=%s",
@@ -575,7 +599,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 											}
 											runWork()
 										} else if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
-											slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
+											slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf, postgresClientCRL,
 												func(record phase6terminalcleanup.ExternalPostgresRecord, _ string, _ func() error) {
 													postgresRecord = &record
 													runWork()
@@ -613,7 +637,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							credentialKey, onCredentialReady)
 					}
 					if os.Getenv(slice6ProductPostgresDSNEnv) == "1" {
-						slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
+						slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf, postgresClientCRL,
 							func(record phase6terminalcleanup.ExternalPostgresRecord, postgresID string, stop func() error) {
 								postgresRecord = &record
 								postgresStop = stop
@@ -898,6 +922,38 @@ func slice6VaultReadCRL(t *testing.T, ctx context.Context, run slice6DockerRun, 
 		t.Fatal("complete Vault issuer CRL validity does not cover the trust cutover")
 	}
 	return new(big.Int).Set(list.Number)
+}
+
+// This is the complete original issuer CRL for PostgreSQL's own client-leaf
+// verifier. It is supplied by the operator, never by a SQL login or a role.
+func slice6VaultReadPostgresClientCRL(t *testing.T, ctx context.Context, run slice6DockerRun,
+	serverID string, root slice6VaultRoot) []byte {
+	t.Helper()
+	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json",
+		"pki/issuer/"+root.ID+"/crl")...)
+	defer clear(response)
+	var document struct {
+		Data struct {
+			CRL string `json:"crl"`
+		} `json:"data"`
+	}
+	if err != nil || len(response) > 128<<10 || json.Unmarshal(response, &document) != nil ||
+		len(document.Data.CRL) > 64<<10 {
+		t.Fatal("read bounded original PostgreSQL client issuer CRL")
+	}
+	block, remainder := pem.Decode([]byte(document.Data.CRL))
+	if block == nil || block.Type != "X509 CRL" || len(block.Headers) != 0 ||
+		len(bytes.TrimSpace(remainder)) != 0 {
+		t.Fatal("original PostgreSQL client issuer CRL encoding drifted")
+	}
+	list, err := x509.ParseRevocationList(block.Bytes)
+	now := time.Now().UTC()
+	if err != nil || list.Number == nil || !bytes.Equal(list.RawIssuer, root.Certificate.RawSubject) ||
+		list.CheckSignatureFrom(root.Certificate) != nil || list.ThisUpdate.After(now) ||
+		!list.NextUpdate.After(now) {
+		t.Fatal("original PostgreSQL client issuer CRL signature or validity drifted")
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: block.Bytes})
 }
 
 type slice6NetworkIssuerObservation struct {

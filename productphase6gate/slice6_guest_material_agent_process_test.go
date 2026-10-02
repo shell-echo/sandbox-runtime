@@ -43,13 +43,16 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
 	t.Helper()
 	profile := composed.Profile
+	migration := agentDeployment == "product-migration-agent"
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
 		len(socketVolumes) != expectedSockets ||
-		(agentDeployment != "guest-agent" && agentDeployment != "product-runtime-agent") ||
+		(agentDeployment != "guest-agent" && agentDeployment != "product-runtime-agent" && !migration) ||
 		(agentDeployment == "guest-agent" && (len(expectedDigest) != len("sha256:")+64 ||
 			ownerDeployment != "guest-runtime" || label != "guest" || expectedSockets != 67)) ||
 		(agentDeployment == "product-runtime-agent" && (len(expectedDigest) != len("sha256:")+64 ||
-			ownerDeployment != "product-runtime" || label != "product-material" || expectedSockets != 70)) {
+			ownerDeployment != "product-runtime" || label != "product-material" || expectedSockets != 70)) ||
+		(migration && (expectedDigest != "" || expectedDSNDigest != "" ||
+			ownerDeployment != "product-migration-job" || label != "product-migration-material" || expectedSockets != 73)) {
 		t.Fatal("runtime material-agent final source authority unavailable")
 	}
 	var agent, owner phase6security.Principal
@@ -83,10 +86,14 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	}
 	allowedSockets := map[string]bool{
 		material.SocketStorageID: false, issuer.SocketStorageID: true, tls.SocketStorageID: true,
-		delivery.SocketStorageID: false, consume.SocketStorageID: true,
 	}
-	if err != nil || issuerErr != nil || tlsErr != nil || len(allowedSockets) != 5 ||
-		delivery.ID == "" || consume.ID == "" {
+	if !migration {
+		allowedSockets[delivery.SocketStorageID] = false
+		allowedSockets[consume.SocketStorageID] = true
+	}
+	if err != nil || issuerErr != nil || tlsErr != nil || len(allowedSockets) != map[bool]int{true: 3, false: 5}[migration] ||
+		(migration && (delivery.ID != "" || consume.ID != "")) ||
+		(!migration && (delivery.ID == "" || consume.ID == "")) {
 		t.Fatal("Guest material-agent socket authority drift")
 	}
 	var dedicated, service phase6security.Network
@@ -133,6 +140,9 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	if agentDeployment == "guest-agent" {
 		role = secretref.RoleGuest
 		purposes = []secretref.Purpose{secretref.PurposeGuestSigningKey}
+	} else if migration {
+		role = secretref.RoleProduct
+		purposes = []secretref.Purpose{secretref.PurposePostgresMigrationDSN}
 	} else {
 		role = secretref.RoleProduct
 		purposes = []secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN}
@@ -303,8 +313,12 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	}
 	ready := false
 	for time.Now().Before(deadline) && ctx.Err() == nil {
+		probe := "test -S " + material.SocketPath
+		if !migration {
+			probe += " && test -S " + delivery.SocketPath
+		}
 		if _, probeErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID),
-			id, "/bin/sh", "-ec", "test -S "+material.SocketPath+" && test -S "+delivery.SocketPath); probeErr == nil {
+			id, "/bin/sh", "-ec", probe); probeErr == nil {
 			ready = true
 			break
 		}
@@ -405,12 +419,14 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 			t.Fatalf("Guest owner-side Vault-backed material resolve failed: stage=%s resolve_ms=%d exit=%v", stage, resolveMS, observeErr)
 		}
 		t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
-	} else {
+	} else if !migration {
 		slice6ObserveProductIdentityMaterial(t, ctx, run, profile, agent, owner, material,
 			config, expectedDigest, expectedDSNDigest, socketVolumes[material.SocketStorageID], root)
 	}
-	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-		t.Fatal("stop runtime material-agent")
+	if !migration {
+		if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
+			t.Fatal("stop runtime material-agent")
+		}
 	}
 	select {
 	case done := <-completed:
@@ -419,22 +435,27 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		if done.err != nil {
 			t.Fatalf("runtime material-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("runtime material-agent did not drain")
 	}
 	if _, err := run.docker(ctx, "rm", id); err != nil {
 		t.Fatal("remove stopped runtime material-agent")
 	}
-	if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-clean-"+run.id,
+	cleanupMounts := []string{"--mount", "type=volume,src=" + socketVolumes[material.SocketStorageID] + ",dst=" + material.SocketDirectory + ",readonly"}
+	cleanupTest := "test ! -e " + material.SocketPath
+	if !migration {
+		cleanupMounts = append(cleanupMounts, "--mount", "type=volume,src="+socketVolumes[delivery.SocketStorageID]+",dst="+delivery.SocketDirectory+",readonly")
+		cleanupTest += " && test ! -e " + delivery.SocketPath
+	}
+	cleanupArgs := []string{"run", "--rm", "--pull=never", "--name", "sr-p6-" + label + "-clean-" + run.id,
 		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID),
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
-		"--mount", "type=volume,src="+socketVolumes[material.SocketStorageID]+",dst="+material.SocketDirectory+",readonly",
-		"--mount", "type=volume,src="+socketVolumes[delivery.SocketStorageID]+",dst="+delivery.SocketDirectory+",readonly",
-		"--entrypoint=/bin/sh", agent.ImageReference, "-ec",
-		"test ! -e "+material.SocketPath+" && test ! -e "+delivery.SocketPath); err != nil {
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only"}
+	cleanupArgs = append(cleanupArgs, cleanupMounts...)
+	cleanupArgs = append(cleanupArgs, "--entrypoint=/bin/sh", agent.ImageReference, "-ec", cleanupTest)
+	if _, err := run.docker(ctx, cleanupArgs...); err != nil {
 		t.Fatal("runtime material and break-glass listener exact socket cleanup unproved")
 	}
-	t.Logf("real %s material-agent clean drain removed both exact listeners", label)
+	t.Logf("real %s material-agent clean drain removed its exact listeners", label)
 }
 
 // The observer has a finite, reviewed diagnostic vocabulary. Never include

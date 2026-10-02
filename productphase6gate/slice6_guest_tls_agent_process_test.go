@@ -41,13 +41,29 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
 	t.Helper()
 	profile := composed.Profile
-	binding, principal, subject, err := profile.TLSAgentForSubject(subjectDeployment)
+	var binding phase6security.TLSAgentBinding
+	var principal, subject phase6security.Principal
+	var err error
+	postgresPurpose := agentDeployment == "product-migration-postgres-tls-agent"
+	if postgresPurpose {
+		var postgres phase6security.PostgresClientAgentBinding
+		var target phase6security.Slice6PostgresSignerTarget
+		postgres, target, principal, subject, _, err = profile.PostgresClientSignerForOwner(subjectDeployment)
+		if err == nil && (target.AgentDeployment != agentDeployment || !target.Migration ||
+			target.DatabaseName != "product" || target.SQLRole != "product_migrator") {
+			err = phase6security.ErrInvalidProfile
+		}
+		binding = postgres.TLSAgentBinding
+	} else {
+		binding, principal, subject, err = profile.TLSAgentForSubject(subjectDeployment)
+	}
 	if err != nil || principal.Name != agentDeployment || subject.Name != subjectDeployment ||
 		principal.ImageLocation != "local" || principal.ImageReference != principal.ImageDigest ||
 		principal.UID == 0 || principal.GID == 0 || !principal.ReadOnlyRootFilesystem ||
 		!principal.NoNewPrivileges || !slices.Equal(principal.DroppedCapabilities, []string{"ALL"}) ||
 		len(principal.Networks) != 1 || principal.Networks[0] != "network-"+agentDeployment ||
-		(label != "guest" && label != "product" && label != "product-material") {
+		(label != "guest" && label != "product" && label != "product-material" &&
+			label != "product-migration-material" && label != "product-migration-postgres") {
 		t.Fatal("ordinary TLS-agent immutable Profile identity drift")
 	}
 	cpuContrast := label == "guest" && os.Getenv(slice6GuestTLSCPUContrastEnv) == "1"
@@ -84,7 +100,12 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	if err != nil {
 		t.Fatal("create ordinary TLS-agent dedicated network")
 	}
-	config, err := slice6BuildOrdinaryTLSAgentConfig(composed, subjectDeployment, agentDeployment)
+	var config []byte
+	if postgresPurpose {
+		config, err = slice6BuildProductMigrationPostgresSignerConfig(composed)
+	} else {
+		config, err = slice6BuildOrdinaryTLSAgentConfig(composed, subjectDeployment, agentDeployment)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

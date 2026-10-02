@@ -7,8 +7,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -36,7 +38,7 @@ type slice6PostgresObservedMount struct {
 }
 
 var slice6PostgresPrivateFiles = []string{
-	"bootstrap-password", "client-ca.pem", "pg_hba.conf",
+	"bootstrap-password", "client-ca.pem", "client-crl.pem", "pg_hba.conf",
 	"server-ca.pem", "server-key.pem", "server.pem",
 }
 
@@ -45,7 +47,7 @@ var slice6PostgresPrivateFiles = []string{
 // root-revocation boundary; it must stop this server before terminal PKI
 // cleanup. This is component evidence, not the Slice 6 release gate.
 func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, leaf slice6PostgresServerLeaf,
+	composed slice6VaultComposedInputs, leaf slice6PostgresServerLeaf, clientCRL []byte,
 	work func(phase6terminalcleanup.ExternalPostgresRecord, string, func() error)) {
 	t.Helper()
 	if work == nil || phase6security.VerifySlice6DesiredFinalExternalProfile(composed.Profile) != nil ||
@@ -81,13 +83,25 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 		composed.Profile.ProviderDatabases, clientCA, hba, clientCABytes, time.Now().UTC()) != nil {
 		t.Fatal("PostgreSQL HBA/client CA differ from source-bound Profile")
 	}
+	issuer := slice6VaultParsePEMCertificate(t, clientCABytes)
+	block, remainder := pem.Decode(clientCRL)
+	if len(clientCRL) == 0 || len(clientCRL) > 64<<10 || block == nil || block.Type != "X509 CRL" ||
+		len(bytes.TrimSpace(remainder)) != 0 || !bytes.Equal(pem.EncodeToMemory(block), clientCRL) {
+		t.Fatal("PostgreSQL client CRL is not one canonical complete issuer PEM")
+	}
+	list, err := x509.ParseRevocationList(block.Bytes)
+	now := time.Now().UTC()
+	if err != nil || list.Number == nil || !bytes.Equal(list.RawIssuer, issuer.RawSubject) ||
+		list.CheckSignatureFrom(issuer) != nil || list.ThisUpdate.After(now) || !list.NextUpdate.After(now) {
+		t.Fatal("PostgreSQL client CRL issuer, signature or validity drifted")
+	}
 	privateDir := filepath.Dir(leaf.KeyPath)
 	if privateDir == "" || filepath.Dir(leaf.CertificatePath) != privateDir ||
 		filepath.Dir(leaf.IssuerPath) != privateDir {
 		t.Fatal("PostgreSQL key/certificate supply is not a single exact private directory")
 	}
 	for name, contents := range map[string][]byte{
-		"pg_hba.conf": hba, "client-ca.pem": clientCABytes,
+		"pg_hba.conf": hba, "client-ca.pem": clientCABytes, "client-crl.pem": clientCRL,
 	} {
 		if err := os.WriteFile(filepath.Join(privateDir, name), contents, 0o600); err != nil {
 			t.Fatal("prepare exact PostgreSQL server configuration")
@@ -131,7 +145,8 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 		"postgres", "-c", "listen_addresses=*", "-c", "ssl=on",
 		"-c", "ssl_min_protocol_version=TLSv1.3", "-c", "ssl_cert_file=/pg/server.pem",
 		"-c", "ssl_key_file=/pg/server-key.pem", "-c", "ssl_ca_file=/pg/client-ca.pem",
-		"-c", "hba_file=/pg/pg_hba.conf", "-c", "log_statement=none",
+		"-c", "hba_file=/pg/pg_hba.conf", "-c", "ssl_crl_file=/pg/client-crl.pem",
+		"-c", "log_statement=none",
 		"-c", "log_min_error_statement=panic", "-c", "log_duration=off",
 		"-c", "log_min_duration_statement=-1", "-c", "log_parameter_max_length=0",
 		"-c", "log_parameter_max_length_on_error=0", "-c", "password_encryption=scram-sha-256")
@@ -190,7 +205,7 @@ func slice6RunPostgresServer(t *testing.T, parent context.Context, run slice6Doc
 	slice6WaitPostgresReady(t, ctx, run, serverID, owner)
 	var mountedCertificate []byte
 	for name, expected := range map[string][]byte{
-		"pg_hba.conf": hba, "client-ca.pem": clientCABytes,
+		"pg_hba.conf": hba, "client-ca.pem": clientCABytes, "client-crl.pem": clientCRL,
 		"server.pem": leaf.Record.CertificatePEM, "server-ca.pem": leaf.Record.IssuerPEM,
 	} {
 		actual, err := run.docker(ctx, "exec", "-u", owner, serverID, "cat", "/pg/"+name)
@@ -494,9 +509,9 @@ func slice6ObservePostgresSuppliedVolumes(t *testing.T, ctx context.Context, run
 		`test "$(stat -c '%u:%g:%a:%F' /pg)" = '70:70:700:directory' && `+
 			`test "$(stat -c '%u:%g:%a:%F' /data)" = '70:70:700:directory' && `+
 			`test -z "$(ls -A /data)" && `+
-			`for f in bootstrap-password client-ca.pem pg_hba.conf server-ca.pem server-key.pem server.pem; do `+
+			`for f in bootstrap-password client-ca.pem client-crl.pem pg_hba.conf server-ca.pem server-key.pem server.pem; do `+
 			`test "$(stat -c '%u:%g:%a:%F' /pg/$f)" = '70:70:600:regular file' && test -r /pg/$f || exit 1; done; `+
-			`test "$(ls -A /pg | wc -l)" -eq 6 && echo ok`)
+			`test "$(ls -A /pg | wc -l)" -eq 7 && echo ok`)
 	if err != nil || strings.TrimSpace(string(output)) != "ok" {
 		t.Fatal("unprivileged PostgreSQL owner could not observe exact private volume handoff")
 	}
@@ -580,6 +595,7 @@ func slice6WaitPostgresReady(t *testing.T, parent context.Context, run slice6Doc
 				"ssl_min_protocol_version": "TLSv1.3", "listen_addresses": "*",
 				"ssl_cert_file": "/pg/server.pem", "ssl_key_file": "/pg/server-key.pem",
 				"ssl_ca_file":   "/pg/client-ca.pem",
+				"ssl_crl_file":  "/pg/client-crl.pem",
 				"log_statement": "none", "log_min_error_statement": "panic",
 				"log_duration": "off", "log_min_duration_statement": "-1",
 				"log_parameter_max_length": "0", "log_parameter_max_length_on_error": "0",

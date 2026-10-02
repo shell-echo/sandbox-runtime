@@ -122,3 +122,35 @@ gate or a signed evidence manifest. Neither Product DSN was consumed by a
 live Product SQL client; nine live SQL callers, the full
 78-principal topology, public Product E2E, deployment and production readiness
 remain unproved. Phase 6 remains **5/15**.
+
+## Migration input and server CRL continuation (2026-10-03)
+
+Another mutable-worktree run of the same real-Docker/Vault component gate
+passed in 372.65 seconds. PostgreSQL loaded a canonical, issuer-signature-
+checked, currently valid client CRL from an exclusive PG-owned read-only
+private volume; the gate read back the active `ssl_crl_file` setting and exact
+mounted bytes. This proves the initial server configuration, **not** a revoked
+client's refusal or a live CRL refresh. The non-secret server leaf DER digest
+was `sha256:985d8fe3daa00afb555e78c89be349178d585f530e0a294ff1c6e8793ede5065`.
+Controller quiesce, PostgreSQL stop-before-terminal ordering, three
+certificate/two accessor/complete-CRL/self-revoke terminal confirmation, and
+the gate's exact Docker cleanup passed in the same run.
+
+Before process launch, the gate independently prepared the Product migration
+material signer, one-shot material agent, PostgreSQL-purpose signer and
+migration job's four private config readers. Three distinct owner/agent
+socket volumes brought the combined count from 70 to 73. The two signer
+configs and one-shot material-agent config were assembled from the same
+Profile, keys and peer-CRL source mapping; the job received only its own
+PostgreSQL peer-CRL role derivative. No migration agent, PostgreSQL client
+signer or migration job was launched in this run, and no Product business
+schema DDL was performed.
+
+An implementation gap was found before attempting the job: the explicit v2
+migration command still calls the legacy material-registry constructor, which
+rejects the required `unix-workload-material.v2` owner/agent socket. The
+non-secret migration TOML startup mount also needs a closed admission rule.
+Both issues were reported for architecture review. Until the v2 command and
+its source-bound candidate image are corrected and the live job completes,
+this continuation is **not** a migration, SQL login, release gate or evidence
+manifest. Phase 6 remains **5/15**.

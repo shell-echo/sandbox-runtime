@@ -135,10 +135,13 @@ func slice6BuildRuntimeMaterialAgentConfig(composed slice6VaultComposedInputs,
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil {
 		return nil, errors.New("material-agent Profile unavailable")
 	}
+	migration := agentDeployment == "product-migration-agent"
 	if (agentDeployment != "guest-agent" || ownerDeployment != "guest-runtime" || role != secretref.RoleGuest ||
 		!slices.Equal(purposes, []secretref.Purpose{secretref.PurposeGuestSigningKey})) &&
 		(agentDeployment != "product-runtime-agent" || ownerDeployment != "product-runtime" || role != secretref.RoleProduct ||
-			!slices.Equal(purposes, []secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN})) {
+			!slices.Equal(purposes, []secretref.Purpose{secretref.PurposeIdentityKeyRing, secretref.PurposePostgresRuntimeDSN})) &&
+		(!migration || ownerDeployment != "product-migration-job" || role != secretref.RoleProduct ||
+			!slices.Equal(purposes, []secretref.Purpose{secretref.PurposePostgresMigrationDSN})) {
 		return nil, errors.New("unsupported runtime material-agent owner")
 	}
 	var access phase6security.Slice6MaterialAccess
@@ -168,16 +171,22 @@ func slice6BuildRuntimeMaterialAgentConfig(composed slice6VaultComposedInputs,
 	serviceNetwork := "service-" + agentDeployment + "-vault"
 	address, errAddress := phase6security.Slice6DesiredServiceEndpointAddress(serviceNetwork, "vault")
 	if err != nil || errIssuer != nil || errTLS != nil || errAddress != nil ||
-		access.Agent != agent.Name || access.Owner != ownerDeployment || access.Migration ||
+		access.Agent != agent.Name || access.Owner != ownerDeployment || access.Migration != migration ||
 		access.Role != role || len(access.Bindings) != len(purposes) ||
 		material.AgentDeployment != agent.Name || material.AgentUID != agent.UID ||
 		material.AgentGID != agent.GID || material.OwnerGID == agent.GID ||
 		issuer.SocketPath != access.CredentialSocket || controller.Name != "workload-credential-controller" ||
 		tlsSubject.Name != agent.Name || signer.Name != agent.Name+"-tls-agent" ||
-		delivery.ServerDeployment != agent.Name || consume.ClientDeployment != agent.Name ||
-		delivery.ClientUID == agent.UID || consume.ServerUID == agent.UID ||
 		!slices.Contains(agent.Networks, serviceNetwork) {
 		return nil, errors.New("material-agent source authority drift")
+	}
+	if migration {
+		if delivery.ID != "" || consume.ID != "" {
+			return nil, errors.New("migration material-agent gained break-glass authority")
+		}
+	} else if delivery.ServerDeployment != agent.Name || consume.ClientDeployment != agent.Name ||
+		delivery.ClientUID == agent.UID || consume.ServerUID == agent.UID {
+		return nil, errors.New("runtime material-agent break-glass authority drift")
 	}
 	for index, purpose := range purposes {
 		if access.Bindings[index].Purpose != purpose {
@@ -194,7 +203,7 @@ func slice6BuildRuntimeMaterialAgentConfig(composed slice6VaultComposedInputs,
 		Protocol:   "sandbox-runtime.workload-material-agent-config.v2",
 		SocketPath: material.SocketPath, SocketUID: material.AgentUID, SocketGID: material.OwnerGID,
 		ExpectedClientUID: material.OwnerUID, ExpectedClientGID: material.OwnerGID,
-		Role: access.Role, MaxConnections: material.MaxConnections, MaxResolutions: 0, Migration: false,
+		Role: access.Role, MaxConnections: material.MaxConnections, MaxResolutions: 0, Migration: migration,
 		CredentialControllerSocket: issuer.SocketPath,
 		CredentialControllerUID:    controller.UID, CredentialControllerGID: controller.GID,
 		CredentialAgentID: agent.Name, CredentialPolicyID: access.CredentialPolicyID,
@@ -212,5 +221,14 @@ func slice6BuildRuntimeMaterialAgentConfig(composed slice6VaultComposedInputs,
 		VaultTLSAgentGID: tlsBinding.AgentGID, BreakGlassSocketGID: delivery.ClientGID,
 		BreakGlassControllerDirectoryGID: consume.ClientGID,
 	}
+	if migration {
+		config.MaxResolutions = 1
+	}
 	return json.Marshal(config)
+}
+
+func slice6BuildProductMigrationMaterialAgentConfig(composed slice6VaultComposedInputs) ([]byte, error) {
+	return slice6BuildRuntimeMaterialAgentConfig(composed, "product-migration-agent",
+		"product-migration-job", secretref.RoleProduct,
+		[]secretref.Purpose{secretref.PurposePostgresMigrationDSN})
 }

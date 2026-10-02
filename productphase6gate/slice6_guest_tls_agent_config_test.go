@@ -19,6 +19,8 @@ import (
 // material-agent Vault client certificate.
 type slice6TLSAgentConfig struct {
 	Protocol                      string                      `json:"protocol"`
+	Purpose                       string                      `json:"purpose,omitempty"`
+	Postgres                      *slice6TLSAgentPostgres     `json:"postgres,omitempty"`
 	SecurityProfilePath           string                      `json:"security_profile_path"`
 	SecurityProfileDigest         string                      `json:"security_profile_digest"`
 	PeerCRLSourcesPath            string                      `json:"peer_crl_sources_path"`
@@ -59,6 +61,14 @@ type slice6TLSAgentConfig struct {
 	RevocationPollIntervalSeconds int                         `json:"revocation_poll_interval_seconds"`
 	RevocationMaxStalenessSeconds int                         `json:"revocation_max_staleness_seconds"`
 	OperationTimeoutSeconds       int                         `json:"operation_timeout_seconds"`
+}
+
+type slice6TLSAgentPostgres struct {
+	OwnerDeployment string `json:"owner_deployment"`
+	DatabaseName    string `json:"database_name"`
+	RuntimeRole     string `json:"runtime_role"`
+	CommonName      string `json:"common_name"`
+	IssuerAnchorID  string `json:"issuer_anchor_id"`
 }
 
 func slice6BuildGuestTLSAgentConfig(composed slice6VaultComposedInputs) ([]byte, error) {
