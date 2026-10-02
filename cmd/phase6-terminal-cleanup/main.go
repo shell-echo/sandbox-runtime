@@ -18,27 +18,29 @@ import (
 )
 
 const (
-	inputProtocol = "sandbox-runtime.phase6-terminal-cleanup-input.v1"
+	inputProtocol   = "sandbox-runtime.phase6-terminal-cleanup-input.v1"
+	inputProtocolV2 = "sandbox-runtime.phase6-terminal-cleanup-input.v2"
 	// Both canonical controller ledgers are independently bounded at 8 MiB.
 	// Leave a fixed allowance for the full Profile, peer sources and PEMs.
 	maxInputBytes = 18 << 20
 )
 
 type input struct {
-	Protocol              string    `json:"protocol"`
-	RunID                 string    `json:"run_id"`
-	ProfileJSON           []byte    `json:"profile_json"`
-	PeerSourcesJSON       []byte    `json:"peer_sources_json"`
-	CertificateLedgerJSON []byte    `json:"certificate_ledger_json"`
-	CredentialLedgerJSON  []byte    `json:"credential_ledger_json"`
-	ManagementAccessor    string    `json:"management_accessor"`
-	PlanDigest            string    `json:"plan_digest"`
-	VaultEndpoint         string    `json:"vault_endpoint"`
-	VaultServerCAPEM      []byte    `json:"vault_server_ca_pem"`
-	ClientCertificatePEM  []byte    `json:"client_certificate_pem"`
-	ClientPrivateKeyPEM   []byte    `json:"client_private_key_pem"`
-	OperatorToken         []byte    `json:"operator_token"`
-	TokenExpiresAt        time.Time `json:"token_expires_at"`
+	Protocol              string                                        `json:"protocol"`
+	RunID                 string                                        `json:"run_id"`
+	ProfileJSON           []byte                                        `json:"profile_json"`
+	PeerSourcesJSON       []byte                                        `json:"peer_sources_json"`
+	CertificateLedgerJSON []byte                                        `json:"certificate_ledger_json"`
+	CredentialLedgerJSON  []byte                                        `json:"credential_ledger_json"`
+	ManagementAccessor    string                                        `json:"management_accessor"`
+	ExternalPostgres      *phase6terminalcleanup.ExternalPostgresRecord `json:"external_postgres,omitempty"`
+	PlanDigest            string                                        `json:"plan_digest"`
+	VaultEndpoint         string                                        `json:"vault_endpoint"`
+	VaultServerCAPEM      []byte                                        `json:"vault_server_ca_pem"`
+	ClientCertificatePEM  []byte                                        `json:"client_certificate_pem"`
+	ClientPrivateKeyPEM   []byte                                        `json:"client_private_key_pem"`
+	OperatorToken         []byte                                        `json:"operator_token"`
+	TokenExpiresAt        time.Time                                     `json:"token_expires_at"`
 }
 
 type cleanupStage string
@@ -46,6 +48,10 @@ type cleanupStage string
 func (s cleanupStage) Error() string { return "terminal cleanup unavailable" }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--capabilities" {
+		fmt.Println(inputProtocolV2)
+		return
+	}
 	if len(os.Args) != 2 || os.Args[1] != "--one-shot" {
 		fmt.Fprintln(os.Stderr, "phase6-terminal-cleanup: unavailable")
 		os.Exit(1)
@@ -109,8 +115,16 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	if err != nil {
 		return cleanupStage("sources-decode")
 	}
-	plan, err := phase6terminalcleanup.Build(value.RunID, profile, sources,
-		value.CertificateLedgerJSON, value.CredentialLedgerJSON, value.ManagementAccessor, time.Now().UTC())
+	var plan phase6terminalcleanup.Plan
+	if value.Protocol == inputProtocolV2 {
+		plan, err = phase6terminalcleanup.BuildV2(value.RunID, profile, sources,
+			value.CertificateLedgerJSON, value.CredentialLedgerJSON,
+			value.ManagementAccessor, *value.ExternalPostgres, time.Now().UTC())
+	} else {
+		plan, err = phase6terminalcleanup.Build(value.RunID, profile, sources,
+			value.CertificateLedgerJSON, value.CredentialLedgerJSON,
+			value.ManagementAccessor, time.Now().UTC())
+	}
 	if err != nil || plan.Digest != value.PlanDigest {
 		return cleanupStage("plan-rebuild")
 	}
@@ -153,7 +167,10 @@ func decodeInput(document []byte) (input, error) {
 		return input{}, phase6terminalcleanup.ErrInvalid
 	}
 	canonical, err := json.Marshal(value)
-	if err != nil || !bytes.Equal(canonical, document) || value.Protocol != inputProtocol ||
+	if err != nil || !bytes.Equal(canonical, document) ||
+		(value.Protocol != inputProtocol && value.Protocol != inputProtocolV2) ||
+		(value.Protocol == inputProtocol && value.ExternalPostgres != nil) ||
+		(value.Protocol == inputProtocolV2 && value.ExternalPostgres == nil) ||
 		value.RunID == "" || value.PlanDigest == "" || len(value.OperatorToken) == 0 ||
 		len(value.ClientPrivateKeyPEM) == 0 || value.TokenExpiresAt.IsZero() {
 		clear(canonical)

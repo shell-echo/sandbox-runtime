@@ -35,6 +35,38 @@ least-scope, short-lived Vault credential through the Slice 5 workload-
 credential controller. It never exposes a Vault token, CA private key or
 arbitrary Vault PKI role to a workload.
 
+For the already declared external PostgreSQL service only, the controlled
+operator bootstrap creates a separate server-only role under this run's
+general Vault issuer. Its allowed URI is exactly
+`spiffe://sandbox-runtime.test/external/postgres`, its sole DNS name is
+`postgres.sandbox-runtime.test`, and it permits only a P-256,
+DigitalSignature, non-CA ServerAuth leaf with the fixed 30-second backdate
+and a complete lifetime no greater than one hour. It does not enter the
+workload/controller role inventory or broaden their token ACLs. The run-owned
+PG private key is generated with its CSR by the transient operator
+provisioner; only the CSR goes to Vault. A private temporary file is used
+for controlled delivery, then the key resides only in a PostgreSQL-exclusive
+read-only mount owned by the actual PG UID with mode 0600 and a private,
+symlink-free parent. It is not a Vault KV value, image layer, command-line
+argument, environment value or workload-owned key. The provisioner removes
+its temporary copy; the gate must prove wrong-identity issuance refusal,
+exact issuer/serial revocation and failure-path cleanup. This external
+bootstrap exception does not authorize a runtime role to mint server leaves
+or change the frozen nine-source HBA, and it is not rotation/drain evidence.
+The finite, networkless Alpine volume provisioner alone may run as UID 0 with
+only `CAP_CHOWN` after dropping all capabilities; it has exactly two fresh
+run-labeled volumes and no host bind, daemon socket or published port. On
+Docker Desktop, `docker cp` was observed preserving host file ownership,
+so each fixed, type-checked file is first transferred to provisioner UID 0,
+mode 0600 is set while UID 0 still owns it, and then its ownership is passed
+to the pinned PostgreSQL UID:GID `70:70`; the two 0700 parent directories are
+transferred last. No recursive chown, `CAP_FOWNER`, DAC bypass, root PostgreSQL
+runtime or broadened fallback is allowed. A separate no-secret probe must
+confirm this order and cancelled-context exact cleanup before the Vault/PG
+gate. During normal service, PostgreSQL is the sole container mounting the
+private config volume read-only; the trusted Docker daemon/operator remains
+part of the supply boundary, so this is not absolute host unreadability.
+
 Each role-owned TLS agent generates its TLS private key locally and sends
 a closed, signed CSR request to the certificate controller. The controller
 maps the authenticated peer and agent identity to one exact trust domain,
@@ -2038,6 +2070,21 @@ actual remote revoke and independent readback before deleting the isolated
 Vault. Deleting that Vault alone proves only resource cleanup. The operator
 token then self-revokes, its mTLS key is destroyed, and any remaining
 certificate lifetime/trust boundary is reported rather than concealed.
+
+The original private terminal plan/receipt v1 retains exactly two controller
+certificate targets and two token accessors. A run that signs the external
+PostgreSQL server leaf requires explicit private input/plan/receipt v2,
+advertised by the independently built operator before signing. V2 adds
+exactly one `external-postgres-server` certificate target, not an arbitrary
+serial list or a new Vault token/operator. The operator re-parses the frozen
+public leaf and issuer, binds their DER digests and derived serial to the
+run/Profile/general issuer and exact PostgreSQL URI/DNS, and compares the
+independently observed PostgreSQL-mounted leaf digest. It checks all three
+serials against the same issuer's signed complete CRL before the two token
+accessors and final self-revocation. Missing or duplicate targets, v1
+fallback, partial revoke and physical deletion never count as confirmation.
+The PostgreSQL private key is not an operator input. This terminal path does
+not substitute for running-service rotation, CRL-denial or drain evidence.
 
 For the local Slice 6 diagnostic, the one-shot cleanup uses the already
 locked Alpine arm64 image as a fixed carrier for a separate, clean-source,

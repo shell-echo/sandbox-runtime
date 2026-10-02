@@ -154,6 +154,13 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 				MaxTTL                        int64    `json:"max_ttl"`
 				NotBeforeDuration             int64    `json:"not_before_duration"`
 				BasicConstraintsValidForNonCA bool     `json:"basic_constraints_valid_for_non_ca"`
+				EnforceHostnames              bool     `json:"enforce_hostnames"`
+				KeyType                       string   `json:"key_type"`
+				KeyBits                       int      `json:"key_bits"`
+				KeyUsage                      []string `json:"key_usage"`
+				ExtKeyUsage                   []string `json:"ext_key_usage"`
+				CodeSigningFlag               bool     `json:"code_signing_flag"`
+				EmailProtectionFlag           bool     `json:"email_protection_flag"`
 			} `json:"data"`
 		}
 		wantDomains := role.DNSNames
@@ -173,7 +180,12 @@ func slice6VaultInstallPKIRoles(t *testing.T, ctx context.Context, run slice6Doc
 			observed.Data.ClientFlag != role.Client || observed.Data.ServerFlag != role.Server ||
 			observed.Data.MaxTTL != role.MaxTTLSeconds ||
 			observed.Data.NotBeforeDuration != phase6security.Slice6VaultRoleBackdateSeconds ||
-			!observed.Data.BasicConstraintsValidForNonCA {
+			!observed.Data.BasicConstraintsValidForNonCA ||
+			observed.Data.EnforceHostnames != (role.CommonName == "") ||
+			observed.Data.KeyType != "ec" || observed.Data.KeyBits != 256 ||
+			!slices.Equal(observed.Data.KeyUsage, []string{"DigitalSignature"}) ||
+			!slices.Equal(observed.Data.ExtKeyUsage, usages) ||
+			observed.Data.CodeSigningFlag || observed.Data.EmailProtectionFlag {
 			t.Fatalf("installed Vault PKI role %s readback drifted", role.Name)
 		}
 	}

@@ -197,9 +197,19 @@ The same-run component chain now also starts separate Product runtime and
 Product material-agent TLS signer PID1 processes with managed leaves and
 exact socket cleanup. Product material-agent configuration is preflighted
 against both required bindings, and its separate PID1 opens both restricted
-listeners, then drains with exact cleanup. Its Product KVv2 material reads
+listeners, resolves the real KVv2 identity key-ring for a cross-UID/GID
+Product owner, then drains with exact cleanup. Its PostgreSQL runtime DSN
 and the Product/Guest production commands have not yet run; this does not
 advance Slice 6.
+
+The initial external PostgreSQL leaf signing diagnostic is non-release:
+its v1 terminal plan did not confirm revocation of that added serial. A
+separate audit retains this exact gap. A new run must prove clean-source
+operator v2 capability *before* signing, then observe the actual PG-mounted
+leaf, stop PG, and confirm all three serials in the complete issuer CRL
+before calling this path closed. The source-bound nine-bridge PG startup and
+v2 operator wiring are in progress; no SQL role/DSN or scenario evidence is
+claimed yet.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,

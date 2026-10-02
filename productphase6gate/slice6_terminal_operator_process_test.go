@@ -28,24 +28,47 @@ import (
 const slice6TerminalOperatorEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR"
 const slice6TerminalOperatorUID = 20090
 const slice6TerminalOperatorGID = 30090
+const slice6TerminalOperatorV2Capability = "sandbox-runtime.phase6-terminal-cleanup-input.v2\n"
 
 var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: unavailable stage=([a-z][a-z-]{0,63})`)
 
+// A leaf may not be signed merely because the terminal operator built. The
+// clean-source Linux binary must declare v2 before this run creates Vault.
+func slice6RequireTerminalOperatorV2Capability(t *testing.T, ctx context.Context,
+	run slice6DockerRun, binaryPath, binaryDigest string) {
+	t.Helper()
+	if binaryPath == "" || slice6HashTerminalBinary(t, binaryPath) != binaryDigest {
+		t.Fatal("external PostgreSQL leaf requires a fixed terminal operator binary")
+	}
+	output, err := run.docker(ctx, "run", "--rm", "--pull=never",
+		"--name", "sr-p6-terminal-v2-preflight-"+run.id,
+		"--label", run.label(), "--network=none", "--restart=no",
+		"--user", fmt.Sprintf("%d:%d", slice6TerminalOperatorUID, slice6TerminalOperatorGID),
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true",
+		"--read-only", "--memory=32m", "--cpus=0.25", "--pids-limit=16",
+		"--mount", "type=bind,src="+binaryPath+",dst=/phase6-terminal-cleanup,readonly",
+		"--entrypoint=/phase6-terminal-cleanup", slice6PinnedAlpineImage, "--capabilities")
+	if err != nil || string(output) != slice6TerminalOperatorV2Capability {
+		t.Fatal("source-bound terminal operator lacks exact v2 capability; refusing PostgreSQL leaf signing")
+	}
+}
+
 type slice6TerminalOperatorInput struct {
-	Protocol              string    `json:"protocol"`
-	RunID                 string    `json:"run_id"`
-	ProfileJSON           []byte    `json:"profile_json"`
-	PeerSourcesJSON       []byte    `json:"peer_sources_json"`
-	CertificateLedgerJSON []byte    `json:"certificate_ledger_json"`
-	CredentialLedgerJSON  []byte    `json:"credential_ledger_json"`
-	ManagementAccessor    string    `json:"management_accessor"`
-	PlanDigest            string    `json:"plan_digest"`
-	VaultEndpoint         string    `json:"vault_endpoint"`
-	VaultServerCAPEM      []byte    `json:"vault_server_ca_pem"`
-	ClientCertificatePEM  []byte    `json:"client_certificate_pem"`
-	ClientPrivateKeyPEM   []byte    `json:"client_private_key_pem"`
-	OperatorToken         []byte    `json:"operator_token"`
-	TokenExpiresAt        time.Time `json:"token_expires_at"`
+	Protocol              string                                        `json:"protocol"`
+	RunID                 string                                        `json:"run_id"`
+	ProfileJSON           []byte                                        `json:"profile_json"`
+	PeerSourcesJSON       []byte                                        `json:"peer_sources_json"`
+	CertificateLedgerJSON []byte                                        `json:"certificate_ledger_json"`
+	CredentialLedgerJSON  []byte                                        `json:"credential_ledger_json"`
+	ManagementAccessor    string                                        `json:"management_accessor"`
+	ExternalPostgres      *phase6terminalcleanup.ExternalPostgresRecord `json:"external_postgres,omitempty"`
+	PlanDigest            string                                        `json:"plan_digest"`
+	VaultEndpoint         string                                        `json:"vault_endpoint"`
+	VaultServerCAPEM      []byte                                        `json:"vault_server_ca_pem"`
+	ClientCertificatePEM  []byte                                        `json:"client_certificate_pem"`
+	ClientPrivateKeyPEM   []byte                                        `json:"client_private_key_pem"`
+	OperatorToken         []byte                                        `json:"operator_token"`
+	TokenExpiresAt        time.Time                                     `json:"token_expires_at"`
 }
 
 // Build before signing the short-lived operator leaf or minting its token.
@@ -94,7 +117,8 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot 
 
 func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, vaultID, binaryPath, binaryDigest, managementAccessor string,
-	general slice6VaultRoot, credential *slice6TerminalOperatorCredential) {
+	general slice6VaultRoot, credential *slice6TerminalOperatorCredential,
+	externalPostgres *phase6terminalcleanup.ExternalPostgresRecord) {
 	t.Helper()
 	if os.Getenv(slice6TerminalOperatorEnv) != "1" || credential == nil ||
 		!credential.ExpiresAt.After(time.Now().Add(90*time.Second)) ||
@@ -109,8 +133,15 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	credentialLedger := slice6ReadTerminalLedger(t, ctx, run, composed.Profile, "workload-credential-controller")
 	defer clear(certificateLedger)
 	defer clear(credentialLedger)
-	plan, err := phase6terminalcleanup.Build(run.id, composed.Profile, composed.PeerSources,
-		certificateLedger, credentialLedger, managementAccessor, time.Now().UTC())
+	var plan phase6terminalcleanup.Plan
+	var err error
+	if externalPostgres != nil {
+		plan, err = phase6terminalcleanup.BuildV2(run.id, composed.Profile, composed.PeerSources,
+			certificateLedger, credentialLedger, managementAccessor, *externalPostgres, time.Now().UTC())
+	} else {
+		plan, err = phase6terminalcleanup.Build(run.id, composed.Profile, composed.PeerSources,
+			certificateLedger, credentialLedger, managementAccessor, time.Now().UTC())
+	}
 	if err != nil || plan.Validate() != nil {
 		t.Fatal("independently read quiesced ledgers cannot bind the exact terminal cleanup plan")
 	}
@@ -122,9 +153,14 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	if err != nil {
 		t.Fatal("encode exact operator peer source input")
 	}
-	input := slice6TerminalOperatorInput{Protocol: "sandbox-runtime.phase6-terminal-cleanup-input.v1",
+	inputProtocol := "sandbox-runtime.phase6-terminal-cleanup-input.v1"
+	if externalPostgres != nil {
+		inputProtocol = slice6TerminalOperatorV2Capability[:len(slice6TerminalOperatorV2Capability)-1]
+	}
+	input := slice6TerminalOperatorInput{Protocol: inputProtocol,
 		RunID: run.id, ProfileJSON: profileJSON, PeerSourcesJSON: peerJSON,
 		CertificateLedgerJSON: certificateLedger, CredentialLedgerJSON: credentialLedger,
+		ExternalPostgres:   externalPostgres,
 		ManagementAccessor: managementAccessor, PlanDigest: plan.Digest,
 		VaultEndpoint: "https://vault.sandbox-runtime.test:8200", VaultServerCAPEM: general.PEM,
 		ClientCertificatePEM: credential.LeafPEM, ClientPrivateKeyPEM: credential.KeyPEM,
@@ -195,12 +231,11 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	output, startErr := attached.CombinedOutput()
 	defer clear(output)
 	slice6VerifyTerminalNetwork(t, ctx, run, networkID, vaultID, containerID)
-	var receipt phase6terminalcleanup.Receipt
-	if startErr != nil || len(output) > 16<<10 || json.Unmarshal(bytes.TrimSpace(output), &receipt) != nil ||
+	receipt, decodeErr := phase6terminalcleanup.DecodeReceipt(output)
+	if startErr != nil || decodeErr != nil ||
 		!receipt.Complete || !receipt.SelfRevoked || receipt.PlanDigest != plan.Digest ||
 		receipt.RunID != run.id || receipt.ProfileDigest != composed.Profile.ProfileDigest ||
-		len(receipt.Certificates) != 2 || len(receipt.Tokens) != 2 ||
-		receipt.IssuerCRLSHA == "" || receipt.FailureStage != "" {
+		phase6terminalcleanup.VerifyReceipt(plan, receipt) != nil {
 		stage := "unknown"
 		if matched := slice6TerminalStagePattern.FindSubmatch(output); len(matched) == 2 {
 			stage = string(matched[1])
@@ -214,11 +249,6 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 		}
 		t.Fatalf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
 	}
-	for _, target := range append(receipt.Certificates, receipt.Tokens...) {
-		if !target.Confirmed {
-			t.Fatal("terminal operator reported an unconfirmed target")
-		}
-	}
 	if _, err := run.docker(ctx, "rm", containerID); err != nil {
 		t.Fatal("remove exact completed terminal operator task")
 	}
@@ -228,7 +258,7 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	if _, err := run.docker(ctx, "network", "rm", networkID); err != nil {
 		t.Fatal("remove exact terminal-only network")
 	}
-	t.Logf("one-shot terminal operator confirmed two certs, two token accessors, complete CRL and self-revoke; source-bound binary %s; private receipt plan=%s", binaryDigest, plan.Digest)
+	t.Logf("one-shot terminal operator confirmed %d certs, two token accessors, complete CRL and self-revoke; source-bound binary %s; private receipt plan=%s", len(plan.Certificates), binaryDigest, plan.Digest)
 }
 
 func slice6ReadTerminalLedger(t *testing.T, ctx context.Context, run slice6DockerRun,

@@ -37,7 +37,7 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 }
 
 func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, serverID, publicKeyDigest,
+	composed slice6VaultComposedInputs, serverID, expectedDigest,
 	agentDeployment, ownerDeployment, label string, expectedSockets int,
 	socketVolumes, anchorFiles map[string]string,
 	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
@@ -46,9 +46,9 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
 		len(socketVolumes) != expectedSockets ||
 		(agentDeployment != "guest-agent" && agentDeployment != "product-runtime-agent") ||
-		(agentDeployment == "guest-agent" && (len(publicKeyDigest) != len("sha256:")+64 ||
+		(agentDeployment == "guest-agent" && (len(expectedDigest) != len("sha256:")+64 ||
 			ownerDeployment != "guest-runtime" || label != "guest" || expectedSockets != 67)) ||
-		(agentDeployment == "product-runtime-agent" && (publicKeyDigest != "" ||
+		(agentDeployment == "product-runtime-agent" && (len(expectedDigest) != len("sha256:")+64 ||
 			ownerDeployment != "product-runtime" || label != "product-material" || expectedSockets != 70)) {
 		t.Fatal("runtime material-agent final source authority unavailable")
 	}
@@ -383,7 +383,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 			OwnerGID                uint32            `json:"owner_gid"`
 			Binding                 secretref.Binding `json:"binding"`
 			ExpectedPublicKeyDigest string            `json:"expected_public_key_digest"`
-		}{SocketPath: material.SocketPath, ExpectedPublicKeyDigest: publicKeyDigest,
+		}{SocketPath: material.SocketPath, ExpectedPublicKeyDigest: expectedDigest,
 			AgentUID: agent.UID, AgentGID: agent.GID, OwnerUID: owner.UID, OwnerGID: owner.GID, Binding: binding})
 		if err != nil {
 			t.Fatal(err)
@@ -406,7 +406,8 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		}
 		t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
 	} else {
-		t.Log("real Product material-agent PID1 opened owner-only and break-glass sockets through its distinct managed Vault signer; Product KVv2 resolution and runtime command remain unproved")
+		slice6ObserveProductIdentityMaterial(t, ctx, run, profile, agent, owner, material,
+			config, expectedDigest, socketVolumes[material.SocketStorageID], root)
 	}
 	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
 		t.Fatal("stop runtime material-agent")

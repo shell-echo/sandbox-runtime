@@ -27,24 +27,29 @@ var (
 	accessorPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{8,256}$`)
 )
 
-const ProtocolID = "sandbox-runtime.phase6-terminal-cleanup-plan.v1"
+const (
+	ProtocolID   = "sandbox-runtime.phase6-terminal-cleanup-plan.v1"
+	ProtocolV2ID = "sandbox-runtime.phase6-terminal-cleanup-plan.v2"
+)
 
 // Plan is private run-owned input, not a Provider API or a claim that Vault
 // has revoked anything. The operator must independently read back each target.
 type Plan struct {
-	Protocol             string              `json:"protocol"`
-	RunID                string              `json:"run_id"`
-	ProfileDigest        string              `json:"profile_digest"`
-	CertificateLedgerSHA string              `json:"certificate_ledger_sha"`
-	CredentialLedgerSHA  string              `json:"credential_ledger_sha"`
-	GeneralIssuerID      string              `json:"general_issuer_id"`
-	GeneralIssuerDigest  string              `json:"general_issuer_digest"`
-	Certificates         []CertificateTarget `json:"certificates"`
-	Tokens               []TokenTarget       `json:"tokens"`
-	Digest               string              `json:"digest"`
+	Protocol             string                  `json:"protocol"`
+	RunID                string                  `json:"run_id"`
+	ProfileDigest        string                  `json:"profile_digest"`
+	CertificateLedgerSHA string                  `json:"certificate_ledger_sha"`
+	CredentialLedgerSHA  string                  `json:"credential_ledger_sha"`
+	GeneralIssuerID      string                  `json:"general_issuer_id"`
+	GeneralIssuerDigest  string                  `json:"general_issuer_digest"`
+	Certificates         []CertificateTarget     `json:"certificates"`
+	Tokens               []TokenTarget           `json:"tokens"`
+	ExternalPostgres     *ExternalPostgresRecord `json:"external_postgres,omitempty"`
+	Digest               string                  `json:"digest"`
 }
 
 type CertificateTarget struct {
+	Kind          string `json:"kind,omitempty"`
 	PolicyID      string `json:"policy_id"`
 	Serial        string `json:"serial"`
 	SubjectDigest string `json:"subject_digest"`

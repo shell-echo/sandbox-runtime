@@ -115,7 +115,7 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 		if !revoked {
 			cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := slice6VaultRevokeGuestScopedToken(cleanupContext, run, serverID, accessorFile,
+			if err := slice6VaultRevokeScopedToken(cleanupContext, run, serverID, accessorFile,
 				accessor, guest.BackendPolicy); err != nil {
 				t.Errorf("failed Guest bootstrap token cleanup remained unproved: %v", err)
 			}
@@ -161,7 +161,7 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 		t.Fatal("Guest token cross-owner KV read was not explicitly denied")
 	}
 	clear(denied)
-	if err := slice6VaultRevokeGuestScopedToken(ctx, run, serverID, accessorFile,
+	if err := slice6VaultRevokeScopedToken(ctx, run, serverID, accessorFile,
 		accessor, guest.BackendPolicy); err != nil {
 		t.Fatal("Guest bootstrap token exact revocation/readback failed")
 	}
@@ -177,7 +177,7 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 	return "sha256:" + hex.EncodeToString(publicDigest[:])
 }
 
-func slice6VaultRevokeGuestScopedToken(ctx context.Context, run slice6DockerRun,
+func slice6VaultRevokeScopedToken(ctx context.Context, run slice6DockerRun,
 	serverID, accessorFile, accessor, policy string) error {
 	lookup, err := run.docker(ctx, slice6VaultExec(serverID, true, "write", "-format=json",
 		"auth/token/lookup-accessor", "accessor=@/vault/config/"+accessorFile)...)
@@ -214,9 +214,27 @@ func slice6VaultRevokeGuestScopedToken(ctx context.Context, run slice6DockerRun,
 }
 
 func slice6VaultExecGuestMaterialToken(containerID string, arguments ...string) []string {
+	return slice6VaultExecMaterialToken(containerID, "guest-material-scope-token", arguments...)
+}
+
+func slice6VaultExecMaterialToken(containerID, tokenFile string, arguments ...string) []string {
+	if tokenFile != "guest-material-scope-token" && tokenFile != "product-identity-scope-token" {
+		return nil
+	}
 	result := []string{"exec", "-e", "VAULT_ADDR=https://127.0.0.1:8200",
 		"-e", "VAULT_CACERT=/vault/config/server-ca.pem", "-e", "VAULT_CLIENT_CERT=/vault/config/client.pem",
 		"-e", "VAULT_CLIENT_KEY=/vault/config/client-key.pem", "-e", "VAULT_TLS_SERVER_NAME=vault.sandbox-runtime.test",
-		containerID, "sh", "-c", "VAULT_TOKEN=\"$(cat /vault/config/guest-material-scope-token)\" exec vault \"$@\"", "--"}
+		containerID, "sh", "-c", "VAULT_TOKEN=\"$(cat /vault/config/" + tokenFile + ")\" exec vault \"$@\"", "--"}
 	return append(result, arguments...)
+}
+
+func TestSlice6VaultExecMaterialTokenRejectsArbitraryFile(t *testing.T) {
+	if slice6VaultExecMaterialToken("container", "../../unreviewed", "kv", "get") != nil {
+		t.Fatal("arbitrary Vault token file reached the shell command")
+	}
+	for _, allowed := range []string{"guest-material-scope-token", "product-identity-scope-token"} {
+		if len(slice6VaultExecMaterialToken("container", allowed, "kv", "get")) == 0 {
+			t.Fatal("fixed Vault token file was not admitted")
+		}
+	}
 }

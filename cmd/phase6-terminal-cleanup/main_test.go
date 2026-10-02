@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6terminalcleanup"
 )
 
 func TestDecodeInputRejectsNonCanonicalOrIncomplete(t *testing.T) {
@@ -44,6 +46,37 @@ func TestDecodeInputRejectsNonCanonicalOrIncomplete(t *testing.T) {
 	}
 	if _, err := decodeInput(encoded); err == nil {
 		t.Fatal("missing operator token accepted")
+	}
+}
+
+func TestDecodeInputV2CannotDowngradeOrOmitExternalPostgres(t *testing.T) {
+	value := input{Protocol: inputProtocolV2, RunID: strings.Repeat("a", 32),
+		PlanDigest:          "sha256:" + strings.Repeat("b", 64),
+		ClientPrivateKeyPEM: []byte("private"), OperatorToken: []byte("secret"),
+		TokenExpiresAt:   time.Now().UTC().Add(time.Minute),
+		ExternalPostgres: &phase6terminalcleanup.ExternalPostgresRecord{Protocol: phase6terminalcleanup.ExternalPostgresRecordProtocol}}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeInput(encoded); err != nil {
+		t.Fatal("canonical v2 envelope rejected")
+	}
+	for name, mutate := range map[string]func(*input){
+		"v1 with external":    func(v *input) { v.Protocol = inputProtocol },
+		"v2 without external": func(v *input) { v.ExternalPostgres = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := value
+			mutate(&changed)
+			invalid, err := json.Marshal(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := decodeInput(invalid); err == nil {
+				t.Fatal("mixed v1/v2 input accepted")
+			}
+		})
 	}
 }
 

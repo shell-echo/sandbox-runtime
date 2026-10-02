@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6terminalcleanup"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
@@ -47,6 +48,14 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if os.Getenv(slice6ProductMaterialInputsEnv) == "1" && os.Getenv(slice6ProductTLSSignerEnv) != "1" {
 		t.Fatal("Product material-agent inputs require the same-run Product TLS signer")
+	}
+	if os.Getenv(slice6PostgresServerLeafEnv) == "1" &&
+		(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" ||
+			os.Getenv(slice6TerminalOperatorEnv) != "1" ||
+			os.Getenv(slice6ProductMaterialInputsEnv) != "1" ||
+			os.Getenv(slice6CertificateProcessEnv) != "1" ||
+			os.Getenv(slice6QuiesceProcessEnv) != "1") {
+		t.Fatal("external PostgreSQL server certificate requires complete same-run Product/controller chain and v2 terminal operator")
 	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
@@ -103,6 +112,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Errorf("exact Vault trust-switch Docker cleanup: %v", err)
 		}
 	})
+	if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
+		slice6RequireTerminalOperatorV2Capability(t, ctx, run, terminalBinaryPath, terminalBinaryDigest)
+	}
 	var network phase6security.Network
 	for _, candidate := range phase6security.Slice6DesiredFinalNetworks() {
 		if candidate.Name == "network-certificate-controller" {
@@ -383,6 +395,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var productSocketVolumes map[string]string
 		var productMaterialSocketVolumes map[string]string
 		var guestPublicKeyDigest string
+		var productIdentityDigest string
+		var postgresLeaf slice6PostgresServerLeaf
+		var postgresRecord *phase6terminalcleanup.ExternalPostgresRecord
+		postgresTerminalConfirmed := false
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
@@ -436,8 +452,22 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") == "1" {
 			management := slice6VaultInstallScopedAccess(t, ctx, run, serverID, configDir, composed.Profile, general, broker)
 			defer clear(management.Token)
+			if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
+				postgresLeaf = slice6VaultPreparePostgresServerLeaf(t, ctx, run, serverID, root,
+					configDir, composed.Profile, general, management.Token)
+				t.Cleanup(func() {
+					if !postgresTerminalConfirmed {
+						t.Errorf("external PostgreSQL leaf remains unconfirmed for v2 terminal revoke: run=%s issuer=%s serial=%s leaf=%s",
+							run.id, postgresLeaf.IssuerID, postgresLeaf.Serial, postgresLeaf.Record.LeafDigest)
+					}
+				})
+			}
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
 				guestPublicKeyDigest = slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
+				if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
+					productIdentityDigest = slice6VaultInstallProductIdentityMaterial(t, ctx, run,
+						serverID, configDir, composed.Profile)
+				}
 				guestTLSConfig, configErr := slice6BuildGuestTLSAgentConfig(composed)
 				if configErr != nil {
 					t.Fatalf("same-run Guest TLS-agent startup input failed: %v", configErr)
@@ -497,45 +527,62 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							var onManagedReady func()
 							if os.Getenv(slice6GuestMaterialEnv) == "1" {
 								onManagedReady = func() {
-									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
-										runGuestChain := func() {
-											slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
-												slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-													guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
-													func(delivery phase6security.Slice6BreakGlassSocketBinding) {
-														slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
-															delivery, breakGlassSocketVolumes, restartController)
-													})
-											})
-										}
-										if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
-											runProductChain := runGuestChain
-											if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
-												runProductChain = func() {
-													slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
-														"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
-														productMaterialSocketVolumes, anchorFiles, func() {
-															slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
-																serverID, "", "product-runtime-agent", "product-runtime",
-																"product-material", 70, productMaterialSocketVolumes, anchorFiles,
-																func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+									runWork := func() {
+										slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
+											runGuestChain := func() {
+												slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
+													slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+														guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
+														func(delivery phase6security.Slice6BreakGlassSocketBinding) {
+															slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
+																delivery, breakGlassSocketVolumes, restartController)
 														})
-												}
+												})
 											}
-											slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
-												"product-runtime", "product-tls-agent", "product",
-												productSocketVolumes, anchorFiles, runProductChain)
-										} else {
-											runGuestChain()
-										}
-									})
+											if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
+												runProductChain := runGuestChain
+												if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
+													runProductChain = func() {
+														slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+															"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
+															productMaterialSocketVolumes, anchorFiles, func() {
+																slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																	serverID, productIdentityDigest, "product-runtime-agent", "product-runtime",
+																	"product-material", 70, productMaterialSocketVolumes, anchorFiles,
+																	func(phase6security.Slice6BreakGlassSocketBinding) { runGuestChain() })
+															})
+													}
+												}
+												slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+													"product-runtime", "product-tls-agent", "product",
+													productSocketVolumes, anchorFiles, runProductChain)
+											} else {
+												runGuestChain()
+											}
+										})
+									}
+									if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
+										slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf,
+											func(record phase6terminalcleanup.ExternalPostgresRecord) {
+												postgresRecord = &record
+												runWork()
+											})
+									} else {
+										runWork()
+									}
 								}
 							}
 							if terminalOperator != nil {
 								onTerminated = func() {
+									if os.Getenv(slice6PostgresServerLeafEnv) == "1" && postgresRecord == nil {
+										t.Fatal("PostgreSQL leaf was not observed on stopped server before v2 cleanup")
+									}
 									slice6RunTerminalOperator(t, ctx, run, composed, serverID,
 										terminalBinaryPath, terminalBinaryDigest,
-										management.Accessor, general, terminalOperator)
+										management.Accessor, general, terminalOperator, postgresRecord)
+									if postgresRecord != nil {
+										postgresTerminalConfirmed = true
+									}
 								}
 							}
 							slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,

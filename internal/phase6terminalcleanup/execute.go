@@ -64,17 +64,98 @@ type Receipt struct {
 	FailureStage  string         `json:"failure_stage,omitempty"`
 }
 
-func (p Plan) Validate() error {
-	if p.Protocol != ProtocolID || !runPattern.MatchString(p.RunID) || !digestPattern.MatchString(p.ProfileDigest) ||
-		!digestPattern.MatchString(p.CertificateLedgerSHA) || !digestPattern.MatchString(p.CredentialLedgerSHA) ||
-		!digestPattern.MatchString(p.GeneralIssuerDigest) || !digestPattern.MatchString(p.Digest) ||
-		!phase6security.ValidSlice6IssuerID(p.GeneralIssuerID) || len(p.Certificates) != 2 || len(p.Tokens) != 2 {
+// DecodeReceipt accepts the one canonical JSON line emitted by the finite
+// operator, rejecting unknown, duplicate, oversized or trailing fields.
+func DecodeReceipt(document []byte) (Receipt, error) {
+	if len(document) < 2 || len(document) > 16<<10 || document[len(document)-1] != '\n' {
+		return Receipt{}, ErrInvalid
+	}
+	return decodeCanonical[Receipt](document[:len(document)-1], 16<<10)
+}
+
+// VerifyReceipt binds a private completion claim to every exact plan target.
+// A count-only check cannot distinguish a missing PostgreSQL revocation from
+// a duplicate controller result.
+func VerifyReceipt(plan Plan, receipt Receipt) error {
+	if plan.Validate() != nil || !receipt.Complete || !receipt.SelfRevoked ||
+		receipt.FailureStage != "" || !digestPattern.MatchString(receipt.IssuerCRLSHA) ||
+		receipt.RunID != plan.RunID || receipt.ProfileDigest != plan.ProfileDigest ||
+		receipt.PlanDigest != plan.Digest || len(receipt.Certificates) != len(plan.Certificates) ||
+		len(receipt.Tokens) != len(plan.Tokens) {
 		return ErrInvalid
 	}
+	wantProtocol := "sandbox-runtime.phase6-terminal-cleanup-receipt.v1"
+	if plan.Protocol == ProtocolV2ID {
+		wantProtocol = "sandbox-runtime.phase6-terminal-cleanup-receipt.v2"
+	}
+	if receipt.Protocol != wantProtocol {
+		return ErrInvalid
+	}
+	seen := make(map[string]bool, len(plan.Certificates)+len(plan.Tokens))
+	for index, target := range plan.Certificates {
+		kind := "certificate"
+		if target.Kind == externalPostgresKind {
+			kind = externalPostgresKind
+		}
+		result := receipt.Certificates[index]
+		if !result.Confirmed || result.Kind != kind ||
+			result.TargetDigest != targetDigest(kind, target.Serial) || seen[result.TargetDigest] {
+			return ErrInvalid
+		}
+		seen[result.TargetDigest] = true
+	}
+	for index, target := range plan.Tokens {
+		result := receipt.Tokens[index]
+		if !result.Confirmed || result.Kind != target.Kind ||
+			result.TargetDigest != targetDigest("token", target.Accessor) || seen[result.TargetDigest] {
+			return ErrInvalid
+		}
+		seen[result.TargetDigest] = true
+	}
+	return nil
+}
+
+func (p Plan) Validate() error {
+	certificateCount := 2
+	digestDomain := "sandbox-runtime/phase6-terminal-cleanup-plan/v1\x00"
+	if p.Protocol == ProtocolV2ID {
+		certificateCount = 3
+		digestDomain = "sandbox-runtime/phase6-terminal-cleanup-plan/v2\x00"
+	} else if p.Protocol != ProtocolID || p.ExternalPostgres != nil {
+		return ErrInvalid
+	}
+	if !runPattern.MatchString(p.RunID) || !digestPattern.MatchString(p.ProfileDigest) ||
+		!digestPattern.MatchString(p.CertificateLedgerSHA) || !digestPattern.MatchString(p.CredentialLedgerSHA) ||
+		!digestPattern.MatchString(p.GeneralIssuerDigest) || !digestPattern.MatchString(p.Digest) ||
+		!phase6security.ValidSlice6IssuerID(p.GeneralIssuerID) || len(p.Certificates) != certificateCount || len(p.Tokens) != 2 {
+		return ErrInvalid
+	}
+	if p.Protocol == ProtocolV2ID {
+		if p.ExternalPostgres == nil || p.ExternalPostgres.RunID != p.RunID ||
+			p.ExternalPostgres.ProfileDigest != p.ProfileDigest ||
+			p.ExternalPostgres.IssuerID != p.GeneralIssuerID ||
+			p.ExternalPostgres.IssuerDigest != p.GeneralIssuerDigest {
+			return ErrInvalid
+		}
+		minimalProfile := phase6security.Profile{ProfileDigest: p.ProfileDigest,
+			External: []phase6security.ExternalService{{Name: "postgres", URI: externalPostgresURI,
+				DNSNames: []string{externalPostgresDNS}}}}
+		minimalSources := phase6security.PeerCRLSources{Sources: []phase6security.PeerCRLSource{{
+			ID: "general", Mount: "pki", IssuerID: p.GeneralIssuerID, IssuerDigest: p.GeneralIssuerDigest}}}
+		if p.ExternalPostgres.Validate(minimalProfile, minimalSources, time.Now().UTC()) != nil {
+			return ErrInvalid
+		}
+	}
 	seenSerial, seenAccessor := map[string]bool{}, map[string]bool{}
-	for _, target := range p.Certificates {
+	for index, target := range p.Certificates {
 		if target.PolicyID == "" || !serialPattern.MatchString(target.Serial) || seenSerial[target.Serial] ||
 			!digestPattern.MatchString(target.SubjectDigest) || (target.State != "active" && target.State != "revoked") {
+			return ErrInvalid
+		}
+		if index < 2 && target.Kind != "" || index == 2 &&
+			(target.Kind != externalPostgresKind || target.PolicyID != externalPostgresKind ||
+				target.State != "active" || target.Serial != p.ExternalPostgres.Serial ||
+				target.SubjectDigest != p.ExternalPostgres.LeafDigest) {
 			return ErrInvalid
 		}
 		seenSerial[target.Serial] = true
@@ -101,7 +182,7 @@ func (p Plan) Validate() error {
 		return ErrInvalid
 	}
 	defer clear(encoded)
-	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-terminal-cleanup-plan/v1\x00"), encoded...))
+	digest := sha256.Sum256(append([]byte(digestDomain), encoded...))
 	if p.Digest != "sha256:"+hex.EncodeToString(digest[:]) {
 		return ErrInvalid
 	}
@@ -109,7 +190,11 @@ func (p Plan) Validate() error {
 }
 
 func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time) (Receipt, error) {
-	receipt := Receipt{Protocol: "sandbox-runtime.phase6-terminal-cleanup-receipt.v1",
+	receiptProtocol := "sandbox-runtime.phase6-terminal-cleanup-receipt.v1"
+	if plan.Protocol == ProtocolV2ID {
+		receiptProtocol = "sandbox-runtime.phase6-terminal-cleanup-receipt.v2"
+	}
+	receipt := Receipt{Protocol: receiptProtocol,
 		RunID: plan.RunID, ProfileDigest: plan.ProfileDigest, PlanDigest: plan.Digest,
 		Certificates: make([]TargetResult, len(plan.Certificates)), Tokens: make([]TargetResult, len(plan.Tokens))}
 	if ctx == nil || remote == nil || now == nil || now().IsZero() || plan.Validate() != nil {
@@ -120,7 +205,11 @@ func Execute(ctx context.Context, plan Plan, remote Remote, now func() time.Time
 		return receipt, ErrInvalid
 	}
 	for index, target := range plan.Certificates {
-		receipt.Certificates[index] = TargetResult{Kind: "certificate", TargetDigest: targetDigest("certificate", target.Serial)}
+		kind := "certificate"
+		if target.Kind == externalPostgresKind {
+			kind = externalPostgresKind
+		}
+		receipt.Certificates[index] = TargetResult{Kind: kind, TargetDigest: targetDigest(kind, target.Serial)}
 	}
 	for index, target := range plan.Tokens {
 		receipt.Tokens[index] = TargetResult{Kind: target.Kind, TargetDigest: targetDigest("token", target.Accessor)}
