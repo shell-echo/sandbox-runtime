@@ -139,13 +139,35 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 	var client *http.Client
 	var peer *phase6tls.PeerCRLGuard
 	var err error
+	var slice6Profile phase6security.Profile
+	if productionV3 {
+		slice6Profile, err = phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "guest-runtime")
+		if err != nil || slice6Profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
+			return GuestAuthority{}, errors.New("Guest security profile mismatch")
+		}
+		for _, input := range []struct{ filename, path string }{
+			{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
+			{phase6security.Slice6DependencyAuthorityFile, cfg.Authority.DependencyFile},
+			{phase6security.Slice6PolicyAuthorityFile, cfg.Authority.PolicyFile},
+			{phase6security.Slice6PeerCRLRoleFile, cfg.TLS.PeerCRLRoleFile},
+		} {
+			if phase6security.VerifySlice6PrivateConfigPath(slice6Profile, "guest-runtime", input.filename, input.path) != nil {
+				return GuestAuthority{}, errors.New("Guest private config path mismatch")
+			}
+		}
+	}
 	if production {
 		purposes := []secretref.Purpose{secretref.PurposeTLSCertificate, secretref.PurposeTLSPrivateKey,
 			secretref.PurposeCABundle, secretref.PurposeGuestSigningKey}
 		if productionV3 {
 			purposes = []secretref.Purpose{secretref.PurposeGuestSigningKey}
 		}
-		registry, err = rolematerials.New(cfg.Materials, secretref.RoleGuest, purposes, true, time.Now)
+		if productionV3 {
+			registry, err = rolematerials.NewSlice6ForDeployment(cfg.Materials, "guest-runtime", slice6Profile,
+				secretref.RoleGuest, purposes, true, time.Now)
+		} else {
+			registry, err = rolematerials.New(cfg.Materials, secretref.RoleGuest, purposes, true, time.Now)
+		}
 		if err != nil {
 			return GuestAuthority{}, errors.New("construct Guest material registry")
 		}
@@ -175,29 +197,13 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 			return GuestAuthority{}, errors.New("invalid Guest private key")
 		}
 		if productionV3 {
-			profile, profileErr := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "guest-runtime")
-			if profileErr != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
-				clear(privateKey)
-				return GuestAuthority{}, errors.New("Guest security profile mismatch")
-			}
-			for _, input := range []struct{ filename, path string }{
-				{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
-				{phase6security.Slice6DependencyAuthorityFile, cfg.Authority.DependencyFile},
-				{phase6security.Slice6PolicyAuthorityFile, cfg.Authority.PolicyFile},
-				{phase6security.Slice6PeerCRLRoleFile, cfg.TLS.PeerCRLRoleFile},
-			} {
-				if phase6security.VerifySlice6PrivateConfigPath(profile, "guest-runtime", input.filename, input.path) != nil {
-					clear(privateKey)
-					return GuestAuthority{}, errors.New("Guest private config path mismatch")
-				}
-			}
-			peerRole, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, profile,
+			peerRole, roleErr := phase6security.VerifyPeerCRLRoleFile(cfg.TLS.PeerCRLRoleFile, slice6Profile,
 				cfg.TLS.PeerCRLSourceMappingDigest, cfg.TLS.PeerCRLRoleDigest)
 			if roleErr != nil {
 				clear(privateKey)
 				return GuestAuthority{}, errors.New("Guest peer CRL role binding mismatch")
 			}
-			transport, guard, tlsErr := phase6tls.GuestProductClient(profile,
+			transport, guard, tlsErr := phase6tls.GuestProductClient(slice6Profile,
 				phase6tls.GuestProductClientAuthority{Origin: cfg.OutboundURL, PeerCRLRole: peerRole,
 					AgentSocket: cfg.TLS.AgentSocket, AgentUID: cfg.TLS.AgentUID, AgentGID: cfg.TLS.AgentGID,
 					OperationTimeout: time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond})

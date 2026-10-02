@@ -5,9 +5,11 @@ package rolematerials
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
 )
@@ -20,6 +22,61 @@ func New(materials config.RoleMaterialsConfig, role secretref.Role, allowedPurpo
 // explicit process identity check, not merely a shared logical Role check.
 func NewForDeployment(materials config.RoleMaterialsConfig, deployment string, role secretref.Role,
 	allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
+	return newForDeployment(materials, deployment, role, allowedPurposes, cache, now, false)
+}
+
+// NewSlice6ForDeployment requires a fully admitted Profile before an owner
+// can connect to its one v2 material agent. The ordinary v1 constructors do
+// not silently gain cross-UID authority.
+func NewSlice6ForDeployment(materials config.RoleMaterialsConfig, deployment string, profile phase6security.Profile,
+	role secretref.Role, allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
+	binding, err := profile.Slice6MaterialSocketForOwner(deployment)
+	if err != nil || materials.Provider.Type != config.UnixWorkloadMaterialProviderV2 ||
+		materials.Provider.SocketPath != binding.SocketPath ||
+		materials.Provider.ExpectedUID != int64(binding.AgentUID) ||
+		materials.Provider.ExpectedGID != int64(binding.AgentGID) ||
+		materials.Provider.DirectoryGID != int64(binding.OwnerGID) ||
+		uint32(os.Getuid()) != binding.OwnerUID || uint32(os.Getgid()) != binding.OwnerGID ||
+		materials.Provider.OperationTimeoutSeconds > binding.MaxOperationSeconds {
+		return nil, errors.New("Slice 6 material owner boundary is invalid")
+	}
+	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
+	if err != nil {
+		return nil, errors.New("Slice 6 material access plan is invalid")
+	}
+	var expected *phase6security.Slice6MaterialAccess
+	for index := range plan {
+		if plan[index].Owner == deployment && plan[index].Agent == binding.AgentDeployment {
+			expected = &plan[index]
+			break
+		}
+	}
+	configured, err := materials.DecodeBindings(role)
+	if err != nil || expected == nil || expected.Role != role || len(configured) != len(expected.Bindings) ||
+		len(allowedPurposes) != len(expected.Bindings) {
+		return nil, errors.New("Slice 6 material binding plan is invalid")
+	}
+	for _, wanted := range expected.Bindings {
+		matchedBinding, matchedPurpose := false, false
+		for _, configuredBinding := range configured {
+			if configuredBinding == wanted {
+				matchedBinding = true
+			}
+		}
+		for _, purpose := range allowedPurposes {
+			if purpose == wanted.Purpose {
+				matchedPurpose = true
+			}
+		}
+		if !matchedBinding || !matchedPurpose {
+			return nil, errors.New("Slice 6 material binding plan is invalid")
+		}
+	}
+	return newForDeployment(materials, deployment, role, allowedPurposes, cache, now, true)
+}
+
+func newForDeployment(materials config.RoleMaterialsConfig, deployment string, role secretref.Role,
+	allowedPurposes []secretref.Purpose, cache bool, now func() time.Time, allowV2 bool) (*secretref.Registry, error) {
 	if now == nil || now().IsZero() {
 		return nil, errors.New("invalid role material clock")
 	}
@@ -33,7 +90,8 @@ func NewForDeployment(materials config.RoleMaterialsConfig, deployment string, r
 		}
 	}
 	bindings, err := materials.DecodeBindings(role)
-	if err != nil || materials.Provider.Type != config.UnixWorkloadMaterialProviderV1 {
+	if err != nil || (materials.Provider.Type != config.UnixWorkloadMaterialProviderV1 && !allowV2) ||
+		(allowV2 && materials.Provider.Type != config.UnixWorkloadMaterialProviderV2) {
 		return nil, errors.New("invalid role material registry configuration")
 	}
 	for _, binding := range bindings {
@@ -45,14 +103,20 @@ func NewForDeployment(materials config.RoleMaterialsConfig, deployment string, r
 			return nil, errors.New("external database credentials require uncached material resolution")
 		}
 	}
-	provider, err := workloadagent.NewProduction(workloadagent.Config{
+	providerConfig := workloadagent.Config{
 		SocketPath:       materials.Provider.SocketPath,
 		ExpectedUID:      uint32(materials.Provider.ExpectedUID),
 		ExpectedGID:      uint32(materials.Provider.ExpectedGID),
 		Role:             role,
 		OperationTimeout: time.Duration(materials.Provider.OperationTimeoutSeconds) * time.Second,
 		Now:              now,
-	})
+	}
+	var provider *workloadagent.Client
+	if allowV2 {
+		provider, err = workloadagent.NewProductionV2(providerConfig, uint32(materials.Provider.DirectoryGID))
+	} else {
+		provider, err = workloadagent.NewProduction(providerConfig)
+	}
 	if err != nil {
 		return nil, errors.New("workload material agent is unavailable")
 	}

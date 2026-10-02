@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"time"
 
@@ -58,6 +59,7 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	if err != nil || profile.ProfileDigest != v2.SecurityProfileDigest ||
 		phase6security.VerifySlice6PrivateConfigPath(profile, config.CredentialAgentID,
 			phase6security.Slice6ProfileConfigFile, v2.SecurityProfilePath) != nil ||
+		phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
 		v2.CredentialMaxTTLSeconds < v2.CredentialTTLSeconds || v2.CredentialMaxTTLSeconds > 900 {
 		return nil, secretref.ErrUnavailable
 	}
@@ -76,7 +78,8 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		}
 	}
 	if agent == nil || controller == nil || agent.AuthorizationPrincipal == nil ||
-		agent.Kind != "material_agent" || agent.UID != config.SocketUID || agent.GID != config.SocketGID ||
+		agent.Kind != "material_agent" || agent.UID != config.SocketUID ||
+		uint32(os.Getuid()) != agent.UID || uint32(os.Getgid()) != agent.GID ||
 		agent.AuthorizationPrincipal.Kind != securityprincipal.KindMaterialAgent ||
 		secretref.Role(agent.AuthorizationPrincipal.Role) != config.Role ||
 		controller.UID != config.CredentialControllerUID || controller.GID != config.CredentialControllerGID ||
@@ -103,6 +106,20 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 	if !accessBound {
 		return nil, secretref.ErrUnavailable
 	}
+	materialSocketBound := false
+	for _, materialSocket := range profile.MaterialSockets {
+		if materialSocket.AgentDeployment != agent.Name {
+			continue
+		}
+		if !validV2MaterialSocketConfig(materialSocket, config) {
+			return nil, secretref.ErrUnavailable
+		}
+		materialSocketBound = true
+		break
+	}
+	if !materialSocketBound {
+		return nil, secretref.ErrUnavailable
+	}
 	binding, boundController, boundAgent, err := profile.CredentialIssuerSocketForClient(agent.Name)
 	if err != nil || binding.SocketPath != config.CredentialControllerSocket ||
 		boundController.UID != controller.UID || boundController.GID != controller.GID ||
@@ -127,6 +144,14 @@ func newCredentialIssuer(config configDocument, v2 *configDocumentV2, privateKey
 		return nil, err
 	}
 	return principalCredentialIssuer{client}, nil
+}
+
+func validV2MaterialSocketConfig(binding phase6security.Slice6MaterialSocketBinding, config configDocument) bool {
+	return config.CredentialAgentID == binding.AgentDeployment && config.SocketPath == binding.SocketPath &&
+		config.SocketUID == binding.AgentUID && config.SocketGID == binding.OwnerGID &&
+		config.ExpectedClientUID == binding.OwnerUID && config.ExpectedClientGID == binding.OwnerGID &&
+		config.MaxConnections == binding.MaxConnections &&
+		config.OperationTimeoutSeconds >= 1 && config.OperationTimeoutSeconds <= binding.MaxOperationSeconds
 }
 
 func validV2MaterialAccessConfig(entry phase6security.Slice6MaterialAccess, config configDocument, v2 configDocumentV2) bool {

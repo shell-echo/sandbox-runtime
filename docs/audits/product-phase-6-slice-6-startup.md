@@ -3761,3 +3761,27 @@ step is pending a closed authority check for the material and break-glass
 Unix sockets; gate-only hand-entered paths cannot replace the Profile.
 The checkpoint's complete race/shuffle suite, ordinary and tagged vet,
 Contract lock verifier, and diff check also passed.
+
+Checkpoint 2026-10-02 (material socket static boundary and v2 transport):
+Sandbox's architecture ruling identified that the historical same-UID
+material and break-glass sockets cannot connect the planned independently
+identified processes. The unaccepted final Profile now derives 11 closed,
+unique material-agent endpoints and mount directions from the existing
+agent→owner facts. Focused negative tests reject missing/duplicate endpoints,
+owner or identity drift, broader modes/deadlines/capacity, storage alias,
+extra reader, writable owner mount and overlapping parent mount. The explicit
+`workloadagent` v2 path uses the restricted cross-UID Unix layout, exact peer
+credentials, two-second first-frame deadline, tracked connection drain and
+same-inode cleanup; its real Linux Docker test passed with distinct agent
+and owner UID/GID, wrong UID/GID denial, stalled first frame, canceled
+client request, and tracked stalled-connection drain. v1 remains unchanged
+for Slice 5 compatibility. The v2
+material agent checks its Profile endpoint before credential issuance;
+Guest v3 checks its Profile and exact v2 binding inventory before the first
+signing-key resolution. This invalidates the prior R22 runtime images as a
+final Slice 6 candidate. Break-glass v2 and the full live topology still
+remain open; no new R was frozen and Phase 6 remains **5/15**.
+The complete race/shuffle suite, ordinary and tagged vet, Product Contract
+lock verifier and diff check passed; the newly added config v2 negative test
+also passed separately. Exact `sr-material-v2-*` Docker container and volume
+inventories were empty after the live component test.

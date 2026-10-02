@@ -85,6 +85,35 @@ func TestV2MaterialAccessConfigRequiresExactProfilePlan(t *testing.T) {
 	}
 }
 
+func TestV2MaterialSocketConfigRequiresDistinctOwnerAndAgent(t *testing.T) {
+	binding := phase6security.Slice6MaterialSocketBinding{AgentDeployment: "guest-agent", OwnerDeployment: "guest-runtime",
+		AgentUID: 20010, AgentGID: 30010, OwnerUID: 20011, OwnerGID: 30011,
+		SocketPath: "/run/phase6/material/guest-agent/agent.sock", MaxConnections: 4, MaxOperationSeconds: 30}
+	config := configDocument{CredentialAgentID: binding.AgentDeployment, SocketPath: binding.SocketPath,
+		SocketUID: binding.AgentUID, SocketGID: binding.OwnerGID, ExpectedClientUID: binding.OwnerUID,
+		ExpectedClientGID: binding.OwnerGID, MaxConnections: 4, OperationTimeoutSeconds: 3}
+	if !validV2MaterialSocketConfig(binding, config) {
+		t.Fatal("exact cross-UID material endpoint rejected")
+	}
+	for name, mutate := range map[string]func(*configDocument){
+		"path":          func(c *configDocument) { c.SocketPath += "-other" },
+		"socket uid":    func(c *configDocument) { c.SocketUID++ },
+		"directory gid": func(c *configDocument) { c.SocketGID = binding.AgentGID },
+		"peer uid":      func(c *configDocument) { c.ExpectedClientUID++ },
+		"peer gid":      func(c *configDocument) { c.ExpectedClientGID++ },
+		"capacity":      func(c *configDocument) { c.MaxConnections = 256 },
+		"deadline":      func(c *configDocument) { c.OperationTimeoutSeconds = 60 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := config
+			mutate(&changed)
+			if validV2MaterialSocketConfig(binding, changed) {
+				t.Fatal("cross-UID material endpoint drift admitted")
+			}
+		})
+	}
+}
+
 func TestHistoricalV1ConfigRemainsSeparate(t *testing.T) {
 	value := configDocument{Protocol: configProtocol, CredentialAgentID: "gateway-agent"}
 	document, err := json.Marshal(value)

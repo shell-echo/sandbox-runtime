@@ -112,6 +112,10 @@ func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, err
 	if err != nil {
 		return phase6security.Profile{}, ErrInvalidCandidateProfile
 	}
+	principals, materialSockets, err := phase6security.AttachSlice6MaterialSocketBindings(principals)
+	if err != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	profile := phase6security.Profile{Protocol: phase6security.ProtocolID, Version: phase6security.Version,
 		Revision:          "slice6-" + draft.ImageSupply.RuntimeRevision,
 		EnvironmentDigest: identity.EnvironmentDigest, PrincipalProfileDigest: identity.ProfileDigest,
@@ -121,6 +125,7 @@ func buildSlice6CandidateProfile(draft StaticDraft) (phase6security.Profile, err
 		External: draft.External, TrustEdges: draft.TrustEdges, TrustAnchors: draft.TrustAnchors,
 		PublicListeners: draft.PublicListeners, IngressBindings: draft.IngressBindings,
 		CertificateController: draft.CertificateController, CredentialIssuerSockets: draft.CredentialIssuerSockets,
+		MaterialSockets:  materialSockets,
 		TLSAgentBindings: draft.TLSAgentBindings, PostgresClientAgents: draft.PostgresClientAgents,
 		EgressPolicies: draft.EgressPolicies, CleanupClasses: draft.CleanupClasses}
 	profile.ProfileDigest = profile.Digest()

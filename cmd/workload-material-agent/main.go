@@ -287,11 +287,18 @@ func run() error { //nolint:maintidx
 		breakGlassDone = make(chan error, 1)
 		go func() { breakGlassDone <- breakGlassServer.Serve(ctx) }()
 	}
-	server, err := workloadagent.Listen(workloadagent.ServerConfig{DeploymentName: config.CredentialAgentID,
+	serverConfig := workloadagent.ServerConfig{DeploymentName: config.CredentialAgentID,
 		SocketPath: config.SocketPath, SocketUID: config.SocketUID, SocketGID: config.SocketGID,
 		ExpectedClientUID: config.ExpectedClientUID, ExpectedClientGID: config.ExpectedClientGID, Role: config.Role,
 		AllowedPurposes: purposes, Bindings: config.Bindings, MaxConnections: config.MaxConnections,
-		MaxResolutions: config.MaxResolutions, Now: time.Now}, vault)
+		MaxResolutions: config.MaxResolutions, Now: time.Now}
+	var server *workloadagent.Server
+	if v2 != nil {
+		serverConfig.MaxOperationSeconds = config.OperationTimeoutSeconds
+		server, err = workloadagent.ListenV2(serverConfig, vault)
+	} else {
+		server, err = workloadagent.Listen(serverConfig, vault)
+	}
 	if err != nil {
 		return stageError("material-listen")
 	}

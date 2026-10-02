@@ -2059,3 +2059,29 @@ all 38 policies must pass the production validator, the 9 dedicated
 PostgreSQL signers cannot gain ordinary TLS issuance, and shared Provider
 principal vocabulary does not erase per-instance digest, owner, SQL role,
 key, socket, UID/GID and issuer binding.
+
+### Slice 6 material-agent Unix correction (2026-10-02)
+
+The reviewed 11 agent→owner material-access facts now derive 11 distinct
+owner→agent Unix endpoints in the final draft Profile. Each endpoint fixes
+agent/owner deployment and UID/GID, storage ID, directory/socket path,
+agent-writable and owner-read-only mounts, a `0710` agent-owned directory
+with the owner's directory GID, a `0666` socket, exact peer credentials,
+first-frame and operation deadlines, bounded capacity and socket cleanup.
+The final static gate rejects a missing, aliased, exchanged or extra reader
+even if the Profile digest is recomputed. The historical same-UID `0600`
+material-agent transport is retained only for Slice 5 compatibility; the
+explicit cross-UID v2 transport uses inode checks, a bounded first frame,
+tracked handler close and same-inode cleanup. A real Linux Docker component
+test has crossed distinct UID/GID boundaries and rejected third parties.
+
+The material agent checks the final Profile's exact listener/owner binding
+before requesting a workload credential. A Slice 6 role must check its
+Profile, own v2 material endpoint and exact binding inventory before the
+first resolution; Guest v3 now performs that preflight before its signing
+key read. This does **not** complete Slice 6: break-glass controller/agent
+operator paths still need their own explicit cross-UID v2 binding and
+persistent state, all remaining owners need live v2 configuration, and the
+78-deployment/16-scenario evidence gate has not run. Profile v1 and the
+material-agent v2 command remain unaccepted Slice 6 drafts and can be
+tightened without a locked Provider Contract change. Phase 6 stays 5/15.

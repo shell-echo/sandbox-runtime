@@ -8,7 +8,10 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
-const UnixWorkloadMaterialProviderV1 = "unix-workload-material.v1"
+const (
+	UnixWorkloadMaterialProviderV1 = "unix-workload-material.v1"
+	UnixWorkloadMaterialProviderV2 = "unix-workload-material.v2"
+)
 
 var materialIDPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 
@@ -26,6 +29,7 @@ type RoleMaterialProviderConfig struct {
 	SocketPath              string `mapstructure:"socket_path"`
 	ExpectedUID             int64  `mapstructure:"expected_uid"`
 	ExpectedGID             int64  `mapstructure:"expected_gid"`
+	DirectoryGID            int64  `mapstructure:"directory_gid"`
 	OperationTimeoutSeconds int    `mapstructure:"operation_timeout_seconds"`
 	CacheSeconds            int    `mapstructure:"cache_seconds"`
 }
@@ -45,7 +49,11 @@ func (c RoleMaterialsConfig) IsZero() bool {
 // no material.
 func (c RoleMaterialsConfig) DecodeBindings(role secretref.Role) (map[string]secretref.Binding, error) {
 	provider := c.Provider
-	if provider.Type != UnixWorkloadMaterialProviderV1 || !materialIDPattern.MatchString(provider.Alias) ||
+	if (provider.Type != UnixWorkloadMaterialProviderV1 && provider.Type != UnixWorkloadMaterialProviderV2) ||
+		(provider.Type == UnixWorkloadMaterialProviderV1 && provider.DirectoryGID != 0) ||
+		(provider.Type == UnixWorkloadMaterialProviderV2 && (provider.DirectoryGID < 1 || provider.DirectoryGID > (1<<32)-1 ||
+			provider.DirectoryGID == provider.ExpectedGID)) ||
+		!materialIDPattern.MatchString(provider.Alias) ||
 		!filepath.IsAbs(provider.SocketPath) || filepath.Clean(provider.SocketPath) != provider.SocketPath || len(provider.SocketPath) > 100 ||
 		provider.ExpectedUID < 0 || provider.ExpectedUID > (1<<32)-1 || provider.ExpectedGID < 0 || provider.ExpectedGID > (1<<32)-1 ||
 		provider.OperationTimeoutSeconds < 1 || provider.OperationTimeoutSeconds > 60 || provider.CacheSeconds < 0 || provider.CacheSeconds > 60 ||

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
@@ -33,20 +34,39 @@ type Client struct {
 	operationTimeout time.Duration
 	now              func() time.Time
 	random           io.Reader
+	v2               bool
+	directoryGID     uint32
 }
 
 func New(config Config) (*Client, error) {
+	return newClient(config, false, 0)
+}
+
+// NewV2 binds an owner to a distinct material-agent UID/GID and to its
+// restricted socket directory group. It is not an implicit v1 fallback.
+func NewV2(config Config, directoryGID uint32) (*Client, error) {
+	return newClient(config, true, directoryGID)
+}
+
+func newClient(config Config, v2 bool, directoryGID uint32) (*Client, error) {
 	if !filepath.IsAbs(config.SocketPath) || filepath.Clean(config.SocketPath) != config.SocketPath || len(config.SocketPath) > 100 ||
 		config.OperationTimeout < time.Second || config.OperationTimeout > time.Minute || config.Now == nil || config.Now().IsZero() ||
 		config.Random == nil || !validRole(config.Role) {
 		return nil, secretref.ErrUnavailable
 	}
-	if err := validateSocket(config.SocketPath, config.ExpectedUID, config.ExpectedGID); err != nil {
+	if v2 {
+		if uint32(os.Getuid()) == config.ExpectedUID || uint32(os.Getgid()) == config.ExpectedGID ||
+			uint32(os.Getgid()) != directoryGID || !restrictedunix.ValidateSocket(config.SocketPath, restrictedunix.Layout{
+			DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: config.ExpectedUID, DirectoryGID: directoryGID}) {
+			return nil, secretref.ErrUnavailable
+		}
+	} else if err := validateSocket(config.SocketPath, config.ExpectedUID, config.ExpectedGID); err != nil {
 		return nil, secretref.ErrUnavailable
 	}
 	return &Client{
 		socketPath: config.SocketPath, expectedUID: config.ExpectedUID, expectedGID: config.ExpectedGID,
 		role: config.Role, operationTimeout: config.OperationTimeout, now: config.Now, random: config.Random,
+		v2: v2, directoryGID: directoryGID,
 	}, nil
 }
 
@@ -56,6 +76,14 @@ func NewProduction(config Config) (*Client, error) {
 	}
 	config.Random = rand.Reader
 	return New(config)
+}
+
+func NewProductionV2(config Config, directoryGID uint32) (*Client, error) {
+	if config.Random != nil {
+		return nil, secretref.ErrUnavailable
+	}
+	config.Random = rand.Reader
+	return NewV2(config, directoryGID)
 }
 
 func (c *Client) ResolveSecret(ctx context.Context, binding secretref.Binding) (secretref.SecretMaterial, error) {
@@ -87,7 +115,11 @@ func (c *Client) ResolveSecret(ctx context.Context, binding secretref.Binding) (
 		return secretref.SecretMaterial{}, err
 	}
 	defer clear(requestDocument)
-	if err := validateSocket(c.socketPath, c.expectedUID, c.expectedGID); err != nil {
+	if !c.validSocket() {
+		return secretref.SecretMaterial{}, secretref.ErrUnavailable
+	}
+	preDialSocket, err := os.Lstat(c.socketPath)
+	if err != nil {
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
 	connection, err := (&net.Dialer{}).DialContext(operationContext, "unix", c.socketPath)
@@ -100,10 +132,15 @@ func (c *Client) ResolveSecret(ctx context.Context, binding secretref.Binding) (
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
 	defer unixConnection.Close()
+	if c.v2 {
+		stopCancel := context.AfterFunc(operationContext, func() { _ = unixConnection.Close() })
+		defer stopCancel()
+	}
 	if err := unixConnection.SetDeadline(deadline); err != nil {
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
-	if err := validateSocket(c.socketPath, c.expectedUID, c.expectedGID); err != nil {
+	postDialSocket, err := os.Lstat(c.socketPath)
+	if err != nil || !os.SameFile(preDialSocket, postDialSocket) || !c.validSocket() {
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
 	credentials, err := peerCredentials(unixConnection)
@@ -111,14 +148,14 @@ func (c *Client) ResolveSecret(ctx context.Context, binding secretref.Binding) (
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
 	if err := WriteFrame(unixConnection, requestDocument, maxRequestBytes); err != nil {
-		return secretref.SecretMaterial{}, providerError(err)
+		return secretref.SecretMaterial{}, c.operationError(operationContext, err)
 	}
 	if err := unixConnection.CloseWrite(); err != nil {
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
 	responseDocument, err := ReadFrame(unixConnection, maxResponseBytes)
 	if err != nil {
-		return secretref.SecretMaterial{}, providerError(err)
+		return secretref.SecretMaterial{}, c.operationError(operationContext, err)
 	}
 	defer clear(responseDocument)
 	response, err := DecodeResponse(responseDocument, request, c.now())
@@ -145,6 +182,21 @@ func (c *Client) ResolveSecret(ctx context.Context, binding secretref.Binding) (
 	default:
 		return secretref.SecretMaterial{}, secretref.ErrUnavailable
 	}
+}
+
+func (c *Client) validSocket() bool {
+	if c.v2 {
+		return restrictedunix.ValidateSocket(c.socketPath, restrictedunix.Layout{
+			DirectoryMode: 0o710, SocketMode: 0o666, OwnerUID: c.expectedUID, DirectoryGID: c.directoryGID})
+	}
+	return validateSocket(c.socketPath, c.expectedUID, c.expectedGID) == nil
+}
+
+func (c *Client) operationError(ctx context.Context, err error) error {
+	if c.v2 && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return providerError(err)
 }
 
 type peerIdentity struct {

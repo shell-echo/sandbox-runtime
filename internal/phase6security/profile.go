@@ -227,6 +227,7 @@ type Profile struct {
 	IngressBindings         []IngressBinding                `json:"ingress_bindings"`
 	CertificateController   CertificateControllerAuthority  `json:"certificate_controller"`
 	CredentialIssuerSockets []CredentialIssuerSocketBinding `json:"credential_issuer_sockets"`
+	MaterialSockets         []Slice6MaterialSocketBinding   `json:"material_sockets"`
 	TLSAgentBindings        []TLSAgentBinding               `json:"tls_agent_bindings"`
 	PostgresClientAgents    []PostgresClientAgentBinding    `json:"postgres_client_agents"`
 	EgressPolicies          []EgressPolicy                  `json:"egress_policies"`
@@ -774,12 +775,15 @@ func (p Profile) Validate() error { //nolint:gocyclo
 	if err := validateCredentialIssuerSockets(p.CredentialIssuerSockets, principals, edges); err != nil {
 		return err
 	}
+	if len(p.MaterialSockets) > 0 && VerifySlice6MaterialSocketBindings(p) != nil {
+		return ErrInvalidProfile
+	}
 	if err := validatePostgresClientAgents(p.PostgresClientAgents, p.ProviderDatabases, p.TLSAgentBindings, p.EgressPolicies,
 		p.CertificateController, p.TrustAnchors, principals, edges); err != nil {
 		return err
 	}
-	if err := validateTLSAgentBindingsWithPostgres(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies,
-		p.CertificateController, p.CredentialIssuerSockets, principals, edges); err != nil {
+	if err := validateTLSAgentBindingsWithPostgresAndMaterial(p.TLSAgentBindings, p.PostgresClientAgents, p.EgressPolicies,
+		p.CertificateController, p.CredentialIssuerSockets, p.MaterialSockets, principals, edges); err != nil {
 		return err
 	}
 	for name, service := range external {
@@ -1531,6 +1535,13 @@ func validateTLSAgentBindings(values []TLSAgentBinding, policies []EgressPolicy,
 func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
 	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
+	return validateTLSAgentBindingsWithPostgresAndMaterial(values, postgres, policies, controllerAuthority,
+		credentialSockets, nil, principals, edges)
+}
+
+func validateTLSAgentBindingsWithPostgresAndMaterial(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
+	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
+	materialSockets []Slice6MaterialSocketBinding, principals map[string]Principal, edges map[string]TrustEdge) error {
 	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
 	for agent, subject := range requiredTLSAgentSubjects {
 		expected[agent] = subject
@@ -1696,7 +1707,8 @@ func validateTLSAgentBindingsWithPostgres(values []TLSAgentBinding, postgres []P
 						(name == "browser-executor-backend" && mount.ReadOnly)) {
 					return ErrInvalidProfile
 				}
-			} else if !postgresSocketMember(postgres, name, mount) && !policyStorageMember(policies, name, mount) {
+			} else if !postgresSocketMember(postgres, name, mount) && !policyStorageMember(policies, name, mount) &&
+				!slice6MaterialSocketMember(materialSockets, name, mount) {
 				return ErrInvalidProfile
 			}
 		}
