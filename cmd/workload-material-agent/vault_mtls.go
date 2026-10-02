@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +16,10 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
+func vaultMTLSUnavailable(category string) error {
+	return fmt.Errorf("vault-mtls-%s: %w", category, secretref.ErrUnavailable)
+}
+
 // A v2 material agent has no server-only Vault fallback. Its own client leaf
 // is signed by its distinct TLS-agent process, while the Vault server remains
 // a separately pinned external identity on one isolated service bridge.
@@ -25,7 +30,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		phase6security.VerifySlice6PrivateConfigPath(profile, config.CredentialAgentID,
 			phase6security.Slice6ProfileConfigFile, v2.SecurityProfilePath) != nil ||
 		config.Protocol != configProtocolV2 || len(config.VaultCABundle) != 0 {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("profile")
 	}
 	var subject phase6security.Principal
 	var vault phase6security.ExternalService
@@ -43,7 +48,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		!validV2MaterialSocketInProfile(profile, config) || subject.TLS == nil ||
 		vault.Name != "vault" || len(vault.DNSNames) != 1 ||
 		config.VaultServerName != vault.DNSNames[0] {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("identity")
 	}
 	var dependency phase6security.Slice6DirectExternalDependency
 	for _, candidate := range phase6security.Slice6RequiredDirectExternalDependencies() {
@@ -53,7 +58,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		}
 	}
 	if dependency.Network == "" || dependency.EdgeID == "" {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("dependency")
 	}
 	address, err := phase6security.Slice6DesiredServiceEndpointAddress(dependency.Network, "vault")
 	endpoint, parseErr := url.Parse(config.VaultEndpoint)
@@ -61,7 +66,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		endpoint.Host != net.JoinHostPort(address, "8200") || endpoint.Path != "" ||
 		endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.User != nil ||
 		endpoint.String() != config.VaultEndpoint {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("endpoint")
 	}
 	bridgeOK := false
 	var plannedBridge phase6security.Network
@@ -82,7 +87,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		}
 	}
 	if !bridgeOK {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("bridge")
 	}
 	edgeOK := false
 	for _, edge := range profile.TrustEdges {
@@ -95,33 +100,33 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		}
 	}
 	if !edgeOK {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("edge")
 	}
 	binding, signer, material, err := profile.TLSAgentForSubject(subject.Name)
 	if err != nil || !validV2VaultSignerBinding(binding, signer, material, subject, v2) {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("signer-binding")
 	}
 	serverAnchor, _, err := profile.EdgeTrustAnchors(dependency.EdgeID)
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("server-anchor")
 	}
 	clientAnchor, err := profile.ConsumerTrustAnchor("vault-client-ca", subject.Name, "client_verification")
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("client-anchor")
 	}
 	serverPEM, err := trustanchor.Load(serverAnchor, time.Now())
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("server-anchor-bytes")
 	}
 	defer clear(serverPEM)
 	clientPEM, err := trustanchor.Load(clientAnchor, time.Now())
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("client-anchor-bytes")
 	}
 	defer clear(clientPEM)
 	serverRoots, clientRoots := x509.NewCertPool(), x509.NewCertPool()
 	if !serverRoots.AppendCertsFromPEM(serverPEM) || !clientRoots.AppendCertsFromPEM(clientPEM) {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("anchor-roots")
 	}
 	agent, err := workloadtlsagent.NewProductionClient(workloadtlsagent.ClientConfig{
 		SocketPath: v2.VaultTLSAgentSocket, ExpectedUID: v2.VaultTLSAgentUID,
@@ -129,7 +134,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
 	})
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("signer-socket")
 	}
 	transportTLS, err := remotetls.NewClient(remotetls.ClientOptions{
 		IssuerRoots: clientRoots, ServerRoots: serverRoots, ServerName: config.VaultServerName,
@@ -140,7 +145,7 @@ func newV2VaultHTTPClient(config configDocument, v2 configDocumentV2) (*http.Cli
 		Source: agent.CertificateForHandshake, Now: time.Now,
 	})
 	if err != nil {
-		return nil, secretref.ErrUnavailable
+		return nil, vaultMTLSUnavailable("signer-bootstrap")
 	}
 	transport := &http.Transport{TLSClientConfig: transportTLS, DisableKeepAlives: true,
 		TLSHandshakeTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second,

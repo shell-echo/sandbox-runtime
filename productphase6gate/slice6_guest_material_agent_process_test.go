@@ -241,8 +241,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		select {
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
+			category := slice6MaterialFailureCategory(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent exited before network join: stage=%s exit=%v", stage, done.err)
+			t.Fatalf("Guest material-agent exited before network join: stage=%s category=%s exit=%v", stage, category, done.err)
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -263,8 +264,12 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		map[string]string{agent.Name: id}); err != nil {
 		t.Fatal("Guest material-agent dedicated network membership drift")
 	}
-	if _, err := observeSlice6ProfileNetworkWithExternal(ctx, run, createdService.NetworkID,
-		service, serverID); err != nil {
+	serviceInspect, inspectErr := run.docker(ctx, "network", "inspect", createdService.NetworkID)
+	if inspectErr != nil {
+		t.Fatal("Guest material-agent/Vault bridge inspect unavailable")
+	}
+	if _, err := phase6security.ObserveDockerNetworkWithExternal(serviceInspect, service,
+		map[string]string{agent.Name: id}, map[string]string{"vault": serverID}); err != nil {
 		t.Fatal("Guest material-agent/Vault bridge membership drift")
 	}
 	ready := false
@@ -277,8 +282,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		select {
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
+			category := slice6MaterialFailureCategory(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent exited before listeners: stage=%s exit=%v", stage, done.err)
+			t.Fatalf("Guest material-agent exited before listeners: stage=%s category=%s exit=%v", stage, category, done.err)
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
@@ -287,8 +293,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		select {
 		case done := <-completed:
 			stage := slice6ControllerFailureStage(done.output)
+			category := slice6MaterialFailureCategory(done.output)
 			clear(done.output)
-			t.Fatalf("Guest material-agent listener timeout: state=%q stage=%s exit=%v", strings.TrimSpace(string(state)), stage, done.err)
+			t.Fatalf("Guest material-agent listener timeout: state=%q stage=%s category=%s exit=%v", strings.TrimSpace(string(state)), stage, category, done.err)
 		default:
 			t.Fatalf("Guest material-agent listener timeout: state=%q attached start still pending", strings.TrimSpace(string(state)))
 		}
@@ -380,4 +387,17 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		t.Fatal("Guest material and break-glass listener exact socket cleanup unproved")
 	}
 	t.Log("real Guest material-agent clean drain removed both exact listeners; online break-glass delivery/consume remains unproved")
+}
+
+// The only surfaced error detail is a fixed, reviewed category. Captured
+// process output may contain sensitive arguments and is never logged raw.
+func slice6MaterialFailureCategory(output []byte) string {
+	for _, category := range []string{"profile", "identity", "dependency", "endpoint", "bridge", "edge",
+		"signer-binding", "server-anchor", "client-anchor", "server-anchor-bytes",
+		"client-anchor-bytes", "anchor-roots", "signer-socket", "signer-bootstrap"} {
+		if bytes.Contains(output, []byte("vault-mtls-"+category+":")) {
+			return category
+		}
+	}
+	return "unclassified"
 }

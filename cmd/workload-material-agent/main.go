@@ -231,7 +231,7 @@ func run() error { //nolint:maintidx
 	if v2 != nil {
 		httpClient, err = newV2VaultHTTPClient(config, *v2)
 		if err != nil {
-			return stageError("vault-mtls")
+			return fmt.Errorf("stage vault-mtls: %w", err)
 		}
 	} else {
 		roots := x509.NewCertPool()
