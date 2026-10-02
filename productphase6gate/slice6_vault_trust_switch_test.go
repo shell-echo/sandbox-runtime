@@ -382,6 +382,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			defer clear(management.Token)
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
 				slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
+				guestTLSConfig, configErr := slice6BuildGuestTLSAgentConfig(composed)
+				if configErr != nil {
+					t.Fatalf("same-run Guest TLS-agent startup input failed: %v", configErr)
+				}
+				t.Logf("same-run Guest TLS-agent canonical v3 config assembled: bytes=%d; signer process not yet launched", len(guestTLSConfig))
+				clear(guestTLSConfig)
 			}
 			if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 				credentialLeaf, credentialKey := slice6VaultSignControllerBootstrap(t, ctx, run,
