@@ -338,6 +338,13 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	if binding.Validate() != nil || binding.Purpose != secretref.PurposeGuestSigningKey {
 		t.Fatal("Guest owner-side exact material binding unavailable")
 	}
+	var activeConfig slice6GuestMaterialAgentConfig
+	if json.Unmarshal(config, &activeConfig) != nil ||
+		activeConfig.Role != secretref.RoleGuest || activeConfig.MaxResolutions != 0 ||
+		len(activeConfig.Bindings) != 1 || activeConfig.Bindings[0] != binding ||
+		activeConfig.ExpectedClientUID != owner.UID || activeConfig.ExpectedClientGID != owner.GID {
+		t.Fatal("Guest observer and live material-agent authorization inputs disagree")
+	}
 	request, err := json.Marshal(struct {
 		SocketPath              string            `json:"socket_path"`
 		AgentUID                uint32            `json:"agent_uid"`
@@ -363,7 +370,9 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 	command.Stdin = bytes.NewReader(request)
 	output, observeErr := command.CombinedOutput()
 	if observeErr != nil || string(output) != "guest-material-resolved=exact-vault-key\n" {
-		t.Fatalf("Guest owner-side Vault-backed material resolve failed: %v: %.256s", observeErr, output)
+		stage, resolveMS := slice6GuestMaterialObservationFailure(output)
+		clear(output)
+		t.Fatalf("Guest owner-side Vault-backed material resolve failed: stage=%s resolve_ms=%d exit=%v", stage, resolveMS, observeErr)
 	}
 	t.Log("real Guest material-agent PID1 obtained a scoped credential, used the distinct signer for Vault mTLS, and served the exact KVv2 Guest key to a cross-UID/GID owner-only observer")
 	if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
@@ -392,6 +401,40 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 		t.Fatal("Guest material and break-glass listener exact socket cleanup unproved")
 	}
 	t.Log("real Guest material-agent clean drain removed both exact listeners; online break-glass delivery/consume remains unproved")
+}
+
+// The observer has a finite, reviewed diagnostic vocabulary. Never include
+// Docker output or provider errors in gate logs: they can contain private paths.
+func slice6GuestMaterialObservationFailure(output []byte) (string, int64) {
+	pattern := regexp.MustCompile(`^guest-material-observation stage=(input|identity-or-binding|parent-layout|socket-layout|client-init|resolve-canceled|resolve-deadline|resolve-revoked|resolve-expired|resolve-unavailable|material-binding|material-window|material-size|public-digest) resolve_ms=(-1|[0-9]{1,6})\n$`)
+	match := pattern.FindSubmatch(output)
+	if match == nil {
+		return "unclassified", -1
+	}
+	millis, err := strconv.ParseInt(string(match[2]), 10, 64)
+	if err != nil || millis > 30000 {
+		return "unclassified", -1
+	}
+	return string(match[1]), millis
+}
+
+func TestSlice6GuestMaterialObservationFailure(t *testing.T) {
+	for _, tc := range []struct {
+		output, stage string
+		millis        int64
+	}{
+		{"guest-material-observation stage=parent-layout resolve_ms=-1\n", "parent-layout", -1},
+		{"guest-material-observation stage=resolve-unavailable resolve_ms=15001\n", "resolve-unavailable", 15001},
+		{"guest-material-observation stage=resolve-unavailable-unavailable resolve_ms=6\n", "unclassified", -1},
+		{"guest-material-observation stage=resolve-deadline resolve_ms=30001\n", "unclassified", -1},
+		{"guest-material-observation stage=other resolve_ms=1\n", "unclassified", -1},
+		{"secret\nguest-material-observation stage=socket-layout resolve_ms=-1\n", "unclassified", -1},
+	} {
+		stage, millis := slice6GuestMaterialObservationFailure([]byte(tc.output))
+		if stage != tc.stage || millis != tc.millis {
+			t.Fatalf("observer diagnostic classified as %s/%d; want %s/%d", stage, millis, tc.stage, tc.millis)
+		}
+	}
 }
 
 // The only surfaced error detail is a fixed, reviewed category. Captured

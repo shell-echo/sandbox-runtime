@@ -323,7 +323,11 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
 		t.Fatalf("Guest TLS-agent signer socket cleanup unproved: %v: %.128s", err, output)
 	}
-	t.Log("real Guest TLS-agent PID1 issued its managed certificate, opened the isolated signer listener and cleaned the exact socket; material-agent Vault mTLS and material read remain unproved")
+	if onSignerReady != nil {
+		t.Log("real Guest TLS-agent PID1 issued its managed certificate, served the dependent process, and cleaned the exact signer socket; dependent evidence is reported separately")
+	} else {
+		t.Log("real Guest TLS-agent PID1 issued its managed certificate, opened the isolated signer listener and cleaned the exact socket; material-agent Vault mTLS and material read remain unproved")
+	}
 }
 
 func slice6GuestTLSCPUMillis(profile int64, contrast bool) int64 {

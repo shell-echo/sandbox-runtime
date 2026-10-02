@@ -38,6 +38,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv(slice6VaultTrustSwitchEnv) != "1" {
 		t.Skip("set " + slice6VaultTrustSwitchEnv + "=1 for the real Vault trust switch")
 	}
+	if os.Getenv(slice6GuestMaterialEnv) == "1" && os.Getenv(slice6BreakGlassProcessEnv) != "1" {
+		t.Fatal("live Guest material agent requires the same-run break-glass consume listener")
+	}
 	if os.Getuid() == 0 {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
@@ -458,9 +461,11 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							var onManagedReady func()
 							if os.Getenv(slice6GuestMaterialEnv) == "1" {
 								onManagedReady = func() {
-									slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
-										slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-											guestPublicKeyDigest, guestSocketVolumes, anchorFiles)
+									slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func() {
+										slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
+											slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+												guestPublicKeyDigest, guestSocketVolumes, anchorFiles)
+										})
 									})
 								}
 							}
@@ -482,9 +487,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				}
 			}
 		}
-		if os.Getenv(slice6BreakGlassProcessEnv) == "1" {
+		if os.Getenv(slice6BreakGlassProcessEnv) == "1" && os.Getenv(slice6GuestMaterialEnv) != "1" {
 			revokeBootstrapRoot()
-			slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes)
+			slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, nil)
 		}
 	}
 	revokeBootstrapRoot()
@@ -615,7 +620,9 @@ func slice6VaultSignFinalLeaf(t *testing.T, ctx context.Context, run slice6Docke
 		"issuer_ref=" + root.ID, "allowed_uri_sans=" + uri, "require_cn=false",
 		"use_csr_common_name=false", "use_csr_sans=true", "allow_subdomains=false", "allow_ip_sans=false",
 		"enforce_hostnames=true", "max_ttl=20m", "key_type=ec", "key_bits=256",
-		"key_usage=DigitalSignature", "code_signing_flag=false", "email_protection_flag=false"}, flags...)
+		"key_usage=DigitalSignature", "code_signing_flag=false", "email_protection_flag=false",
+		"not_before_duration=" + strconv.FormatInt(phase6security.Slice6VaultRoleBackdateSeconds, 10) + "s",
+		"basic_constraints_valid_for_non_ca=true"}, flags...)
 	if _, err := run.docker(ctx, slice6VaultExec(serverID, true, roleArguments...)...); err != nil {
 		t.Fatal("final Vault leaf signing role creation failed")
 	}
@@ -644,6 +651,34 @@ func slice6VaultSignFinalLeaf(t *testing.T, ctx context.Context, run slice6Docke
 	if len(leaf.URIs) != 1 || leaf.URIs[0].String() != wantURI || !reflect.DeepEqual(leaf.ExtKeyUsage, []x509.ExtKeyUsage{wantEKU}) ||
 		(client && len(leaf.DNSNames) != 0) || (!client && !reflect.DeepEqual(leaf.DNSNames, []string{"vault.sandbox-runtime.test"})) {
 		t.Fatal("final Vault leaf identity/EKU does not match its exact role")
+	}
+	if !client {
+		var mask uint16
+		set := func(bit uint16, valid bool) {
+			if valid {
+				mask |= 1 << bit
+			}
+		}
+		now := time.Now().UTC()
+		set(0, !leaf.IsCA && leaf.BasicConstraintsValid)
+		set(1, leaf.KeyUsage == x509.KeyUsageDigitalSignature)
+		set(2, reflect.DeepEqual(leaf.ExtKeyUsage, []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}) && len(leaf.UnknownExtKeyUsage) == 0)
+		set(3, leaf.Subject.String() == "")
+		set(4, len(leaf.URIs) == 1 && leaf.URIs[0] != nil && leaf.URIs[0].String() == wantURI)
+		set(5, reflect.DeepEqual(leaf.DNSNames, []string{"vault.sandbox-runtime.test"}))
+		set(6, len(leaf.IPAddresses) == 0 && len(leaf.EmailAddresses) == 0)
+		set(7, leaf.NotBefore.Before(leaf.NotAfter) && !now.Before(leaf.NotBefore) && now.Before(leaf.NotAfter))
+		set(8, leaf.NotAfter.Sub(leaf.NotBefore) <= time.Hour)
+		roots := x509.NewCertPool()
+		roots.AddCert(root.Certificate)
+		chains, verifyErr := leaf.Verify(x509.VerifyOptions{Roots: roots, CurrentTime: now,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}})
+		set(9, verifyErr == nil && len(chains) == 1 && len(chains[0]) == 2 && bytes.Equal(chains[0][1].Raw, root.Certificate.Raw))
+		t.Logf("NON-RELEASE final Vault server strict leaf diagnostic: mask=%03x is_ca=%t basic_constraints_valid=%t duration_ms=%d",
+			mask, leaf.IsCA, leaf.BasicConstraintsValid, leaf.NotAfter.Sub(leaf.NotBefore).Milliseconds())
+		if mask != 0x3ff {
+			t.Fatal("final Vault server leaf cannot satisfy strict live TLS peer verification")
+		}
 	}
 	return []byte(signed.Data.Certificate)
 }
@@ -681,11 +716,15 @@ func slice6VaultAssertRoleIssuer(t *testing.T, ctx context.Context, run slice6Do
 	response, err := run.docker(ctx, slice6VaultExec(serverID, true, "read", "-format=json", "pki/roles/"+role)...)
 	var document struct {
 		Data struct {
-			IssuerRef string `json:"issuer_ref"`
+			IssuerRef                     string `json:"issuer_ref"`
+			NotBeforeDuration             int64  `json:"not_before_duration"`
+			BasicConstraintsValidForNonCA bool   `json:"basic_constraints_valid_for_non_ca"`
 		} `json:"data"`
 	}
-	if err != nil || json.Unmarshal(response, &document) != nil || document.Data.IssuerRef != issuerID {
-		t.Fatal("Vault role issuer_ref changed or is not the fixed general issuer")
+	if err != nil || json.Unmarshal(response, &document) != nil || document.Data.IssuerRef != issuerID ||
+		document.Data.NotBeforeDuration != phase6security.Slice6VaultRoleBackdateSeconds ||
+		!document.Data.BasicConstraintsValidForNonCA {
+		t.Fatal("Vault final role issuer or strict leaf parameters changed")
 	}
 }
 

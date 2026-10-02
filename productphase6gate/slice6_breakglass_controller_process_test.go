@@ -112,7 +112,7 @@ func slice6BuildBreakGlassControllerInput(composed slice6VaultComposedInputs) ([
 }
 
 func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, socketVolumes map[string]string) {
+	composed slice6VaultComposedInputs, socketVolumes map[string]string, onReady func()) {
 	t.Helper()
 	profile := composed.Profile
 	if len(socketVolumes) != 65 || phase6security.VerifySlice6BreakGlassBoundaries(profile) != nil {
@@ -373,6 +373,12 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 	defer clear(replacementInput)
 	replacementCompleted := startAndAwait(replacementID, replacementInput)
 	slice6ExerciseBreakGlassRestart(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID], seed)
+	// The replay record has a one-minute lifetime. Check it immediately
+	// across the restart, then run the slower Guest dependency chain while
+	// the replacement controller remains live for delivery/consume.
+	if onReady != nil {
+		onReady()
+	}
 	stopAndDrain(replacementID, replacementCompleted)
 	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
 	if _, err := run.docker(ctx, "rm", replacementID); err != nil {
@@ -419,8 +425,9 @@ func slice6InspectStoppedBreakGlassController(t *testing.T, ctx context.Context,
 }
 
 type slice6BreakGlassRestartSeed struct {
-	request   breakglass.AccessRequest
-	replayJTI string
+	request    breakglass.AccessRequest
+	replayJTI  string
+	acceptedAt time.Time
 }
 
 func slice6ExerciseBreakGlassControlChain(t *testing.T, ctx context.Context, run slice6DockerRun,
@@ -515,6 +522,7 @@ func slice6ExerciseBreakGlassControlChain(t *testing.T, ctx context.Context, run
 	if err != nil {
 		t.Fatal(err)
 	}
+	acceptedAt := time.Now()
 	issued := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "issue",
 		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.IssueType, Command: &issue}, true)
 	if issued.Revision != 0 || issued.Capability == nil ||
@@ -524,14 +532,14 @@ func slice6ExerciseBreakGlassControlChain(t *testing.T, ctx context.Context, run
 		issued.Capability.BindingDigest != request.BindingDigest || issued.Capability.MaxUses != 1 {
 		t.Fatal("issued break-glass capability drift")
 	}
-	return slice6BreakGlassRestartSeed{request: request, replayJTI: issue.JTI}
+	return slice6BreakGlassRestartSeed{request: request, replayJTI: issue.JTI, acceptedAt: acceptedAt}
 }
 
 func slice6ExerciseBreakGlassRestart(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, control phase6security.Slice6BreakGlassSocketBinding, volume string,
 	seed slice6BreakGlassRestartSeed) {
 	t.Helper()
-	if seed.request.RequestID == "" || seed.replayJTI == "" || seed.replayJTI == seed.request.JTI {
+	if seed.request.RequestID == "" || seed.replayJTI == "" || seed.replayJTI == seed.request.JTI || seed.acceptedAt.IsZero() {
 		t.Fatal("replacement controller replay seed invalid")
 	}
 	key, err := slice6ReadPrivateSigningKey(filepath.Join(composed.BreakGlassSignerDirectory,
@@ -561,8 +569,17 @@ func slice6ExerciseBreakGlassRestart(t *testing.T, ctx context.Context, run slic
 		fresh.JTI == replayed.JTI {
 		t.Fatal("replacement controller fresh and replay requests not distinct")
 	}
+	beforeReplay := time.Since(seed.acceptedAt)
+	if beforeReplay < 0 || beforeReplay >= 50*time.Second {
+		t.Fatalf("break-glass restart replay precondition expired before attempt: elapsed_ms=%d", beforeReplay.Milliseconds())
+	}
 	slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "restart-replay",
 		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &replayed}, false)
+	afterReplay := time.Since(seed.acceptedAt)
+	if afterReplay < 0 || afterReplay >= time.Minute {
+		t.Fatalf("break-glass restart replay observation exceeded nonce retention: elapsed_ms=%d", afterReplay.Milliseconds())
+	}
+	t.Logf("real break-glass replacement rejected persisted nonce within one-minute retention: elapsed_ms=%d", afterReplay.Milliseconds())
 	result := slice6FiniteBreakGlassControlTask(t, ctx, run, composed, control, volume, "restart-submit",
 		breakglass.WireRequest{Protocol: breakglass.ProtocolID, Type: breakglass.SubmitType, Request: &fresh}, true)
 	if result.Revision != 1 || result.Capability != nil {

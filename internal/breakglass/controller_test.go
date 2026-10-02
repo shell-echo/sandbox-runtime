@@ -211,6 +211,30 @@ func TestDualApprovalCapabilityIsOnlineSingleUseAndRestartDurable(t *testing.T) 
 	}
 }
 
+func TestOriginalSignedRequestExpiresAtDeadlineAndBeyondNonceRetention(t *testing.T) {
+	for _, scenario := range []struct {
+		name    string
+		advance time.Duration
+	}{
+		{"exact-deadline", 30 * time.Second},
+		{"after-nonce-retention", time.Minute + time.Nanosecond},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			value := newFixture(t)
+			original := accessRequest(t, value, secretref.PurposeTLSCertificate, 5*time.Minute)
+			value.clock.Advance(scenario.advance)
+			// The original signature stays cryptographically valid, but its
+			// unchanged deadline must reject even with an empty replay ledger.
+			if _, err := value.controller.Submit(context.Background(), original); !errors.Is(err, ErrDenied) {
+				t.Fatalf("expired original signed request error=%v", err)
+			}
+			if len(value.controller.ledger.Requests) != 0 || len(value.controller.ledger.Replays) != 0 {
+				t.Fatal("expired signed request changed the ledger")
+			}
+		})
+	}
+}
+
 func TestApprovalMustBeTwoDistinctActorsAndSeparateFromRequesterTarget(t *testing.T) {
 	value := newFixture(t)
 	request := accessRequest(t, value, secretref.PurposeTLSCertificate, 5*time.Minute)

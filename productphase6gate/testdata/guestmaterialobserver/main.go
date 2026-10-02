@@ -15,6 +15,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/restrictedunix"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref/workloadagent"
 )
@@ -30,16 +31,16 @@ type input struct {
 }
 
 func main() {
-	if err := run(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "guest material observation failed")
+	if stage, resolveMillis := run(); stage != "" {
+		_, _ = fmt.Fprintf(os.Stderr, "guest-material-observation stage=%s resolve_ms=%d\n", stage, resolveMillis)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run() (string, int64) {
 	document, err := io.ReadAll(io.LimitReader(os.Stdin, (8<<10)+1))
 	if err != nil || len(document) == 0 || len(document) > 8<<10 {
-		return errors.New("invalid owner-side input")
+		return "input", -1
 	}
 	defer clear(document)
 	decoder := json.NewDecoder(bytes.NewReader(document))
@@ -50,30 +51,56 @@ func run() error {
 		value.AgentUID == value.OwnerUID || value.AgentGID == value.OwnerGID ||
 		value.Binding.Validate() != nil || value.Binding.Purpose != secretref.PurposeGuestSigningKey ||
 		value.Binding.Role != secretref.RoleGuest || len(value.ExpectedPublicKeyDigest) != len("sha256:")+64 {
-		return errors.New("invalid owner-side identity or binding")
+		return "identity-or-binding", -1
+	}
+	layout := restrictedunix.Layout{DirectoryMode: 0o710, SocketMode: 0o666,
+		OwnerUID: value.AgentUID, DirectoryGID: value.OwnerGID}
+	if !restrictedunix.ValidateParent(value.SocketPath, layout) {
+		return "parent-layout", -1
+	}
+	if !restrictedunix.ValidateSocket(value.SocketPath, layout) {
+		return "socket-layout", -1
 	}
 	client, err := workloadagent.NewProductionV2(workloadagent.Config{SocketPath: value.SocketPath,
 		ExpectedUID: value.AgentUID, ExpectedGID: value.AgentGID, Role: secretref.RoleGuest,
 		OperationTimeout: 15 * time.Second, Now: time.Now}, value.OwnerGID)
 	if err != nil {
-		return err
+		return "client-init", -1
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	started := time.Now()
 	material, err := client.ResolveSecret(ctx, value.Binding)
+	resolveMillis := time.Since(started).Milliseconds()
 	if err != nil {
-		return err
+		switch {
+		case errors.Is(err, context.Canceled):
+			return "resolve-canceled", resolveMillis
+		case errors.Is(err, context.DeadlineExceeded):
+			return "resolve-deadline", resolveMillis
+		case errors.Is(err, secretref.ErrRevoked):
+			return "resolve-revoked", resolveMillis
+		case errors.Is(err, secretref.ErrExpired):
+			return "resolve-expired", resolveMillis
+		default:
+			return "resolve-unavailable", resolveMillis
+		}
 	}
 	defer material.Destroy()
-	if material.Binding != value.Binding || material.Validate(time.Now().UTC()) != nil ||
-		len(material.Bytes) != ed25519.PrivateKeySize {
-		return errors.New("resolved material does not match the exact Guest binding")
+	if material.Binding != value.Binding {
+		return "material-binding", resolveMillis
+	}
+	if material.Validate(time.Now().UTC()) != nil {
+		return "material-window", resolveMillis
+	}
+	if len(material.Bytes) != ed25519.PrivateKeySize {
+		return "material-size", resolveMillis
 	}
 	public := ed25519.PrivateKey(material.Bytes).Public().(ed25519.PublicKey)
 	digest := sha256.Sum256(public)
 	if "sha256:"+hex.EncodeToString(digest[:]) != value.ExpectedPublicKeyDigest {
-		return errors.New("resolved Guest key differs from Vault create-only material")
+		return "public-digest", resolveMillis
 	}
 	_, _ = fmt.Fprintln(os.Stdout, "guest-material-resolved=exact-vault-key")
-	return nil
+	return "", resolveMillis
 }
