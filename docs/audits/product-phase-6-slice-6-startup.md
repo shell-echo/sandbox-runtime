@@ -4379,3 +4379,44 @@ not evidence already obtained here.
 The successor's focused tagged race/shuffle test, tagged vet, full repository
 race/shuffle/count-one test, ordinary vet, Product Contract verifier and diff
 check passed before it was selected for any further real issuer diagnostic.
+
+Follow-up 2026-10-04 (one further Sandbox-authorized ordinary, non-race R4/E3
+real issuer diagnostic, **failed**): clean E-only gate/observer revision
+`f0403fbe370983db327efc459de1e35a6b30e26f`, tree
+`45c04207300788bd775d987779505b50b9693c9b`, paired with the same clean
+R4 runtime/terminal and independent E3 fixture. New run
+`c67fee7bd535215e91cae2b998f44c37` froze Profile
+`sha256:947895a14644701fbb4fdf3f73b9d596df4dba8efc466f9c269774a66cdee385`.
+Source/archive/image and pinned observer/fixture/operator hashes, non-root
+mounts and continuous capacity admission passed. Real Vault server and
+PostgreSQL leaves, PostgreSQL PID1, two controller PID1 processes, Product
+migration with same-PG ledger/ownership/grants, Guest initial durable binding
+(generation 1, one event, one audit), Product `serve` ready→SQL-edge loss
+not-ready→recovered ready, and Guest material-agent/break-glass consume and
+replay/restart paths were observed. Guest runtime PID1 and live revoke were
+**not** observed. The first retained business error was `Product live dependent
+gate failed` → `Guest private signer socket volume missing` during the Guest
+runtime's pre-create socket-volume admission. No capacity monitor failure or
+emergency-stop error was reported in this run. It exited failed in 440.30 s.
+
+Read-only source analysis narrows the missing socket to a likely gate-topology
+gap, not a proven runtime or Docker defect: the Guest launch plan requires the
+`guest-tls-agent`→`guest-runtime` signer socket; the Guest agent input step
+adds only the distinct `guest-agent-tls-agent`→`guest-agent` socket and Guest
+material socket. The certificate-controller allocation covers agent→controller
+directories, not each agent→subject signer socket. The live chain starts the
+Guest material agent's TLS signer but does not start the separate Guest
+runtime TLS signer. This hypothesis needs a bounded no-issuer topology check
+before any correction or new real signing attempt.
+
+Both controllers persisted quiesce receipts, but the certificate controller
+still retained its sticky terminal credential-revoke failure. The independent
+v2 terminal operator confirmed three certificates, two token accessors,
+complete CRL and self-revoke; this does not erase the controller error. The
+new shared exact Docker cleanup reported no error. Independent post-run
+label inventory found zero containers, networks and volumes; both recorded
+Vault anonymous volume IDs were absent, all three source checkouts were
+clean, and the diagnostic log was mode 0600. Docker cleanup does not prove
+credential revocation. This run consumed its single issuer permission and
+does not authorize an automatic retry, complete the 16-scenario gate, or
+produce a release manifest. Phase 6 remains **5/15**.
