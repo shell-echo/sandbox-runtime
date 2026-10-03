@@ -210,6 +210,92 @@ func TestPeerCRLGuardRejectsAgentSourceMappingDrift(t *testing.T) {
 	}
 }
 
+func TestPeerCRLBootstrapLocalFailureClassesAreClosed(t *testing.T) {
+	for _, candidate := range []struct {
+		name  string
+		setup func(*testing.T, guardFixture) context.Context
+		want  PeerCRLFailureClass
+	}{
+		{"parent-canceled", func(t *testing.T, f guardFixture) context.Context {
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			return ctx
+		}, PeerCRLParentCanceledFailure},
+		{"parent-deadline", func(t *testing.T, f guardFixture) context.Context {
+			ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+			t.Cleanup(cancel)
+			return ctx
+		}, PeerCRLParentDeadlineFailure},
+		{"internal-deadline", func(t *testing.T, f guardFixture) context.Context {
+			f.guard.timeout = 10 * time.Millisecond
+			f.guard.pullPermit <- struct{}{}
+			return t.Context()
+		}, PeerCRLInternalDeadlineFailure},
+		{"local-clock", func(t *testing.T, f guardFixture) context.Context {
+			f.guard.lastNow = f.now.Add(time.Second)
+			return t.Context()
+		}, PeerCRLLocalGuardFailure},
+		{"agent-error", func(t *testing.T, f guardFixture) context.Context {
+			f.client.err = errors.New("password=private " + string(bytes.Repeat([]byte("x"), 32768)))
+			return t.Context()
+		}, PeerCRLAgentResponseFailure},
+		{"binding", func(t *testing.T, f guardFixture) context.Context {
+			f.client.response.SourceMappingDigest = "sha256:" + hex.EncodeToString(bytes.Repeat([]byte{3}, 32))
+			return t.Context()
+		}, PeerCRLBindingFailure},
+		{"crl-semantic", func(t *testing.T, f guardFixture) context.Context {
+			f.client.response.CRLNumber = "999"
+			return t.Context()
+		}, PeerCRLSemanticFailure},
+	} {
+		t.Run(candidate.name, func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			ctx := candidate.setup(t, f)
+			err := f.guard.Bootstrap(ctx)
+			if !errors.Is(err, ErrPeerCRLUnavailable) || PeerCRLFailureOf(err) != candidate.want ||
+				err.Error() != ErrPeerCRLUnavailable.Error() || f.guard.Ready() {
+				t.Fatalf("closed failure: class=%q err=%v ready=%v", PeerCRLFailureOf(err), err, f.guard.Ready())
+			}
+		})
+	}
+	if PeerCRLFailureOf(errors.New("untrusted")) != PeerCRLUnknownFailure {
+		t.Fatal("untyped error did not remain unknown")
+	}
+}
+
+func TestPeerCRLFailureParentContextHasFixedPriority(t *testing.T) {
+	parent, cancel := context.WithCancel(t.Context())
+	operation, stop := context.WithTimeout(parent, time.Nanosecond)
+	defer stop()
+	cancel()
+	<-operation.Done()
+	err := peerCRLContextFailure(parent, operation)
+	if PeerCRLFailureOf(err) != PeerCRLParentCanceledFailure ||
+		!errors.Is(err, context.Canceled) || !errors.Is(err, ErrPeerCRLUnavailable) ||
+		errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("parent cancellation lost fixed priority: %v", err)
+	}
+	deadlineParent, deadlineCancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer deadlineCancel()
+	deadlineOperation, deadlineStop := context.WithTimeout(deadlineParent, time.Nanosecond)
+	defer deadlineStop()
+	err = peerCRLContextFailure(deadlineParent, deadlineOperation)
+	if PeerCRLFailureOf(err) != PeerCRLParentDeadlineFailure || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("parent deadline lost fixed priority: %v", err)
+	}
+}
+
+func TestPeerCRLGuardMalformedVerifiedChainIsLocalFailure(t *testing.T) {
+	f := newGuardFixture(t)
+	state := f.state
+	state.VerifiedChains = [][]*x509.Certificate{{nil, f.issuer}}
+	if err := f.guard.CheckHandshake(t.Context(), state); PeerCRLFailureOf(err) != PeerCRLLocalGuardFailure ||
+		!errors.Is(err, ErrPeerCRLUnavailable) || f.client.calls.Load() != 0 {
+		t.Fatal("malformed verified chain reached agent")
+	}
+}
+
 func TestPeerCRLGuardPollBootstrapsWithoutActiveConnection(t *testing.T) {
 	f := newGuardFixture(t)
 	f.client.response = f.response(t, 1, false, "fixed-source")

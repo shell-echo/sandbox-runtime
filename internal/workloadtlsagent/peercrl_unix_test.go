@@ -7,6 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -146,4 +149,54 @@ func TestPeerCRLV2BootstrapUsesPinnedIssuerDigest(t *testing.T) {
 	if _, err := fixture.client.BootstrapPeerCRL(t.Context(), binding, peerCRLTestDigest("other")); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("wrong fixed issuer digest admitted: %v", err)
 	}
+}
+
+func TestPeerCRLClientFailureClassesDoNotExposeLocalDetails(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	issuerDER, crlDER := peerCRLTestDER(t, now)
+	issuerHash := sha256.Sum256(issuerDER)
+	binding := PeerCRLBinding{ProfileDigest: peerCRLTestDigest("profile"),
+		SourceMappingDigest: peerCRLTestDigest("mapping"), EdgeID: "product-provider-contract",
+		LocalPrincipalDigest: peerCRLTestDigest("product"), Direction: "outbound", PeerAnchorID: "internal-server-ca"}
+	legacy := newUnixFixtureWithPeer(t, 2, &testPeerCRLProvider{issuerDER: issuerDER, crlDER: crlDER})
+	if _, err := legacy.client.BootstrapPeerCRL(t.Context(), binding, "invalid"); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("malformed pinned issuer was accepted")
+	} else if class, ok := PeerCRLClientFailureOf(err); !ok || class != PeerCRLRequestBuildFailure || err.Error() != ErrUnavailable.Error() {
+		t.Fatalf("request failure class: %q %v", class, err)
+	}
+	binding.EdgeID = "wrong-edge"
+	if _, err := legacy.client.BootstrapPeerCRL(t.Context(), binding, "sha256:"+hex.EncodeToString(issuerHash[:])); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("agent error frame accepted")
+	} else if class, ok := PeerCRLClientFailureOf(err); !ok || class != PeerCRLResponseFailure || err.Error() != ErrUnavailable.Error() {
+		t.Fatalf("agent response failure class: %q %v", class, err)
+	}
+	binding.EdgeID = "product-provider-contract"
+	legacy.close(t)
+	if _, err := legacy.client.BootstrapPeerCRL(t.Context(), binding, "sha256:"+hex.EncodeToString(issuerHash[:])); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("removed agent socket accepted request")
+	} else if class, ok := PeerCRLClientFailureOf(err); !ok || class != PeerCRLSocketPeerFailure || err.Error() != ErrUnavailable.Error() {
+		t.Fatalf("socket failure class: %q %v", class, err)
+	}
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: filepath.Join(legacy.dir, "agent.sock"), Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if err := os.Chmod(filepath.Join(legacy.dir, "agent.sock"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan struct{})
+	go func() {
+		connection, acceptErr := listener.AcceptUnix()
+		if acceptErr == nil {
+			_ = connection.Close()
+		}
+		close(ended)
+	}()
+	if _, err := legacy.client.BootstrapPeerCRL(t.Context(), binding, "sha256:"+hex.EncodeToString(issuerHash[:])); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("truncated agent frame accepted")
+	} else if class, ok := PeerCRLClientFailureOf(err); !ok || class != PeerCRLTransportFailure || err.Error() != ErrUnavailable.Error() {
+		t.Fatalf("transport failure class: %q %v", class, err)
+	}
+	<-ended
 }

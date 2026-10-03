@@ -745,6 +745,22 @@ candidate after any runtime change. The R8 migration failure and the R9
 diagnostic boundary are recorded in the
 [Slice 6 PostgreSQL component audit](audits/product-phase-6-slice-6-postgres-v2-component.md).
 
+For the successor peer-bootstrap correction, agent and controller constructors
+must privately copy and completely validate the Profile/source snapshot before
+compiling their bounded source index. Per-request signed authority, Unix peer,
+deadline, purpose/owner and full CRL verification remain unchanged. The
+one-shot migration may additionally print only a reviewed `class=` suffix for
+the `peer-bootstrap` stage; no raw cause enters it. The E-only bounded
+observer must reject missing, duplicate, unknown, oversized or multiline
+classes and compare its closed set against the frozen runtime producer source.
+Measure constructor cost separately from first-pull cost under the actual
+agent/controller quotas. The agent's `manager.Bootstrap` has a separate
+15-second parent deadline after provider construction; the Product migration
+peer-CRL pull is bounded to 2 seconds, while the harness observes 45 seconds
+from Docker start to signer socket readiness. A green component measurement
+is not a substitute
+for the source-bound real issuer/SQL gate and exact cleanup.
+
 Browser action-ingress external credentials have two distinct Gateway-family
 secret purposes: `action_history_witness_dsn` and
 `capacity_valkey_credentials`. The witness binding belongs only to the

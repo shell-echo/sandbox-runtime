@@ -151,15 +151,16 @@ func derivePeerCRLBudget(staleness, drain, operationTimeout time.Duration) (peer
 func (g *PeerCRLGuard) CheckHandshake(ctx context.Context, state tls.ConnectionState) error {
 	if g == nil || ctx == nil || state.Version != tls.VersionTLS13 || len(state.VerifiedChains) != 1 ||
 		len(state.VerifiedChains[0]) < 2 || len(state.PeerCertificates) < 1 ||
+		state.VerifiedChains[0][0] == nil || state.PeerCertificates[0] == nil ||
 		!bytes.Equal(state.PeerCertificates[0].Raw, state.VerifiedChains[0][0].Raw) {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
-	if err := ctx.Err(); err != nil {
+	if err := peerCRLContextFailure(ctx, nil); err != nil {
 		return err
 	}
 	leaf, issuer := state.VerifiedChains[0][0], state.VerifiedChains[0][1]
 	if leaf == nil || issuer == nil || len(leaf.Raw) == 0 || len(issuer.Raw) == 0 {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	return g.refresh(ctx, issuer.Raw, leaf.Raw, false)
 }
@@ -169,23 +170,23 @@ func (g *PeerCRLGuard) CheckHandshake(ctx context.Context, state tls.ConnectionS
 // not identify a peer or add the issuer to TLS trust roots.
 func (g *PeerCRLGuard) Bootstrap(ctx context.Context) error {
 	if g == nil || ctx == nil {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	return g.refresh(ctx, nil, nil, true)
 }
 
 func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, bootstrap bool) (result error) {
 	if g == nil || ctx == nil {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
-	if err := ctx.Err(); err != nil {
+	if err := peerCRLContextFailure(ctx, nil); err != nil {
 		return err
 	}
 	if !bootstrap && (len(issuerDER) == 0 || len(leafDER) == 0) {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	if !bootstrap && peerCRLIssuerDigest(issuerDER) != g.expectedIssuerDigest {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLBindingFailure, nil)
 	}
 	g.mu.Lock()
 	startedFailureSequence := g.failureSequence
@@ -206,20 +207,20 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	operationContext, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
 	if g.pullPermit == nil {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	select {
 	case g.pullPermit <- struct{}{}:
 		defer func() { <-g.pullPermit }()
 	case <-operationContext.Done():
-		return ErrPeerCRLUnavailable
+		return peerCRLContextFailure(ctx, operationContext)
 	}
 	g.mu.Lock()
 	start := g.now().UTC()
 	if g.failed || (!g.lastNow.IsZero() && start.Before(g.lastNow)) {
 		g.failed = true
 		g.mu.Unlock()
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	g.lastNow = start
 	g.mu.Unlock()
@@ -232,8 +233,11 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 		response, err = g.client.PeerCRL(operationContext, g.binding, issuerDER)
 	}
 	defer clear(response.CRLDER)
-	if err != nil || operationContext.Err() != nil {
-		return ErrPeerCRLUnavailable
+	if contextFailure := peerCRLContextFailure(ctx, operationContext); contextFailure != nil {
+		return contextFailure
+	}
+	if err != nil {
+		return peerCRLAgentFailure(err)
 	}
 	verifiedAt := g.now().UTC()
 	issuerDigest := peerCRLIssuerDigest(issuerDER)
@@ -242,7 +246,7 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 		response.EdgeID != g.binding.EdgeID || response.Direction != g.binding.Direction ||
 		response.PeerAnchorID != g.binding.PeerAnchorID || response.IssuerDigest != issuerDigest ||
 		issuerDigest != g.expectedIssuerDigest || !bytes.Equal(response.IssuerDER, issuerDER) {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLBindingFailure, nil)
 	}
 	thisUpdate, firstErr := parsePeerCRLTime(response.ThisUpdate)
 	nextUpdate, secondErr := parsePeerCRLTime(response.NextUpdate)
@@ -250,39 +254,39 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	if firstErr != nil || secondErr != nil || thirdErr != nil ||
 		collectedAt.Before(verifiedAt.Add(-g.maxStaleness)) || collectedAt.After(verifiedAt.Add(5*time.Second)) ||
 		collectedAt.Before(thisUpdate) || !collectedAt.Before(nextUpdate) {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 	}
 	verified, err := workloadpki.VerifyCRLForIssuer(workloadpki.RevocationSnapshot{DER: response.CRLDER,
 		ThisUpdate: thisUpdate, NextUpdate: nextUpdate}, issuerDER, verifiedAt)
 	if err != nil || verified.IssuerDigest() != issuerDigest || verified.CRLDigest() != response.CRLDigest ||
 		verified.Number().String() != response.CRLNumber {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	observedAt := g.now().UTC()
 	if g.failed || observedAt.Before(g.lastNow) {
 		g.failed = true
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	if g.failureSequence != startedFailureSequence {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	g.lastNow = observedAt
 	if collectedAt.Before(observedAt.Add(-g.maxStaleness)) || collectedAt.After(observedAt.Add(5*time.Second)) ||
 		observedAt.Before(verified.ThisUpdate()) || !observedAt.Before(verified.NextUpdate()) {
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 	}
 	if g.sourceID != "" && (g.sourceID != response.SourceID || g.issuerDigest != issuerDigest) {
 		g.failed = true
-		return ErrPeerCRLUnavailable
+		return newPeerCRLFailure(PeerCRLBindingFailure, nil)
 	}
 	if g.number != nil {
 		comparison := verified.Number().Cmp(g.number)
 		if comparison < 0 || verified.ThisUpdate().Before(g.thisUpdate) ||
 			(comparison == 0 && (verified.CRLDigest() != g.crlDigest || !verified.ThisUpdate().Equal(g.thisUpdate))) {
 			g.failed = true
-			return ErrPeerCRLUnavailable
+			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 	}
 	for key, prior := range g.observedRevoked {
@@ -292,7 +296,7 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 		}
 		if !verified.RevokesSerial(prior.serial) {
 			g.failed = true
-			return ErrPeerCRLUnavailable
+			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 	}
 	g.sourceID, g.issuerDigest = response.SourceID, issuerDigest
@@ -308,14 +312,17 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
 		if len(g.observedRevoked) >= maxObservedRevokedPeers {
 			g.failed = true
-			return ErrPeerCRLUnavailable
+			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 		leaf, parseErr := x509.ParseCertificate(leafDER)
 		if parseErr != nil {
-			return ErrPeerCRLUnavailable
+			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 		g.observedRevoked[leaf.SerialNumber.String()] = revokedPeerObservation{
 			serial: new(big.Int).Set(leaf.SerialNumber), notAfter: leaf.NotAfter}
+	}
+	if checkErr != nil && !errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
+		return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 	}
 	return checkErr
 }

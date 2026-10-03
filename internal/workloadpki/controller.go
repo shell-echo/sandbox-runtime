@@ -3,7 +3,6 @@ package workloadpki
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -70,6 +69,13 @@ type Controller struct {
 	ledger           Ledger
 	peerCRLProfile   *phase6security.Profile
 	peerCRLSources   *phase6security.PeerCRLSources
+	peerCRLIdentity  peerCRLSourceAuthorizer
+}
+
+type peerCRLSourceAuthorizer interface {
+	AuthorizedSourceID(profileDigest, mappingDigest, edgeID, localPrincipalDigest,
+		direction, peerAnchorID, issuerDigest, postgresOwner string) (string, error)
+	MappingDigest() string
 }
 
 func NewController(config ControllerConfig) (*Controller, error) {
@@ -81,12 +87,20 @@ func NewController(config ControllerConfig) (*Controller, error) {
 	if (config.PeerCRLProfile == nil) != (config.PeerCRLSources == nil) {
 		return nil, ErrUnavailable
 	}
+	// Freeze policy purpose/owner and signature authority before validating
+	// issuer mappings. A caller cannot mutate these slices between validation
+	// and the controller's later read-only request path.
+	policies := make([]Policy, len(config.Policies))
+	for i, policy := range config.Policies {
+		policy.PublicKey = append(ed25519.PublicKey(nil), policy.PublicKey...)
+		policy.DNSNames = append([]string(nil), policy.DNSNames...)
+		policy.Usages = append([]string(nil), policy.Usages...)
+		policies[i] = policy
+	}
+	config.Policies = policies
 	if config.PeerCRLProfile != nil {
-		if config.PeerCRLSources.Validate(*config.PeerCRLProfile) != nil {
-			return nil, ErrUnavailable
-		}
-		authority, ok := config.Authority.(PeerIssuerAuthority)
-		if !ok || authority.ValidatePeerSources(config.PeerCRLSources.Sources) != nil {
+		_, ok := config.Authority.(PeerIssuerAuthority)
+		if !ok {
 			return nil, ErrUnavailable
 		}
 		policyAuthority, ok := config.Authority.(PolicyIssuerAuthority)
@@ -99,29 +113,14 @@ func NewController(config ControllerConfig) (*Controller, error) {
 		maximumActive: config.MaximumActive, maximumLedgerAge: config.MaximumLedgerAge}
 	controller.permit <- struct{}{}
 	if config.PeerCRLProfile != nil {
-		profileDocument, err := json.Marshal(config.PeerCRLProfile)
-		if err != nil {
-			controller.Close()
-			return nil, ErrUnavailable
-		}
-		profile, err := phase6security.Decode(profileDocument)
-		clear(profileDocument)
-		if err != nil {
-			controller.Close()
-			return nil, ErrUnavailable
-		}
-		sourcesDocument, err := json.Marshal(config.PeerCRLSources)
-		if err != nil {
-			controller.Close()
-			return nil, ErrUnavailable
-		}
-		sources, err := phase6security.DecodePeerCRLSources(sourcesDocument, profile)
-		clear(sourcesDocument)
-		if err != nil {
+		profile, sources, identity, err := phase6security.CompilePrivatePeerCRLAuthorizer(
+			*config.PeerCRLProfile, *config.PeerCRLSources)
+		if err != nil || config.Authority.(PeerIssuerAuthority).ValidatePeerSources(sources.Sources) != nil {
 			controller.Close()
 			return nil, ErrUnavailable
 		}
 		controller.peerCRLProfile, controller.peerCRLSources = &profile, &sources
+		controller.peerCRLIdentity = identity
 	}
 	for _, policy := range config.Policies {
 		if policy.Validate() != nil {
@@ -132,9 +131,6 @@ func NewController(config ControllerConfig) (*Controller, error) {
 			controller.Close()
 			return nil, ErrUnavailable
 		}
-		policy.PublicKey = append(ed25519.PublicKey(nil), policy.PublicKey...)
-		policy.DNSNames = append([]string(nil), policy.DNSNames...)
-		policy.Usages = append([]string(nil), policy.Usages...)
 		controller.policies[policy.ID] = policy
 	}
 	ledger, err := loadLedger(config.LedgerPath)

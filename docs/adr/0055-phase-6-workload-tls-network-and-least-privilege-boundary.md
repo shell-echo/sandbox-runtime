@@ -2334,3 +2334,36 @@ that the 2-second PostgreSQL peer-CRL bootstrap budget is adequate under the
 full process graph. Source-bound builds, race/shuffle and vet, Contract lock,
 real same-run gate, exact cleanup, and its strict evidence manifest remain
 separate acceptance requirements. Phase 6 remains **5/15**.
+
+## Slice 6 Product migration peer-CRL hot-path correction (2026-10-03)
+
+The R10 real Product migration stopped at first peer-CRL bootstrap before any
+confirmed SQL DDL. A no-new-issuer sample under the reviewed 50m TLS-agent
+quota found that repeating full final-Profile/source validation in each
+agent/controller source lookup could exceed the guard's two-second pull bound.
+This is a component cost observation, not proof of the deleted run's cause.
+
+Each agent and controller now privately copies the exact canonical Profile and
+complete peer-source document, fully validates them once at construction, and
+compiles a finite lookup for profile/mapping digest, edge, local principal,
+direction, anchor, issuer digest and PostgreSQL owner. The controller derives
+the owner independently from a copied, validated signer policy; ordinary
+policies cannot read a PostgreSQL logical peer and a PostgreSQL-purpose policy
+cannot read ordinary or another owner's peer. The index retains only opaque
+source IDs and scalar bindings, not Vault coordinates or CRL evidence. The
+existing mutable-document API continues full validation per call. Any new
+Profile/source revision requires a new constructor and the existing restart
+and source-reopen gates. Request signature, nonce, Unix peer, deadline, policy
+purpose, CRL issuer/signature/number/time/freshness and every fail-closed
+drain rule remain per request; no CRL cache or timeout increase is admitted.
+
+First-pull failure diagnostics are local-only, closed classes. Parent
+cancellation/deadline takes precedence over an internal deadline if both
+fire; agent build, socket/peer, transport and generic error/unverifiable
+response are distinct from guard binding and CRL semantic failures. An agent
+error frame cannot be claimed as a controller denial. Error text remains
+generic, raw causes are not unwrapped or serialized, and the one-shot
+migration's exact stage/class output is accepted only by a bounded, strict
+observer. This correction is not a successful release gate or a production
+readiness claim. Phase 6 remains **5/15** until a new source-bound real gate
+and strict evidence pass.

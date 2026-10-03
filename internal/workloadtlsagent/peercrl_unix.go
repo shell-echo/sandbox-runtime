@@ -88,7 +88,7 @@ func (s *Server) writePeerCRLError(connection *net.UnixConn, request PeerCRLRequ
 
 func (c *Client) PeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDER []byte) (PeerCRLResponse, error) {
 	if c == nil || ctx == nil || len(issuerDER) == 0 || len(issuerDER) > 64<<10 {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, ctx)
 	}
 	issuerHash := sha256.Sum256(issuerDER)
 	return c.peerCRL(ctx, binding, "sha256:"+hex.EncodeToString(issuerHash[:]), issuerDER)
@@ -99,7 +99,7 @@ func (c *Client) PeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDER 
 // issuer DER; it does not establish a peer identity or add a trust root.
 func (c *Client) BootstrapPeerCRL(ctx context.Context, binding PeerCRLBinding, issuerDigest string) (PeerCRLResponse, error) {
 	if c == nil || ctx == nil || !peerCRLDigestPattern.MatchString(issuerDigest) {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, ctx)
 	}
 	return c.peerCRL(ctx, binding, issuerDigest, nil)
 }
@@ -113,11 +113,11 @@ func (c *Client) peerCRL(ctx context.Context, binding PeerCRLBinding, issuerDige
 	deadline, _ := operationContext.Deadline()
 	nonce, requestID := make([]byte, 32), make([]byte, 16)
 	if _, err := io.ReadFull(c.config.Random, nonce); err != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, operationContext)
 	}
 	defer clear(nonce)
 	if _, err := io.ReadFull(c.config.Random, requestID); err != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, operationContext)
 	}
 	defer clear(requestID)
 	request, err := NewPeerCRLRequest(PeerCRLRequest{RequestID: "crl_" + hex.EncodeToString(requestID),
@@ -126,7 +126,7 @@ func (c *Client) peerCRL(ctx context.Context, binding PeerCRLBinding, issuerDige
 		LocalPrincipalDigest: binding.LocalPrincipalDigest, Direction: binding.Direction,
 		PeerAnchorID: binding.PeerAnchorID, IssuerDigest: issuerDigest}, c.config.Now().UTC())
 	if err != nil {
-		return PeerCRLResponse{}, err
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, operationContext)
 	}
 	return c.executePeerCRL(operationContext, request, issuerDER)
 }
@@ -134,24 +134,24 @@ func (c *Client) peerCRL(ctx context.Context, binding PeerCRLBinding, issuerDige
 func (c *Client) executePeerCRL(ctx context.Context, request PeerCRLRequest, issuerDER []byte) (PeerCRLResponse, error) {
 	deadline, err := parseProtocolTime(request.Deadline)
 	if err != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, ctx)
 	}
 	encoded, err := EncodePeerCRLRequest(request, c.config.Now().UTC())
 	if err != nil {
-		return PeerCRLResponse{}, err
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLRequestBuildFailure, ctx)
 	}
 	defer clear(encoded)
 	if validateSocket(c.config.SocketPath, c.config.ExpectedUID, c.config.RoleGID) != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLSocketPeerFailure, ctx)
 	}
 	connectionValue, err := (&net.Dialer{}).DialContext(ctx, "unix", c.config.SocketPath)
 	if err != nil {
-		return PeerCRLResponse{}, clientError(err)
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLSocketPeerFailure, ctx)
 	}
 	connection, ok := connectionValue.(*net.UnixConn)
 	if !ok {
 		_ = connectionValue.Close()
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLSocketPeerFailure, ctx)
 	}
 	defer connection.Close()
 	watchDone := make(chan struct{})
@@ -164,22 +164,26 @@ func (c *Client) executePeerCRL(ctx context.Context, request PeerCRLRequest, iss
 	}()
 	defer close(watchDone)
 	if connection.SetDeadline(deadline) != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLTransportFailure, ctx)
 	}
 	identity, err := socketPeer(connection)
 	if err != nil || identity.uid != c.config.ExpectedUID || identity.gid != c.config.ExpectedGID {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLSocketPeerFailure, ctx)
 	}
 	if writeFrame(connection, encoded, maxRequestBytes) != nil {
-		return PeerCRLResponse{}, ErrUnavailable
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLTransportFailure, ctx)
 	}
 	responseDocument, err := readFrame(connection, maxPeerCRLFrame)
 	if err != nil {
 		if ctx.Err() != nil {
 			return PeerCRLResponse{}, ctx.Err()
 		}
-		return PeerCRLResponse{}, clientError(err)
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLTransportFailure, ctx)
 	}
 	defer clear(responseDocument)
-	return DecodePeerCRLResponse(responseDocument, request, issuerDER, c.config.Now().UTC())
+	response, err := DecodePeerCRLResponse(responseDocument, request, issuerDER, c.config.Now().UTC())
+	if err != nil {
+		return PeerCRLResponse{}, peerCRLFailure(PeerCRLResponseFailure, ctx)
+	}
+	return response, nil
 }

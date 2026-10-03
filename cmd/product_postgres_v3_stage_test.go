@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/logger"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +34,9 @@ func TestMigrationPostgresConnectStagesAreClosedAndLocal(t *testing.T) {
 			t.Fatalf("runtime error changed for %q: %q", stage, got)
 		}
 		want := "migration v2 PostgreSQL connection is unavailable: stage=" + string(stage)
+		if stage == postgresStagePeerBootstrap {
+			want += ": class=unknown"
+		}
 		if got := migrationPostgresConnectError(startup).Error(); got != want {
 			t.Fatalf("migration stage %q: got %q", stage, got)
 		}
@@ -55,8 +59,34 @@ func TestMigrationPostgresConnectErrorRejectsUnknownAndMaliciousCause(t *testing
 			t.Fatalf("untrusted cause entered local startup diagnostic: %q", got)
 		}
 	}
-	if got := migrationPostgresConnectError(postgresStartupError(postgresStagePeerBootstrap, secret)).Error(); got != generic+": stage=peer-bootstrap" {
+	if got := migrationPostgresConnectError(postgresStartupError(postgresStagePeerBootstrap, secret)).Error(); got != generic+": stage=peer-bootstrap: class=unknown" {
 		t.Fatalf("trusted stage leaked cause: %q", got)
+	}
+}
+
+func TestMigrationPeerBootstrapClosedClassProjection(t *testing.T) {
+	classes := []phase6tls.PeerCRLFailureClass{
+		phase6tls.PeerCRLLocalGuardFailure, phase6tls.PeerCRLParentCanceledFailure,
+		phase6tls.PeerCRLParentDeadlineFailure, phase6tls.PeerCRLInternalDeadlineFailure,
+		phase6tls.PeerCRLRequestBuildFailure, phase6tls.PeerCRLSocketPeerFailure,
+		phase6tls.PeerCRLTransportFailure, phase6tls.PeerCRLAgentResponseFailure,
+		phase6tls.PeerCRLBindingFailure, phase6tls.PeerCRLSemanticFailure,
+		phase6tls.PeerCRLUnknownFailure,
+	}
+	for _, class := range classes {
+		startup := &directPostgresStartupError{stage: postgresStagePeerBootstrap,
+			message: "private", peerClass: class}
+		want := "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=" + string(class)
+		if got := migrationPostgresConnectError(startup).Error(); got != want {
+			t.Fatalf("class %q: %q", class, got)
+		}
+	}
+	malicious := phase6tls.PeerCRLFailureClass("private:" + strings.Repeat("x", 32768))
+	startup := &directPostgresStartupError{stage: postgresStagePeerBootstrap,
+		message: "private", peerClass: malicious}
+	if got := migrationPostgresConnectError(startup).Error(); got !=
+		"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown" {
+		t.Fatal("unreviewed failure class escaped")
 	}
 }
 
@@ -112,8 +142,11 @@ func TestDirectPostgresGuardFailureStagesAndExactCleanup(t *testing.T) {
 			}
 			pull := &fakePostgresStartupGuard{failure: secretFailure}
 			failed = candidate.start(ctx, pull, nil)
-			if pull.calls != 1 || pull.closed != 1 ||
-				migrationPostgresConnectError(failed).Error() != "migration v2 PostgreSQL connection is unavailable: stage="+string(candidate.pull) {
+			want := "migration v2 PostgreSQL connection is unavailable: stage=" + string(candidate.pull)
+			if candidate.pull == postgresStagePeerBootstrap {
+				want += ": class=unknown"
+			}
+			if pull.calls != 1 || pull.closed != 1 || migrationPostgresConnectError(failed).Error() != want {
 				t.Fatal("live pull failure missed exact close or wrong stage")
 			}
 			success := &fakePostgresStartupGuard{}
@@ -145,7 +178,7 @@ func TestMigrationStageRootCLIPrintsOneClosedLine(t *testing.T) {
 	defer clear(output)
 	var exited *exec.ExitError
 	if !errors.As(err, &exited) || exited.ExitCode() != 1 ||
-		string(output) != "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n" {
+		string(output) != "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\n" {
 		t.Fatal("root CLI produced a duplicate, extra or unclassified migration error line")
 	}
 }

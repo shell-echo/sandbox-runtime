@@ -81,10 +81,17 @@ func DecodePeerCRLSources(document []byte, profile Profile) (PeerCRLSources, err
 }
 
 func (p PeerCRLSources) Validate(profile Profile) error {
+	_, err := p.validatedPostgresOwners(profile)
+	return err
+}
+
+// The compiler consumes this private result from the same fully validated,
+// unchanged snapshot. Public validation still performs every check itself.
+func (p PeerCRLSources) validatedPostgresOwners(profile Profile) (map[[2]string]string, error) {
 	if profile.Validate() != nil || p.Protocol != PeerCRLSourcesProtocolID ||
 		p.SecurityProfileDigest != profile.ProfileDigest ||
 		len(p.Sources) < 1 || len(p.Sources) > 128 || len(p.Edges) < 1 || len(p.Edges) > 512 {
-		return ErrInvalidProfile
+		return nil, ErrInvalidProfile
 	}
 	vaultFound, vaultEdgeFound := false, false
 	for _, external := range profile.External {
@@ -99,7 +106,7 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		}
 	}
 	if !vaultFound || !vaultEdgeFound {
-		return ErrInvalidProfile
+		return nil, ErrInvalidProfile
 	}
 	sources := make(map[string]PeerCRLSource, len(p.Sources))
 	locations := make(map[string]bool, len(p.Sources))
@@ -109,7 +116,7 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		if source.ID <= previous || !namePattern.MatchString(source.ID) || !namePattern.MatchString(source.Mount) ||
 			!peerCRLIssuerIDPattern.MatchString(source.IssuerID) || !digestPattern.MatchString(source.IssuerDigest) ||
 			locations[location] {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		previous = source.ID
 		locations[location] = true
@@ -120,7 +127,7 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 	// needs the complete final external authority. Resolve that authority once
 	// for this already validated, locally unchanged Profile snapshot instead of
 	// revalidating the entire 78-principal graph for each peer-CRL edge.
-	postgresPeers := make(map[string]bool)
+	postgresOwners := make(map[[2]string]string)
 	if peerCRLNeedsFinalPostgresAuthority(p, profile) && VerifySlice6DesiredFinalExternalProfile(profile) == nil {
 		principals := make(map[string]Principal, len(profile.Principals))
 		for _, principal := range profile.Principals {
@@ -129,9 +136,14 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		for _, target := range Slice6DesiredFinalPostgresSignerTargets() {
 			authority, err := profile.resolveSlice6FinalPostgresAuthorityValidated(target.SubjectDeployment)
 			principal := principals[target.SubjectDeployment]
-			if err == nil && principal.Name == target.SubjectDeployment && principal.PrincipalDigest != "" {
-				postgresPeers[authority.PeerEdgeID+"/"+principal.PrincipalDigest] = true
+			if err != nil || principal.Name != target.SubjectDeployment || principal.PrincipalDigest == "" {
+				return nil, ErrInvalidProfile
 			}
+			key := [2]string{authority.PeerEdgeID, principal.PrincipalDigest}
+			if postgresOwners[key] != "" {
+				return nil, ErrInvalidProfile
+			}
+			postgresOwners[key] = target.SubjectDeployment
 		}
 	}
 	previous = ""
@@ -139,7 +151,7 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 		key := binding.EdgeID + "/" + binding.LocalPrincipalDigest + "/" + binding.Direction
 		source, known := sources[binding.SourceID]
 		if key <= previous || !known || !digestPattern.MatchString(binding.LocalPrincipalDigest) {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		previous = key
 		var edge TrustEdge
@@ -150,41 +162,41 @@ func (p PeerCRLSources) Validate(profile Profile) error {
 			}
 		}
 		postgresPeer := edge.ClientAnchorID == "" && binding.Direction == "outbound" &&
-			postgresPeers[edge.ID+"/"+binding.LocalPrincipalDigest]
+			postgresOwners[[2]string{edge.ID, binding.LocalPrincipalDigest}] != ""
 		dnsPeer := edge.ClientAnchorID == "" &&
 			profile.IsSlice6DNSPeerEdge(edge.ID, binding.LocalPrincipalDigest, binding.Direction)
 		if edge.ID == "" || edge.Authentication != "mtls" ||
 			(edge.ClientAnchorID == "" && !postgresPeer && !dnsPeer) || binding.SourceID != source.ID {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		localName, anchorID := "", ""
 		switch binding.Direction {
 		case "outbound":
 			localName, anchorID = edge.From, edge.ServerAnchorID
 			if binding.LocalPrincipalDigest != edge.FromPrincipalDigest {
-				return ErrInvalidProfile
+				return nil, ErrInvalidProfile
 			}
 		case "inbound":
 			localName, anchorID = edge.To, edge.ClientAnchorID
 			if binding.LocalPrincipalDigest != edge.ToPrincipalDigest {
-				return ErrInvalidProfile
+				return nil, ErrInvalidProfile
 			}
 		default:
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		if binding.PeerAnchorID != anchorID ||
 			(!postgresPeer && !localAgentOwnsEdge(profile, localName, binding.LocalPrincipalDigest)) ||
 			(postgresPeer && edge.From != localName) {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		used[source.ID] = true
 	}
 	for sourceID := range sources {
 		if !used[sourceID] {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 	}
-	return nil
+	return postgresOwners, nil
 }
 
 // This is only a cheap trigger. It grants nothing: a positive exceptional

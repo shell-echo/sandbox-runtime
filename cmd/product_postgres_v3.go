@@ -100,8 +100,9 @@ const (
 )
 
 type directPostgresStartupError struct {
-	stage   directPostgresStage
-	message string
+	stage     directPostgresStage
+	message   string
+	peerClass phase6tls.PeerCRLFailureClass
 }
 
 func (e *directPostgresStartupError) Error() string { return e.message }
@@ -110,19 +111,40 @@ func postgresStartupError(stage directPostgresStage, message string) error {
 	return &directPostgresStartupError{stage: stage, message: message}
 }
 
+func postgresPeerStartupError(message string, err error) error {
+	return &directPostgresStartupError{stage: postgresStagePeerBootstrap, message: message,
+		peerClass: phase6tls.PeerCRLFailureOf(err)}
+}
+
+func closedMigrationPeerClass(class phase6tls.PeerCRLFailureClass) string {
+	switch class {
+	case phase6tls.PeerCRLLocalGuardFailure, phase6tls.PeerCRLParentCanceledFailure,
+		phase6tls.PeerCRLParentDeadlineFailure, phase6tls.PeerCRLInternalDeadlineFailure,
+		phase6tls.PeerCRLRequestBuildFailure, phase6tls.PeerCRLSocketPeerFailure,
+		phase6tls.PeerCRLTransportFailure, phase6tls.PeerCRLAgentResponseFailure,
+		phase6tls.PeerCRLBindingFailure, phase6tls.PeerCRLSemanticFailure:
+		return string(class)
+	default:
+		return string(phase6tls.PeerCRLUnknownFailure)
+	}
+}
+
 func migrationPostgresConnectError(err error) error {
 	const generic = "migration v2 PostgreSQL connection is unavailable"
 	var startup *directPostgresStartupError
 	if !errors.As(err, &startup) {
 		return errors.New(generic)
 	}
+	line := generic + ": stage=" + string(startup.stage)
 	switch startup.stage {
+	case postgresStagePeerBootstrap:
+		return errors.New(line + ": class=" + closedMigrationPeerClass(startup.peerClass))
 	case postgresStageAuthority, postgresStageSignerClient, postgresStagePeerRole,
-		postgresStagePeerGuardConstruction, postgresStagePeerBootstrap,
+		postgresStagePeerGuardConstruction,
 		postgresStageTLSClient, postgresStageMaterialResolve, postgresStageDSNBinding,
 		postgresStagePoolBinding, postgresStageOwnGuardConstruction, postgresStageOwnRefresh,
 		postgresStagePoolCreate, postgresStageMonitorStart:
-		return errors.New(generic + ": stage=" + string(startup.stage))
+		return errors.New(line)
 	default:
 		return errors.New(generic)
 	}
@@ -140,9 +162,9 @@ func bootstrapPostgresPeer(ctx context.Context, guard postgresPeerStartupGuard, 
 		}
 		return postgresStartupError(postgresStagePeerGuardConstruction, "direct v3 PostgreSQL peer revocation evidence is unavailable")
 	}
-	if guard.Bootstrap(ctx) != nil {
+	if err := guard.Bootstrap(ctx); err != nil {
 		guard.Close()
-		return postgresStartupError(postgresStagePeerBootstrap, "direct v3 PostgreSQL peer revocation evidence is unavailable")
+		return postgresPeerStartupError("direct v3 PostgreSQL peer revocation evidence is unavailable", err)
 	}
 	return nil
 }

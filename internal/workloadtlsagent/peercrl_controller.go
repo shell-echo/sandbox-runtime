@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
@@ -19,12 +18,17 @@ type PeerCRLControllerClient interface {
 // role-owned agent to the certificate controller. The role can name an edge,
 // never a Vault source; this adapter selects the source from a pinned profile.
 type ControllerPeerCRLProvider struct {
-	profile         phase6security.Profile
-	sources         phase6security.PeerCRLSources
-	subjectDigest   string
-	client          PeerCRLControllerClient
-	now             func() time.Time
-	postgresPurpose bool
+	profileDigest string
+	identity      peerCRLSourceAuthorizer
+	subjectDigest string
+	postgresOwner string
+	client        PeerCRLControllerClient
+	now           func() time.Time
+}
+
+type peerCRLSourceAuthorizer interface {
+	AuthorizedSourceID(profileDigest, mappingDigest, edgeID, localPrincipalDigest,
+		direction, peerAnchorID, issuerDigest, postgresOwner string) (string, error)
 }
 
 func NewControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
@@ -42,58 +46,40 @@ func NewPostgresControllerPeerCRLProvider(profile phase6security.Profile, source
 
 func newControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
 	subjectDigest, postgresOwner string, client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
-	if client == nil || now == nil || now().IsZero() || sources.Validate(profile) != nil {
+	if client == nil || now == nil || now().IsZero() {
+		return nil, ErrUnavailable
+	}
+	copyProfile, _, identity, err := phase6security.CompilePrivatePeerCRLAuthorizer(profile, sources)
+	if err != nil {
 		return nil, ErrUnavailable
 	}
 	found := false
 	if postgresOwner == "" {
-		for _, binding := range profile.TLSAgentBindings {
+		for _, binding := range copyProfile.TLSAgentBindings {
 			if binding.SubjectPrincipalDigest == subjectDigest {
 				found = true
 				break
 			}
 		}
 	} else {
-		binding, _, _, subject, _, err := profile.PostgresClientSignerForOwner(postgresOwner)
-		if err == nil && binding.SubjectPrincipalDigest == subjectDigest && subject.PrincipalDigest == subjectDigest {
-			_, err = profile.ResolveSlice6FinalPostgresAuthority(postgresOwner)
-			found = err == nil
-		}
+		validatedSubject, ok := identity.PostgresSubjectForOwner(postgresOwner)
+		found = ok && validatedSubject == subjectDigest
 	}
 	if !found {
 		return nil, ErrUnavailable
 	}
-	profileDocument, err := json.Marshal(profile)
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	copyProfile, err := phase6security.Decode(profileDocument)
-	clear(profileDocument)
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	sourcesDocument, err := json.Marshal(sources)
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	copySources, err := phase6security.DecodePeerCRLSources(sourcesDocument, copyProfile)
-	clear(sourcesDocument)
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	return &ControllerPeerCRLProvider{profile: copyProfile, sources: copySources,
-		subjectDigest: subjectDigest, client: client, now: now, postgresPurpose: postgresOwner != ""}, nil
+	return &ControllerPeerCRLProvider{profileDigest: copyProfile.ProfileDigest, identity: identity,
+		subjectDigest: subjectDigest, postgresOwner: postgresOwner, client: client, now: now}, nil
 }
 
 func (p *ControllerPeerCRLProvider) ReadPeerCRL(ctx context.Context, request PeerCRLRequest) (string, []byte, []byte, time.Time, error) {
-	if p == nil || ctx == nil || ctx.Err() != nil || request.Validate(p.now().UTC()) != nil ||
-		request.ProfileDigest != p.profile.ProfileDigest || request.SourceMappingDigest != p.sources.Digest() ||
-		request.LocalPrincipalDigest != p.subjectDigest ||
-		p.profile.IsSlice6FinalPostgresPeerEdge(request.EdgeID, request.LocalPrincipalDigest) != p.postgresPurpose {
+	if p == nil || p.identity == nil || ctx == nil || ctx.Err() != nil || request.Validate(p.now().UTC()) != nil ||
+		request.ProfileDigest != p.profileDigest || request.LocalPrincipalDigest != p.subjectDigest {
 		return "", nil, nil, time.Time{}, ErrUnavailable
 	}
-	sourceID, err := p.sources.AuthorizedSourceID(p.profile, request.EdgeID, request.LocalPrincipalDigest,
-		request.Direction, request.PeerAnchorID, request.IssuerDigest)
+	sourceID, err := p.identity.AuthorizedSourceID(request.ProfileDigest, request.SourceMappingDigest,
+		request.EdgeID, request.LocalPrincipalDigest, request.Direction, request.PeerAnchorID,
+		request.IssuerDigest, p.postgresOwner)
 	if err != nil {
 		return "", nil, nil, time.Time{}, ErrUnavailable
 	}

@@ -125,6 +125,7 @@ func TestControllerPermitCanceledAndExpiredWaitersDoNotMutate(t *testing.T) {
 				// can become an authorized source through this test path.
 				controller.peerCRLProfile = &phase6security.Profile{}
 				controller.peerCRLSources = &phase6security.PeerCRLSources{}
+				controller.peerCRLIdentity = &purposePeerIndex{}
 				request, requestErr := NewPeerCRLRequest(fixture.policy, "permit-peer-crl",
 					base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{92}, 32)), fixture.now.Add(30*time.Second),
 					"sha256:"+strings.Repeat("a", 64), "product-provider-contract", fixture.policy.Subject.Digest(),
@@ -176,7 +177,7 @@ func TestControllerPermitCanceledAndExpiredWaitersDoNotMutate(t *testing.T) {
 				t.Fatalf("occupying issue: %v", err)
 			}
 			if variant.v2 {
-				controller.peerCRLProfile, controller.peerCRLSources = nil, nil
+				controller.peerCRLProfile, controller.peerCRLSources, controller.peerCRLIdentity = nil, nil, nil
 			}
 			normal, err := NewRevocationsRequest(fixture.policy, "permit-normal-crl",
 				base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{93}, 32)), fixture.now.Add(30*time.Second), fixture.agentPrivate)

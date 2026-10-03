@@ -244,7 +244,7 @@ func peerCRLResponseDigest(response PeerCRLResponse) string {
 }
 
 func (c *Controller) HandlePeerCRL(ctx context.Context, request PeerCRLRequest, peerUID, peerGID uint32) (PeerCRLResponse, error) {
-	if c == nil || ctx == nil || c.peerCRLProfile == nil || c.peerCRLSources == nil {
+	if c == nil || ctx == nil || c.peerCRLProfile == nil || c.peerCRLSources == nil || c.peerCRLIdentity == nil {
 		return PeerCRLResponse{}, ErrUnavailable
 	}
 	if err := c.acquireRequest(ctx, request.Deadline); err != nil {
@@ -257,8 +257,15 @@ func (c *Controller) HandlePeerCRL(ctx context.Context, request PeerCRLRequest, 
 		request.Validate(policy, now) != nil || request.ProfileDigest != c.peerCRLProfile.ProfileDigest {
 		return c.peerCRLError(request, StatusDenied, ErrDenied)
 	}
-	sourceID, err := c.peerCRLSources.AuthorizedSourceID(*c.peerCRLProfile, request.EdgeID,
-		request.LocalPrincipalDigest, request.Direction, request.PeerAnchorID, request.IssuerDigest)
+	postgresOwner := ""
+	if policy.Purpose == PostgresClientPurpose {
+		postgresOwner = policy.Postgres.OwnerDeployment
+	} else if policy.Purpose != "" {
+		return c.peerCRLError(request, StatusDenied, ErrDenied)
+	}
+	sourceID, err := c.peerCRLIdentity.AuthorizedSourceID(request.ProfileDigest,
+		c.peerCRLIdentity.MappingDigest(), request.EdgeID, request.LocalPrincipalDigest,
+		request.Direction, request.PeerAnchorID, request.IssuerDigest, postgresOwner)
 	if err != nil || sourceID != request.SourceID {
 		return c.peerCRLError(request, StatusDenied, ErrDenied)
 	}
