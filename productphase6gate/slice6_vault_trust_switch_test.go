@@ -85,6 +85,19 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			os.Getenv(slice6ProductPostgresDSNEnv) != "1") {
 		t.Fatal("Product serve PID1 requires completed same-run migration, PostgreSQL and exact runtime inputs")
 	}
+	if os.Getenv(slice6GuestBindingFixtureEnv) == "1" &&
+		(os.Getenv(slice6ProductRuntimeProcessEnv) != "1" ||
+			os.Getenv(slice6GuestMaterialEnv) != "1") {
+		t.Fatal("Guest binding fixture requires same-run Product runtime and real Vault Guest public key")
+	}
+	if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" &&
+		os.Getenv(slice6GuestBindingFixtureEnv) != "1" {
+		t.Fatal("Guest PID1 requires a same-run durable Product binding fixture")
+	}
+	if os.Getenv(slice6GuestLiveRevokeEnv) == "1" &&
+		os.Getenv(slice6GuestRuntimeProcessEnv) != "1" {
+		t.Fatal("live Guest revoke requires connected Product and Guest PID1")
+	}
 	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" && os.Getenv(slice6ProductMigrationJobEnv) != "1" {
 		t.Fatal("controlled pre-DDL failure requires the real Product migration chain")
 	}
@@ -144,6 +157,23 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		t.Logf("pre-issuer Product runtime observer source=%s binary=sha256:%x go=%s",
 			observerRevision, productRuntimeObserver.Digest, runtime.Version())
+	}
+	var guestBindingFixture slice6GuestBindingFixtureArtifact
+	if os.Getenv(slice6GuestBindingFixtureEnv) == "1" {
+		fixture, fixtureErr := slice6BuildGuestBindingFixture(t, ctx,
+			static.sourceRoot, static.sourceRevision)
+		guestBindingFixture = fixture
+		if fixtureErr != nil || slice6ApproveGuestBindingFixture(&guestBindingFixture,
+			os.Getenv(slice6GuestBindingFixtureExpectedDigestEnv)) != nil {
+			t.Fatal("Guest binding fixture source or externally approved binary unavailable before issuer allocation")
+		}
+		identity := phase6security.Slice6DesiredUIDGID()["product-runtime"]
+		if err := slice6ProbeGuestBindingFixtureMount(ctx, guestBindingFixture,
+			identity[0], identity[1]); err != nil {
+			t.Fatal("Guest binding fixture non-root executable probe failed before issuer allocation")
+		}
+		t.Logf("pre-issuer Guest binding fixture source=%s binary=%s go=%s",
+			guestBindingFixture.SourceRevision, guestBindingFixture.Digest, runtime.Version())
 	}
 	// Build the finite operator from its own clean source checkpoint before
 	// this test creates any run-private files or short-lived Vault authority.
@@ -500,7 +530,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var productMaterialSocketVolumes map[string]string
 		var productMigrationSocketVolumes map[string]string
 		var productRuntimeSocketVolumes map[string]string
-		var guestPublicKeyDigest string
+		var guestPublicMaterial slice6GuestPublicMaterial
 		var productIdentityDigest string
 		var productRuntimeDSNDigest string
 		var postgresLeaf slice6PostgresServerLeaf
@@ -604,7 +634,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				})
 			}
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
-				guestPublicKeyDigest = slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
+				guestPublicMaterial = slice6VaultInstallGuestMaterial(t, ctx, run, serverID, configDir, composed.Profile)
 				if os.Getenv(slice6ProductMaterialInputsEnv) == "1" {
 					productIdentityDigest = slice6VaultInstallProductIdentityMaterial(t, ctx, run,
 						serverID, configDir, composed.Profile)
@@ -671,13 +701,33 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 									onManagedReady = func() {
 										runWork := func() {
 											slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
+												var guestBindingReceipt slice6GuestBindingFixtureReceipt
+												var guestRuntimeFailure error
+												var productRuntimeID string
 												runGuestChain := func() {
 													slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
 														slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
-															guestPublicKeyDigest, guestSocketVolumes, anchorFiles,
+															guestPublicMaterial.Digest, guestSocketVolumes, anchorFiles,
 															func(delivery phase6security.Slice6BreakGlassSocketBinding) {
 																slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
 																	delivery, breakGlassSocketVolumes, restartController)
+																if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" {
+																	var onConnected func(string) error
+																	if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
+																		onConnected = func(guestContainerID string) error {
+																			revoked, err := slice6RunGuestLiveRevoke(ctx, run, composed.Profile,
+																				productRuntimeID, guestContainerID, postgresServerID,
+																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles)
+																			if err == nil {
+																				t.Logf("finite same-netns Product Store revoke confirmed while Guest/Product PID1 remained live: generation=%d backend_pid=%d (private receipt; not production audit)",
+																					revoked.BindingGeneration, revoked.PostgresBackendPID)
+																			}
+																			return err
+																		}
+																	}
+																	guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
+																		guestBindingReceipt, guestSocketVolumes, anchorFiles, productRuntimeID, onConnected)
+																}
 															})
 													})
 												}
@@ -701,14 +751,30 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																				slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 																					"product-runtime", "product-postgres-tls-agent", "product-runtime-postgres",
 																					productRuntimeSocketVolumes, anchorFiles, func() {
+																						if os.Getenv(slice6GuestBindingFixtureEnv) == "1" {
+																							guestBindingReceipt, runtimeFailure = slice6RunGuestBindingFixture(ctx, run, composed.Profile,
+																								postgresServerID, productRuntimeSocketVolumes, anchorFiles,
+																								guestBindingFixture, guestPublicMaterial)
+																							if runtimeFailure != nil {
+																								return
+																							}
+																							t.Logf("same-run finite Guest binding fixture exited and released Product SQL endpoint before Product PID1: binding_generation=%d event_count=%d audit_count=%d; identities remain private and no live Guest claimed",
+																								guestBindingReceipt.BindingGeneration, guestBindingReceipt.EventCount, guestBindingReceipt.AuditCount)
+																						}
 																						runtimeFailure = slice6RunProductRuntimePID1(t, ctx, run, composed,
-																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver)
+																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver,
+																							func(id string) error { productRuntimeID = id; runGuestChain(); return guestRuntimeFailure })
 																					})
 																				if runtimeFailure != nil {
 																					return runtimeFailure
 																				}
 																			}
-																			runGuestChain()
+																			if os.Getenv(slice6ProductRuntimeProcessEnv) != "1" {
+																				runGuestChain()
+																				if guestRuntimeFailure != nil {
+																					runtimeFailure = guestRuntimeFailure
+																				}
+																			}
 																			return nil
 																		})
 																})

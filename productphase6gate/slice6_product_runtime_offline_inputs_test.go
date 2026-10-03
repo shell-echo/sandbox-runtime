@@ -75,16 +75,25 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		Certificate: brokerCertificate}
 	composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
 	// This is a construction-only Guest authority fixture. The ID is not a
-	// durable Product binding, and the old R3 shell digest is not future-R
-	// executable evidence.
+	// durable Product binding; the actual selected image supplies its shell
+	// digest for this run rather than reusing a historical R3 observation.
+	guestPlan, guestPlanErr := slice6BuildGuestRuntimeLaunchPlan(composed.Profile)
+	if guestPlanErr != nil || guestPlan.ProductNetwork.Name != "guest-product" ||
+		guestPlan.InternalNetwork.Name != "network-guest-runtime" ||
+		guestPlan.MaterialSocketID == guestPlan.TLSSocketID {
+		t.Fatalf("offline Guest source-bound launch plan unavailable: %v", guestPlanErr)
+	}
+	guestShellDigest, guestShellErr := slice6MeasureGuestShell(ctx, run, guestPlan.Principal)
+	if guestShellErr != nil {
+		t.Fatalf("offline selected Guest toolchain observation unavailable: %v", guestShellErr)
+	}
 	guestInputs, guestInputErr := slice6BuildGuestRuntimeInputs(composed, run.id,
-		"gst-phase6-offline", 1,
-		"sha256:dd10691d81c84f0182f5af5f1583d566ddc0b9d0d9fc46b41b99b83c398306dd")
+		"gst-phase6-offline", 1, guestShellDigest)
 	if guestInputErr != nil || len(guestInputs) != 6 {
 		t.Fatalf("offline Guest private startup input construction failed: count=%d err=%v", len(guestInputs), guestInputErr)
 	}
 	if _, err := slice6BuildGuestRuntimeInputs(composed, run.id, "gst-phase6-offline", 0,
-		"sha256:dd10691d81c84f0182f5af5f1583d566ddc0b9d0d9fc46b41b99b83c398306dd"); err == nil {
+		guestShellDigest); err == nil {
 		t.Fatal("Guest input construction accepted a missing Product binding generation")
 	}
 	guestArchive, err := phase6security.BuildSlice6PrivateConfigArchive(composed.Profile,

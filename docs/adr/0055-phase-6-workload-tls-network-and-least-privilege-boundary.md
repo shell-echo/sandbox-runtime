@@ -2487,3 +2487,45 @@ binding revocation while Product and Guest are running; that later mutation
 path requires separate review. Removing the build-tag-only fixture/task and
 discarding the run-owned database rolls back this local-gate exception without
 an online schema or permission change.
+
+For the separate **live revocation observation only**, Sandbox approved one
+additional source/binary-digest-bound, build-tag-only, finite local-gate task.
+It may share the **exact running Product container's network namespace** with
+`--network=container:<same-run-Product-ID>` while Product and Guest retain
+their original PID1 and start time. It does not share PID, mount or IPC
+namespaces, expose a listener/port, gain a Docker socket or host network, or
+join another bridge as an endpoint. The task runs under Product's UID:GID,
+read-only root, drop-ALL, no-new-privileges, the locked seccomp and a bounded
+resource budget included in aggregate concurrent capacity admission. It
+mounts only the Product runtime material and PostgreSQL signer sockets,
+necessary read-only Profile/config/peer-CRL/trust inputs and its approved
+executable; no public TLS signer, Guest signing key, Vault token, admin DSN
+or migration authority is available. This is an explicit temporary trusted
+gate-orchestrator exception to namespace independence, not a new production
+principal or a general `container:` network allowance.
+
+The task accepts only one run/Profile/artifact/target/initial-receipt-bound
+revoke operation. It first reads back the exact real, unexpired, connected
+binding and nonempty nonce, then calls the existing Product Store's
+`RevokeGuest` for that tenant and Guest ID. It cannot issue arbitrary SQL
+updates or target other tenants, IDs or generations. An unknown write result
+requires readback classification, never a blind retry. Independent readback
+must prove only that row became `revoked` with a null nonce, with unchanged
+scope, and no replay resurrection. The gate must observe an already
+authenticated Product–Guest challenge/welcome/connected session, measure
+revocation-to-close conservatively while both real processes and their
+dependencies remain healthy and the binding is unexpired, then reject old
+binding reconnect. The fixture must close its pool/guards/material registry,
+release its temporary process and leave no new bridge endpoint or SQL
+connection; cleanup must not disconnect or delete Product. A stopped Product,
+natural expiry or unrelated network fault cannot substitute for this gate.
+
+`Store.RevokeGuest` does not currently persist the reason or create a
+`security_audit`/`workspace_event` row. This local-gate task therefore records
+only private, run/source-bound test metadata and **does not establish
+production Guest revocation audit**. The authenticated formal business
+mutation entry point, generation/CAS/idempotency policy and transactional
+audit remain Slice 8 obligations and a later full-product release gate. Both
+tag-only tasks can be removed and their run-owned database discarded without
+changing a production API, schema, network or HBA rule. Neither task alone
+authorizes a Vault issuer run or advances Phase 6 beyond **5/15**.

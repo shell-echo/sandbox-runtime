@@ -24,11 +24,24 @@ import (
 
 const slice6GuestMaterialEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_MATERIAL"
 
+type slice6GuestPublicMaterial struct {
+	Key    ed25519.PublicKey
+	Digest string
+}
+
+func (material slice6GuestPublicMaterial) valid() bool {
+	if len(material.Key) != ed25519.PublicKeySize {
+		return false
+	}
+	sum := sha256.Sum256(material.Key)
+	return material.Digest == "sha256:"+hex.EncodeToString(sum[:])
+}
+
 // This writes a real run-owned Guest signing key through the installed KVv2
 // path and exercises an actual scoped token. A live material agent and Guest
 // consumer are separate, still-missing release observations.
 func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slice6DockerRun,
-	serverID, configDir string, profile phase6security.Profile) string {
+	serverID, configDir string, profile phase6security.Profile) slice6GuestPublicMaterial {
 	t.Helper()
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil {
@@ -174,7 +187,11 @@ func slice6VaultInstallGuestMaterial(t *testing.T, ctx context.Context, run slic
 	}
 	publicDigest := sha256.Sum256(public)
 	t.Logf("real run-owned Guest Ed25519 key stored in KVv2 version 1; exact scoped read, cross-owner denial and bootstrap token revocation/readback passed; public key sha256:%x; no material agent or Guest consumer launched", publicDigest)
-	return "sha256:" + hex.EncodeToString(publicDigest[:])
+	result := slice6GuestPublicMaterial{Key: bytes.Clone(public), Digest: "sha256:" + hex.EncodeToString(publicDigest[:])}
+	if !result.valid() {
+		t.Fatal("same-run Guest public key receipt is inconsistent")
+	}
+	return result
 }
 
 func slice6VaultRevokeScopedToken(ctx context.Context, run slice6DockerRun,

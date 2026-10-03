@@ -4065,5 +4065,121 @@ Store, then close every dependency and release that endpoint before Product
 occupies it. A ready-slot seed is limited to exact run-owned tenant,
 workspace, slot and expected generation with one-row CAS/readback. No HBA,
 production API, migration/admin privilege or Guest private-key expansion is
-approved. This plan is not yet implemented or executed and cannot prove
-live binding revocation; its later mutation path needs separate review.
+approved. At this checkpoint the build-tag-only fixture command and the
+sequential finite-container harness are implemented but **not yet executed
+against the real Product PostgreSQL service**. The fixture reads only canonical,
+bounded run/Profile-bound non-secret identity and the public half of the
+actual Vault Guest signing key; it resolves the runtime DSN through the
+existing v3 Product material registry, PG signer and peer-CRL path. It uses
+the real Product Application and GuestService, performs a one-row exact
+ready-slot CAS and readback, verifies the persisted binding's public-key
+digest, event, audit and idempotency replay, and emits only a private bounded
+receipt. The ordinary CLI does not include this build-tag-only command.
+
+The gate harness builds the Linux/arm64 binary from the same separately
+clean source revision, requires an externally supplied exact binary SHA-256,
+probes it under Product's non-root UID:GID without network, and, only after
+the real Product migration and signers are online, may start it on Product's
+original fixed PostgreSQL source IP. Its container is read-only, drop-ALL,
+no-new-privileges, seccomp-bound and no larger than Product; it mounts the
+Product private config, runtime material socket, PostgreSQL signer and
+Product trust anchors, but **not** the public TLS signer or Guest private key.
+The harness requires a clean finite-process exit, exact container removal
+and PostgreSQL bridge readback with the source endpoint released before
+formal Product startup. A no-issuer Docker ownership probe additionally
+confirmed that a missing or wrong-run private volume is rejected before
+Docker can silently create it, then returned its one run-labeled volume to
+zero. A diagnostic build from the current mutable checkout
+cross-compiled and executed `--help` in a real non-root, networkless, read-only
+Alpine container; a separate `docker create -i` / `docker start -ai` probe
+verified bounded stdin and exit observation with `--log-driver=none`. These
+are no-issuer mechanics checks, not immutable-source, database, Product–Guest
+or release evidence. No new Vault issuer run was authorized or performed;
+Phase 6 remains **5/15**. Live Guest PID1, Product–Guest authentication,
+restart/revocation behavior and the complete 16-scenario gate remain open.
+
+Sandbox subsequently approved a separate build-tag-only live-revocation task
+which temporarily shares only the exact running Product container's network
+namespace. ADR 0055 records the exception, while preserving the fixed
+PostgreSQL HBA and normal Product CLI. The command's first implementation
+accepts one canonical run/Profile/executable/target/initial-receipt-bound
+operation; it reads the exact unexpired connected Product-owned binding,
+calls the existing `Store.RevokeGuest`, and classifies a bounded readback
+without retrying an unknown mutation. It does not issue general SQL, expose
+a production endpoint or claim a persisted revocation audit. Tagged race
+tests cover input/target/key/generation drift, before/after binding scope,
+database-time expiry and the distinction between confirmed, still-connected
+and revoked-after-unknown outcomes. Only `confirmed` may later count as a
+passing gate mutation; a revoked row after an unknown write is not attributed
+to the helper. The helper also includes its own PostgreSQL backend PID in a
+private receipt for post-exit absence checking; that readback is not yet wired
+to a live scenario.
+A separate no-issuer Docker test observed actual `--network=container:<target>`
+net namespace equality, independently private IPC/PID namespaces, zero added
+network endpoints/ports, non-root read-only/drop-ALL constraints, target
+namespace survival after helper removal and exact run-owned zero cleanup.
+The first probe exposed Alpine's absence of a standalone `/bin/readlink`;
+using its pinned `/bin/busybox readlink` applet passed. Docker reported
+`IpcMode=private`, which is the expected isolated mode, not a shared IPC
+namespace. This remains a mechanism test: no live Product/Guest process was
+revoked and no issuer was used. Phase 6 remains **5/15**.
+
+The next no-issuer source-bound synthetic-CA composition reused immutable
+R3 supply and passed in 121.96 seconds after adding a strict Guest launch
+plan. It admitted the exact `guest-product` and `network-guest-runtime`
+isolated networks, Guest-owned material/TLS sockets, six-file private config,
+three exclusive storage volumes and two tmpfs mounts. The existing real
+Docker private-config preparation verified Guest/Product/PG-agent file
+owners, modes and digests, read-only denial and four run-owned volume cleanup
+to zero. The old R3 shell digest is construction-only; a new R must reobserve
+the selected executable. This does not start Guest or Product PID1, issue a
+real CA certificate, create a durable binding or complete any Slice 6 release
+scenario. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-03 (Guest PID1 launch wiring, still no issuer): the Product
+component runner now keeps its exact PID1 and PostgreSQL/signers alive while
+the dependent Guest chain runs, then rechecks their process fingerprints and
+Product SQL endpoint after that chain returns. A tagged Guest runner now
+requires the finite Product binding receipt, the same-run running Product
+container and its existing isolated `guest-product` bridge; it measures
+`/bin/sh` from the selected Guest image, prepares six private configuration
+files and three run-owned storage volumes, joins exactly the Product and
+Guest-internal bridges, admits only two private signer sockets and closed
+trust/storage/tmpfs mounts, and checks the real Guest process's connected
+`/readyz` before exact container cleanup. These are implementation paths,
+**not** observed live Guest PID1 or formal scenario evidence. The new opt-in
+flag cannot be selected without the initial binding fixture. The no-issuer
+synthetic-CA offline composition was rerun against retained historical R3
+candidate inputs and passed in 122.90 seconds, now deriving the shell digest
+from the selected image at runtime instead of reusing a historical literal.
+It again verified six Guest, four Product, two PostgreSQL-agent private files,
+one signer socket and four-volume cleanup to zero. The initial fixture's real
+SQL path, Guest PID1 connection, live revocation harness and complete 16-case
+gate are still unrun. Historical R3 inputs cannot certify the changed source;
+a new clean R freeze and explicit Sandbox issuer authorization are required.
+Phase 6 remains **5/15**.
+
+The approved live-revocation helper is now wired as an optional nested
+operation only after the Guest PID1's dependency-derived connected `/readyz`.
+Its same-source sealed executable receives a canonical run/Profile/Product-ID/
+initial-binding-bound operation on stdin. The finite task mounts only the
+Product private config, runtime material socket, PostgreSQL TLS signer,
+trust anchors and its own read-only binary. Docker admission checks the exact
+running Product/Guest/PostgreSQL and Guest-agent fingerprints, aggregate
+run-owned memory caps against Docker VM memory with a reserve, and host/Docker
+disk headroom. The task shares Product's network namespace only, with
+separate PID/IPC, no new endpoint/port and no public signer or Guest key.
+After the Store mutation, the harness requires the command's exact confirmed
+receipt, clean exit/removal, absent PostgreSQL backend PID, Guest not-ready
+within a conservative 30-second start-to-close window, sustained not-ready
+after three seconds, and independent PostgreSQL readback of `revoked`, null
+nonce and still-unexpired binding; Product/Guest/PostgreSQL and Guest agents
+must keep their original PID1 and endpoint fingerprints. This is **code and
+component validation only**: no real live binding has been revoked and no
+formal challenge/welcome/reconnect transcript was captured. The no-issuer
+Docker namespace probe now also exercises the aggregate memory admission;
+it passed with exact resource cleanup. Tagged gate race tests and fixture
+race tests, tagged vet, ordinary full race/shuffle, ordinary vet, Product
+Contract lock and diff checks pass for this checkpoint. The full 16-scenario
+gate, release manifest and new issuer authorization remain open; Phase 6 is
+still **5/15**.

@@ -39,9 +39,15 @@ type slice6ProductRuntimeEndpoint struct {
 // relay identity or a guest/SQL/credential network.
 func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, postgresID string, socketVolumes, anchorFiles map[string]string,
-	observer slice6ProductRuntimeObserver) (resultErr error) {
+	observer slice6ProductRuntimeObserver, onReady func(string) error) (resultErr error) {
 	t.Helper()
-	runtimeContext, cancelRuntime := context.WithTimeout(parent, 4*time.Minute)
+	budget := 4 * time.Minute
+	if onReady != nil {
+		// The live dependent chain includes Guest signers, break-glass
+		// recovery and possibly Guest PID1; Product must outlive that chain.
+		budget = 12 * time.Minute
+	}
+	runtimeContext, cancelRuntime := context.WithTimeout(parent, budget)
 	defer cancelRuntime()
 	parent = runtimeContext
 	plan, err := slice6BuildProductRuntimeLaunchPlan(composed.Profile)
@@ -229,6 +235,14 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 	}
 	t.Logf("real Product serve PID1 admitted exact 7-network/3-socket Profile; verified TLS /readyz ready→SQL-edge loss not_ready→same-PG recovery ready and read-only product_runtime SQL session; observer_poll initial=%s loss=%s recovery=%s; since_network_operation loss=%s recovery=%s; component observer is not public relay or Guest",
 		initialReady, notReady, recovered, connectionLossObservedAfter, connectionRecoveryObservedAfter)
+	if onReady != nil {
+		if err := onReady(id); err != nil {
+			return errors.Join(errors.New("Product live dependent gate failed"), err)
+		}
+		if err := slice6AssertProductRuntimeFaultState(parent, run, id, postgresID, endpoints, true, baseline); err != nil {
+			return errors.New("Product PID1 or SQL endpoint changed during dependent gate")
+		}
+	}
 	return nil
 }
 
