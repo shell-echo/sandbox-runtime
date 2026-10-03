@@ -253,13 +253,16 @@ Current verified state:
   DSNs in separate create-only KVv2 version-1 purpose bindings. Scoped
   readback, cross-purpose/cross-owner denial, token revocation, controller
   quiesce, v2 terminal PKI cleanup and exact Docker cleanup passed. A second
-  same-run component test also proved that a distinct-UID/GID Product owner
-  resolves the exact runtime DSN through the live material-agent and parses
-  its fixed target and digest without establishing a SQL connection. Earlier
-  unconfirmed-leaf attempts remain explicitly recorded. This does not prove
-  Product DSN consumption or runtime SQL, nine live SQL clients,
-  all 78 principals, the 16-scenario Slice 6 release gate, signed evidence or
-  deployment. Phase 6 stays 5/15.
+  same-run component test proved distinct-owner runtime DSN resolution. The
+  clean-source R3 run `50f6810acddb8bffd5ba4167b0e424e2` additionally
+  completed independent Product `migrate v2` PID1 with exit 0 and exact
+  same-PostgreSQL migration-ledger, table-owner and grant readback. The known
+  certificate-controller terminal failure remained recorded; the accepted
+  independent one-shot operator confirmed revocation, complete CRL and
+  self-revocation, followed by exact resource cleanup. Earlier failures remain
+  historical. Product runtime SQL, the actual Product/Guest security edge,
+  nine live SQL callers, the 16-scenario Slice 6 release gate, signed evidence
+  and deployment remain unproved. Phase 6 stays 5/15.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

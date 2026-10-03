@@ -215,16 +215,21 @@ confirmed. That earlier component result did not supply a Product runtime
 DSN or run nine SQL callers, the full 16-scenario gate or a release manifest.
 
 A subsequent mutable-tree same-run component test started that PostgreSQL
-server before Vault root revocation, used its local peer socket to create
-the operator-owned Product database/schema and two non-elevated SCRAM SQL
-logins, then installed distinct real migration/runtime DSNs into exact
-create-only Vault KVv2 purpose bindings. Scoped readback, cross-purpose and
-cross-owner denial, token revocation, controlled PG stop and terminal v2
-cleanup passed. A second run also proved actual Product-owner resolution
-through the live material-agent and strict fixed-target/digest parsing.
-This establishes DSN *supply and resolution*, not a PostgreSQL login: a
-separate Product migration v2 job, runtime SQL and all nine network-bound callers
-remain release work. Phase 6 remains 5/15.
+server before Vault root revocation, created separate non-elevated Product
+SCRAM logins and installed distinct migration/runtime DSNs into exact
+create-only Vault KVv2 purpose bindings. Another run proved Product-owner
+resolution through the live material-agent. Clean-source R3 component run
+`50f6810acddb8bffd5ba4167b0e424e2` then completed an independent Product
+`migrate v2` PID1 with exit 0 and read back the exact ledger, table ownership
+and post-DDL grants from the same PostgreSQL process. Both controllers
+quiesced; the certificate controller's known terminal failure remained
+visible, and the approved independent operator confirmed revocation, complete
+CRL and self-revocation before exact cleanup. See the
+[component audit](../audits/product-phase-6-slice-6-postgres-v2-component.md)
+for the frozen R3/E identities and failed historical runs. This closes a
+Product migration **component**, not runtime SQL, the actual Product/Guest
+security edge, nine live SQL callers or the 16-scenario release gate. Phase 6
+remains 5/15.
 
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,

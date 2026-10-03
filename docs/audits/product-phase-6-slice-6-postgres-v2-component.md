@@ -975,3 +975,55 @@ fixture remained separate. This proves complete static input admission only;
 it does not compose a new real Profile, launch a Product migration PID1,
 resolve the R2 history, or produce a Slice 6 manifest. No new issuer run is
 authorized by this preflight. Phase 6 remains **5/15**.
+
+### R3 single real migration and exact cleanup (2026-10-03)
+
+After separate Sandbox approval for exactly one issuer-consuming run, the
+tagged real Vault/PostgreSQL gate passed as run
+`50f6810acddb8bffd5ba4167b0e424e2` in 451.24 seconds. It executed the
+clean runtime R3 `923813f9a195ca7f49202ee11de4796ee6a8ef17` (tree
+`e6e7ad5f3a7b0affe345ac80dfa8ea714284436a`) with the clean gate source
+`b791ab6726e9b0e1199902062ada4d3817bcaa55` (tree
+`150b6c9f490277fff03f0f49b4a92969803679cb`). Live pre-issuer admission
+checked the same-source terminal operator and exact v2 capability, twelve
+role candidates, Desktop, Browser, and four complete external OCI archives.
+The source-bound Profile digest was
+`sha256:541dbf0402e799a00f98a2594c7cde3e9cfe91e6c7f33ce4ea6fdc4128be30d8`;
+its inventory contained 78 principals, twelve role candidates, fourteen
+loaded images and 48 peer-CRL edges. The real PostgreSQL server leaf DER
+digest was
+`sha256:9a48117c1b7fae7c6d6a4b1d4cc36a17825b0a33e5a44dc5b4b1892f40826ce7`.
+
+PostgreSQL PID1 passed the nine isolated bridges, source-bound HBA,
+PG-owned read-only key mount and local SQL readiness checks. Distinct Product
+SQL roles and the exact Vault KVv2 migration/runtime DSNs passed. Both
+controller PID1 processes reached managed issuance; the Product migration
+material signer and PostgreSQL signer became ready in 22.273 and 19.039
+seconds respectively, within the unchanged 50m CPU, 64 MiB and 16-PID agent
+limits. The independent Product `migrate v2` PID1 completed its guarded
+PostgreSQL operation and exited once with state
+`exited|0|false|0|started-set|finished-set|state-error-none`: exit 0, no OOM
+and no restart. A separate read-only observation of that **same PostgreSQL
+process** returned `ledger-and-catalog-exact`, including the migration ledger,
+current table ownership and post-DDL grants. This is the first real same-run
+Product business migration established by this component chain. It does not
+rewrite R2's failed `migration-ping-tls-or-guard` result.
+
+Guest and Product material/signing/break-glass checks continued after the
+migration. Both controllers persisted quiesce receipts, but the certificate
+controller again retained the known sticky terminal credential-revoke failure.
+The independent terminal operator, not the normal controller terminal path,
+confirmed three certificate revocations, two token-accessor revocations,
+complete CRL and self-revocation under private plan digest
+`sha256:62b9bad0a6b76b7c8f5b404c42d2b5f88b5297dacfc9127ded17fc5291857bf2`.
+PostgreSQL stopped and was removed before terminal certificate cleanup.
+The gate's exact cleanup passed. An independent read-only post-run query
+found zero run-labeled containers, networks and volumes; both captured Vault
+anonymous volume IDs were absent, as was the run-private directory.
+
+This is a successful **component** migration and cleanup gate, not the full
+16-scenario Slice 6 release gate. Runtime Product SQL, nine live SQL callers,
+the Guest security edge, public E2E, deployment, a signed evidence manifest
+and production readiness remain unproved here. The sticky controller failure
+remains recorded even though the accepted independent terminal procedure
+completed. No manifest was generated and Phase 6 remains **5/15**.
