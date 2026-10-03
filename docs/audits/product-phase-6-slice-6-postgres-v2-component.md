@@ -692,3 +692,32 @@ independently queried absent after `--rm`; no Vault token, certificate,
 PostgreSQL DDL or Slice 6 release evidence was created. Phase 6 remains
 **5/15** pending source-bound real gate and strict
 manifest.
+
+## R11 source-bound pre-issuer inputs (2026-10-03)
+
+Successor runtime R `ac525c615bfb788607da716ce8736e7babfd8fd0`
+remains an independently clean checkout. Its twelve local-role candidates and
+Desktop candidate were rebuilt from R; the Browser archive was reopened by
+the source-bound role/Desktop/Browser image-supply preflight, which passed
+under race in 159.05 seconds. Independently, all four complete pinned
+Vault/PostgreSQL/Valkey/DNS OCI archives passed the five-service external
+image-supply component. The one-shot Linux/arm64 terminal operator was built
+from the same clean R source (`sha256:68db76678b088d7f88a0edb27dc758fbd3285be51148fad166257f42d017dcec`)
+and returned the exact v2 capability in a non-root, networkless, bounded
+Docker preflight container. That container was subsequently absent. These
+checks did not launch Vault or issue a certificate.
+
+The first E-only negative-input attempt exhausted its three-minute context
+while repeatedly reopening the full role/Desktop/Browser supply. Its error
+category was therefore **not** proof that the deliberately incomplete Vault
+archive had been rejected. Sandbox approved a narrower test-harness change:
+the existing complete external-archive check now precedes the independent
+role/Desktop/Browser check, while both remain mandatory for positive
+admission; the negative test additionally rejects any result after context
+expiry. The three-minute negative-test budget and all live process deadlines
+remain unchanged. With this correction, the same admission function rejected
+both the stale source revision and selected-only Vault archive before any
+Docker run or issuer, in 0.09 seconds under race. The tagged E package race
+suite, vet and diff check passed. This is pre-issuer component evidence only;
+the approved one-time real Vault→Product migration gate remains separate,
+and Phase 6 remains **5/15**.

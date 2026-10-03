@@ -56,16 +56,16 @@ func slice6VaultPreflightStaticInputs(ctx context.Context, input slice6VaultStat
 		verifyCleanSlice6Source(ctx, source, input.sourceRevision) != nil {
 		return errors.New("Vault and terminal operator must use the same clean source revision")
 	}
+	external, err := phase6profilebuilder.LoadExternalImageSupply(ctx, input.external)
+	if err != nil || len(external.Bindings()) != len(phase6security.Slice6DesiredExternalServiceNames()) ||
+		external.VerifySources(ctx) != nil {
+		return errors.New("Vault complete external image archives unavailable")
+	}
 	images, err := phase6profilebuilder.LoadImageSupply(ctx, input.sourceRoot, input.sourceRevision,
 		input.roleCandidates, input.desktopCandidate, input.browserArchive)
 	if err != nil || len(images.LocalRoleTargets) != len(phase6security.Slice6DesiredLocalRoleTargets()) ||
 		images.Platform != input.external.Platform || images.VerifySources(ctx) != nil {
 		return errors.New("Vault source-bound role, Desktop or Browser image supply unavailable")
-	}
-	external, err := phase6profilebuilder.LoadExternalImageSupply(ctx, input.external)
-	if err != nil || len(external.Bindings()) != len(phase6security.Slice6DesiredExternalServiceNames()) ||
-		external.VerifySources(ctx) != nil {
-		return errors.New("Vault complete external image archives unavailable")
 	}
 	return nil
 }
@@ -82,7 +82,7 @@ func TestSlice6VaultPreIssuerStaticInputRejections(t *testing.T) {
 	defer cancel()
 	oldSource := static
 	oldSource.sourceRevision = strings.Repeat("0", 40)
-	if err := slice6VaultPreflightStaticInputs(ctx, oldSource); err == nil ||
+	if err := slice6VaultPreflightStaticInputs(ctx, oldSource); ctx.Err() != nil || err == nil ||
 		!strings.Contains(err.Error(), "same clean source revision") {
 		t.Fatalf("stale source must fail before issuer allocation: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestSlice6VaultPreIssuerStaticInputRejections(t *testing.T) {
 		t.Fatal("private selected-only Vault archive required for pre-issuer regression")
 	}
 	static.external.Vault.Path = incomplete
-	if err := slice6VaultPreflightStaticInputs(ctx, static); err == nil ||
+	if err := slice6VaultPreflightStaticInputs(ctx, static); ctx.Err() != nil || err == nil ||
 		!strings.Contains(err.Error(), "complete external image archives") {
 		t.Fatalf("Vault OCI archive missing layers must fail before issuer allocation: %v", err)
 	}
