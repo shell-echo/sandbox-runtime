@@ -83,6 +83,28 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		t.Fatal("Product runtime config contains absent or secret material")
 	}
 	clear(config)
+	plan, err := slice6BuildProductRuntimeLaunchPlan(composed.Profile)
+	if err != nil || len(plan.Networks) != 7 || len(plan.SocketStorageID) != 3 {
+		t.Fatalf("Product runtime source-bound launch plan unavailable: %v", err)
+	}
+	var ingress phase6security.Network
+	for _, network := range plan.Networks {
+		if network.Name == "ingress-product" {
+			ingress = network
+		}
+	}
+	observerIP, err := slice6ProductRuntimeObserverIP(ingress)
+	if err != nil || observerIP == "" {
+		t.Fatalf("Product component observer does not have a non-reserved ingress endpoint: %v", err)
+	}
+	sourceDir, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal("Product component observer source checkout unavailable")
+	}
+	observer, err := slice6BuildProductRuntimeObserver(t, ctx, sourceDir)
+	if err != nil || len(observer.Digest) != 32 {
+		t.Fatalf("Product component observer binary not built from current source: %v", err)
+	}
 	// These placeholders model only the exact 73 allocations in the prior
 	// controller→break-glass→Guest→Product→migration preparation sequence.
 	// They are not claimed as real volumes or running socket servers.
@@ -112,7 +134,7 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		t.Fatalf("offline Product input exact Docker cleanup failed: %v", err)
 	}
 	cleaned = true
-	t.Log("synthetic-CA source-bound Product runtime config admitted; four Product private files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; three run-owned volumes cleaned to zero; no Vault issuance or Product PID1")
+	t.Log("synthetic-CA source-bound Product runtime config and observer binary admitted; four Product private files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; three run-owned volumes cleaned to zero; no Vault issuance or Product PID1")
 }
 
 func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6security.Profile) map[string]string {

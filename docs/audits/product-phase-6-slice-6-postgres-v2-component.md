@@ -1063,3 +1063,62 @@ did execute and admit the Product TOML before rejecting its placeholder map.
 This is private-input **component** evidence only. No real prior 73 sockets,
 Product PID1, runtime SQL, Guest handshake, sixteen-scenario gate or release
 manifest was exercised. Phase 6 remains **5/15**.
+
+### Product runtime PID1 component staged, not executed (2026-10-03)
+
+The next gate-source change adds an explicit opt-in independent `product serve`
+PID1 after the same-run Product migration ledger/grant readback. Its
+source-bound launch plan requires seven exact isolated Product networks,
+the Product-only PostgreSQL service bridge, three distinct read-only
+signer/material sockets, the four-file private startup volume, public
+trust-anchor mounts, non-root UID/GID, the pinned core image and seccomp,
+read-only root, dropped capabilities, no host ports and fixed resource caps.
+The existing real Product TLS signer and material agent remain active; a
+separate Product PostgreSQL signer is nested around the runtime process.
+
+Sandbox approved an **extra component-only observer**, not a substitute
+public ingress relay or Guest. The test-owned Go binary is restricted to
+`ingress-product` at a temporary `.250` address explicitly disjoint from
+both Profile principal addresses. It has no Product private socket, DSN,
+key, Vault, PostgreSQL, Docker socket, host port or other role network. It
+pins the Product IP, Profile CA-bundle SHA-256, DNS/SNI, URI SAN and TLS 1.3;
+it performs normal chain verification and only bounded GET `/readyz` polls.
+The staged component also reads the `product_runtime` SQL session count and
+exact Profile source IP from the **same** PostgreSQL PID1 under fixed read-only
+SQL, then exercises ready → PostgreSQL-edge loss/not-ready → original-IP
+reconnect/ready while keeping the real Product dependency monitor and
+private Guest CRL probe. The fault path independently re-inspects the
+Product/PG PIDs, started times and restart counts, three private signer/
+material PID1 processes, all six unaffected Product endpoints, and the
+PostgreSQL bridge membership before/after the operation. A canceled Docker
+observer has an exact-name/run-label cleanup fallback; a failed network
+reconnect is propagated, not silently ignored. This observes component
+behavior, not the Guest security edge. Sandbox accepted this *network
+connectivity-loss/recovery* mechanism for the Product runtime component;
+it does **not** prove a PostgreSQL process crash/restart, storage recovery
+or HA. The full release gate still requires the real relay, independent
+Guest and all formal scenarios.
+
+The observer placement, strict output-envelope and locked-Go build tests,
+tagged package compile, tagged vet and diff check passed. A separate
+no-issuer Docker preflight proved that UID/GID 65532 can read the public CA
+fixture and execute the read-only observer bind in a networkless,
+capability-dropped container; a leftover observer-container cleanup regression
+passed with exact run-label zero. The live gate now requires a clean E source
+revision, Go 1.26.8, a pre-issuer observer build/digest and that non-root
+mount preflight **before** any new issuer allocation. The prior offline
+Product private-input positive predates this staged PID1 addition; its
+expanded no-issuer rerun subsequently passed in 122.84 seconds against the
+same clean R3 source/OCI supply. It rechecked the 78-principal, 12-role,
+14-image and 48-peer-CRL source-bound Profile; the seven-network/three-socket
+Product launch plan; the observer build and non-reserved ingress endpoint;
+the strict TOML; both private config directories and the new signer socket;
+and exact three-volume cleanup. **No new Vault issuer run or Product PID1 was
+executed**, so no runtime readiness, SQL-login or release claim is made.
+The new opt-in remains off pending a clean source checkpoint, reviewed
+preflight/evidence/cleanup pack and separate issuer authorization.
+The changed-source full locked-Go-1.26.8 race/shuffle suite, full vet,
+tagged vet, focused tagged observer race/Docker preflight, Product Contract
+lock verifier and diff check also passed. Those checks do not promote the
+staged, unexecuted PID1 path into real Product runtime evidence.
+Phase 6 remains **5/15**.

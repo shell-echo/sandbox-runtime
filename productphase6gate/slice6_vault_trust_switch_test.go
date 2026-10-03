@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,6 +34,7 @@ import (
 
 const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWITCH"
 const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTGRES_DSN"
+const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_SOURCE_REVISION"
 
 // This is real Docker component evidence for the operator bootstrap trust
 // cutover. It is not the managed certificate-controller/agent path or a Slice 6
@@ -72,6 +74,16 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			os.Getenv(slice6ProductMaterialInputsEnv) != "1") {
 		t.Fatal("Product runtime inputs require the complete migration and runtime material socket supply")
 	}
+	if os.Getenv(slice6ProductRuntimeProcessEnv) == "1" &&
+		(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") != "1" ||
+			os.Getenv(slice6ControllerPrivateConfigEnv) != "1" ||
+			os.Getenv(slice6CredentialProcessEnv) != "1" ||
+			os.Getenv(slice6CertificateProcessEnv) != "1" ||
+			os.Getenv(slice6ProductRuntimeInputsEnv) != "1" ||
+			os.Getenv(slice6ProductMigrationJobEnv) != "1" ||
+			os.Getenv(slice6ProductPostgresDSNEnv) != "1") {
+		t.Fatal("Product serve PID1 requires completed same-run migration, PostgreSQL and exact runtime inputs")
+	}
 	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" && os.Getenv(slice6ProductMigrationJobEnv) != "1" {
 		t.Fatal("controlled pre-DDL failure requires the real Product migration chain")
 	}
@@ -79,6 +91,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
 	var migrationFailure error
+	var runtimeFailure error
 	var terminalFailure error
 	static := slice6VaultStaticInputsFromEnvironment()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
@@ -106,6 +119,25 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatalf("pre-issuer static source and complete archive preflight: %v", err)
 		}
 		t.Log("pre-issuer source, role/Desktop/Browser candidates and four complete external OCI archives verified")
+	}
+	var productRuntimeObserver slice6ProductRuntimeObserver
+	if os.Getenv(slice6ProductRuntimeProcessEnv) == "1" {
+		observerRoot, err := filepath.Abs("..")
+		observerRevision := os.Getenv(slice6ProductObserverRevisionEnv)
+		if err != nil || runtime.Version() != "go1.26.8" ||
+			len(observerRevision) != 40 || !lowerHexSlice6(observerRevision) ||
+			verifyCleanSlice6Source(ctx, observerRoot, observerRevision) != nil {
+			t.Fatal("Product runtime observer requires clean E source and locked Go 1.26.8 before issuer allocation")
+		}
+		productRuntimeObserver, err = slice6BuildProductRuntimeObserver(t, ctx, observerRoot)
+		if err != nil || slice6VerifyProductRuntimeObserverBinary(productRuntimeObserver) != nil {
+			t.Fatal("Product runtime observer binary freeze failed before issuer allocation")
+		}
+		if err := slice6ProbeProductRuntimeObserverMount(ctx, productRuntimeObserver); err != nil {
+			t.Fatal("Product runtime observer non-root mount preflight failed before issuer allocation")
+		}
+		t.Logf("pre-issuer Product runtime observer source=%s binary=sha256:%x go=%s",
+			observerRevision, productRuntimeObserver.Digest, runtime.Version())
 	}
 	// Build the finite operator from its own clean source checkpoint before
 	// this test creates any run-private files or short-lived Vault authority.
@@ -636,6 +668,21 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																		"product-runtime-agent", "product-runtime",
 																		"product-material", 70, productMaterialSocketVolumes, anchorFiles,
 																		func(phase6security.Slice6BreakGlassSocketBinding) error {
+																			if os.Getenv(slice6ProductRuntimeProcessEnv) == "1" {
+																				if postgresServerID == "" {
+																					runtimeFailure = errors.New("Product serve has no same-run PostgreSQL PID1")
+																					return runtimeFailure
+																				}
+																				slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+																					"product-runtime", "product-postgres-tls-agent", "product-runtime-postgres",
+																					productRuntimeSocketVolumes, anchorFiles, func() {
+																						runtimeFailure = slice6RunProductRuntimePID1(t, ctx, run, composed,
+																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver)
+																					})
+																				if runtimeFailure != nil {
+																					return runtimeFailure
+																				}
+																			}
 																			runGuestChain()
 																			return nil
 																		})
@@ -779,6 +826,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if migrationFailure != nil {
 		t.Errorf("Product migration attempt failed after strict terminal and exact Docker cleanup: %v", migrationFailure)
+	}
+	if runtimeFailure != nil {
+		t.Errorf("Product runtime component failed after strict terminal and exact Docker cleanup: %v", runtimeFailure)
 	}
 	if terminalFailure != nil {
 		t.Errorf("strict terminal cleanup remained unconfirmed after exact Docker cleanup: %v", terminalFailure)

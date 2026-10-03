@@ -231,6 +231,15 @@ Product migration **component**, not runtime SQL, the actual Product/Guest
 security edge, nine live SQL callers or the 16-scenario release gate. Phase 6
 remains 5/15.
 
+A subsequent no-issuer offline continuation admits
+the Product v3 private inputs and stages an opt-in Product PID1 component
+using the same PostgreSQL process, three private sockets and seven isolated
+networks. Its restricted ingress-only TLS observer and SQL-connectivity-loss
+path have not run against a new issuer; they are not relay, Guest, full gate
+or readiness evidence. Sandbox accepted network disconnection only as this
+component's database-connectivity-loss mechanism, not a PostgreSQL restart
+or HA proof.
+
 The Desktop Provider's Slice 6 proof uses the strict Phase 6
 `local-candidate-non-release` executor-v2 image with a source-bound manifest,
 `provider-process.v3` live TLS/CRL and `deployment_level=local_candidate`.
