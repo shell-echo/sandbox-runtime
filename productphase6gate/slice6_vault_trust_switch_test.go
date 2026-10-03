@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6terminalcleanup"
 	"github.com/shell-echo/sandbox-runtime/internal/secretref"
@@ -133,6 +134,22 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		os.Getenv(slice6GuestRuntimeProcessEnv) != "1" {
 		t.Fatal("live Guest revoke requires connected Product and Guest PID1")
 	}
+	if os.Getenv(slice6GuestReceiptEnv) != "1" && os.Getenv(slice6GuestReceiptEvidenceRootEnv) != "" {
+		t.Fatal("private Guest evidence root requires the complete receipt chain")
+	}
+	var receiptRoot *slice6ReceiptEvidenceRoot
+	if os.Getenv(slice6GuestReceiptEnv) == "1" {
+		var rootErr error
+		receiptRoot, rootErr = slice6OpenReceiptEvidenceRoot(os.Getenv(slice6GuestReceiptEvidenceRootEnv))
+		if rootErr != nil {
+			t.Fatal("pre-issuer private Guest evidence root unavailable")
+		}
+		t.Cleanup(func() {
+			if err := receiptRoot.close(); err != nil {
+				t.Error("private Guest evidence root close unconfirmed")
+			}
+		})
+	}
 	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" && os.Getenv(slice6ProductMigrationJobEnv) != "1" {
 		t.Fatal("controlled pre-DDL failure requires the real Product migration chain")
 	}
@@ -167,6 +184,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	var guestCandidateImage string
+	var verifiedImages phase6profilebuilder.ImageSupply
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		external, images, err := slice6VaultLoadStaticInputs(ctx, static)
 		if err != nil {
@@ -175,6 +193,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if err := slice6VaultPreflightAllStoredImages(ctx, external, images); err != nil {
 			t.Fatalf("pre-issuer fixed Docker image inventory: %v", err)
 		}
+		verifiedImages = images
 		if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" {
 			binding, ok := images.LocalRoleTargets["core"]
 			if !ok || binding.Reference != binding.Digest {
@@ -252,6 +271,18 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	run, err := newSlice6DockerRun()
 	if err != nil {
 		t.Fatal(err)
+	}
+	var receiptEvidence *slice6ReceiptEvidenceRun
+	if receiptRoot != nil {
+		receiptEvidence, err = receiptRoot.newRun(run.id)
+		if err != nil {
+			t.Fatal("pre-issuer exclusive private Guest evidence run unavailable")
+		}
+		t.Cleanup(func() {
+			if err := receiptEvidence.close(); err != nil {
+				t.Error("private Guest evidence run durability or incomplete marker unconfirmed")
+			}
+		})
 	}
 	t.Logf("exact Vault trust-switch Docker run label=%s", run.label())
 	cleanupGuard := &slice6BoundedRunCleanup{budget: 45 * time.Second}
@@ -657,6 +688,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
 		composed.PrivateGuestReceipt = os.Getenv(slice6GuestReceiptEnv) == "1"
+		composed.GuestReceiptEvidence = receiptEvidence
 		if err := slice6VerifyComposedTaskCarrier(composed.Profile); err != nil {
 			t.Fatal(err)
 		}
@@ -846,6 +878,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 											slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
 												var guestBindingReceipt slice6GuestBindingFixtureReceipt
 												var guestReceiptPair slice6GuestReceiptPair
+												var mutationReceipt slice6GuestRevokeFixtureReceipt
+												var mutationVerifiedAt time.Time
 												var guestRuntimeFailure error
 												var productRuntimeID string
 												runGuestChain := func() {
@@ -864,6 +898,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles,
 																				productRuntimeObserver)
 																			if err == nil {
+																				mutationReceipt = revoked
+																				mutationVerifiedAt = time.Now().UTC()
 																				t.Logf("finite same-netns Product Store mutation confirmed; Guest post-mutation 503/exit1 observed, cause unproven: generation=%d backend_pid=%d (private receipt; not production audit)",
 																					revoked.BindingGeneration, revoked.PostgresBackendPID)
 																			}
@@ -921,7 +957,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																						if runtimeFailure == nil && composed.PrivateGuestReceipt {
 																							runtimeFailure = guestReceiptPair.verifyRevoke(guestBindingReceipt.BindingGeneration)
 																							if runtimeFailure == nil {
-																								t.Log("private Product/Guest PID1 stdout receipts joined to the same signed attempts and PG revocation; component evidence only")
+																								runtimeFailure = slice6FinishGuestReceiptEvidence(ctx, receiptEvidence,
+																									static, verifiedImages, guestBindingFixture,
+																									composed.Profile.ProfileDigest, mutationReceipt, mutationVerifiedAt)
+																								if runtimeFailure == nil {
+																									t.Log("private Product/Guest PID1 stdout receipts durably bound to same signed attempts, source/image identities and PG revocation; component evidence only")
+																								}
 																							}
 																						}
 																					})

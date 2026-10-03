@@ -27,6 +27,7 @@ type slice6VaultComposedInputs struct {
 	ProfilePath               string
 	Profile                   phase6security.Profile
 	PrivateGuestReceipt       bool
+	GuestReceiptEvidence      *slice6ReceiptEvidenceRun
 	PeerSourcesPath           string
 	PeerSources               phase6security.PeerCRLSources
 	CertificateKeys           map[string]string

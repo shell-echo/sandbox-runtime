@@ -40,6 +40,7 @@ type HubOptions struct {
 type Hub struct {
 	auth      Authenticator
 	observe   ObservationSink
+	observers *observationLifecycle
 	clock     func() time.Time
 	handshake time.Duration
 	poll      time.Duration
@@ -68,10 +69,22 @@ func NewHub(options HubOptions) (*Hub, error) {
 	if handshake < time.Second || handshake > 30*time.Second || poll < 10*time.Millisecond || poll > 30*time.Second {
 		return nil, ErrInvalid
 	}
-	return &Hub{auth: options.Authenticator, observe: options.Observation, clock: clock, handshake: handshake, poll: poll, peers: make(map[peerKey]*peer)}, nil
+	var observers *observationLifecycle
+	if options.Observation != nil {
+		observers = newObservationLifecycle()
+	}
+	return &Hub{auth: options.Authenticator, observe: options.Observation, observers: observers,
+		clock: clock, handshake: handshake, poll: poll, peers: make(map[peerKey]*peer)}, nil
 }
 
 func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if h != nil && !h.observers.enter() {
+		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+	if h != nil {
+		defer h.observers.leave()
+	}
 	writer.Header().Set("Cache-Control", "no-store")
 	if h == nil || request.Method != http.MethodGet || request.Header.Get("Origin") != "" || !exactSubprotocol(request.Header.Values("Sec-WebSocket-Protocol")) {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -100,7 +113,12 @@ func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	h.emit(Observation{Event: ObservationProductPeerInstalled, AttemptDigest: attemptDigest,
 		BindingGeneration: identity.BindingGeneration})
 	defer h.remove(key, p)
-	go h.monitorAuthority(ctx, p)
+	if h.observers.enter() {
+		go func() {
+			defer h.observers.leave()
+			h.monitorAuthority(ctx, p)
+		}()
+	}
 	p.readLoop(ctx)
 }
 
@@ -132,12 +150,26 @@ func (h *Hub) Disconnect(tenantID, workspaceID, slotKey string) {
 	if h == nil {
 		return
 	}
+	if !h.observers.enter() {
+		return
+	}
+	defer h.observers.leave()
 	h.mu.RLock()
 	p := h.peers[peerKey{tenantID, workspaceID, slotKey}]
 	h.mu.RUnlock()
 	if p != nil {
 		p.close(ErrUnavailable, "operator_disconnect")
 	}
+}
+
+// QuiesceObservation is a private opt-in producer join, not a Guest wire or
+// authorization operation. It must run after the listener and transports are
+// drained and within their existing shutdown deadline.
+func (h *Hub) QuiesceObservation(ctx context.Context) error {
+	if h == nil {
+		return ErrUnavailable
+	}
+	return h.observers.quiesce(ctx)
 }
 
 func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn) (Identity, string, error) {

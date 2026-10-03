@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +35,12 @@ type slice6GuestReceiptCapture struct {
 	role     string
 	profile  string
 	config   string
+	image    string
+	imageRef string
+	id       string
+	started  time.Time
+	evidence *slice6ReceiptEvidenceRun
+	closeErr error
 	finalize sync.Once
 }
 
@@ -163,24 +168,17 @@ func slice6ReceiptConfigDigest(document []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-func slice6StartGuestReceiptCapture(t *testing.T, parent context.Context, id, role,
-	profileDigest, configDigest string) (*slice6GuestReceiptCapture, error) {
+func slice6StartGuestReceiptCapture(t *testing.T, parent context.Context, evidence *slice6ReceiptEvidenceRun,
+	id, role, profileDigest, configDigest, image, imageRef string) (*slice6GuestReceiptCapture, error) {
 	t.Helper()
-	if parent == nil || parent.Err() != nil || len(id) != 64 || !lowerHexSlice6(id) ||
+	if parent == nil || parent.Err() != nil || evidence == nil || evidence.check() != nil ||
+		len(id) != 64 || !lowerHexSlice6(id) || !guestRevokeFixtureDigestGate(image) || imageRef == "" ||
 		(role != "product" && role != "guest") ||
 		!guestRevokeFixtureDigestGate(profileDigest) || !guestRevokeFixtureDigestGate(configDigest) {
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
-	privateDir, err := os.MkdirTemp(t.TempDir(), "receipt-")
-	if err != nil {
-		return nil, phase6guestreceipt.ErrUnavailable
-	}
-	info, err := os.Lstat(privateDir)
-	if err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
-		return nil, phase6guestreceipt.ErrUnavailable
-	}
-	path := filepath.Join(privateDir, role+"-pid1.stdout")
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	name := slice6ReceiptRawName(role)
+	file, err := evidence.createFile(name)
 	if err != nil {
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
@@ -196,8 +194,9 @@ func slice6StartGuestReceiptCapture(t *testing.T, parent context.Context, id, ro
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
 	capture := &slice6GuestReceiptCapture{cmd: command, cancel: cancel, file: file,
-		output: output, done: make(chan struct{}), path: path, role: role,
-		profile: profileDigest, config: configDigest}
+		output: output, done: make(chan struct{}), path: evidence.root.path + "/" + evidence.id + "/" + name,
+		role: role, profile: profileDigest, config: configDigest, image: image, imageRef: imageRef, id: id,
+		started: time.Now().UTC(), evidence: evidence}
 	go func() {
 		capture.waitErr = command.Wait()
 		close(capture.done)
@@ -211,12 +210,15 @@ func (capture *slice6GuestReceiptCapture) abort() {
 	}
 	capture.cancel()
 	<-capture.done
-	capture.finalize.Do(func() { _ = capture.file.Close() })
+	capture.finalize.Do(func() {
+		capture.closeErr = errors.Join(capture.file.Sync(), capture.file.Close())
+	})
 }
 
 func (capture *slice6GuestReceiptCapture) verifyStopped(ctx context.Context, run slice6DockerRun,
 	id string, expectedExit int) ([]phase6guestreceipt.Record, error) {
-	if capture == nil || ctx == nil || ctx.Err() != nil || expectedExit < 0 || expectedExit > 255 {
+	if capture == nil || ctx == nil || ctx.Err() != nil || run.id != capture.evidence.id ||
+		id != capture.id || expectedExit < 0 || expectedExit > 255 {
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
 	select {
@@ -225,9 +227,12 @@ func (capture *slice6GuestReceiptCapture) verifyStopped(ctx context.Context, run
 		capture.abort()
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
-	capture.finalize.Do(func() { _ = capture.file.Close() })
+	capture.finalize.Do(func() {
+		capture.closeErr = errors.Join(capture.file.Sync(), capture.file.Close())
+	})
 	defer capture.cancel()
-	if capture.output.overflow || capture.output.written == 0 ||
+	if capture.closeErr != nil || capture.evidence.check() != nil ||
+		capture.output.overflow || capture.output.written == 0 ||
 		capture.output.written > phase6guestreceipt.MaxTotalBytes {
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
@@ -240,19 +245,35 @@ func (capture *slice6GuestReceiptCapture) verifyStopped(ctx context.Context, run
 			return nil, phase6guestreceipt.ErrUnavailable
 		}
 	}
-	state, err, overflow := slice6DockerBounded(ctx, 128, nil, "inspect", "--format",
-		"{{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}", id)
+	state, err, overflow := slice6DockerBounded(ctx, 512, nil, "inspect", "--format",
+		"{{.Id}} {{.Image}} {{.Config.Image}} {{.HostConfig.LogConfig.Type}} {{.Config.Tty}} {{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}", id)
 	defer clear(state)
-	if err != nil || overflow || string(state) != "false "+strconv.Itoa(expectedExit)+" false\n" {
+	fields := strings.Fields(string(state))
+	if err != nil || overflow || len(fields) != 8 || fields[0] != id ||
+		fields[1] != capture.image || fields[2] != capture.imageRef ||
+		fields[3] != "none" || fields[4] != "false" || fields[5] != "false" ||
+		fields[6] != strconv.Itoa(expectedExit) || fields[7] != "false" {
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
-	document, err := os.ReadFile(capture.path)
+	document, err := capture.evidence.readFile(slice6ReceiptRawName(capture.role), phase6guestreceipt.MaxTotalBytes)
 	if err != nil || len(document) != capture.output.written {
 		clear(document)
 		return nil, phase6guestreceipt.ErrUnavailable
 	}
 	defer clear(document)
-	return phase6guestreceipt.Verify(document, capture.role, capture.profile, capture.config)
+	records, err := phase6guestreceipt.Verify(document, capture.role, capture.profile, capture.config)
+	if err != nil {
+		return nil, err
+	}
+	if err := capture.evidence.recordRaw(slice6ReceiptRawBinding{Role: capture.role,
+		File: slice6ReceiptRawName(capture.role), SHA256: slice6ReceiptSHA256(document),
+		Bytes: len(document), ProfileDigest: capture.profile, ConfigDigest: capture.config,
+		SelectedImage: capture.image, ActualImage: fields[1], ContainerID: capture.id,
+		DockerExitCode: expectedExit, CaptureStartUTC: capture.started.Format(time.RFC3339Nano),
+		CaptureFinishUTC: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
+		return nil, phase6guestreceipt.ErrUnavailable
+	}
+	return records, nil
 }
 
 func slice6StopReceiptContainer(ctx context.Context, run slice6DockerRun, id string) error {

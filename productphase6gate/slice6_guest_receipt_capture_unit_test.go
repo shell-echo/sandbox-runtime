@@ -94,6 +94,24 @@ func TestSlice6GuestReceiptAttachedDockerNoIssuer(t *testing.T) {
 	})
 	profile := "sha256:" + strings.Repeat("a", 64)
 	config := "sha256:" + strings.Repeat("b", 64)
+	privateRoot := filepath.Join(t.TempDir(), "private-evidence")
+	if err := os.Mkdir(privateRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	privateRoot, err = filepath.EvalSymlinks(privateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceRoot, err := slice6OpenReceiptEvidenceRoot(privateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidenceRoot.close()
+	evidence, err := evidenceRoot.newRun(run.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidence.close()
 	begin := phase6guestreceipt.Record{Protocol: phase6guestreceipt.Protocol, Role: "guest",
 		Event: "begin", Sequence: 1, ElapsedNanos: 1, UnixMillis: 1_700_000_000_000,
 		ProfileDigest: profile, ConfigDigest: config}
@@ -118,7 +136,8 @@ func TestSlice6GuestReceiptAttachedDockerNoIssuer(t *testing.T) {
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create no-issuer attached Docker probe failed")
 	}
-	capture, err := slice6StartGuestReceiptCapture(t, ctx, id, "guest", profile, config)
+	capture, err := slice6StartGuestReceiptCapture(t, ctx, evidence, id, "guest", profile, config,
+		"sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c", slice6PinnedAlpineImage)
 	if err != nil {
 		t.Fatal("start no-issuer attached Docker collector failed")
 	}
@@ -135,8 +154,19 @@ func TestSlice6GuestReceiptAttachedDockerNoIssuer(t *testing.T) {
 	if err != nil || parent.Mode().Perm() != 0o700 {
 		t.Fatal("private receipt capture directory mode drift")
 	}
-	created, err = run.docker(ctx, "create", "--pull=never", "--name", "sr-p6-receipt-exit-"+run.id,
-		"--label", run.label(), "--log-driver=none", "--network=none", "--restart=no",
+	secondRun, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
+		defer stop()
+		if err := secondRun.cleanup(cleanup); err != nil {
+			t.Errorf("second attached receipt collector exact cleanup: %v", err)
+		}
+	})
+	created, err = secondRun.docker(ctx, "create", "--pull=never", "--name", "sr-p6-receipt-exit-"+secondRun.id,
+		"--label", secondRun.label(), "--log-driver=none", "--network=none", "--restart=no",
 		"--user=65532:65532", "--read-only", "--cap-drop=ALL",
 		"--security-opt=no-new-privileges:true", "--memory=67108864", "--pids-limit=16",
 		"-e", "BEGIN="+string(beginJSON), "-e", "SEAL="+string(sealJSON),
@@ -146,15 +176,21 @@ func TestSlice6GuestReceiptAttachedDockerNoIssuer(t *testing.T) {
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create nonzero-exit attached Docker probe failed")
 	}
-	capture, err = slice6StartGuestReceiptCapture(t, ctx, id, "guest", profile, config)
+	secondEvidence, err := evidenceRoot.newRun(secondRun.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secondEvidence.close()
+	capture, err = slice6StartGuestReceiptCapture(t, ctx, secondEvidence, id, "guest", profile, config,
+		"sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c", slice6PinnedAlpineImage)
 	if err != nil {
 		t.Fatal("start nonzero-exit attached Docker collector failed")
 	}
 	defer capture.abort()
-	if _, err := capture.verifyStopped(ctx, run, id, 2); err == nil {
+	if _, err := capture.verifyStopped(ctx, secondRun, id, 2); err == nil {
 		t.Fatal("collector accepted a mismatched nonzero exit code")
 	}
-	records, err = capture.verifyStopped(ctx, run, id, 3)
+	records, err = capture.verifyStopped(ctx, secondRun, id, 3)
 	if err != nil || len(records) != 2 {
 		t.Fatal("collector rejected the exact observed nonzero exit code")
 	}

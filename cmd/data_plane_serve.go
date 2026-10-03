@@ -67,7 +67,7 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 		if profileErr != nil {
 			return profileErr
 		}
-		defer sealLocalGuestReceipt(guestReceipt)
+		defer guestReceipt.Abort()
 	}
 	var err error
 	var graph roleprocess.ApplicationGraph
@@ -91,10 +91,19 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 	if err != nil {
 		return err
 	}
+	baseGraphShutdown := graph.Shutdown
+	if guestReceipt != nil {
+		if err := bindGuestReceiptGraph(&graph, guestReceipt); err != nil {
+			if baseGraphShutdown != nil {
+				_ = baseGraphShutdown(ctx)
+			}
+			return err
+		}
+	}
 	composition, err := roleprocess.NewWithGraph(ctx, cfg, graph)
 	if err != nil {
-		if graph.Shutdown != nil {
-			_ = graph.Shutdown(ctx)
+		if baseGraphShutdown != nil {
+			_ = baseGraphShutdown(ctx)
 		}
 		return err
 	}

@@ -252,6 +252,71 @@ func TestPrivateObservationCorrelatesInstalledPeerAndCompletedTransportClose(t *
 	}
 }
 
+type blockedAuthorityMonitor struct {
+	Authenticator
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (a *blockedAuthorityMonitor) CheckAuthority(ctx context.Context, identity Identity) error {
+	a.once.Do(func() { close(a.entered) })
+	<-a.release
+	return a.Authenticator.CheckAuthority(ctx, identity)
+}
+
+func TestPrivateObservationQuiescenceJoinsActualAuthorityMonitor(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	auth := &blockedAuthorityMonitor{Authenticator: newMemoryAuthenticator(publicKey, 1),
+		entered: make(chan struct{}), release: make(chan struct{})}
+	hub, err := NewHub(HubOptions{Authenticator: auth, AuthorityPollPeriod: 10 * time.Millisecond,
+		Observation: func(Observation) {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	agent, err := NewAgent(AgentOptions{URL: "ws" + strings.TrimPrefix(server.URL, "http"),
+		GuestID: "gst-test", BindingGeneration: 1, PrivateKey: privateKey,
+		Handlers: map[string]OperationHandler{"guest.health": func(context.Context, json.RawMessage) (any, error) { return true, nil }}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	agentDone := make(chan error, 1)
+	go func() { agentDone <- agent.Run(ctx) }()
+	_ = waitForCall(t, hub, "guest.health", nil)
+	select {
+	case <-auth.entered:
+	case <-ctx.Done():
+		t.Fatal("actual authority monitor did not enter")
+	}
+	hub.Disconnect("tenant-test", "wrk-test", "primary-code")
+	joined := make(chan error, 1)
+	go func() { joined <- hub.QuiesceObservation(ctx) }()
+	select {
+	case err := <-joined:
+		t.Fatalf("quiescence completed with active authority monitor: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(auth.release)
+	select {
+	case err := <-joined:
+		if err != nil {
+			t.Fatalf("joined authority monitor: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("authority monitor did not join")
+	}
+	cancel()
+	select {
+	case <-agentDone:
+	case <-time.After(time.Second):
+		t.Fatal("Guest agent did not stop after monitor join")
+	}
+}
+
 func awaitObservation(t *testing.T, events <-chan Observation, kind string) Observation {
 	t.Helper()
 	deadline := time.After(2 * time.Second)

@@ -181,8 +181,9 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 	}
 	var receiptCapture *slice6GuestReceiptCapture
 	if composed.PrivateGuestReceipt {
-		receiptCapture, err = slice6StartGuestReceiptCapture(t, parent, id, "product",
-			profile.ProfileDigest, receiptConfigDigest)
+		receiptCapture, err = slice6StartGuestReceiptCapture(t, parent, composed.GuestReceiptEvidence,
+			id, "product", profile.ProfileDigest, receiptConfigDigest,
+			plan.Principal.ImageDigest, plan.Principal.ImageReference)
 		if err != nil {
 			return errors.New("start attached Product runtime PID1 receipt capture")
 		}

@@ -48,6 +48,12 @@ canonical receipts with `--log-driver=none` and classify exact container exit
 containers clean by exact label. This proves the collector carrier and exit
 classification, not a Product/Guest lifecycle signal or production evidence.
 
+The current E-only collector additionally requires an explicit private,
+persistent root and an exclusive run-ID subdirectory. Its read-only verifier
+reopens bounded Product/Guest raw files, the canonical fixture mutation
+receipt and source/image/config binding; a disposable test directory is not
+durable component evidence.
+
 The options considered with Sandbox were:
 
 1. Existing `/readyz`, PostgreSQL row, container/agent fingerprints and
@@ -68,7 +74,10 @@ The options considered with Sandbox were:
    attempt digest, binding generation and bounded in-process elapsed/wall
    time. The Gate
    binds the stream to its exact Docker container ID and run ID; it retains
-   no raw frames, keys, tokens, signatures, addresses or unredacted IDs.
+   no raw frames, keys, tokens, signatures or addresses. The exact fixture
+   receipt, including its private Guest/container identifiers, stays only in
+   the operator-owned 0700 evidence run for independent verification; it is
+   not a stable API, runtime mount or routine diagnostic output.
    `product/adapter/postgres/guest.go` must distinguish a validated signature
    on a revoked row from invalid signature and store unavailability without
    changing admission. `guestagent/hub.go` and `guestagent/agent.go` provide
@@ -99,11 +108,14 @@ Contract migration. Sandbox has since authorized this exact bounded runtime
 implementation and no-issuer component verification, but **not** another
 issuer run. The optional v3 config switch, both process hooks, same-transaction
 PostgreSQL classification, closed receipt writer and strict stream verifier
-now exist. The E-only `docker start -a` collector now opens 0600 bounded
-captures before Product/Guest PID1 startup, checks exact stopped/exit/OOM
-state, verifies each closed stream against source-derived config/Profile
-digests, and joins accepted/closed and fresh validated-revoked signed attempt
-digests. This path has passed no-issuer Docker and causal-drift tests but has
+now exist. The E-only `docker start -a` collector opens 0600 bounded captures
+under the persistent 0700 run root before Product/Guest PID1 startup, waits
+for exact Guest running PID1 within the existing 45-second budget, checks
+stopped/exit/OOM/image identity, verifies both closed streams against
+source-derived config/Profile digests, and joins accepted/closed and fresh
+validated-revoked signed attempt digests. It stores E/R/F source, candidate
+image, fixture mutation and raw-byte bindings only after both streams pass.
+This path has passed no-issuer Docker and causal-drift tests but has
 **not** run with the real Product/Guest pair. Pinned arm64 Docker proves normal non-TTY attach and a deliberately
 unread attached-output writer cancellation/join; real isolated PostgreSQL
 proves the signed revoked positive and wrong-signature/capability/generation/
@@ -117,3 +129,17 @@ source-bound Product/Guest PID1 run. The new R/F candidate still must be built a
 E collector must then observe actual source-bound Product/Guest PID1 streams,
 and the full run must pass all 16 scenarios with a strict manifest.
 None of these component results advances Phase 6 beyond **5/15**.
+
+Sandbox rejected the first `72ffa6d` R checkpoint for an unjoined-producer
+`seal` race and E's disposable raw capture. R now joins Product's actual Hub
+handler/monitor/auth paths and Guest's Agent lifecycle before sealing under
+the inherited shutdown context, aborting on cancellation or timeout. E
+requires `SANDBOX_RUNTIME_PHASE6_SLICE6_RUN_EVIDENCE_ROOT` before issuer
+allocation; failure retains bounded raw files plus `incomplete.json`, never
+an accepted disposition. Deterministic handler/monitor/writer tests, a real
+Linux Docker abort probe, directory/file replacement, tamper, identity,
+overflow and sync-failure negatives, and the no-issuer attached Docker probe
+pass locally. The `72ffa6d` role/Desktop images are preserved only as
+**unaccepted diagnostic** artifacts. A clean corrected R/E checkpoint, fresh
+R/F rebuild, independent review and newly authorized same-run gate are still
+required. Phase 6 remains **5/15**.

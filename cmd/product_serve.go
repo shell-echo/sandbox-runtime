@@ -142,7 +142,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 			if err != nil {
 				return err
 			}
-			defer sealLocalGuestReceipt(guestReceipt)
+			defer guestReceipt.Abort()
 		}
 	}
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
@@ -217,6 +217,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	}
 	var privateGuest *productprocess.PrivateGuestServer
 	var privateGuestProbe func(context.Context) error
+	var guestHub *guestagent.Hub
 	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
 		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(productConfig.TLS.PeerCRLRoleFile,
 			securityProfile, productConfig.TLS.PeerCRLSourceMappingDigest, productConfig.TLS.PeerCRLRoleDigest)
@@ -248,6 +249,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if hubErr != nil {
 			return fmt.Errorf("construct Product Guest Hub: %w", hubErr)
 		}
+		guestHub = hub
 		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, hub, guestTLS, guard,
 			maxAge, productConfig.GuestControlMaxConnections)
 		if err != nil {
@@ -288,7 +290,12 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	}
 	components := map[string]server.Server{"product": productServer, "product-dependencies": monitor}
 	if privateGuest != nil {
-		components["product-guest"] = privateGuest
+		if guestReceipt != nil {
+			components["product-guest"] = productGuestReceiptServer{Server: privateGuest,
+				hub: guestHub, recorder: guestReceipt}
+		} else {
+			components["product-guest"] = privateGuest
+		}
 	}
 	return server.RunE(components)
 }

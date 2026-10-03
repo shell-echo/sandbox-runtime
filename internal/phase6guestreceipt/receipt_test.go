@@ -163,6 +163,33 @@ func TestReceiptCancellationJoinsBlockedWriter(t *testing.T) {
 	}
 }
 
+func TestAbortedProducerJoinCannotLeaveCompleteReceipt(t *testing.T) {
+	requireLinuxReceiptPipe(t)
+	reader, writer := receiptTestPipe(t)
+	defer reader.Close()
+	defer writer.Close()
+	recorder, err := New(writer, "guest", testDigest, testDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder.Emit(guestagent.ObservationGuestHelloWritten, testDigest, 1, "")
+	recorder.Abort()
+	recorder.Emit(guestagent.ObservationGuestWelcomeAccepted, testDigest, 1, "")
+	if err := recorder.Seal(context.Background()); err == nil {
+		t.Fatal("aborted producer join was later accepted as sealed")
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	document, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(document, "guest", testDigest, testDigest); err == nil {
+		t.Fatal("aborted producer stream was accepted as complete evidence")
+	}
+}
+
 func TestReceiptRejectsInvalidRoleDigestEventAndTTY(t *testing.T) {
 	requireLinuxReceiptPipe(t)
 	reader, writer := receiptTestPipe(t)

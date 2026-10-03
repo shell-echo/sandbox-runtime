@@ -50,7 +50,7 @@ func TestDockerNonTTYReceiptWriterAndBlockedAttach(t *testing.T) {
 	if err := os.Chmod(statusDirectory, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	create := func(full bool) string {
+	create := func(full, abort bool) string {
 		t.Helper()
 		var random [5]byte
 		if _, err := rand.Read(random[:]); err != nil {
@@ -66,6 +66,9 @@ func TestDockerNonTTYReceiptWriterAndBlockedAttach(t *testing.T) {
 			args = append(args, "--env", "PHASE6_RECEIPT_PROBE_FULL=1", "--mount",
 				"type=bind,src="+statusDirectory+",dst=/status")
 		}
+		if abort {
+			args = append(args, "--env", "PHASE6_RECEIPT_PROBE_ABORT=1")
+		}
 		args = append(args, dockerProbeImage)
 		command := exec.CommandContext(t.Context(), "docker", args...)
 		output, err := command.Output()
@@ -80,7 +83,7 @@ func TestDockerNonTTYReceiptWriterAndBlockedAttach(t *testing.T) {
 		})
 		return id
 	}
-	healthy := create(false)
+	healthy := create(false, false)
 	healthyCommand := exec.CommandContext(t.Context(), "docker", "start", "-a", healthy)
 	document, err := healthyCommand.Output()
 	if err != nil {
@@ -89,8 +92,16 @@ func TestDockerNonTTYReceiptWriterAndBlockedAttach(t *testing.T) {
 	if records, err := Verify(document, "guest", testDigest, testDigest); err != nil || len(records) != 18 {
 		t.Fatalf("actual Docker stdout receipt was not complete: records=%d err=%v", len(records), err)
 	}
+	aborted := create(false, true)
+	abortedDocument, err := exec.CommandContext(t.Context(), "docker", "start", "-a", aborted).Output()
+	if err != nil {
+		t.Fatal("actual Docker aborted receipt probe did not terminate cleanly")
+	}
+	if _, err := Verify(abortedDocument, "guest", testDigest, testDigest); err == nil {
+		t.Fatal("actual Docker aborted producer emitted a complete receipt")
+	}
 
-	blocked := create(true)
+	blocked := create(true, false)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	attached := exec.CommandContext(ctx, "docker", "start", "-a", blocked)

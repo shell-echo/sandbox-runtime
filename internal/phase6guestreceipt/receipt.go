@@ -55,6 +55,7 @@ type Recorder struct {
 	count    uint64
 	dropped  uint64
 	sealed   bool
+	aborted  bool
 	writeErr error
 }
 
@@ -117,10 +118,18 @@ func (r *Recorder) Emit(event, digest string, generation int64, reason string) {
 // Seal joins the sole writer; a missing or nonzero-drop seal is never valid
 // evidence. The caller supplies its existing shutdown context/budget.
 func (r *Recorder) Seal(ctx context.Context) error {
-	if r == nil || ctx == nil {
+	if r == nil {
+		return ErrUnavailable
+	}
+	if ctx == nil || ctx.Err() != nil {
+		r.Abort()
 		return ErrUnavailable
 	}
 	r.mu.Lock()
+	if r.aborted {
+		r.mu.Unlock()
+		return ErrUnavailable
+	}
 	if !r.sealed {
 		r.sealed = true
 		r.seq++
@@ -138,16 +147,32 @@ func (r *Recorder) Seal(ctx context.Context) error {
 	select {
 	case <-r.done:
 	case <-ctx.Done():
-		r.stopOnce.Do(func() { close(r.stop) })
-		<-r.done
+		r.Abort()
 		return ErrUnavailable
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.writeErr != nil || r.dropped != 0 {
+	if r.writeErr != nil || r.dropped != 0 || r.aborted {
 		return ErrUnavailable
 	}
 	return nil
+}
+
+// Abort joins the writer without emitting a complete seal. It is used when
+// source quiescence or the inherited shutdown deadline cannot be proved.
+func (r *Recorder) Abort() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	if !r.sealed {
+		r.sealed = true
+		close(r.queue)
+	}
+	r.aborted = true
+	r.stopOnce.Do(func() { close(r.stop) })
+	r.mu.Unlock()
+	<-r.done
 }
 
 func (r *Recorder) record(event string) Record {

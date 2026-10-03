@@ -2717,3 +2717,60 @@ child exec, exact fd closure, overflow, cancellation and blocked-pipe join.
 These are carrier/component checks only. The original E7 result, R884/F884
 artifacts and the 16-scenario issuer/release gate remain unchanged and
 unpassed; Phase 6 stays **5/15**.
+
+### Slice 6 Guest receipt producer join and persistent E evidence correction (2026-10-04)
+
+Sandbox review rejected the first R checkpoint as a candidate for another
+issuer run. A `seal` written while a hijacked Product Hub handler, authority
+monitor, revocation-authentication callback or Guest Agent lifecycle remained
+active could be followed by a dropped in-memory event invisible to the
+external verifier. Product's transport shutdown alone did not join those
+producers. The optional observation path now tracks actual Hub handlers,
+monitor goroutines and explicit disconnects, denies new entries during
+quiescence and joins them before Product seals. Guest joins its actual
+`Agent.Run` graph before sealing. Both use the inherited 30-second shutdown
+context with at most two seconds for the writer; cancellation, producer-join
+failure or writer failure aborts without a complete seal. The default-off
+paths retain their prior lifecycle behavior. An aborted stream is never
+evidence even if earlier records reached stdout.
+
+The E-only attached collector must observe the exact Guest container enter
+`State.Running` with a positive PID1 before dependent readiness checks; this
+wait consumes the existing 45-second readiness budget. `created`, early exit,
+OOM, daemon/inspect error and attach loss do not become negative readiness
+polls or successful evidence.
+
+The approved E-only private component-evidence root is supplied explicitly
+through `SANDBOX_RUNTIME_PHASE6_SLICE6_RUN_EVIDENCE_ROOT` when the receipt
+switch is on. Before issuer allocation it must already be an absolute,
+canonical, symlink-free, current-owner 0700 directory. E creates one
+exclusive random-run-ID 0700 child and fixed 0600 Product/Guest PID1 raw
+stdout files; no fallback directory, runtime mount, socket, endpoint or
+formal evidence-manifest field is added. FD-relative no-follow operations
+recheck root/run/file inode, owner and mode; writes and directory entries are
+synced, bounded and independently reopened. Captures remain under the
+operator-owned root after the test, including failed runs. Missing or
+tampered bytes, replacement, overflow, interrupted attach, wrong exit/OOM,
+write/sync failure or incomplete shutdown cannot publish an accepted binding.
+A failed run retains an `incomplete.json` marker; any such extra file makes
+the read-only complete verifier reject that run.
+
+Only after both actual Docker stdout streams and the trusted fixture mutation
+have been independently verified may E write its bounded canonical mutation
+receipt and final component binding. The binding records distinct E/R/F
+revisions and source-tree digests, the verified local candidate archive,
+selected OCI manifest/config/image identity, run/Profile/startup-config
+digests, exact Docker container/image/exit identities, raw byte counts and
+SHA-256, and capture/fixture-verification UTC boundaries. An independent
+read-only pass reopens exactly those four files, rejects extra/incomplete
+files, checks canonical bytes, hashes, two closed receipt streams and their
+same-attempt causal join. The fixture verification time is a trusted E
+boundary, **not** a cross-process clock or database commit timestamp. No
+credentials, nonce values, signatures, raw endpoints or daemon diagnostics
+are retained. This is still partial component evidence; the formal closed
+Slice 6 one-run recorder and final scenarios remain separate.
+
+The clean `72ffa6d` R/F candidate rebuilds made before this review are
+preserved as unaccepted diagnostic artifacts. No new issuer run is authorized
+by these corrections; R/E must be committed, rebuilt from clean sources and
+reviewed again first. Phase 6 remains **5/15**.

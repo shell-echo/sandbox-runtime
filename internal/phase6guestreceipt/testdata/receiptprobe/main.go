@@ -26,6 +26,15 @@ func main() {
 	if err != nil {
 		os.Exit(2)
 	}
+	if os.Getenv("PHASE6_RECEIPT_PROBE_ABORT") == "1" {
+		recorder.Emit(guestagent.ObservationGuestHelloWritten, digest, 1, "")
+		recorder.Abort()
+		recorder.Emit(guestagent.ObservationGuestWelcomeAccepted, digest, 1, "")
+		if recorder.Seal(context.Background()) == nil {
+			os.Exit(5)
+		}
+		return
+	}
 	for index := range 16 {
 		sum := sha256.Sum256([]byte(strconv.Itoa(index)))
 		recorder.Emit(guestagent.ObservationGuestHelloWritten, "sha256:"+hex.EncodeToString(sum[:]), 1, "")

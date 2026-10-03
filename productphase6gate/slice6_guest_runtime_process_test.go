@@ -195,9 +195,12 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		return err
 	}
 	var receiptCapture *slice6GuestReceiptCapture
+	var receiptReadyDeadline time.Time
 	if composed.PrivateGuestReceipt {
-		receiptCapture, err = slice6StartGuestReceiptCapture(t, ctx, id, "guest",
-			profile.ProfileDigest, startupDigest)
+		receiptReadyDeadline = time.Now().Add(45 * time.Second)
+		receiptCapture, err = slice6StartGuestReceiptCapture(t, ctx, composed.GuestReceiptEvidence,
+			id, "guest", profile.ProfileDigest, startupDigest,
+			plan.Principal.ImageDigest, plan.Principal.ImageReference)
 		if err != nil {
 			return errors.New("start attached Guest PID1 receipt capture")
 		}
@@ -205,11 +208,49 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	} else if _, err := run.docker(ctx, "start", id); err != nil {
 		return errors.New("start independent Guest PID1")
 	}
+	if receiptCapture != nil {
+		if err := slice6AwaitGuestReceiptStart(ctx, receiptReadyDeadline, 100*time.Millisecond,
+			func(check context.Context) (string, int, error) {
+				state, stateErr, overflow := slice6DockerBounded(check, 160, nil, "inspect", "--format",
+					"{{.Id}} {{.State.Status}} {{.State.Running}} {{.State.Pid}} {{.State.OOMKilled}}", id)
+				defer clear(state)
+				fields := strings.Fields(string(state))
+				if stateErr != nil || overflow || len(fields) != 5 || fields[0] != id || fields[4] != "false" {
+					return "", 0, errors.New("Guest attached start state unavailable")
+				}
+				pid, parseErr := strconv.Atoi(fields[3])
+				if parseErr != nil || pid < 0 || pid > 1<<22 ||
+					(fields[2] != "true" && fields[2] != "false") {
+					return "", 0, errors.New("Guest attached start state invalid")
+				}
+				select {
+				case <-receiptCapture.done:
+					return "", 0, errors.New("Guest Docker attach exited before PID1 readiness")
+				default:
+				}
+				if fields[1] == "running" && fields[2] == "true" {
+					return fields[1], pid, nil
+				}
+				if fields[1] == "created" && fields[2] == "false" && pid == 0 {
+					return fields[1], pid, nil
+				}
+				return "", 0, errors.New("Guest PID1 exited or changed state before readiness")
+			}); err != nil {
+			return err
+		}
+	}
 	if err := slice6VerifyGuestRuntimeRunningNetworks(ctx, run, id, plan,
 		productEdge.NetworkID, internal.NetworkID); err != nil {
 		return err
 	}
-	if err := slice6AwaitGuestConnected(ctx, 45*time.Second, 250*time.Millisecond,
+	readyBudget := 45 * time.Second
+	if receiptCapture != nil {
+		readyBudget = time.Until(receiptReadyDeadline)
+		if readyBudget <= 0 {
+			return errors.New("Guest attached startup consumed the fixed readiness budget")
+		}
+	}
+	if err := slice6AwaitGuestConnected(ctx, readyBudget, 250*time.Millisecond,
 		func(check context.Context) (bool, error) {
 			guest, inspectErr := slice6InspectProductRuntimeMember(check, run, id)
 			if inspectErr == nil {
@@ -277,6 +318,72 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		receipts.Guest = records
 	}
 	return nil
+}
+
+// The attached Docker CLI may have started without the exact PID1 entering
+// State.Running. This wait consumes, rather than extends, the existing 45s
+// readiness budget and never turns an inspect/exit error into a negative poll.
+func slice6AwaitGuestReceiptStart(parent context.Context, deadline time.Time, interval time.Duration,
+	sample func(context.Context) (string, int, error)) error {
+	if parent == nil || parent.Err() != nil || !deadline.After(time.Now()) || interval <= 0 || sample == nil {
+		return errors.New("Guest attached start budget unavailable")
+	}
+	ctx, cancel := context.WithDeadline(parent, deadline)
+	defer cancel()
+	for ctx.Err() == nil {
+		status, pid, err := sample(ctx)
+		if err != nil {
+			return err
+		}
+		if status == "running" && pid > 0 {
+			return nil
+		}
+		if status != "created" || pid != 0 {
+			return errors.New("Guest attached start observed unexpected state")
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
+	}
+	return errors.New("Guest attached PID1 did not start within the fixed readiness budget")
+}
+
+func TestSlice6AttachedGuestStartWaitsExactRunningAndFailsClosed(t *testing.T) {
+	ctx := t.Context()
+	calls := 0
+	if err := slice6AwaitGuestReceiptStart(ctx, time.Now().Add(time.Second), time.Millisecond,
+		func(context.Context) (string, int, error) {
+			calls++
+			if calls < 3 {
+				return "created", 0, nil
+			}
+			return "running", 42, nil
+		}); err != nil || calls != 3 {
+		t.Fatalf("delayed exact PID1 start: calls=%d err=%v", calls, err)
+	}
+	for _, candidate := range []struct {
+		name   string
+		status string
+		pid    int
+		err    error
+	}{
+		{"early exit", "exited", 0, nil},
+		{"daemon failure", "", 0, errors.New("inspect failed")},
+		{"pid absent", "running", 0, nil},
+		{"status drift", "restarting", 42, nil},
+	} {
+		t.Run(candidate.name, func(t *testing.T) {
+			if err := slice6AwaitGuestReceiptStart(ctx, time.Now().Add(time.Second), time.Millisecond,
+				func(context.Context) (string, int, error) {
+					return candidate.status, candidate.pid, candidate.err
+				}); err == nil {
+				t.Fatal("attached Guest start accepted an exited or unobserved PID1")
+			}
+		})
+	}
 }
 
 // The deadline is created before the first inspect and is inherited by each
