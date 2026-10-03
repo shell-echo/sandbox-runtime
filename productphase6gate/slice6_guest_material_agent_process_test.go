@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,8 +38,8 @@ type slice6MaterialRunResult struct {
 func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, serverID, publicKeyDigest string,
 	socketVolumes, anchorFiles map[string]string,
-	onReady func(phase6security.Slice6BreakGlassSocketBinding)) {
-	_ = slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed, serverID, publicKeyDigest,
+	onReady func(phase6security.Slice6BreakGlassSocketBinding)) error {
+	return slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed, serverID, publicKeyDigest,
 		"", "guest-agent", "guest-runtime", "guest", 67, socketVolumes, anchorFiles,
 		func(binding phase6security.Slice6BreakGlassSocketBinding) error {
 			if onReady != nil {
@@ -52,7 +53,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	composed slice6VaultComposedInputs, serverID, expectedDigest, expectedDSNDigest,
 	agentDeployment, ownerDeployment, label string, expectedSockets int,
 	socketVolumes, anchorFiles map[string]string,
-	onReady func(phase6security.Slice6BreakGlassSocketBinding) error) error {
+	onReady func(phase6security.Slice6BreakGlassSocketBinding) error) (resultErr error) {
 	t.Helper()
 	profile := composed.Profile
 	migration := agentDeployment == "product-migration-agent"
@@ -276,6 +277,22 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		clear(startup)
 		completed <- slice6MaterialRunResult{output, startErr}
 	}()
+	completionConsumed := false
+	stopRequired := true
+	runtimeCleanup := slice6RuntimeMaterialCleanupSequence(
+		func(cleanup context.Context, arguments ...string) error {
+			_, err := run.docker(cleanup, arguments...)
+			return err
+		}, run.id, id, label, agent.ImageReference, agent.UID, agent.GID,
+		material.SocketPath, material.SocketDirectory, socketVolumes[material.SocketStorageID],
+		delivery.SocketPath, delivery.SocketDirectory, socketVolumes[delivery.SocketStorageID],
+		completed, &completionConsumed, &stopRequired)
+	// Arm before readiness checks: testing.T.Fatal/Goexit must not strand an
+	// already-created agent or leave active nonterminal ledger records.
+	guard := slice6MaterialCleanupGuard{sequence: runtimeCleanup}
+	defer guard.Finish(&resultErr, func(err error) {
+		t.Errorf("failure-path runtime material-agent cleanup: %v", err)
+	})
 	deadline := time.Now().Add(90 * time.Second)
 	running := false
 	for time.Now().Before(deadline) && ctx.Err() == nil {
@@ -286,6 +303,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		}
 		select {
 		case done := <-completed:
+			completionConsumed = true
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
 			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
@@ -332,6 +350,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		}
 		select {
 		case done := <-completed:
+			completionConsumed = true
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
 			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
@@ -344,6 +363,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		state, _ := run.docker(ctx, "inspect", "--format", "{{.State.Status}}:{{.State.ExitCode}}", id)
 		select {
 		case done := <-completed:
+			completionConsumed = true
 			stage := slice6ControllerFailureStage(done.output)
 			category := slice6MaterialFailureCategory(done.output)
 			bootstrapMS := slice6MaterialBootstrapMillis(done.output)
@@ -355,12 +375,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	}
 	if onReady != nil {
 		if callbackErr := onReady(delivery); callbackErr != nil {
-			if !migration {
-				t.Fatal("runtime material-agent callback failed outside one-shot migration")
-			}
-			return errors.Join(callbackErr, slice6AbortMigrationMaterialAgent(run, id,
-				material.SocketPath, material.SocketDirectory, socketVolumes[material.SocketStorageID],
-				agent.ImageReference, agent.UID, agent.GID, completed))
+			return callbackErr
 		}
 	}
 	if agentDeployment == "guest-agent" {
@@ -438,86 +453,210 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		slice6ObserveProductIdentityMaterial(t, ctx, run, profile, agent, owner, material,
 			config, expectedDigest, expectedDSNDigest, socketVolumes[material.SocketStorageID], root)
 	}
-	if !migration {
-		if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-			t.Fatal("stop runtime material-agent")
-		}
+	if migration {
+		// A one-shot migration agent exits after its sole resolution. If the
+		// dependent callback failed, the deferred path still stops it first.
+		stopRequired = false
 	}
-	select {
-	case done := <-completed:
-		stage := slice6ControllerFailureStage(done.output)
-		clear(done.output)
-		if done.err != nil {
-			t.Fatalf("runtime material-agent did not drain cleanly: stage=%s exit=%v", stage, done.err)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("runtime material-agent did not drain")
-	}
-	if _, err := run.docker(ctx, "rm", id); err != nil {
-		t.Fatal("remove stopped runtime material-agent")
-	}
-	cleanupMounts := []string{"--mount", "type=volume,src=" + socketVolumes[material.SocketStorageID] + ",dst=" + material.SocketDirectory + ",readonly"}
-	cleanupTest := "test ! -e " + material.SocketPath
-	if !migration {
-		cleanupMounts = append(cleanupMounts, "--mount", "type=volume,src="+socketVolumes[delivery.SocketStorageID]+",dst="+delivery.SocketDirectory+",readonly")
-		cleanupTest += " && test ! -e " + delivery.SocketPath
-	}
-	cleanupArgs := []string{"run", "--rm", "--pull=never", "--name", "sr-p6-" + label + "-clean-" + run.id,
-		"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", agent.UID, agent.GID),
-		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only"}
-	cleanupArgs = append(cleanupArgs, cleanupMounts...)
-	cleanupArgs = append(cleanupArgs, "--entrypoint=/bin/sh", agent.ImageReference, "-ec", cleanupTest)
-	if _, err := run.docker(ctx, cleanupArgs...); err != nil {
-		t.Fatal("runtime material and break-glass listener exact socket cleanup unproved")
+	resultErr = guard.Complete()
+	if resultErr != nil {
+		return resultErr
 	}
 	t.Logf("real %s material-agent clean drain removed its exact listeners", label)
 	return nil
 }
 
-// A pre-DDL callback failure must not strand the one-shot listener waiting
-// for its single resolution. The caller still owns the original error and
-// must continue normal signer/controller/terminal shutdown.
-func slice6AbortMigrationMaterialAgent(run slice6DockerRun, id, socketPath, socketDirectory,
-	volume, image string, uid, gid uint32, completed <-chan slice6MaterialRunResult) error {
-	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
+// The runtime agent must be gone before its signer and the controllers begin
+// terminal cleanup, including when a dependent callback fails or calls Goexit.
+// Only fixed failure categories leave this helper; Docker output is discarded.
+type slice6MaterialCleanupGuard struct {
+	sequence *slice6CleanupSequence
+	complete bool
+}
+
+func (guard *slice6MaterialCleanupGuard) Complete() error {
+	guard.complete = true
+	return guard.sequence.Run()
+}
+
+func (guard *slice6MaterialCleanupGuard) Finish(resultErr *error, report func(error)) {
+	if guard.complete {
+		return
+	}
+	if cleanupErr := guard.sequence.Run(); cleanupErr != nil {
+		if *resultErr != nil {
+			*resultErr = errors.Join(*resultErr, cleanupErr)
+		} else {
+			report(cleanupErr)
+		}
+	}
+}
+
+func slice6RuntimeMaterialCleanupSequence(docker func(context.Context, ...string) error,
+	runID, id, label, image string, uid, gid uint32,
+	materialPath, materialDirectory, materialVolume,
+	deliveryPath, deliveryDirectory, deliveryVolume string,
+	completed <-chan slice6MaterialRunResult, completionConsumed, stopRequired *bool) *slice6CleanupSequence {
+	drainBudget := 30 * time.Second
+	if label == "product-migration-material" {
+		// Preserve the prior bounded abort budget for the one-shot listener.
+		drainBudget = 20 * time.Second
+	}
+	return &slice6CleanupSequence{stages: []slice6CleanupStage{
 		{"stop-material-agent", func(ctx context.Context) error {
-			if _, err := run.docker(ctx, "stop", "--time", "10", id); err != nil {
-				return errors.New("Product migration material-agent stop unconfirmed")
+			if !*stopRequired {
+				return nil
+			}
+			if err := docker(ctx, "stop", "--time", "10", id); err != nil {
+				return errors.New("runtime material-agent stop unconfirmed")
 			}
 			return nil
 		}},
 		{"drain-material-agent", func(ctx context.Context) error {
+			if *completionConsumed {
+				return nil
+			}
 			select {
 			case done := <-completed:
+				*completionConsumed = true
 				clear(done.output)
 				if done.err != nil {
-					return errors.New("Product migration material-agent drain unconfirmed")
+					return errors.New("runtime material-agent drain unconfirmed")
 				}
 				return nil
-			case <-time.After(20 * time.Second):
-				return errors.New("Product migration material-agent drain timed out")
+			case <-time.After(drainBudget):
+				return errors.New("runtime material-agent drain timed out")
 			case <-ctx.Done():
-				return errors.New("Product migration material-agent cleanup deadline ended")
+				return errors.New("runtime material-agent cleanup deadline ended")
 			}
 		}},
 		{"remove-material-agent", func(ctx context.Context) error {
-			if _, err := run.docker(ctx, "rm", "-f", id); err != nil {
-				return errors.New("Product migration material-agent removal unconfirmed")
+			if err := docker(ctx, "rm", "-f", id); err != nil {
+				return errors.New("runtime material-agent removal unconfirmed")
 			}
 			return nil
 		}},
-		{"verify-material-socket", func(ctx context.Context) error {
-			if _, err := run.docker(ctx, "run", "--rm", "--pull=never", "--name", "sr-p6-product-migration-material-abort-clean-"+run.id,
-				"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", uid, gid),
+		{"verify-material-sockets", func(ctx context.Context) error {
+			arguments := []string{"run", "--rm", "--pull=never", "--name", "sr-p6-" + label + "-clean-" + runID,
+				"--label", slice6RunLabel + "=" + runID, "--network=none", "--user", fmt.Sprintf("%d:%d", uid, gid),
 				"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
-				"--mount", "type=volume,src="+volume+",dst="+socketDirectory+",readonly",
-				"--entrypoint=/bin/sh", image, "-ec", "test ! -e "+socketPath); err != nil {
-				return errors.New("Product migration material-agent socket cleanup unconfirmed")
+				"--mount", "type=volume,src=" + materialVolume + ",dst=" + materialDirectory + ",readonly"}
+			probe := "test ! -e " + materialPath
+			if deliveryPath != "" {
+				arguments = append(arguments, "--mount", "type=volume,src="+deliveryVolume+",dst="+deliveryDirectory+",readonly")
+				probe += " && test ! -e " + deliveryPath
+			}
+			arguments = append(arguments, "--entrypoint=/bin/sh", image, "-ec", probe)
+			if err := docker(ctx, arguments...); err != nil {
+				return errors.New("runtime material-agent exact socket cleanup unconfirmed")
 			}
 			return nil
 		}},
 	}}
-	return sequence.Run()
+}
+
+func TestSlice6RuntimeMaterialFailureCleanupIsSingleShot(t *testing.T) {
+	parent, cancel := context.WithCancel(t.Context())
+	cancel()
+	var commands []string
+	completed := make(chan slice6MaterialRunResult, 1)
+	completed <- slice6MaterialRunResult{output: []byte("private process output")}
+	consumed, stopRequired := false, true
+	sequence := slice6RuntimeMaterialCleanupSequence(func(ctx context.Context, args ...string) error {
+		if parent.Err() == nil || ctx.Err() != nil {
+			t.Error("material cleanup inherited the canceled business context")
+		}
+		commands = append(commands, args[0])
+		if args[0] == "stop" {
+			return errors.New("private Docker diagnostic")
+		}
+		return nil
+	}, strings.Repeat("a", 32), strings.Repeat("b", 64), "product-material", "image", 20041, 30041,
+		"/material.sock", "/material", "material-volume", "/delivery.sock", "/delivery", "delivery-volume", completed,
+		&consumed, &stopRequired)
+	callback := errors.New("original callback failure")
+	guard := &slice6MaterialCleanupGuard{sequence: sequence}
+	var reported error
+	got := func() (resultErr error) {
+		defer guard.Finish(&resultErr, func(err error) { reported = err })
+		return callback
+	}()
+	if !errors.Is(got, callback) || strings.Contains(got.Error(), "private Docker diagnostic") ||
+		!slices.Equal(commands, []string{"stop", "rm", "run"}) || reported != nil {
+		t.Fatal("material failure lost its first error, leaked a diagnostic or skipped cleanup")
+	}
+	if sequence.Run() == nil || len(commands) != 3 {
+		t.Fatal("material cleanup retried after its first execution")
+	}
+}
+
+func TestSlice6RuntimeMaterialCleanupSurvivesGoexit(t *testing.T) {
+	var commands []string
+	completed := make(chan slice6MaterialRunResult, 1)
+	completed <- slice6MaterialRunResult{}
+	consumed, stopRequired := false, true
+	sequence := slice6RuntimeMaterialCleanupSequence(func(ctx context.Context, args ...string) error {
+		commands = append(commands, args[0])
+		return nil
+	}, strings.Repeat("a", 32), strings.Repeat("b", 64), "product-material", "image", 20041, 30041,
+		"/material.sock", "/material", "material-volume", "/delivery.sock", "/delivery", "delivery-volume", completed,
+		&consumed, &stopRequired)
+	guard := &slice6MaterialCleanupGuard{sequence: sequence}
+	finished := make(chan error, 1)
+	go func() {
+		var resultErr error
+		defer func() { finished <- resultErr }()
+		defer guard.Finish(&resultErr, func(err error) { resultErr = err })
+		runtime.Goexit()
+	}()
+	select {
+	case err := <-finished:
+		if err != nil || !slices.Equal(commands, []string{"stop", "rm", "run"}) {
+			t.Fatal("Goexit skipped the runtime material cleanup order")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Goexit did not reach runtime material cleanup")
+	}
+}
+
+func TestSlice6RuntimeMaterialPreReadyCompletionDoesNotDrainTwice(t *testing.T) {
+	completed := make(chan slice6MaterialRunResult, 1)
+	// The readiness loop consumed and classified the first exit already.
+	consumed, stopRequired := true, true
+	var commands []string
+	sequence := slice6RuntimeMaterialCleanupSequence(func(ctx context.Context, args ...string) error {
+		commands = append(commands, args[0])
+		return nil
+	}, strings.Repeat("a", 32), strings.Repeat("b", 64), "product-material", "image", 20041, 30041,
+		"/material.sock", "/material", "material-volume", "/delivery.sock", "/delivery", "delivery-volume", completed,
+		&consumed, &stopRequired)
+	guard := &slice6MaterialCleanupGuard{sequence: sequence}
+	started := time.Now()
+	var resultErr error
+	guard.Finish(&resultErr, func(err error) { resultErr = err })
+	if resultErr != nil || time.Since(started) > time.Second ||
+		!slices.Equal(commands, []string{"stop", "rm", "run"}) {
+		t.Fatal("pre-ready process exit waited for an already-consumed completion or skipped cleanup")
+	}
+}
+
+func TestSlice6GuestCleanupOnlyFailureRemainsObservable(t *testing.T) {
+	completed := make(chan slice6MaterialRunResult, 1)
+	completed <- slice6MaterialRunResult{}
+	consumed, stopRequired := false, true
+	sequence := slice6RuntimeMaterialCleanupSequence(func(ctx context.Context, args ...string) error {
+		if args[0] == "stop" {
+			return errors.New("private Docker diagnostic")
+		}
+		return nil
+	}, strings.Repeat("a", 32), strings.Repeat("b", 64), "guest", "image", 20035, 30035,
+		"/material.sock", "/material", "material-volume", "/delivery.sock", "/delivery", "delivery-volume", completed,
+		&consumed, &stopRequired)
+	guard := &slice6MaterialCleanupGuard{sequence: sequence}
+	guestFailure := slice6PreserveFirstFailure(nil, guard.Complete())
+	if guestFailure == nil || strings.Contains(guestFailure.Error(), "private Docker diagnostic") {
+		t.Fatal("Guest cleanup-only error was lost or disclosed a raw diagnostic")
+	}
 }
 
 // The observer has a finite, reviewed diagnostic vocabulary. Never include

@@ -158,11 +158,18 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 			t.Fatalf("offline Product %s resources=%d, want %d", resource, len(ids), want)
 		}
 	}
+	if os.Getenv(slice6GuestFixtureAdmissionNoIssuerEnv) == "1" {
+		slice6GuestFixtureAdmissionNoIssuer(t, ctx, run, static, composed, plan, result)
+	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("offline Product input exact Docker cleanup failed: %v", err)
 	}
 	cleaned = true
-	t.Log("synthetic-CA source-bound Guest/Product startup inputs admitted; six Guest private files, four Product files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; four run-owned volumes cleaned to zero; no Vault issuance or Guest/Product PID1")
+	if os.Getenv(slice6GuestFixtureAdmissionNoIssuerEnv) == "1" {
+		t.Log("synthetic-CA source-bound Guest/Product startup inputs and finite Guest fixture create/inspect admitted; all run-owned diagnostic containers/networks/volumes cleaned to zero; no Vault issuance, SQL, fixture execution or Guest/Product PID1")
+	} else {
+		t.Log("synthetic-CA source-bound Guest/Product startup inputs admitted; six Guest private files, four Product files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; four run-owned volumes cleaned to zero; no Vault issuance or Guest/Product PID1")
+	}
 }
 
 func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6security.Profile) map[string]string {

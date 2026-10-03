@@ -38,6 +38,39 @@ const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTG
 const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_SOURCE_REVISION"
 const slice6ProductObserverExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_EXPECTED_DIGEST"
 
+// Nested callbacks may already have recorded the primary failure before an
+// enclosing process returns its cleanup result. Never replace that failure
+// with nil or duplicate it when the returned error already wraps it.
+func slice6PreserveFirstFailure(first, next error) error {
+	if first == nil {
+		return next
+	}
+	if next == nil || errors.Is(first, next) {
+		return first
+	}
+	if errors.Is(next, first) {
+		return next
+	}
+	return errors.Join(first, next)
+}
+
+func TestSlice6PreserveFirstFailureAcrossNestedCallbacks(t *testing.T) {
+	guest := errors.New("Guest cleanup-only failure")
+	callback := errors.New("primary callback failure")
+	cleanup := errors.New("material cleanup failure")
+	if got := slice6PreserveFirstFailure(guest, nil); !errors.Is(got, guest) {
+		t.Fatal("nil outer return erased Guest failure")
+	}
+	got := slice6PreserveFirstFailure(callback, errors.Join(callback, cleanup))
+	if !errors.Is(got, callback) || !errors.Is(got, cleanup) {
+		t.Fatal("outer material result erased callback or cleanup failure")
+	}
+	got = slice6PreserveFirstFailure(guest, cleanup)
+	if !errors.Is(got, guest) || !errors.Is(got, cleanup) {
+		t.Fatal("independent Guest and material failures were not combined")
+	}
+}
+
 // This is real Docker component evidence for the operator bootstrap trust
 // cutover. It is not the managed certificate-controller/agent path or a Slice 6
 // release scenario.
@@ -787,7 +820,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 												var productRuntimeID string
 												runGuestChain := func() {
 													slice6RunGuestTLSAgentStartup(t, ctx, run, composed, guestSocketVolumes, anchorFiles, func() {
-														slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
+														materialFailure := slice6RunGuestMaterialAgentStartup(t, ctx, run, composed, serverID,
 															guestPublicMaterial.Digest, guestSocketVolumes, anchorFiles,
 															func(delivery phase6security.Slice6BreakGlassSocketBinding) {
 																slice6ExerciseGuestBreakGlassDelivery(t, ctx, run, composed,
@@ -811,7 +844,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																		guestBindingReceipt, guestSocketVolumes, anchorFiles, productRuntimeID, preIssuerGuestShellDigest, onConnected)
 																}
 															})
+														guestRuntimeFailure = slice6PreserveFirstFailure(guestRuntimeFailure, materialFailure)
 													})
+													runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, guestRuntimeFailure)
 												}
 												if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
 													runProductChain := runGuestChain
@@ -820,7 +855,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 															slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 																"product-runtime-agent", "product-runtime-agent-tls-agent", "product-material",
 																productMaterialSocketVolumes, anchorFiles, func() {
-																	slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
+																	materialFailure := slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed,
 																		serverID, productIdentityDigest, productRuntimeDSNDigest,
 																		"product-runtime-agent", "product-runtime",
 																		"product-material", 70, productMaterialSocketVolumes, anchorFiles,
@@ -843,9 +878,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																							t.Logf("same-run finite Guest binding fixture exited and released Product SQL endpoint before Product PID1: binding_generation=%d event_count=%d audit_count=%d; identities remain private and no live Guest claimed",
 																								guestBindingReceipt.BindingGeneration, guestBindingReceipt.EventCount, guestBindingReceipt.AuditCount)
 																						}
-																						runtimeFailure = slice6RunProductRuntimePID1(t, ctx, run, composed,
+																						productFailure := slice6RunProductRuntimePID1(t, ctx, run, composed,
 																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver,
 																							func(id string) error { productRuntimeID = id; runGuestChain(); return guestRuntimeFailure })
+																						runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, productFailure)
 																					})
 																				if runtimeFailure != nil {
 																					return runtimeFailure
@@ -853,12 +889,11 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																			}
 																			if os.Getenv(slice6ProductRuntimeProcessEnv) != "1" {
 																				runGuestChain()
-																				if guestRuntimeFailure != nil {
-																					runtimeFailure = guestRuntimeFailure
-																				}
+																				return guestRuntimeFailure
 																			}
 																			return nil
 																		})
+																	runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, materialFailure)
 																})
 														}
 													}

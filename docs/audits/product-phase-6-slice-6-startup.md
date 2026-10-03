@@ -4224,3 +4224,44 @@ checks do not prove the full topology or authorize a Vault issuer run.
 Actual Guest exit1 remains a post-mutation observation of **unproven cause**,
 not confirmed authorization denial or completed old-binding reconnect gate.
 Phase 6 remains **5/15**.
+
+Follow-up 2026-10-03 (one authorized R4/E2 issuer diagnostic, **failed**):
+clean R4 runtime revision `4e02121f84a13622e15d732090335850aaa90cd3`
+and clean E2 fixture revision `2f5632508731c89840f23bc6f013cc9b750f0c6c`
+entered one real-Vault run `810d129d6d98d5dc976a8817cf18d26a` with Profile
+`sha256:0099088dccefbdd053ea4a3f5911ead51aed1707dbbe68f002b6fe725e0fe347`.
+The external PostgreSQL PID1, two managed controller PID1 processes, guarded
+Product migration and its ledger/grants readback, and Product signers were
+observed. The first reported failure was a generic Product material-agent
+callback error before any confirmed initial Guest binding or Product `serve`;
+the old callback used `t.Fatal` and discarded its actual cause. Quiesce
+receipts were observed, but the certificate controller retained a terminal
+credential-revoke error and independent v2 terminal plan binding failed. The
+external PostgreSQL leaf's terminal revocation remains **unconfirmed**; exact
+run-labeled Docker containers/networks/volumes were subsequently zero, and
+both recorded Vault anonymous volumes were absent. Docker resource removal is
+not credential-revocation evidence. No second issuer run, complete topology,
+Guest live-revoke observation, 16-scenario gate or manifest is claimed.
+
+No-issuer follow-up found a separate, reproducible fixture admission bug: a
+source-bound synthetic-CA offline run reached finite container create/inspect
+but rejected Docker's pre-start empty `NetworkID` as a fixed-IP drift. That
+race-enabled diagnostic failed in 861.83 seconds; it did **not** start the
+fixture, connect SQL or use Vault. The tagged gate now checks the unique
+requested network key and IPAM address at `created` state, allowing only an
+empty or exact `NetworkID`; after `docker start -ai`, it keeps stdin open and
+checks the exact running container, effective NetworkID/IPAddress and
+PostgreSQL bridge membership **before** sending the one bounded canonical
+payload. The fixture's `RunE` blocks reading stdin to EOF before it opens a
+SQL pool. Wrong/extra network identities, address drift, early exit and
+cancel all keep the payload withheld. Fixed Alpine no-secret Docker barrier
+tests passed; the corrected source-bound offline container admission passed
+in 130.65 seconds with exact run-resource cleanup. These establish mechanism
+and container-admission evidence only. Because the original real-run callback
+cause was lost, this bug is a strong candidate, not a proven retrospective
+cause of run `810d…`. Non-migration and migration material-agent failure paths
+now preserve callback errors and perform once-only stop/drain/remove/socket
+cleanup before outer signer/controller teardown; focused race tests cover
+failure, cancellation-style cleanup and `Goexit`. No terminal strictness,
+ordinary runtime image or Provider Contract was relaxed. Phase 6 stays
+**5/15** pending a fresh Sandbox decision and real-gate evidence.
