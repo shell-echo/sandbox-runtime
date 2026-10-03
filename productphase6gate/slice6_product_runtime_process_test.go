@@ -48,7 +48,7 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 	if err != nil || len(socketVolumes) != 74 || len(postgresID) != 64 || !lowerHexSlice6(postgresID) {
 		return errors.New("Product runtime same-run authority unavailable")
 	}
-	if err := slice6VerifyProductRuntimeObserverBinary(observer); err != nil {
+	if err := slice6VerifyApprovedProductRuntimeObserver(observer); err != nil {
 		return err
 	}
 	profile := composed.Profile
@@ -512,8 +512,9 @@ func slice6VerifyProductRuntimeSQLSession(ctx context.Context, postgresID, sourc
 }
 
 type slice6ProductRuntimeObserver struct {
-	Path   string
-	Digest []byte
+	Path           string
+	Digest         []byte
+	ExpectedDigest string
 }
 
 func slice6VerifyProductRuntimeObserverBinary(observer slice6ProductRuntimeObserver) error {
@@ -534,6 +535,33 @@ func slice6VerifyProductRuntimeObserverBinary(observer slice6ProductRuntimeObser
 		return errors.New("Product runtime observer binary changed after pre-issuer freeze")
 	}
 	return nil
+}
+
+func slice6ApproveProductRuntimeObserver(expected string, observer *slice6ProductRuntimeObserver) error {
+	if observer == nil {
+		return errors.New("Product runtime observer expected digest missing or non-canonical")
+	}
+	observer.ExpectedDigest = ""
+	if len(expected) != len("sha256:")+sha256.Size*2 ||
+		!strings.HasPrefix(expected, "sha256:") || !lowerHexSlice6(strings.TrimPrefix(expected, "sha256:")) {
+		return errors.New("Product runtime observer expected digest missing or non-canonical")
+	}
+	if err := slice6VerifyProductRuntimeObserverBinary(*observer); err != nil {
+		return err
+	}
+	if expected != "sha256:"+hex.EncodeToString(observer.Digest) {
+		return errors.New("Product runtime observer differs from externally approved digest")
+	}
+	observer.ExpectedDigest = expected
+	return nil
+}
+
+func slice6VerifyApprovedProductRuntimeObserver(observer slice6ProductRuntimeObserver) error {
+	if observer.ExpectedDigest == "" ||
+		observer.ExpectedDigest != "sha256:"+hex.EncodeToString(observer.Digest) {
+		return errors.New("Product runtime observer external digest approval unavailable")
+	}
+	return slice6VerifyProductRuntimeObserverBinary(observer)
 }
 
 func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root string) (slice6ProductRuntimeObserver, error) {
@@ -591,7 +619,7 @@ func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root s
 // Vault issuer allocation. The live Profile anchor volumes have their own
 // later non-root digest/mode proof; this does not substitute for that proof.
 func slice6ProbeProductRuntimeObserverMount(ctx context.Context, observer slice6ProductRuntimeObserver) (resultErr error) {
-	if err := slice6VerifyProductRuntimeObserverBinary(observer); err != nil {
+	if err := slice6VerifyApprovedProductRuntimeObserver(observer); err != nil {
 		return err
 	}
 	fixture := filepath.Join(runtime.GOROOT(), "src", "crypto", "x509", "testdata", "nist-pkits",
@@ -624,7 +652,7 @@ func slice6ProbeProductRuntimeObserverMount(ctx context.Context, observer slice6
 	if runErr != nil || overflow || string(out) != "product-runtime-observer-mount=nonroot-readable\n" {
 		return errors.New("Product observer non-root public CA/binary mount preflight failed")
 	}
-	return slice6VerifyProductRuntimeObserverBinary(observer)
+	return slice6VerifyApprovedProductRuntimeObserver(observer)
 }
 
 var slice6ProductReadinessObservationPattern = regexp.MustCompile(`^product-runtime-readiness=observed elapsed_ms=(0|[1-9][0-9]{0,5})\n$`)
@@ -633,7 +661,7 @@ func slice6ObserveProductReady(parent context.Context, run slice6DockerRun,
 	profile phase6security.Profile, plan slice6ProductRuntimeLaunchPlan,
 	endpoints []slice6ProductRuntimeEndpoint, anchorFiles map[string]string,
 	observer slice6ProductRuntimeObserver, status, waitSeconds int) (elapsed time.Duration, resultErr error) {
-	if err := slice6VerifyProductRuntimeObserverBinary(observer); err != nil {
+	if err := slice6VerifyApprovedProductRuntimeObserver(observer); err != nil {
 		return 0, err
 	}
 	_, _, subject, anchor, err := profile.PublicTLSBoundary("product-public", 8444)
@@ -812,6 +840,55 @@ func TestSlice6ProductRuntimeObserverBuild(t *testing.T) {
 	}
 }
 
+func TestSlice6ProductRuntimeObserverDigestApproval(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	observer, err := slice6BuildProductRuntimeObserver(t, ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const approved = "sha256:7151292b6f4571892502d786c8486cdf24ac7b19bb25e2cf171eec5ad1b99123"
+	for _, invalid := range []string{
+		"", "sha256:7151292B6F4571892502D786C8486CDF24AC7B19BB25E2CF171EEC5AD1B99123",
+		"sha256:" + strings.Repeat("0", 64), "SHA256:" + strings.TrimPrefix(approved, "sha256:"),
+		approved + "\n", "sha256:abc",
+	} {
+		candidate := observer
+		if err := slice6ApproveProductRuntimeObserver(invalid, &candidate); err == nil ||
+			candidate.ExpectedDigest != "" {
+			t.Fatal("missing, non-canonical or mismatched external observer digest admitted")
+		}
+	}
+	if err := slice6ApproveProductRuntimeObserver(approved, &observer); err != nil ||
+		slice6VerifyApprovedProductRuntimeObserver(observer) != nil {
+		t.Fatal("externally approved Product observer binary rejected")
+	}
+	reapproval := observer
+	if err := slice6ApproveProductRuntimeObserver("sha256:"+strings.Repeat("0", 64), &reapproval); err == nil ||
+		reapproval.ExpectedDigest != "" || slice6VerifyApprovedProductRuntimeObserver(reapproval) == nil {
+		t.Fatal("failed observer re-approval retained prior external authority")
+	}
+	if err := os.Chmod(observer.Path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(observer.Path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, writeErr := file.Write([]byte("test-only-mutation"))
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil || os.Chmod(observer.Path, 0o555) != nil {
+		t.Fatal("test observer binary mutation unavailable")
+	}
+	if err := slice6VerifyApprovedProductRuntimeObserver(observer); err == nil {
+		t.Fatal("observer binary mutation after external digest freeze admitted")
+	}
+}
+
 func TestSlice6ProductRuntimeObserverMountPreflight(t *testing.T) {
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_MOUNT_PREFLIGHT") != "1" {
 		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_MOUNT_PREFLIGHT=1 for no-issuer Docker mount proof")
@@ -825,6 +902,11 @@ func TestSlice6ProductRuntimeObserverMountPreflight(t *testing.T) {
 	observer, err := slice6BuildProductRuntimeObserver(t, ctx, root)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := slice6ApproveProductRuntimeObserver(
+		"sha256:7151292b6f4571892502d786c8486cdf24ac7b19bb25e2cf171eec5ad1b99123",
+		&observer); err != nil {
+		t.Fatal("fixed no-issuer observer fixture digest drift")
 	}
 	if err := slice6ProbeProductRuntimeObserverMount(ctx, observer); err != nil {
 		t.Fatal(err)

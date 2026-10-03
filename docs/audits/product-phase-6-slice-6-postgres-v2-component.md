@@ -1122,3 +1122,16 @@ tagged vet, focused tagged observer race/Docker preflight, Product Contract
 lock verifier and diff check also passed. Those checks do not promote the
 staged, unexecuted PID1 path into real Product runtime evidence.
 Phase 6 remains **5/15**.
+
+An approval-bound correction followed before any new issuer run: the gate's
+first checkpoint merely computed/logged the observer binary digest, so the
+operator-approved value was not enforced. Sandbox withdrew its unused
+single-run authorization. The corrected gate now requires an **external**
+canonical expected SHA-256 alongside the exact E source revision, rejects
+missing/malformed/wrong values before issuer allocation, compares the
+Go-1.26.8-built binary to that value, and re-hashes its actual file before
+each later mount. Focused race tests passed for missing, uppercase,
+wrong-length, wrong-value, correct-value and post-freeze mutation cases;
+the non-root Docker mount and exact leftover cleanup checks passed again.
+No automatic expected-digest backfill, issuer execution or readiness claim
+occurred. A new clean E checkpoint and Sandbox re-approval are required.

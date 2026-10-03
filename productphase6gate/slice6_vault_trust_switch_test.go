@@ -35,6 +35,7 @@ import (
 const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWITCH"
 const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTGRES_DSN"
 const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_SOURCE_REVISION"
+const slice6ProductObserverExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_EXPECTED_DIGEST"
 
 // This is real Docker component evidence for the operator bootstrap trust
 // cutover. It is not the managed certificate-controller/agent path or a Slice 6
@@ -130,8 +131,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatal("Product runtime observer requires clean E source and locked Go 1.26.8 before issuer allocation")
 		}
 		productRuntimeObserver, err = slice6BuildProductRuntimeObserver(t, ctx, observerRoot)
-		if err != nil || slice6VerifyProductRuntimeObserverBinary(productRuntimeObserver) != nil {
-			t.Fatal("Product runtime observer binary freeze failed before issuer allocation")
+		if err != nil || slice6ApproveProductRuntimeObserver(
+			os.Getenv(slice6ProductObserverExpectedDigestEnv), &productRuntimeObserver) != nil {
+			t.Fatal("Product runtime observer binary differs from externally approved digest before issuer allocation")
 		}
 		if err := slice6ProbeProductRuntimeObserverMount(ctx, productRuntimeObserver); err != nil {
 			t.Fatal("Product runtime observer non-root mount preflight failed before issuer allocation")
