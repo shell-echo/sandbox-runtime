@@ -43,6 +43,10 @@ func BuildSlice6FinalExternalProfileTarget(draft Profile) (Profile, error) {
 	if err != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
+	final.Principals, err = AttachSlice6GuestStorageMounts(final.Principals)
+	if err != nil {
+		return Profile{}, errSlice6DesiredInventory
+	}
 	final.Principals, err = AttachSlice6PrivateConfigMounts(final.Principals)
 	if err != nil {
 		return Profile{}, errSlice6DesiredInventory
@@ -187,6 +191,7 @@ func VerifySlice6DesiredFinalExternalProfile(profile Profile) error {
 		profile.PostgresServerAuth.IngressCIDR != "" ||
 		profile.PostgresServerAuth.HBAArtifactID != "shared-postgres-hba" ||
 		VerifySlice6DesiredFinalTrustAnchors(profile) != nil ||
+		VerifySlice6GuestStorageMounts(profile) != nil ||
 		VerifySlice6DesiredEgressPolicies(profile) != nil ||
 		VerifySlice6DesiredTLSIdentities(profile) != nil ||
 		VerifySlice6DesiredIngress(profile) != nil {

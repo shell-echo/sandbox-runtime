@@ -20,7 +20,44 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/config"
 	guestdevelopment "github.com/shell-echo/sandbox-runtime/guestagent/development"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
+
+func TestGuestV3DependencyPathsBindClosedStorage(t *testing.T) {
+	base := GuestDependencyAuthority{Version: guestAuthorityVersionV3, Role: "guest",
+		WorkspaceRoot:   phase6security.Slice6GuestWorkspaceRoot,
+		StateRoot:       phase6security.Slice6GuestStateRoot,
+		StorageIdentity: strings.Repeat("a", 32),
+		Mounts: []guestdevelopment.Mount{
+			{Path: "/inputs", Mode: "ro"}, {Path: "/workspace", Mode: "rw"},
+			{Path: "/outputs", Mode: "rw"}, {Path: "/tmp", Mode: "rw"},
+		},
+		Toolchains: []guestdevelopment.Toolchain{{ID: "posix-shell", Version: "1.37.0",
+			Digest: "sha256:" + strings.Repeat("a", 64), Executable: "/bin/sh"}},
+	}
+	if err := verifyGuestV3DependencyShape(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*GuestDependencyAuthority){
+		"workspace alias":               func(d *GuestDependencyAuthority) { d.WorkspaceRoot = "/run/phase6/config" },
+		"state alias":                   func(d *GuestDependencyAuthority) { d.StateRoot = "/run/phase6/config" },
+		"input writable":                func(d *GuestDependencyAuthority) { d.Mounts[0].Mode = "rw" },
+		"missing output":                func(d *GuestDependencyAuthority) { d.Mounts = d.Mounts[:3] },
+		"extra toolchain":               func(d *GuestDependencyAuthority) { d.Toolchains = append(d.Toolchains, d.Toolchains[0]) },
+		"missing storage identity":      func(d *GuestDependencyAuthority) { d.StorageIdentity = "" },
+		"noncanonical storage identity": func(d *GuestDependencyAuthority) { d.StorageIdentity = strings.Repeat("A", 32) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := base
+			changed.Mounts = append([]guestdevelopment.Mount(nil), base.Mounts...)
+			changed.Toolchains = append([]guestdevelopment.Toolchain(nil), base.Toolchains...)
+			mutate(&changed)
+			if verifyGuestV3DependencyShape(changed) == nil {
+				t.Fatal("Guest v3 dependency path drift accepted")
+			}
+		})
+	}
+}
 
 func TestReadAuthorityRejectsUnknownTrailingAndUnsafeFiles(t *testing.T) {
 	type document struct {

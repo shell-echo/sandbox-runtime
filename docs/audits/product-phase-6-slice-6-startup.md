@@ -4015,3 +4015,22 @@ release gate, immutable manifest, deployment or production qualification.
 Phase 6 remains **5/15**. The historical instruction above to stop after
 Slice 6 was superseded by the user's later request to continue subsequent
 Phase 6 slices after their own gates; it is not current work sequencing.
+
+Checkpoint 2026-10-03 (Guest storage preparation, no issuer): Sandbox approved
+true Guest-only business storage after review of the development service's
+actual startup and materialization needs. The proposed final Profile now
+closes three exclusive Guest named volumes (`/workspace` 3 GiB logical,
+`guest-state` 1 MiB logical, `/inputs` 1 MiB logical read-only) and two 8 MiB
+Guest tmpfs mounts. Source-side startup checks bind exact directory ownership,
+mode, canonical run/storage receipts and the selected-image BusyBox executable
+digest; development materialization preserves the volume receipt across
+commit/rollback. A separate no-secret Docker component drill used the
+previous R3 source-bound core image only to verify actual UID:GID/modes,
+read-only input denial, tmpfs type/size/options, volume identity retention
+across two containers and exact run-owned cleanup. This is **not** a new R
+freeze or formal Guest PID1 evidence. The preflight budget conservatively adds
+3 GiB + 2 MiB because the existing 10 GiB estimate did not isolate Guest
+storage. Docker named volumes have no hard quota; deep-path metadata/inode
+limits and full Development capacity remain Slice 8 gaps. No new issuer was
+run. The accepted R3 Product component result remains historical and Phase 6
+remains **5/15**.

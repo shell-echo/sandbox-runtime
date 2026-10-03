@@ -992,6 +992,7 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	for _, mount := range value.Mounts {
 		if !strings.HasPrefix(mount.Target, "/") || path.Clean(mount.Target) != mount.Target || mount.Target == "/" ||
 			(mount.Kind != "tmpfs" && mount.Kind != "private_socket" && mount.Kind != "persistent_ledger" &&
+				mount.Kind != "guest_storage" &&
 				mount.Kind != "trust_anchor" && mount.Kind != "private_config") {
 			return ErrInvalidProfile
 		}
@@ -1012,6 +1013,11 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 			_, policyAuthority := authorityBindings[value.Name]
 			_, _, controllerLedger := Slice6ControllerLedgerMount(value.Name)
 			if !policyAuthority && controllerLedger != nil || mount.ReadOnly || mount.MaxBytes < 4096 || mount.MaxBytes > 1<<30 ||
+				!namePattern.MatchString(mount.StorageID) {
+				return ErrInvalidProfile
+			}
+		case "guest_storage":
+			if value.Name != "guest-runtime" || mount.MaxBytes < 4096 || mount.MaxBytes > 3<<30 ||
 				!namePattern.MatchString(mount.StorageID) {
 				return ErrInvalidProfile
 			}

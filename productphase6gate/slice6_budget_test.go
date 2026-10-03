@@ -96,6 +96,29 @@ func slice6TopologyBudget(retainedBytes int64) slice6CapacityBudget {
 		dockerReserveBytes: 4 * slice6GiB, pollBurstBytes: slice6GiB / 4}
 }
 
+// The existing 10 GiB growth estimate does not separately identify Guest
+// workspace/state/inputs. Until that estimate is decomposed, admit their
+// three candidate logical budgets as an explicit conservative increment,
+// rather than silently assuming they were already included. This is still
+// neither a named-volume hard quota nor a proof for arbitrary deep paths.
+func slice6GuestStorageCapacityBudget(retainedBytes int64) slice6CapacityBudget {
+	budget := slice6TopologyBudget(retainedBytes)
+	budget.runtimeWriteBytes += 3*slice6GiB + 2*(1<<20)
+	return budget
+}
+
+func TestSlice6GuestStorageCapacityIncrementIsNotDoubleCounted(t *testing.T) {
+	baseline := slice6TopologyBudget(0)
+	guest := slice6GuestStorageCapacityBudget(0)
+	baselineHost, baselineDocker, err := baseline.required()
+	guestHost, guestDocker, guestErr := guest.required()
+	if err != nil || guestErr != nil || guestHost-baselineHost != 3*slice6GiB+2*(1<<20) ||
+		guestDocker-baselineDocker != 3*slice6GiB+2*(1<<20) ||
+		guest.runtimeWriteBytes != 13*slice6GiB+2*(1<<20) {
+		t.Fatal("Guest named-volume candidate budget omitted or counted twice")
+	}
+}
+
 func TestSlice6CapacityBudgetSeparatesHostAndDocker(t *testing.T) {
 	budget := slice6TopologyBudget(12 * slice6GiB)
 	host, docker, err := budget.required()

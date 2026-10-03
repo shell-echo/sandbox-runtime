@@ -828,7 +828,8 @@ UID/GID, non-root execution, a read-only root filesystem, only declared tmpfs
 and role-private sockets, plus one narrowly scoped managed persistent ledger
 volume per policy-state authority. Its ledger volume is writable only by that
 authority, never by its broker or another role; arbitrary volumes, host-path
-bind mounts and shared business storage remain forbidden. All Linux
+bind mounts and shared business storage remain forbidden, except for the
+subsequently approved Guest-only storage addendum below. All Linux
 capabilities are dropped,
 `no-new-privileges`, a role-specific seccomp policy, bounded PIDs/memory/CPU,
 no host devices, host mounts, daemon sockets or extra listeners. The gate
@@ -2415,3 +2416,45 @@ Profile CPU/memory/PID limits, identities, CRL policy and SQL grants remain
 unchanged. This local diagnostic can be reverted as ordinary source without
 schema, wire or data migration. No new issuer run is authorized by its
 implementation alone; Phase 6 remains **5/15**.
+
+### Slice 6 Guest-only storage addendum (2026-10-03)
+
+The formal production Guest cannot instantiate its real development service
+on a read-only root filesystem or on its private configuration volume. Sandbox
+approved a narrow exception to the generic no-business-volume rule above:
+only `guest-runtime` receives three independently named, run-owned Docker
+volumes. `/workspace` and `/var/lib/sandbox-runtime/guest-state` are writable
+by its unique Guest UID:GID with mode 0700 and retain the same exact volume
+identity across Guest process/container restart. `/inputs` is a separately
+prepared, Guest-owned 0500 volume mounted read-only with a closed, non-secret
+input manifest. No other role receives these volumes; paths cannot overlap
+its configuration, trust, socket or other mount targets. The Profile binds
+their exact paths, storage IDs, direction and logical candidate sizes of
+3 GiB, 1 MiB and 1 MiB. A canonical run/storage receipt is checked before
+Guest starts; Docker name and label are checked before container creation so
+that Docker cannot silently create a missing volume. The one-shot preparation
+writer has no network, exits before Guest, and owns no runtime authority.
+
+`/outputs` and `/tmp` are separate 8 MiB tmpfs mounts, mode 0700, Guest-owned,
+`noexec,nosuid,nodev`; their combined 16 MiB is inside the existing 128 MiB
+Guest memory cgroup, not additional memory. The selected image's `/bin/sh`
+must resolve to its root-owned regular BusyBox executable, mode 0755, with
+the declared actual-file SHA-256 verified at Guest startup. A rebuilt
+candidate must re-observe those bytes rather than inherit the old image's
+digest. No private configuration path may substitute for business storage.
+
+Docker local named volumes provide **no hard per-volume quota**. `MaxBytes`
+here is an admission estimate and Profile intent, not hostile-Guest disk
+isolation or proof of full Development capacity. Normal old-plus-staged
+materialization can approach 2 GiB; the remaining nominal 1 GiB cannot be
+called a proven filesystem-metadata ceiling because implicit parent
+directories may exceed the explicit 10,000-entry manifest count. Deep-path,
+inode, allocated-block, hard-quota and complete business-storage evidence
+remain Slice 8 obligations. Until the existing 10 GiB topology growth
+estimate is decomposed, the three Guest candidate budgets are added as
+3 GiB + 2 MiB to both host and Docker admission/monitoring, without assuming
+that the old estimate already includes them. Writers stop before cleanup on
+low headroom. A no-secret Docker mount probe is component evidence only;
+it does not establish Guest PID1, Product–Guest authentication, the 16-scenario
+gate, an immutable evidence manifest or production readiness. Phase 6 remains
+**5/15**.

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -13,8 +15,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/config"
@@ -51,12 +56,13 @@ type GuestCredentialAuthority struct {
 // Product owns the binding and capability truth; the Guest receives the
 // resulting identity and handler policy through this explicit document.
 type GuestDependencyAuthority struct {
-	Version       int                          `json:"version"`
-	Role          string                       `json:"role"`
-	WorkspaceRoot string                       `json:"workspace_root"`
-	StateRoot     string                       `json:"state_root"`
-	Mounts        []guestdevelopment.Mount     `json:"mounts"`
-	Toolchains    []guestdevelopment.Toolchain `json:"toolchains"`
+	Version         int                          `json:"version"`
+	Role            string                       `json:"role"`
+	WorkspaceRoot   string                       `json:"workspace_root"`
+	StateRoot       string                       `json:"state_root"`
+	StorageIdentity string                       `json:"storage_identity,omitempty"`
+	Mounts          []guestdevelopment.Mount     `json:"mounts"`
+	Toolchains      []guestdevelopment.Toolchain `json:"toolchains"`
 }
 
 // GuestPolicyAuthority freezes reconnect behavior at startup. There is no
@@ -131,6 +137,9 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 	if dependency.Version != dependencyVersion || dependency.Role != string(config.DataPlaneGuest) || !filepath.IsAbs(dependency.WorkspaceRoot) || !filepath.IsAbs(dependency.StateRoot) || filepath.Clean(dependency.WorkspaceRoot) == filepath.Clean(dependency.StateRoot) {
 		return GuestAuthority{}, errors.New("invalid Guest dependency authority")
 	}
+	if !productionV3 && dependency.StorageIdentity != "" {
+		return GuestAuthority{}, errors.New("Guest storage identity requires the v3 profile")
+	}
 	if policy.Version != policyVersion || policy.Role != string(config.DataPlaneGuest) || policy.ReconnectBackoffMillis < 10 || policy.ReconnectBackoffMillis > 30_000 {
 		return GuestAuthority{}, errors.New("invalid Guest policy authority")
 	}
@@ -144,6 +153,11 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 		slice6Profile, err = phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "guest-runtime")
 		if err != nil || slice6Profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
 			return GuestAuthority{}, errors.New("Guest security profile mismatch")
+		}
+		if phase6security.VerifySlice6GuestStorageMounts(slice6Profile) != nil ||
+			verifyGuestV3DependencyShape(dependency) != nil || verifyGuestV3Toolchain(dependency.Toolchains[0]) != nil ||
+			verifyGuestV3Directories() != nil || verifyGuestV3StorageReceipts(dependency.StorageIdentity) != nil {
+			return GuestAuthority{}, errors.New("Guest storage or toolchain authority mismatch")
 		}
 		for _, input := range []struct{ filename, path string }{
 			{phase6security.Slice6CredentialAuthorityFile, cfg.Authority.CredentialFile},
@@ -242,6 +256,125 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 	clear(privateKey)
 	return GuestAuthority{Credential: credential, Dependency: dependency, Policy: policy, PrivateKey: key,
 		HTTPClient: client, Registry: registry, Peer: peer}, nil
+}
+
+// The production Guest may not retarget its workspace/state into private
+// configuration, sockets, trust anchors or a host path. The declared shell is
+// the selected image's existing BusyBox executable, not a fixture digest.
+func verifyGuestV3DependencyShape(dependency GuestDependencyAuthority) error {
+	wantMounts := []guestdevelopment.Mount{
+		{Path: phase6security.Slice6GuestInputsRoot, Mode: "ro"},
+		{Path: phase6security.Slice6GuestWorkspaceRoot, Mode: "rw"},
+		{Path: phase6security.Slice6GuestOutputsRoot, Mode: "rw"},
+		{Path: phase6security.Slice6GuestTempRoot, Mode: "rw"},
+	}
+	if dependency.WorkspaceRoot != phase6security.Slice6GuestWorkspaceRoot ||
+		dependency.StateRoot != phase6security.Slice6GuestStateRoot ||
+		!slices.Equal(dependency.Mounts, wantMounts) || len(dependency.Toolchains) != 1 ||
+		len(dependency.StorageIdentity) != 32 {
+		return errors.New("Guest dependency paths do not match the security profile")
+	}
+	decoded, err := hex.DecodeString(dependency.StorageIdentity)
+	if err != nil || hex.EncodeToString(decoded) != dependency.StorageIdentity {
+		return errors.New("Guest storage identity is not canonical")
+	}
+	return nil
+}
+
+func verifyGuestV3Toolchain(toolchain guestdevelopment.Toolchain) error {
+	if toolchain.ID != "posix-shell" || toolchain.Version != "1.37.0" ||
+		toolchain.Executable != "/bin/sh" ||
+		len(toolchain.Digest) != len("sha256:")+64 ||
+		!strings.HasPrefix(toolchain.Digest, "sha256:") {
+		return errors.New("Guest selected-image toolchain identity is invalid")
+	}
+	resolved, err := filepath.EvalSymlinks(toolchain.Executable)
+	if err != nil || resolved != "/bin/busybox" {
+		return errors.New("Guest selected-image shell link is invalid")
+	}
+	file, err := os.Open(resolved)
+	if err != nil {
+		return errors.New("Guest selected-image shell is unavailable")
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return errors.New("Guest selected-image shell is unavailable")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != 0 || stat.Gid != 0 || !info.Mode().IsRegular() ||
+		info.Size() < 1 || info.Size() > 8<<20 || info.Mode().Perm() != 0o755 {
+		return errors.New("Guest selected-image shell is not a bounded read-only executable")
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != toolchain.Digest {
+		return errors.New("Guest selected-image shell digest mismatch")
+	}
+	return nil
+}
+
+func verifyGuestV3Directories() error {
+	for _, entry := range []struct {
+		path string
+		mode os.FileMode
+	}{
+		{phase6security.Slice6GuestWorkspaceRoot, 0o700},
+		{phase6security.Slice6GuestStateRoot, 0o700},
+		{phase6security.Slice6GuestInputsRoot, 0o500},
+		{phase6security.Slice6GuestOutputsRoot, 0o700},
+		{phase6security.Slice6GuestTempRoot, 0o700},
+	} {
+		resolved, err := filepath.EvalSymlinks(entry.path)
+		if err != nil || resolved != entry.path {
+			return errors.New("Guest storage path was replaced")
+		}
+		info, err := os.Lstat(entry.path)
+		if err != nil || !info.IsDir() || info.Mode().Perm() != entry.mode {
+			return errors.New("Guest storage directory mode drift")
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != uint32(os.Getuid()) || stat.Gid != uint32(os.Getgid()) {
+			return errors.New("Guest storage directory owner drift")
+		}
+	}
+	return nil
+}
+
+func verifyGuestV3StorageReceipts(identity string) error {
+	for _, entry := range []struct{ root, storageID string }{
+		{phase6security.Slice6GuestWorkspaceRoot, "guest-workspace"},
+		{phase6security.Slice6GuestStateRoot, "guest-state"},
+		{phase6security.Slice6GuestInputsRoot, "guest-inputs"},
+	} {
+		name := filepath.Join(entry.root, guestdevelopment.StorageIdentityFileName)
+		document, err := secretfile.Read(name, 256)
+		if err != nil || phase6security.DecodeSlice6GuestStorageReceipt(document, identity, entry.storageID) != nil {
+			clear(document)
+			return errors.New("Guest persistent storage identity mismatch")
+		}
+		clear(document)
+		info, err := os.Lstat(name)
+		if err != nil {
+			return errors.New("Guest persistent storage receipt unavailable")
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != uint32(os.Getuid()) || stat.Gid != uint32(os.Getgid()) {
+			return errors.New("Guest persistent storage receipt owner mismatch")
+		}
+	}
+	entries, err := os.ReadDir(phase6security.Slice6GuestInputsRoot)
+	if err != nil || len(entries) != 2 || entries[0].Name() != guestdevelopment.StorageIdentityFileName ||
+		entries[1].Name() != phase6security.Slice6GuestInputsManifestFileName {
+		return errors.New("Guest read-only input inventory mismatch")
+	}
+	manifest := filepath.Join(phase6security.Slice6GuestInputsRoot, phase6security.Slice6GuestInputsManifestFileName)
+	document, err := secretfile.Read(manifest, 1<<20)
+	if err != nil || string(document) != phase6security.Slice6GuestInputsManifest {
+		clear(document)
+		return errors.New("Guest read-only input manifest mismatch")
+	}
+	clear(document)
+	return nil
 }
 
 // NewGuestApplicationGraph constructs the actual outbound Guest application

@@ -13,6 +13,10 @@ import (
 
 func TestServiceMaterializesExactWorkspaceAndReportsHealth(t *testing.T) {
 	workspace, state := testRoots(t)
+	identity := filepath.Join(workspace, StorageIdentityFileName)
+	if err := os.WriteFile(identity, []byte("operator-owned-volume"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(workspace, "old.txt"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +45,9 @@ func TestServiceMaterializesExactWorkspaceAndReportsHealth(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(workspace, "src", "main.go"))
 	if err != nil || string(got) != string(content) {
 		t.Fatalf("materialized content=%q err=%v", got, err)
+	}
+	if got, err := os.ReadFile(identity); err != nil || string(got) != "operator-owned-volume" {
+		t.Fatalf("operator volume identity was replaced by workspace commit: %v", err)
 	}
 	document := healthJSON(t, health)
 	if strings.Contains(document, workspace) || strings.Contains(document, state) || strings.Contains(document, "credential") {

@@ -30,10 +30,13 @@ const (
 	MaxEntries         = 10000
 	MaxChunkBytes      = 48 << 10
 	MaxWorkspaceBytes  = int64(1 << 30)
-	stageName          = ".sandbox-runtime-stage"
-	backupName         = ".sandbox-runtime-backup"
-	markerName         = "materialization.json"
-	transactionName    = "materialization-transaction.json"
+	// The operator-owned volume identity is not business workspace content.
+	// It survives stage/backup swaps and is never writable through a request.
+	StorageIdentityFileName = ".sandbox-runtime-storage.json"
+	stageName               = ".sandbox-runtime-stage"
+	backupName              = ".sandbox-runtime-backup"
+	markerName              = "materialization.json"
+	transactionName         = "materialization-transaction.json"
 )
 
 var (
@@ -570,7 +573,7 @@ func moveVisibleChildren(root, destination string) error {
 		return err
 	}
 	for _, child := range children {
-		if child.Name() == stageName || child.Name() == backupName {
+		if child.Name() == stageName || child.Name() == backupName || child.Name() == StorageIdentityFileName {
 			continue
 		}
 		if err := os.Rename(filepath.Join(root, child.Name()), filepath.Join(destination, child.Name())); err != nil {
@@ -599,7 +602,7 @@ func removeVisibleChildren(root string) error {
 		return err
 	}
 	for _, child := range children {
-		if child.Name() == stageName || child.Name() == backupName {
+		if child.Name() == stageName || child.Name() == backupName || child.Name() == StorageIdentityFileName {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(root, child.Name())); err != nil {
