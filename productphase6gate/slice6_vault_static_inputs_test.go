@@ -70,6 +70,20 @@ func slice6VaultPreflightStaticInputs(ctx context.Context, input slice6VaultStat
 	return nil
 }
 
+// Exercise the exact live gate's complete static admission without creating
+// a Docker run or asking Vault to issue a certificate.
+func TestSlice6VaultPreIssuerStaticInputAcceptance(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_STATIC_INPUT_ACCEPTANCE") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_STATIC_INPUT_ACCEPTANCE=1 with exact source and archive inputs")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Minute)
+	defer cancel()
+	if err := slice6VaultPreflightStaticInputs(ctx, slice6VaultStaticInputsFromEnvironment()); err != nil || ctx.Err() != nil {
+		t.Fatalf("complete pre-issuer static admission unavailable: %v", err)
+	}
+	t.Log("clean source, terminal source, twelve roles, Desktop, Browser and four complete external OCI archives admitted without Docker run or issuer")
+}
+
 // This uses the same admission function as the live gate, but never allocates
 // a Docker run or starts an issuer. The selected-only Vault archive is a
 // deliberately incomplete OCI input from the operator's private test supply.

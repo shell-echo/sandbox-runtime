@@ -819,3 +819,159 @@ independent clean R2 checkout. These remain source and component checks; no
 R2 role/Desktop candidate image, real Vault migration, release scenario or
 manifest has been admitted by this result. Another issuer-consuming run
 requires separate Sandbox review, and Phase 6 remains **5/15**.
+
+## R2 single real migration attempt: TLS or connection guard rejection (2026-10-03)
+
+After Sandbox approved exactly one further issuer-consuming attempt, twelve
+local role candidates and one Desktop candidate were built from clean R2
+`01c581afb9b77b2028677fe98a999a5e25d0c75c` (tree
+`f9044c18bcc701677ae269b1e9ce4737462910e4`). The Desktop image was
+`sha256:af0ca5af26a160944390b1a57a58fec719bb0ced40f07811b38bb5a6ada03c9f`.
+An independent race-enabled image-supply preflight passed in 160.197 seconds
+for all twelve commands, Desktop and the locked Browser OCI chain. A separate
+no-issuer negative test rejected a stale source revision and a selected-only,
+layer-incomplete Vault archive before Docker run allocation. The same-R2
+one-shot terminal operator was built with Go 1.26.8 for linux/arm64; its
+binary digest was
+`sha256:68db76678b088d7f88a0edb27dc758fbd3285be51148fad166257f42d017dcec`,
+and a restricted, networkless container returned the exact v2 capability.
+
+The single real run `3ee6b653971c2a65f3a2858415b7ad98` passed its
+pre-issuer source and four complete external-archive checks, eleven
+source-bound Profile-composition stages, Vault PKI/KVv2 bootstrap, the
+PostgreSQL server leaf and nine-bridge PG PID1 startup, separate Product
+SQL-role/DSN bootstrap, and both controller PID1 startup. Its Profile digest
+was `sha256:fd42a96c47ab7e42ecb77ac322f08760b26e9fdbb2c12061bea3524a9de779d0`;
+the PG server leaf DER digest was
+`sha256:9c7f52485d69cb9de9f5a69e78ff75d499e0ba4f313750e25b0e3777047337a7`.
+The Product migration material and PG signer sockets became ready after
+21.594 and 21.663 seconds respectively under the unchanged Profile 50m CPU,
+64 MiB memory and 16-PID limits.
+
+The independent Product migration PID1 exited 1 without OOM or restart.
+The strict one-line observer classified its bounded `one-lf/65-128` output
+as `migration-ping-tls-or-guard`; the exact container state was
+`exited|1|false|0|started-set|finished-set|state-error-none`. A read-only
+same-database observation returned `ledger-absent-catalog-0-0-0-0`, so no
+Product business DDL is confirmed. Relative to R11's generic
+`migration-ping`, this identifies failure of TLS negotiation or a connection
+guard callback during the first physical pool connection. It does **not**
+distinguish the PostgreSQL TLS handshake, server identity/client certificate,
+peer-CRL check or own-client guard, and does not prove SCRAM authentication,
+`AfterConnect` SQL verification or Ping query execution. No unchanged issuer
+retry was made or authorized.
+
+Both controllers persisted quiesce receipts. The certificate controller
+again retained its sticky terminal credential-revoke failure, so the
+independent terminal operator confirmed three certificate revocations, two
+token-accessor revocations, complete CRL and self-revocation under private
+plan digest `sha256:74aa59950e887fea9c52eb97d3608667f7a20ddfc68bc8675a9e583974003f08`.
+PostgreSQL stopped before terminal cleanup. The test's exact cleanup passed;
+an independent read-only Docker query found zero containers, networks and
+named volumes with this run label, both captured Vault anonymous volumes
+absent, and no run-private directory. This is a **failed component gate**,
+not a successful Product migration, Slice 6 release scenario or evidence
+manifest. Phase 6 remains **5/15**.
+
+### No-new-issuer TLS and dual-guard diagnostic
+
+Sandbox approved a controlled no-Vault reproduction after the R2 failure;
+it did not approve another issuer run or a production timeout, identity,
+network, CRL or SQL-policy change. The existing disposable PostgreSQL client
+CRL integration fixture was extended to bind the actual
+`BindPostgresPeerGuard` then `BindPostgresOwnGuard` hooks in production order
+through pgx's real PostgreSQL SSL negotiation and TLS 1.3 handshake. A
+closed alias-host lookup and dial mapped only this test's synthetic
+`postgres.sandbox-runtime.test:5432` to its one disposable loopback port.
+The peer test source used the production complete signed-CRL verifier and
+peer check, while the own-client guard used its existing synthetic signer
+snapshot. The healthy first `Acquire`/query, client-leaf rotation and exact
+dual-guard connection close passed under the tagged race test. Separate
+first-connection controls rejected an untrusted server CA before the peer
+callback, a server leaf on a complete signed CRL during the peer callback,
+and a server-accepted but own-snapshot-mismatched client leaf after peer
+tracking; none reached `AfterConnect`. The disposable container and volume
+were absent afterward.
+
+This establishes that the generic pgx TLS and dual-hook composition can
+succeed and fail closed in a controlled environment. It does **not**
+reproduce the real Vault-backed peer-CRL Unix pull, remote signing, 50m
+agent quota, 2-second pull budget, concurrent polling, or the exact
+R2 network/issuer timing. Those differences remain candidates, not assigned
+causes. The R2 run and this fixture cannot be combined into a successful
+migration claim; Phase 6 remains **5/15**.
+
+### Source-proven handshake-state defect and controlled red-to-green
+
+Further review found that the direct PostgreSQL server-identity callback
+called `egressbroker.ValidateTLSIdentity` from `tls.Config.VerifyConnection`.
+The former required `HandshakeComplete=true`; Go 1.26.8 invokes the latter
+after standard server-chain verification but before the TLS 1.3 client
+handshake sets that flag. Thus the normal direct PostgreSQL path rejected a
+verified server before the peer-CRL guard, client signing, authentication or
+SQL. This is a source-proven defect consistent with R2's closed
+`migration-ping-tls-or-guard` class, not a retroactive successful R2 run or
+proof that no later failure exists.
+
+The same disposable PostgreSQL/pgx/TLS 1.3/dual-guard fixture was changed
+to carry an empty-Subject, exact URI/DNS/ServerAuth synthetic server leaf
+and the actual `DirectPostgres` identity callback. Before the fix, its
+healthy first physical connection failed with the bounded observation
+`incompleteTLSCallbacks=1 peerChecks=0`, before SQL. After introducing a
+separate `ValidateTLSIdentityInVerifyConnection` entry and switching only
+`DirectPostgres` to it, the same first `Acquire`/query passed. The new
+handshake-time entry still requires TLS 1.3, no resumption, exactly one
+standard-verified chain with a nonempty issuer and the peer leaf equal to
+the verified leaf, plus the unchanged exact Subject/URI/DNS/EKU/KeyUsage
+predicate. The original
+post-handshake `ValidateTLSIdentity` remains unchanged for established
+connections. Wrong CA, complete-CRL server revocation and own-client leaf
+mismatch remained closed before `AfterConnect`. The controlled real-PG test
+passed three consecutive race+shuffle runs; unit negatives cover wrong or
+extra identity, absent/inconsistent verification chain and issuer, resume,
+protocol and callback-phase drift. A separate actual TLS 1.3 handshake with
+a same-CA, same-DNS/ServerAuth but wrong-URI leaf was also refused inside
+the callback. No Vault issuer, production credential, policy
+relaxation or business DDL was involved.
+
+The fix was committed on the gate branch as `75302cd` and independently
+cherry-picked onto the previously clean R2 checkout as runtime R3
+`923813f9a195ca7f49202ee11de4796ee6a8ef17` (tree
+`e6e7ad5f3a7b0affe345ac80dfa8ea714284436a`). The final changed-source
+`go test -race -shuffle=on -count=1 ./...`, `go vet ./...`, integration-tag
+vet, Product Contract lock verifier and diff check passed. The tagged real
+PostgreSQL callback/CRL test passed three consecutive race+shuffle runs with
+the same-CA wrong-URI case included; its exact disposable containers and
+volumes were absent on a separate read-only Docker query. This is source
+and controlled component evidence, not a real R3 Vault migration. A further
+real issuer run is **not** approved by this local red-to-green. Phase 6
+remains **5/15**.
+
+### R3 clean candidate and complete pre-issuer supply (no issuer)
+
+The R3 checkout remained clean at
+`923813f9a195ca7f49202ee11de4796ee6a8ef17` (tree
+`e6e7ad5f3a7b0affe345ac80dfa8ea714284436a`) while all twelve
+linux/arm64/v8 local-role candidates and their private OCI archives were
+built and recorded. The source-bound Desktop candidate used the unchanged
+locked APK cache and workload-account input; its image digest is
+`sha256:3fd5f8b415656c9f9a07ed274eedf74d91ce76d7fc986005f19f8f20e54b463f`,
+manifest digest
+`sha256:d07dada9d1d03f679deea2ca819393cfdcf779e653f7246b6e15e00cb1856d49`.
+The independently rebuilt same-R3 linux/arm64 terminal operator had binary
+digest `sha256:68db76678b088d7f88a0edb27dc758fbd3285be51148fad166257f42d017dcec`
+and returned the exact v2 capability in a restricted networkless container.
+An independent race-enabled role/Desktop/Browser image-supply preflight
+passed in 161.62 seconds. The stale-source and selected-only, layer-
+incomplete Vault negative controls were rejected without allocating a
+Docker run or issuer.
+
+An additional race-enabled test called the **same complete static admission
+function as the live Vault gate**, without Docker run allocation or Vault
+signing. It passed in 416.90 seconds for clean R3 source, same terminal
+source, twelve roles, Desktop, locked Browser and four complete external
+Vault/PostgreSQL/Valkey/DNS OCI archives. The selected-only Vault negative
+fixture remained separate. This proves complete static input admission only;
+it does not compose a new real Profile, launch a Product migration PID1,
+resolve the R2 history, or produce a Slice 6 manifest. No new issuer run is
+authorized by this preflight. Phase 6 remains **5/15**.
