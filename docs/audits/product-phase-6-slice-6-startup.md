@@ -4697,3 +4697,29 @@ full frozen deployment inventory and 16-scenario release gate, immutable
 manifest,
 publication or production-readiness result. No further issuer run is
 authorized by this pass; Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (preissuer, no new Vault issuer run): clean R/F
+`c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` passed the required full
+race/shuffle suite, vet, Provider Contract lock and tagged attached-Docker
+producer checks. Twelve role candidates were built from clean R; one Desktop
+arm64 candidate was built from clean F using an existing APK cache, with the
+build's exact lock-byte verification still enabled. An initial no-cache
+Desktop build failed at locked APK staging and produced no candidate. The
+new candidate outputs are local, unsigned and not yet release evidence. The
+exact preissuer static-input admission passed for the clean R/F source,
+twelve role candidates, Desktop candidate, Browser archive and four complete
+external OCI archives. The separate preissuer image-store admission passed
+for the 21 fixed references without a Docker create or issuer allocation.
+
+E-only follow-up code now bounds the actual Guest-running, network-inspect
+and first-readiness steps by the same 45-second deadline. It stages the
+private evidence binding under `binding.pending`, verifies synced bytes,
+publishes via no-replace link, syncs and independently rereads, and attempts
+same-inode rollback on any failed publication. A failed rollback or storage
+sync is reported as uncertainty and fails the trusted gate, not claimed as
+zero disk residue. The mutation digest covers exact file bytes including LF;
+independent verification checks externally supplied candidate and actual
+container/image tuples. Focused race tests inject sync, readback, publish
+and rollback failures. These corrections are partial E-owned evidence only;
+the issuer gate, sixteen scenarios, formal evidence manifest, release and
+production-readiness claims remain unpassed. Phase 6 remains **5/15**.

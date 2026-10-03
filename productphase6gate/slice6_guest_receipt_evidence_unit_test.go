@@ -183,17 +183,25 @@ func TestSlice6GuestEvidenceIndependentRereadRejectsTamperAndIdentityDrift(t *te
 	expected := slice6ReceiptExpectedIdentity{ERevision: strings.Repeat("a", 40),
 		ETree: profile, RRevision: strings.Repeat("b", 40), RTree: profile,
 		FRevision: strings.Repeat("c", 40), FTree: profile, ProfileDigest: profile,
-		ProductConfigDigest: productConfig, GuestConfigDigest: guestConfig}
+		ProductConfigDigest: productConfig, GuestConfigDigest: guestConfig,
+		ProductArtifact: artifact, GuestArtifact: artifact,
+		ProductContainerID: bindings["product"].ContainerID,
+		GuestContainerID:   bindings["guest"].ContainerID,
+		ProductImageID:     image, GuestImageID: image}
 	binding := slice6ReceiptEvidenceBinding{Protocol: "sandbox-runtime.phase6-guest-receipt-evidence.v1",
 		Disposition: "component_verified", RunID: id,
 		ERevision: expected.ERevision, ETree: expected.ETree, RRevision: expected.RRevision,
 		RTree: expected.RTree, FRevision: expected.FRevision, FTree: expected.FTree,
 		ProfileDigest: profile, Product: bindings["product"], Guest: bindings["guest"],
 		ProductArtifact: artifact, GuestArtifact: artifact,
-		MutationReceiptSHA256: slice6ReceiptSHA256(mutationJSON), MutationGeneration: 1,
+		MutationReceiptSHA256: slice6ReceiptSHA256(append(mutationJSON, '\n')), MutationGeneration: 1,
 		MutationVerifiedUTC: verifiedAt.Format(time.RFC3339Nano)}
-	if err := run.finish(binding, mutation); err != nil {
+	if err := run.finish(binding, mutation, expected); err != nil {
 		t.Fatal(err)
+	}
+	mutationOnDisk, err := os.ReadFile(filepath.Join(rootPath, id, "mutation-receipt.json"))
+	if err != nil || slice6ReceiptSHA256(mutationOnDisk) != binding.MutationReceiptSHA256 {
+		t.Fatal("binding does not hash exact mutation receipt file bytes", err)
 	}
 	if err := slice6VerifyPersistentGuestEvidence(rootPath, id, expected); err != nil {
 		t.Fatal("independent reread rejected exact evidence", err)
@@ -213,6 +221,22 @@ func TestSlice6GuestEvidenceIndependentRereadRejectsTamperAndIdentityDrift(t *te
 	if slice6VerifyPersistentGuestEvidence(rootPath, id, bad) == nil {
 		t.Fatal("config drift accepted")
 	}
+	for _, drift := range []struct {
+		name  string
+		apply func(*slice6ReceiptExpectedIdentity)
+	}{
+		{"archive", func(x *slice6ReceiptExpectedIdentity) { x.ProductArtifact.ArchiveDigest = guestConfig }},
+		{"selected manifest", func(x *slice6ReceiptExpectedIdentity) { x.GuestArtifact.SelectedManifestDigest = guestConfig }},
+		{"OCI config", func(x *slice6ReceiptExpectedIdentity) { x.ProductArtifact.ConfigDigest = guestConfig }},
+		{"image", func(x *slice6ReceiptExpectedIdentity) { x.GuestImageID = guestConfig }},
+		{"container", func(x *slice6ReceiptExpectedIdentity) { x.ProductContainerID = strings.Repeat("7", 64) }},
+	} {
+		bad = expected
+		drift.apply(&bad)
+		if slice6VerifyPersistentGuestEvidence(rootPath, id, bad) == nil {
+			t.Fatal("legal-shape external expected identity drift accepted:", drift.name)
+		}
+	}
 	if slice6VerifyPersistentGuestEvidence(rootPath, strings.Repeat("d", 32), expected) == nil {
 		t.Fatal("run drift accepted")
 	}
@@ -222,6 +246,164 @@ func TestSlice6GuestEvidenceIndependentRereadRejectsTamperAndIdentityDrift(t *te
 	}
 	if slice6VerifyPersistentGuestEvidence(rootPath, id, expected) == nil {
 		t.Fatal("raw tamper accepted")
+	}
+}
+
+// Publication failures are injected after a complete pair of canonical raw
+// receipts, so each case exercises the binding transaction rather than an
+// unrelated parsing failure.
+func slice6ReceiptPublicationFixture(t *testing.T) (*slice6ReceiptEvidenceRun,
+	slice6ReceiptEvidenceBinding, slice6GuestRevokeFixtureReceipt, slice6ReceiptExpectedIdentity) {
+	t.Helper()
+	rootPath := slice6ReceiptTestRoot(t)
+	root, err := slice6OpenReceiptEvidenceRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.close() })
+	id := strings.Repeat("e", 32)
+	run, err := root.newRun(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := "sha256:" + strings.Repeat("1", 64)
+	productConfig := "sha256:" + strings.Repeat("2", 64)
+	guestConfig := "sha256:" + strings.Repeat("3", 64)
+	image := "sha256:" + strings.Repeat("4", 64)
+	now := time.Now().UTC()
+	bindings := make(map[string]slice6ReceiptRawBinding)
+	for _, value := range []struct{ role, config, container string }{
+		{"product", productConfig, strings.Repeat("5", 64)},
+		{"guest", guestConfig, strings.Repeat("6", 64)},
+	} {
+		data := slice6ReceiptTestStream(t, value.role, profile, value.config)
+		name := slice6ReceiptRawName(value.role)
+		file, err := run.createFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n, err := file.Write(data); err != nil || n != len(data) {
+			t.Fatal("write raw receipt", err)
+		}
+		if err := file.Sync(); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		binding := slice6ReceiptRawBinding{Role: value.role, File: name,
+			SHA256: slice6ReceiptSHA256(data), Bytes: len(data), ProfileDigest: profile,
+			ConfigDigest: value.config, SelectedImage: image, ActualImage: image,
+			ContainerID:      value.container,
+			CaptureStartUTC:  now.Add(-time.Second).Format(time.RFC3339Nano),
+			CaptureFinishUTC: now.Add(time.Second).Format(time.RFC3339Nano)}
+		if value.role == "guest" {
+			binding.DockerExitCode = 1
+		}
+		if err := run.recordRaw(binding); err != nil {
+			t.Fatal(err)
+		}
+		bindings[value.role] = binding
+	}
+	mutation := slice6GuestRevokeFixtureReceipt{Protocol: slice6GuestRevokeFixtureProtocol,
+		RunID: id, ProfileDigest: profile, ProductContainerID: bindings["product"].ContainerID,
+		BindingGeneration: 1, MutationOutcome: "confirmed", BeforeConnected: true,
+		AfterRevoked: true, NonceCleared: true}
+	mutationData, err := json.Marshal(mutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := slice6ReceiptArtifact{ManifestDigest: profile, ArchiveDigest: profile,
+		SelectedManifestDigest: profile, ConfigDigest: profile, ImageID: image}
+	expected := slice6ReceiptExpectedIdentity{ERevision: strings.Repeat("a", 40), ETree: profile,
+		RRevision: strings.Repeat("b", 40), RTree: profile,
+		FRevision: strings.Repeat("c", 40), FTree: profile, ProfileDigest: profile,
+		ProductConfigDigest: productConfig, GuestConfigDigest: guestConfig,
+		ProductArtifact: artifact, GuestArtifact: artifact,
+		ProductContainerID: bindings["product"].ContainerID,
+		GuestContainerID:   bindings["guest"].ContainerID,
+		ProductImageID:     image, GuestImageID: image}
+	binding := slice6ReceiptEvidenceBinding{Protocol: "sandbox-runtime.phase6-guest-receipt-evidence.v1",
+		Disposition: "component_verified", RunID: id,
+		ERevision: expected.ERevision, ETree: expected.ETree,
+		RRevision: expected.RRevision, RTree: expected.RTree,
+		FRevision: expected.FRevision, FTree: expected.FTree,
+		ProfileDigest: profile, Product: bindings["product"], Guest: bindings["guest"],
+		ProductArtifact: artifact, GuestArtifact: artifact,
+		MutationReceiptSHA256: slice6ReceiptSHA256(append(mutationData, '\n')),
+		MutationGeneration:    1, MutationVerifiedUTC: now.Format(time.RFC3339Nano)}
+	return run, binding, mutation, expected
+}
+
+func TestSlice6GuestEvidenceBindingPublicationFailures(t *testing.T) {
+	for _, name := range []string{"pending_sync", "pending_readback", "link", "publish_sync", "rollback_unlink"} {
+		t.Run(name, func(t *testing.T) {
+			run, binding, mutation, expected := slice6ReceiptPublicationFixture(t)
+			originalSync := run.syncDir
+			switch name {
+			case "pending_sync":
+				run.syncFile = func(file *os.File) error {
+					if file.Name() == "binding.pending" {
+						return errors.New("injected pending file sync failure")
+					}
+					return file.Sync()
+				}
+			case "pending_readback":
+				run.afterWrite = func(file string) error {
+					if file == "binding.pending" {
+						return errors.New("injected pending readback failure")
+					}
+					return nil
+				}
+			case "link":
+				run.linkFile = func(int, string, int, string, int) error {
+					return errors.New("injected no-replace publish failure")
+				}
+			case "publish_sync", "rollback_unlink":
+				run.syncDir = func(fd int) error {
+					if _, exists := run.files["binding.json"]; exists {
+						return errors.New("injected publish directory sync failure")
+					}
+					return originalSync(fd)
+				}
+				if name == "rollback_unlink" {
+					run.unlinkFile = func(fd int, file string, flags int) error {
+						if file == "binding.json" {
+							return errors.New("injected final binding rollback unlink failure")
+						}
+						return unix.Unlinkat(fd, file, flags)
+					}
+				}
+			}
+			finishErr := run.finish(binding, mutation, expected)
+			if finishErr == nil {
+				t.Fatal("binding publication failure accepted")
+			}
+			if name == "rollback_unlink" && !errors.Is(finishErr, errSlice6ReceiptPublishUncertain) {
+				t.Fatal("rollback uncertainty was hidden", finishErr)
+			}
+			if name != "rollback_unlink" {
+				for _, file := range []string{"binding.pending", "binding.json"} {
+					if _, err := os.Stat(filepath.Join(run.root.path, run.id, file)); !os.IsNotExist(err) {
+						t.Fatal("failed publish left binding", file, err)
+					}
+				}
+			} else if _, err := os.Stat(filepath.Join(run.root.path, run.id, "binding.pending")); !os.IsNotExist(err) {
+				t.Fatal("rollback failed to remove the separately removable pending entry", err)
+			}
+			run.syncFile = (*os.File).Sync
+			run.syncDir = originalSync
+			run.afterWrite = nil
+			if err := run.close(); err != nil {
+				t.Fatal("incomplete marker persistence", err)
+			}
+			if _, err := os.Stat(filepath.Join(run.root.path, run.id, "incomplete.json")); err != nil {
+				t.Fatal("incomplete marker absent", err)
+			}
+			if slice6VerifyPersistentGuestEvidence(run.root.path, run.id, expected) == nil {
+				t.Fatal("failed publication independently accepted")
+			}
+		})
 	}
 }
 

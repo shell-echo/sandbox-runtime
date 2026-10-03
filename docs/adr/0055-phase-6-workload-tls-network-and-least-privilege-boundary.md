@@ -2774,3 +2774,28 @@ The clean `72ffa6d` R/F candidate rebuilds made before this review are
 preserved as unaccepted diagnostic artifacts. No new issuer run is authorized
 by these corrections; R/E must be committed, rebuilt from clean sources and
 reviewed again first. Phase 6 remains **5/15**.
+
+### Slice 6 E-only binding publication correction (2026-10-04)
+
+The follow-up E observer gives the exact Guest PID1-running check, running-
+network inspect and first connected readiness check one absolute 45-second
+deadline. Its long-lived attached stdout capture remains on the lifecycle
+context; a blocked network inspect cannot silently extend readiness.
+
+The E-owned private evidence binding is first written as a fixed 0600
+`binding.pending` in its exclusively created 0700 run directory. File and
+directory sync plus exact readback precede no-replace publication to
+`binding.json`; the new directory entry is synced, the pending name is
+removed, and the directory is synced again before independent verification.
+On failure, E rolls back only its own inode-checked pending/final entries and
+keeps the raw captures, mutation receipt and best-effort incomplete marker.
+An unlink, directory-sync or marker failure is reported as publication or
+persistence uncertainty; it is never translated into successful evidence or
+an assertion that no bytes can remain under a storage fault. The trusted
+gate fails closed. The mutation digest covers the **exact on-disk bytes**,
+including the trailing newline. The independent verifier also compares the
+externally supplied Product/Guest candidate manifest, archive, selected OCI
+manifest, config and actual image/container identities, not merely their
+shapes or values repeated from the binding. These are E-only component-
+evidence corrections, not a change to the formal Slice 6 manifest or an
+issuer-run authorization. Phase 6 remains **5/15**.

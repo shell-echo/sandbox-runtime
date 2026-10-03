@@ -208,8 +208,8 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	} else if _, err := run.docker(ctx, "start", id); err != nil {
 		return errors.New("start independent Guest PID1")
 	}
-	if receiptCapture != nil {
-		if err := slice6AwaitGuestReceiptStart(ctx, receiptReadyDeadline, 100*time.Millisecond,
+	runningCheck := func(startupCtx context.Context) error {
+		return slice6AwaitGuestReceiptStart(startupCtx, receiptReadyDeadline, 100*time.Millisecond,
 			func(check context.Context) (string, int, error) {
 				state, stateErr, overflow := slice6DockerBounded(check, 160, nil, "inspect", "--format",
 					"{{.Id}} {{.State.Status}} {{.State.Running}} {{.State.Pid}} {{.State.OOMKilled}}", id)
@@ -235,42 +235,43 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 					return fields[1], pid, nil
 				}
 				return "", 0, errors.New("Guest PID1 exited or changed state before readiness")
-			}); err != nil {
+			})
+	}
+	networkCheck := func(startupCtx context.Context) error {
+		return slice6VerifyGuestRuntimeRunningNetworks(startupCtx, run, id, plan,
+			productEdge.NetworkID, internal.NetworkID)
+	}
+	readyCheck := func(startupCtx context.Context) error {
+		return slice6AwaitGuestConnected(startupCtx, 45*time.Second, 250*time.Millisecond,
+			func(check context.Context) (bool, error) {
+				guest, inspectErr := slice6InspectProductRuntimeMember(check, run, id)
+				if inspectErr == nil {
+					if guest.ID != id || guest.Name != "/sr-p6-guest-runtime-"+run.id {
+						return false, errors.New("Guest PID1 identity drift")
+					}
+					return true, nil
+				}
+				// A failed inspect is not evidence of exit. Confirm the exact
+				// container's stopped state without surfacing daemon output.
+				state, stateErr, overflow := slice6DockerBounded(check, 256, nil,
+					"inspect", "--format", "{{.State.Running}}", id)
+				defer clear(state)
+				if !overflow && stateErr == nil && string(state) == "false\n" {
+					return false, nil
+				}
+				return false, errors.New("Guest PID1 inspect unavailable")
+			}, func(check context.Context) (int, error) {
+				return slice6ProbeGuestReady(check, id)
+			})
+	}
+	if receiptCapture != nil {
+		if err := slice6GuestReceiptStartupChecks(ctx, receiptReadyDeadline,
+			runningCheck, networkCheck, readyCheck); err != nil {
 			return err
 		}
-	}
-	if err := slice6VerifyGuestRuntimeRunningNetworks(ctx, run, id, plan,
-		productEdge.NetworkID, internal.NetworkID); err != nil {
+	} else if err := networkCheck(ctx); err != nil {
 		return err
-	}
-	readyBudget := 45 * time.Second
-	if receiptCapture != nil {
-		readyBudget = time.Until(receiptReadyDeadline)
-		if readyBudget <= 0 {
-			return errors.New("Guest attached startup consumed the fixed readiness budget")
-		}
-	}
-	if err := slice6AwaitGuestConnected(ctx, readyBudget, 250*time.Millisecond,
-		func(check context.Context) (bool, error) {
-			guest, inspectErr := slice6InspectProductRuntimeMember(check, run, id)
-			if inspectErr == nil {
-				if guest.ID != id || guest.Name != "/sr-p6-guest-runtime-"+run.id {
-					return false, errors.New("Guest PID1 identity drift")
-				}
-				return true, nil
-			}
-			// A failed inspect is not evidence of exit. Confirm the exact
-			// container's stopped state without surfacing daemon output.
-			state, stateErr, overflow := slice6DockerBounded(check, 256, nil,
-				"inspect", "--format", "{{.State.Running}}", id)
-			defer clear(state)
-			if !overflow && stateErr == nil && string(state) == "false\n" {
-				return false, nil
-			}
-			return false, errors.New("Guest PID1 inspect unavailable")
-		}, func(check context.Context) (int, error) {
-			return slice6ProbeGuestReady(check, id)
-		}); err != nil {
+	} else if err := readyCheck(ctx); err != nil {
 		return err
 	}
 	if _, err := observeSlice6ProfileNetwork(ctx, run, productEdge.NetworkID, plan.ProductNetwork,
@@ -318,6 +319,49 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		receipts.Guest = records
 	}
 	return nil
+}
+
+// The attached collector keeps its long-lived Docker CLI on the lifecycle
+// context, while every startup inspect and first readiness probe consumes one
+// absolute 45-second deadline. A blocking network inspect cannot reset it.
+func slice6GuestReceiptStartupChecks(parent context.Context, deadline time.Time,
+	running, networks, ready func(context.Context) error) error {
+	if parent == nil || parent.Err() != nil || !deadline.After(time.Now()) ||
+		running == nil || networks == nil || ready == nil {
+		return errors.New("Guest attached startup checks unavailable")
+	}
+	check, cancel := context.WithDeadline(parent, deadline)
+	defer cancel()
+	for _, stage := range []func(context.Context) error{running, networks, ready} {
+		if err := stage(check); err != nil {
+			return err
+		}
+		if check.Err() != nil {
+			return errors.New("Guest attached startup consumed the fixed readiness budget")
+		}
+	}
+	return nil
+}
+
+func TestSlice6GuestReceiptStartupChecksUseOneAbsoluteDeadline(t *testing.T) {
+	deadline := time.Now().Add(time.Second)
+	var seen []time.Time
+	check := func(ctx context.Context) error {
+		observed, ok := ctx.Deadline()
+		if !ok {
+			return errors.New("missing startup deadline")
+		}
+		seen = append(seen, observed)
+		return nil
+	}
+	if err := slice6GuestReceiptStartupChecks(t.Context(), deadline, check, check, check); err != nil ||
+		len(seen) != 3 || !seen[0].Equal(deadline) || !seen[1].Equal(deadline) || !seen[2].Equal(deadline) {
+		t.Fatal("running, network and ready checks did not inherit one absolute deadline", err)
+	}
+	if err := slice6GuestReceiptStartupChecks(t.Context(), time.Now().Add(5*time.Millisecond),
+		check, func(ctx context.Context) error { <-ctx.Done(); return nil }, check); err == nil {
+		t.Fatal("network check consumed deadline but startup still passed")
+	}
 }
 
 // The attached Docker CLI may have started without the exact PID1 entering

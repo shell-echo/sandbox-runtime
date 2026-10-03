@@ -880,6 +880,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 												var guestReceiptPair slice6GuestReceiptPair
 												var mutationReceipt slice6GuestRevokeFixtureReceipt
 												var mutationVerifiedAt time.Time
+												var guestRuntimeID string
 												var guestRuntimeFailure error
 												var productRuntimeID string
 												runGuestChain := func() {
@@ -893,6 +894,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																	var onConnected func(string) error
 																	if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
 																		onConnected = func(guestContainerID string) error {
+																			guestRuntimeID = guestContainerID
 																			revoked, err := slice6RunGuestLiveRevoke(ctx, run, composed.Profile,
 																				productRuntimeID, guestContainerID, postgresServerID,
 																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles,
@@ -959,7 +961,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																							if runtimeFailure == nil {
 																								runtimeFailure = slice6FinishGuestReceiptEvidence(ctx, receiptEvidence,
 																									static, verifiedImages, guestBindingFixture,
-																									composed.Profile.ProfileDigest, mutationReceipt, mutationVerifiedAt)
+																									composed.Profile.ProfileDigest, mutationReceipt, mutationVerifiedAt,
+																									productRuntimeID, guestRuntimeID)
 																								if runtimeFailure == nil {
 																									t.Log("private Product/Guest PID1 stdout receipts durably bound to same signed attempts, source/image identities and PG revocation; component evidence only")
 																								}

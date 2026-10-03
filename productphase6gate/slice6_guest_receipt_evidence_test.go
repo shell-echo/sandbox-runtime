@@ -24,6 +24,7 @@ import (
 const slice6GuestReceiptEvidenceRootEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_RUN_EVIDENCE_ROOT"
 
 var errSlice6ReceiptEvidence = errors.New("private Guest receipt evidence unavailable")
+var errSlice6ReceiptPublishUncertain = errors.New("private Guest receipt binding publication rollback unconfirmed")
 
 // These are partial, E-owned component observations. They are deliberately
 // separate from the closed formal Slice 6 one-run evidence recorder.
@@ -77,17 +78,20 @@ type slice6ReceiptArtifact struct {
 }
 
 type slice6ReceiptEvidenceRun struct {
-	mu       sync.Mutex
-	root     *slice6ReceiptEvidenceRoot
-	fd       int
-	stat     unix.Stat_t
-	id       string
-	files    map[string]unix.Stat_t
-	bindings map[string]slice6ReceiptRawBinding
-	syncFile func(*os.File) error
-	syncDir  func(int) error
-	complete bool
-	closed   bool
+	mu         sync.Mutex
+	root       *slice6ReceiptEvidenceRoot
+	fd         int
+	stat       unix.Stat_t
+	id         string
+	files      map[string]unix.Stat_t
+	bindings   map[string]slice6ReceiptRawBinding
+	syncFile   func(*os.File) error
+	syncDir    func(int) error
+	linkFile   func(int, string, int, string, int) error
+	unlinkFile func(int, string, int) error
+	afterWrite func(string) error
+	complete   bool
+	closed     bool
 }
 
 func slice6SameInode(a, b unix.Stat_t) bool { return a.Dev == b.Dev && a.Ino == b.Ino }
@@ -154,7 +158,8 @@ func (root *slice6ReceiptEvidenceRoot) newRun(id string) (*slice6ReceiptEvidence
 	}
 	return &slice6ReceiptEvidenceRun{root: root, fd: fd, stat: observed, id: id,
 		files: make(map[string]unix.Stat_t), bindings: make(map[string]slice6ReceiptRawBinding),
-		syncFile: (*os.File).Sync, syncDir: unix.Fsync}, nil
+		syncFile: (*os.File).Sync, syncDir: unix.Fsync, linkFile: unix.Linkat,
+		unlinkFile: unix.Unlinkat}, nil
 }
 
 func (root *slice6ReceiptEvidenceRoot) openRun(id string) (*slice6ReceiptEvidenceRun, error) {
@@ -172,7 +177,8 @@ func (root *slice6ReceiptEvidenceRoot) openRun(id string) (*slice6ReceiptEvidenc
 	}
 	run := &slice6ReceiptEvidenceRun{root: root, fd: fd, stat: observed, id: id,
 		files: make(map[string]unix.Stat_t), bindings: make(map[string]slice6ReceiptRawBinding),
-		syncFile: (*os.File).Sync, syncDir: unix.Fsync}
+		syncFile: (*os.File).Sync, syncDir: unix.Fsync, linkFile: unix.Linkat,
+		unlinkFile: unix.Unlinkat}
 	if run.check() != nil {
 		unix.Close(fd)
 		return nil, errSlice6ReceiptEvidence
@@ -209,7 +215,7 @@ func (run *slice6ReceiptEvidenceRun) createFile(name string) (*os.File, error) {
 	run.mu.Lock()
 	defer run.mu.Unlock()
 	if run.check() != nil || (name != "product-pid1.stdout" && name != "guest-pid1.stdout" &&
-		name != "binding.json" && name != "incomplete.json" && name != "mutation-receipt.json") {
+		name != "binding.pending" && name != "incomplete.json" && name != "mutation-receipt.json") {
 		return nil, errSlice6ReceiptEvidence
 	}
 	fd, err := unix.Openat(run.fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
@@ -281,6 +287,9 @@ func (run *slice6ReceiptEvidenceRun) writeDocument(name string, value any) error
 		run.syncDir(run.fd) != nil {
 		return errSlice6ReceiptEvidence
 	}
+	if run.afterWrite != nil && run.afterWrite(name) != nil {
+		return errSlice6ReceiptEvidence
+	}
 	read, err := run.readFile(name, 8192)
 	if err != nil || string(read) != string(data) {
 		return errSlice6ReceiptEvidence
@@ -300,8 +309,78 @@ func (run *slice6ReceiptEvidenceRun) recordRaw(binding slice6ReceiptRawBinding) 
 	return nil
 }
 
+// A failed publish removes only files this run created and whose inode still
+// matches the pinned pending inode. A replacement or failed unlink/sync is an
+// uncertain failure, never a reason to remove another file or accept a run.
+func (run *slice6ReceiptEvidenceRun) rollbackBinding() error {
+	if run.check() != nil {
+		return errSlice6ReceiptPublishUncertain
+	}
+	uncertain := false
+	for _, name := range []string{"binding.json", "binding.pending"} {
+		wanted, ok := run.files[name]
+		if !ok {
+			continue
+		}
+		var observed unix.Stat_t
+		err := unix.Fstatat(run.fd, name, &observed, unix.AT_SYMLINK_NOFOLLOW)
+		if errors.Is(err, unix.ENOENT) {
+			delete(run.files, name)
+			continue
+		}
+		if err != nil || !slice6SameInode(wanted, observed) ||
+			observed.Mode&unix.S_IFMT != unix.S_IFREG || observed.Uid != uint32(os.Getuid()) ||
+			run.unlinkFile(run.fd, name, 0) != nil {
+			uncertain = true
+			continue
+		}
+		delete(run.files, name)
+	}
+	if unix.Fsync(run.fd) != nil {
+		uncertain = true
+	}
+	if uncertain {
+		return errSlice6ReceiptPublishUncertain
+	}
+	return nil
+}
+
+func (run *slice6ReceiptEvidenceRun) publishBinding(expected slice6ReceiptExpectedIdentity) error {
+	if run.check() != nil {
+		return errSlice6ReceiptEvidence
+	}
+	pending, ok := run.files["binding.pending"]
+	if !ok {
+		return errSlice6ReceiptEvidence
+	}
+	var named unix.Stat_t
+	if unix.Fstatat(run.fd, "binding.pending", &named, unix.AT_SYMLINK_NOFOLLOW) != nil ||
+		!slice6SameInode(named, pending) {
+		return errSlice6ReceiptEvidence
+	}
+	if err := unix.Fstatat(run.fd, "binding.json", &named, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
+		return errSlice6ReceiptEvidence
+	}
+	// Linkat is atomic and refuses an existing name on Darwin/Linux. The
+	// pending file remains until the new directory entry is synced.
+	run.files["binding.json"] = pending
+	if run.linkFile(run.fd, "binding.pending", run.fd, "binding.json", 0) != nil ||
+		run.syncDir(run.fd) != nil {
+		return errSlice6ReceiptEvidence
+	}
+	if run.unlinkFile(run.fd, "binding.pending", 0) != nil {
+		return errSlice6ReceiptEvidence
+	}
+	delete(run.files, "binding.pending")
+	if run.syncDir(run.fd) != nil ||
+		slice6VerifyPersistentGuestEvidence(run.root.path, run.id, expected) != nil {
+		return errSlice6ReceiptEvidence
+	}
+	return nil
+}
+
 func (run *slice6ReceiptEvidenceRun) finish(binding slice6ReceiptEvidenceBinding,
-	mutation slice6GuestRevokeFixtureReceipt) error {
+	mutation slice6GuestRevokeFixtureReceipt, expected slice6ReceiptExpectedIdentity) (resultErr error) {
 	run.mu.Lock()
 	if run.check() != nil || run.complete || len(run.bindings) != 2 ||
 		binding.RunID != run.id || binding.Product != run.bindings["product"] ||
@@ -315,6 +394,18 @@ func (run *slice6ReceiptEvidenceRun) finish(binding slice6ReceiptEvidenceBinding
 		!guestRevokeFixtureDigestGate(binding.ProfileDigest) ||
 		!guestRevokeFixtureDigestGate(binding.MutationReceiptSHA256) ||
 		binding.MutationVerifiedUTC == "" || binding.MutationGeneration != mutation.BindingGeneration ||
+		binding.ERevision != expected.ERevision || binding.ETree != expected.ETree ||
+		binding.RRevision != expected.RRevision || binding.RTree != expected.RTree ||
+		binding.FRevision != expected.FRevision || binding.FTree != expected.FTree ||
+		binding.ProfileDigest != expected.ProfileDigest ||
+		binding.Product.ConfigDigest != expected.ProductConfigDigest ||
+		binding.Guest.ConfigDigest != expected.GuestConfigDigest ||
+		binding.ProductArtifact != expected.ProductArtifact ||
+		binding.GuestArtifact != expected.GuestArtifact ||
+		binding.Product.ContainerID != expected.ProductContainerID ||
+		binding.Guest.ContainerID != expected.GuestContainerID ||
+		binding.Product.ActualImage != expected.ProductImageID ||
+		binding.Guest.ActualImage != expected.GuestImageID ||
 		!slice6ValidReceiptArtifact(binding.ProductArtifact, binding.Product.ActualImage) ||
 		!slice6ValidReceiptArtifact(binding.GuestArtifact, binding.Guest.ActualImage) {
 		run.mu.Unlock()
@@ -341,21 +432,21 @@ func (run *slice6ReceiptEvidenceRun) finish(binding slice6ReceiptEvidenceBinding
 	}
 	mutationDocument, err := run.readFile("mutation-receipt.json", 4096)
 	if err != nil || len(mutationDocument) < 2 || mutationDocument[len(mutationDocument)-1] != '\n' ||
-		slice6ReceiptSHA256(mutationDocument[:len(mutationDocument)-1]) != binding.MutationReceiptSHA256 {
+		slice6ReceiptSHA256(mutationDocument) != binding.MutationReceiptSHA256 {
 		return errSlice6ReceiptEvidence
 	}
-	if err := run.writeDocument("binding.json", binding); err != nil {
+	defer func() {
+		if resultErr != nil {
+			if rollbackErr := run.rollbackBinding(); rollbackErr != nil {
+				resultErr = errors.Join(resultErr, rollbackErr)
+			}
+		}
+	}()
+	if err := run.writeDocument("binding.pending", binding); err != nil {
 		return err
 	}
-	if err := slice6VerifyPersistentGuestEvidence(run.root.path, run.id, slice6ReceiptExpectedIdentity{
-		ERevision: binding.ERevision, ETree: binding.ETree,
-		RRevision: binding.RRevision, RTree: binding.RTree,
-		FRevision: binding.FRevision, FTree: binding.FTree,
-		ProfileDigest:       binding.ProfileDigest,
-		ProductConfigDigest: binding.Product.ConfigDigest,
-		GuestConfigDigest:   binding.Guest.ConfigDigest,
-	}); err != nil {
-		return errSlice6ReceiptEvidence
+	if err := run.publishBinding(expected); err != nil {
+		return err
 	}
 	run.mu.Lock()
 	run.complete = true
@@ -409,6 +500,8 @@ func slice6ReceiptSHA256(data []byte) string {
 type slice6ReceiptExpectedIdentity struct {
 	ERevision, ETree, RRevision, RTree, FRevision, FTree, ProfileDigest string
 	ProductConfigDigest, GuestConfigDigest                              string
+	ProductArtifact, GuestArtifact                                      slice6ReceiptArtifact
+	ProductContainerID, GuestContainerID, ProductImageID, GuestImageID  string
 }
 
 // Read-only, independent reread of the retained partial component evidence.
@@ -470,6 +563,12 @@ func slice6VerifyPersistentGuestEvidence(rootPath, id string, expected slice6Rec
 		binding.ProfileDigest != expected.ProfileDigest ||
 		binding.Product.ConfigDigest != expected.ProductConfigDigest ||
 		binding.Guest.ConfigDigest != expected.GuestConfigDigest ||
+		binding.ProductArtifact != expected.ProductArtifact ||
+		binding.GuestArtifact != expected.GuestArtifact ||
+		binding.Product.ContainerID != expected.ProductContainerID ||
+		binding.Guest.ContainerID != expected.GuestContainerID ||
+		binding.Product.ActualImage != expected.ProductImageID ||
+		binding.Guest.ActualImage != expected.GuestImageID ||
 		!slice6ValidReceiptArtifact(binding.ProductArtifact, binding.Product.ActualImage) ||
 		!slice6ValidReceiptArtifact(binding.GuestArtifact, binding.Guest.ActualImage) {
 		return errSlice6ReceiptEvidence
@@ -510,7 +609,7 @@ func slice6VerifyPersistentGuestEvidence(rootPath, id string, expected slice6Rec
 	}
 	mutationDocument, err := run.readFile("mutation-receipt.json", 4096)
 	if err != nil || len(mutationDocument) < 2 || mutationDocument[len(mutationDocument)-1] != '\n' ||
-		slice6ReceiptSHA256(mutationDocument[:len(mutationDocument)-1]) != binding.MutationReceiptSHA256 {
+		slice6ReceiptSHA256(mutationDocument) != binding.MutationReceiptSHA256 {
 		return errSlice6ReceiptEvidence
 	}
 	var mutation slice6GuestRevokeFixtureReceipt
@@ -555,7 +654,8 @@ func slice6ReceiptRoleArtifact(images phase6profilebuilder.ImageSupply, image st
 func slice6FinishGuestReceiptEvidence(ctx context.Context, run *slice6ReceiptEvidenceRun,
 	static slice6VaultStaticInputs, images phase6profilebuilder.ImageSupply,
 	fixture slice6GuestBindingFixtureArtifact, profileDigest string,
-	mutation slice6GuestRevokeFixtureReceipt, verifiedAt time.Time) error {
+	mutation slice6GuestRevokeFixtureReceipt, verifiedAt time.Time,
+	productContainerID, guestContainerID string) error {
 	if ctx == nil || ctx.Err() != nil || run == nil || run.check() != nil ||
 		verifiedAt.IsZero() || !guestRevokeFixtureDigestGate(profileDigest) ||
 		mutation.RunID != run.id || mutation.ProfileDigest != profileDigest ||
@@ -591,7 +691,9 @@ func slice6FinishGuestReceiptEvidence(ctx context.Context, run *slice6ReceiptEvi
 	guest, guestOK := run.bindings["guest"]
 	run.mu.Unlock()
 	if !productOK || !guestOK || product.ProfileDigest != profileDigest ||
-		guest.ProfileDigest != profileDigest || product.ContainerID != mutation.ProductContainerID {
+		guest.ProfileDigest != profileDigest || product.ContainerID != mutation.ProductContainerID ||
+		product.ContainerID != productContainerID || guest.ContainerID != guestContainerID ||
+		product.ContainerID == guest.ContainerID {
 		return errSlice6ReceiptEvidence
 	}
 	productArtifact, err := slice6ReceiptRoleArtifact(images, product.ActualImage)
@@ -602,15 +704,24 @@ func slice6FinishGuestReceiptEvidence(ctx context.Context, run *slice6ReceiptEvi
 	if err != nil {
 		return err
 	}
+	expected := slice6ReceiptExpectedIdentity{
+		ERevision: eRevision, ETree: eTree, RRevision: images.RuntimeRevision,
+		RTree: images.RuntimeTreeDigest, FRevision: fixture.SourceRevision, FTree: fTree,
+		ProfileDigest: profileDigest, ProductConfigDigest: product.ConfigDigest,
+		GuestConfigDigest: guest.ConfigDigest, ProductArtifact: productArtifact,
+		GuestArtifact: guestArtifact, ProductContainerID: productContainerID,
+		GuestContainerID: guestContainerID, ProductImageID: productArtifact.ImageID,
+		GuestImageID: guestArtifact.ImageID,
+	}
 	binding := slice6ReceiptEvidenceBinding{
 		Protocol:    "sandbox-runtime.phase6-guest-receipt-evidence.v1",
 		Disposition: "component_verified", RunID: run.id,
 		ERevision: eRevision, ETree: eTree, RRevision: images.RuntimeRevision,
 		RTree: images.RuntimeTreeDigest, FRevision: fixture.SourceRevision, FTree: fTree,
-		ProfileDigest: profileDigest, MutationReceiptSHA256: slice6ReceiptSHA256(canonicalMutation),
+		ProfileDigest: profileDigest, MutationReceiptSHA256: slice6ReceiptSHA256(append(canonicalMutation, '\n')),
 		MutationVerifiedUTC: verifiedAt.Format(time.RFC3339Nano), MutationGeneration: mutation.BindingGeneration,
 		ProductArtifact: productArtifact,
 		GuestArtifact:   guestArtifact, Product: product, Guest: guest,
 	}
-	return run.finish(binding, mutation)
+	return run.finish(binding, mutation, expected)
 }
