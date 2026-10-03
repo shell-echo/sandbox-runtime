@@ -22,6 +22,7 @@ import (
 )
 
 const slice6GuestRuntimeProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RUNTIME_PROCESS"
+const slice6GuestImageUtilityPreflightEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_IMAGE_UTILITY_PREFLIGHT"
 
 // The shell digest is measured from the exact selected Guest image before it
 // is used as a v3 toolchain. This is a finite, networkless operator probe.
@@ -44,13 +45,67 @@ func slice6MeasureGuestShell(ctx context.Context, run slice6DockerRun, principal
 	return "sha256:" + fields[0], nil
 }
 
+func slice6ProbeGuestUtilities(ctx context.Context, run slice6DockerRun, principal phase6security.Principal) error {
+	if principal.Name != "guest-runtime" || principal.ImageReference == "" ||
+		principal.ImageReference != principal.ImageDigest || principal.UID == 0 || principal.GID == 0 {
+		return errors.New("selected Guest utility image identity unavailable")
+	}
+	output, runErr, overflow := slice6DockerBounded(ctx, 256, nil,
+		"run", "--rm", "--pull=never", "--network=none", "--restart=no",
+		"--name", "sr-p6-guest-utilities-"+run.id, "--label", run.label(),
+		"--read-only", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
+		"--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--memory=67108864",
+		"--cpus=0.2", "--pids-limit=16", "--entrypoint=/bin/sh", principal.ImageReference,
+		"-ec", "test -x /bin/busybox; /bin/busybox wget --help >/dev/null 2>&1; /bin/busybox df --help >/dev/null 2>&1")
+	defer clear(output)
+	if runErr != nil || overflow || len(output) != 0 {
+		return errors.New("selected Guest HTTP or filesystem utility unavailable")
+	}
+	return nil
+}
+
+func TestSlice6SelectedGuestImageUtilitiesNoIssuer(t *testing.T) {
+	if os.Getenv(slice6GuestImageUtilityPreflightEnv) != "1" {
+		t.Skip("set " + slice6GuestImageUtilityPreflightEnv + "=1 with R4 source-bound image inputs")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Minute)
+	defer cancel()
+	external, images, err := slice6VaultLoadStaticInputs(ctx, slice6VaultStaticInputsFromEnvironment())
+	if err != nil || slice6VaultPreflightAllStoredImages(ctx, external, images) != nil {
+		t.Fatal("selected Guest image static source or Docker store unavailable")
+	}
+	binding, ok := images.LocalRoleTargets["core"]
+	identity := phase6security.Slice6DesiredUIDGID()["guest-runtime"]
+	if !ok || binding.Reference == "" || binding.Reference != binding.Digest || identity[0] == 0 || identity[1] == 0 {
+		t.Fatal("selected Guest image or non-root identity unavailable")
+	}
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("selected Guest utility preflight exact cleanup: %v", err)
+		}
+	})
+	principal := phase6security.Principal{Name: "guest-runtime", ImageReference: binding.Reference,
+		ImageDigest: binding.Digest, UID: identity[0], GID: identity[1]}
+	shell, err := slice6MeasureGuestShell(ctx, run, principal)
+	if err != nil || shell == "" || slice6ProbeGuestUtilities(ctx, run, principal) != nil {
+		t.Fatal("selected Guest shell/HTTP/df utilities unavailable before issuer")
+	}
+	t.Logf("pre-issuer selected Guest shell=%s and bounded HTTP/df utilities verified", shell)
+}
+
 // This component runner is called only while Product PID1, its real SQL edge,
 // both Guest signers and the Vault-backed Guest material agent remain alive.
 // It cannot fabricate a Product binding: the finite fixture receipt supplies
 // that exact ID and generation.
 func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, binding slice6GuestBindingFixtureReceipt,
-	socketVolumes, anchorFiles map[string]string, productID string,
+	socketVolumes, anchorFiles map[string]string, productID, preIssuerShellDigest string,
 	onConnected func(string) error) (resultErr error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 3*time.Minute)
@@ -81,8 +136,8 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		return err
 	}
 	shellDigest, err := slice6MeasureGuestShell(ctx, run, plan.Principal)
-	if err != nil {
-		return err
+	if err != nil || shellDigest != preIssuerShellDigest || preIssuerShellDigest == "" {
+		return errors.New("selected Guest shell changed after pre-issuer measurement")
 	}
 	files, err := slice6BuildGuestRuntimeInputs(composed, run.id, binding.GuestID,
 		binding.BindingGeneration, shellDigest)
@@ -205,11 +260,24 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 			}
 			t.Log("real independent Guest PID1 reached connected /readyz while Product PID1 and both Guest agents remained live; same-run two-edge network membership observed")
 			if onConnected != nil {
+				before, beforeErr := slice6InspectProductRuntimeMember(ctx, run, id)
+				if beforeErr != nil {
+					return errors.New("Guest PID1 identity unavailable before dependent gate")
+				}
 				if err := onConnected(id); err != nil {
 					return errors.Join(errors.New("Guest live dependent gate failed"), err)
 				}
 				guest, err := slice6InspectProductRuntimeMember(ctx, run, id)
-				if err != nil || guest.ID != id || guest.Name != "/sr-p6-guest-runtime-"+run.id {
+				if err == nil {
+					if slice6RuntimeMemberFingerprint(guest, true) != slice6RuntimeMemberFingerprint(before, true) {
+						return errors.New("Guest PID1 changed during live dependent gate")
+					}
+				} else if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
+					stopped, stateErr := slice6GuestStoppedAfterRevoke(ctx, run, id, before)
+					if stateErr != nil || !stopped {
+						return errors.New("Guest PID1 post-revoke exit was not verified")
+					}
+				} else {
 					return errors.New("Guest PID1 changed during live dependent gate")
 				}
 			}

@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -12,12 +13,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/guestagent"
 	guestdevelopment "github.com/shell-echo/sandbox-runtime/guestagent/development"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/product"
 	productpostgres "github.com/shell-echo/sandbox-runtime/product/adapter/postgres"
 	"github.com/spf13/cobra"
@@ -26,6 +31,7 @@ import (
 const guestRevokeFixtureProtocol = "sandbox-runtime.phase6-guest-revoke-fixture.v1"
 const guestRevokeFixtureOperation = "revoke-exact-connected-binding"
 const guestRevokeFixtureReason = "phase6-slice6-live-revocation"
+const guestRevokeFixtureAdmissionProtocol = "sandbox-runtime.phase6-guest-revoke-admission.v1"
 
 var guestRevokeFixtureCmd = &cobra.Command{
 	Use: "phase6-guest-revoke-fixture", Hidden: true, SilenceUsage: true,
@@ -46,19 +52,104 @@ type guestRevokeFixtureInput struct {
 }
 
 type guestRevokeFixtureReceipt struct {
+	Protocol            string  `json:"protocol"`
+	RunID               string  `json:"run_id"`
+	ProfileDigest       string  `json:"profile_digest"`
+	ExecutableDigest    string  `json:"executable_digest"`
+	ProductContainerID  string  `json:"product_container_id"`
+	GuestID             string  `json:"guest_id"`
+	BindingGeneration   int64   `json:"binding_generation"`
+	MutationOutcome     string  `json:"mutation_outcome"`
+	BeforeConnected     bool    `json:"before_connected"`
+	BindingExpiresAt    string  `json:"binding_expires_at"`
+	AfterRevoked        bool    `json:"after_revoked"`
+	NonceCleared        bool    `json:"nonce_cleared"`
+	PostgresBackendPID  int32   `json:"postgres_backend_pid"`
+	PostgresBackendPIDs []int32 `json:"postgres_backend_pids"`
+}
+
+type guestRevokeFixtureAdmission struct {
 	Protocol           string `json:"protocol"`
 	RunID              string `json:"run_id"`
 	ProfileDigest      string `json:"profile_digest"`
 	ExecutableDigest   string `json:"executable_digest"`
 	ProductContainerID string `json:"product_container_id"`
 	GuestID            string `json:"guest_id"`
-	BindingGeneration  int64  `json:"binding_generation"`
-	MutationOutcome    string `json:"mutation_outcome"`
-	BeforeConnected    bool   `json:"before_connected"`
-	BindingExpiresAt   string `json:"binding_expires_at"`
-	AfterRevoked       bool   `json:"after_revoked"`
-	NonceCleared       bool   `json:"nonce_cleared"`
 	PostgresBackendPID int32  `json:"postgres_backend_pid"`
+}
+
+// A one-connection fixture pool cannot borrow Product's other three role
+// slots. Every opened backend is recorded before use; replacement is rejected.
+type guestRevokeBackendTracker struct {
+	mu   sync.Mutex
+	pids []int32
+}
+
+func (tracker *guestRevokeBackendTracker) record(pid int32) error {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if pid < 1 || len(tracker.pids) >= 8 {
+		return errors.New("Guest revoke fixture PostgreSQL backend identity invalid")
+	}
+	if len(tracker.pids) != 0 {
+		tracker.pids = append(tracker.pids, pid)
+		return errors.New("Guest revoke fixture PostgreSQL backend was replaced")
+	}
+	tracker.pids = append(tracker.pids, pid)
+	return nil
+}
+
+func (tracker *guestRevokeBackendTracker) snapshot() []int32 {
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return append([]int32(nil), tracker.pids...)
+}
+
+func guestRevokeFixtureOpenPostgres(startup, lifetime context.Context, cfg *config.ProductProcessConfig,
+	profile phase6security.Profile, registry *secretref.Registry, tracker *guestRevokeBackendTracker) (*pgxpool.Pool, func(), error) {
+	return openDirectV3Postgres(startup, lifetime, profile, registry, directV3PostgresSettings{
+		Owner: "product-runtime", RuntimeRole: cfg.Postgres.RuntimeRole,
+		DSNBindingID: cfg.Postgres.RuntimeDSNBindingID, Purpose: secretref.PurposePostgresRuntimeDSN,
+		ClientAgentSocket: cfg.Postgres.ClientAgentSocket,
+		ClientAgentUID:    cfg.Postgres.ClientAgentUID, ClientAgentGID: cfg.Postgres.ClientAgentGID,
+		PeerCRLRoleFile:            cfg.Postgres.PeerCRLRoleFile,
+		PeerCRLRoleDigest:          cfg.Postgres.PeerCRLRoleDigest,
+		PeerCRLSourceMappingDigest: cfg.Postgres.PeerCRLSourceMappingDigest,
+		OperationTimeout:           time.Duration(cfg.TLS.OperationTimeoutMillis) * time.Millisecond,
+		MaxConnections:             1, MinConnections: 1,
+		AfterConnect: func(ctx context.Context, connection *pgx.Conn) error {
+			if err := productpostgres.VerifyBoundRuntimeConnection(ctx, connection, "product", cfg.Postgres.RuntimeRole); err != nil {
+				return err
+			}
+			return tracker.record(int32(connection.PgConn().PID()))
+		},
+	})
+}
+
+func guestRevokeFixtureVerifySharedRoleCapacity(ctx context.Context, pool *pgxpool.Pool, ownPID int32) error {
+	var limit, total, other int
+	err := pool.QueryRow(ctx, `SELECT r.rolconnlimit, count(a.pid),
+count(a.pid) FILTER (WHERE a.pid<>$1) FROM pg_catalog.pg_roles r
+LEFT JOIN pg_catalog.pg_stat_activity a ON a.usename=r.rolname AND a.datname='product'
+WHERE r.rolname='product_runtime' GROUP BY r.rolconnlimit`, ownPID).Scan(&limit, &total, &other)
+	if err != nil || limit != 4 || total < 2 || total > 4 || other < 1 || other != total-1 {
+		return errors.New("Guest revoke fixture shared SQL role capacity or Product connection unavailable")
+	}
+	return nil
+}
+
+func guestRevokeFixtureReadContinuation(reader *bufio.Reader, runID string) error {
+	if reader == nil || len(runID) != 32 || !guestBindingFixtureHex(runID) {
+		return errors.New("Guest revoke fixture continuation invalid")
+	}
+	acknowledgement, err := reader.ReadString('\n')
+	if err != nil || acknowledgement != "continue:"+runID+"\n" {
+		return errors.New("Guest revoke fixture Product service admission denied")
+	}
+	if _, err := reader.ReadByte(); err != io.EOF {
+		return errors.New("Guest revoke fixture continuation has trailing input")
+	}
+	return nil
 }
 
 func decodeGuestRevokeFixtureInput(document []byte) (guestRevokeFixtureInput, error) {
@@ -181,11 +272,12 @@ func guestRevokeFixtureOutcome(before, after guestRevokeFixtureBinding, mutation
 }
 
 func runGuestRevokeFixture(command *cobra.Command, _ []string) error {
-	document, err := io.ReadAll(io.LimitReader(os.Stdin, 4097))
-	if err != nil {
+	inputReader := bufio.NewReader(io.LimitReader(os.Stdin, 4608))
+	document, err := inputReader.ReadBytes('\n')
+	if err != nil || len(document) < 2 || len(document) > 4097 {
 		return errors.New("Guest revoke fixture input unavailable")
 	}
-	input, err := decodeGuestRevokeFixtureInput(document)
+	input, err := decodeGuestRevokeFixtureInput(document[:len(document)-1])
 	clear(document)
 	if err != nil || command == nil || command.Context() == nil {
 		return errors.New("Guest revoke fixture input rejected")
@@ -208,24 +300,46 @@ func runGuestRevokeFixture(command *cobra.Command, _ []string) error {
 	defer registry.Close()
 	startup, stopStartup := context.WithTimeout(ctx, time.Duration(cfg.Postgres.StartupTimeoutSeconds)*time.Second)
 	defer stopStartup()
-	pool, closePool, err := openProductV3Postgres(startup, ctx, cfg, profile, registry)
+	tracker := &guestRevokeBackendTracker{}
+	pool, closePool, err := guestRevokeFixtureOpenPostgres(startup, ctx, cfg, profile, registry, tracker)
 	if err != nil {
 		return errors.New("Guest revoke fixture Product PostgreSQL unavailable")
 	}
-	defer closePool()
+	var closeOnce sync.Once
+	closeFixturePool := func() { closeOnce.Do(closePool) }
+	defer closeFixturePool()
 	if productpostgres.VerifyRuntimeRole(ctx, pool, cfg.Postgres.RuntimeRole) != nil ||
 		productpostgres.VerifySchemaCompatibility(ctx, pool) != nil {
 		return errors.New("Guest revoke fixture Product SQL authority mismatch")
 	}
 	var backendPID int32
-	if pool.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&backendPID) != nil || backendPID < 1 {
+	if pool.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&backendPID) != nil || backendPID < 1 ||
+		len(tracker.snapshot()) != 1 || tracker.snapshot()[0] != backendPID {
 		return errors.New("Guest revoke fixture PostgreSQL connection identity unavailable")
+	}
+	if guestRevokeFixtureVerifySharedRoleCapacity(ctx, pool, backendPID) != nil || len(tracker.snapshot()) != 1 {
+		return errors.New("Guest revoke fixture Product SQL role lost capacity before mutation")
 	}
 	before, err := guestRevokeFixtureReadBinding(ctx, pool, "tenant-phase6-"+input.RunID,
 		input.InitialBinding.GuestID)
 	if err != nil || !guestRevokeFixtureBindingMatches(input, before) || before.State != "connected" ||
 		before.ConnectionNonce == "" || !before.ExpiresAt.After(before.ObservedAt.Add(30*time.Second)) {
 		return errors.New("Guest revoke fixture exact live binding unavailable")
+	}
+	admission := guestRevokeFixtureAdmission{Protocol: guestRevokeFixtureAdmissionProtocol,
+		RunID: input.RunID, ProfileDigest: input.ProfileDigest,
+		ExecutableDigest: input.ExecutableDigest, ProductContainerID: input.ProductContainerID,
+		GuestID: before.GuestID, PostgresBackendPID: backendPID}
+	admitted, err := json.Marshal(admission)
+	if err != nil || len(admitted) > 512 {
+		return errors.New("Guest revoke fixture admission receipt unavailable")
+	}
+	if written, writeErr := os.Stdout.Write(append(admitted, '\n')); writeErr != nil || written != len(admitted)+1 {
+		return errors.New("Guest revoke fixture admission delivery failed")
+	}
+	if guestRevokeFixtureReadContinuation(inputReader, input.RunID) != nil || ctx.Err() != nil ||
+		len(tracker.snapshot()) != 1 {
+		return errors.New("Guest revoke fixture continuation input or backend changed")
 	}
 	store, err := productpostgres.New(pool, time.Duration(cfg.Postgres.OperationTimeoutSeconds)*time.Second)
 	if err != nil {
@@ -240,13 +354,18 @@ func runGuestRevokeFixture(command *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	closeFixturePool()
+	backendPIDs := tracker.snapshot()
+	if len(backendPIDs) != 1 || backendPIDs[0] != backendPID {
+		return errors.New("Guest revoke fixture PostgreSQL backend changed during mutation")
+	}
 	result := guestRevokeFixtureReceipt{Protocol: guestRevokeFixtureProtocol, RunID: input.RunID,
 		ProfileDigest: input.ProfileDigest, ExecutableDigest: input.ExecutableDigest,
 		ProductContainerID: input.ProductContainerID, GuestID: before.GuestID,
 		BindingGeneration: before.BindingGeneration, BeforeConnected: true,
 		BindingExpiresAt: before.ExpiresAt.UTC().Format(time.RFC3339Nano),
 		AfterRevoked:     after.State == "revoked", NonceCleared: after.ConnectionNonce == "",
-		PostgresBackendPID: backendPID, MutationOutcome: outcome}
+		PostgresBackendPID: backendPID, PostgresBackendPIDs: backendPIDs, MutationOutcome: outcome}
 	encoded, err := json.Marshal(result)
 	if err != nil || len(encoded) > 2048 {
 		return errors.New("Guest revoke fixture receipt unavailable")

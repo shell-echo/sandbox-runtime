@@ -2492,7 +2492,10 @@ For the separate **live revocation observation only**, Sandbox approved one
 additional source/binary-digest-bound, build-tag-only, finite local-gate task.
 It may share the **exact running Product container's network namespace** with
 `--network=container:<same-run-Product-ID>` while Product and Guest retain
-their original PID1 and start time. It does not share PID, mount or IPC
+their original PID1 and start time **at admission**. After a denied reconnect,
+the Guest is allowed to terminate fail-closed; the gate must verify its exact
+same-run container, original start time, no restart/OOM and expected exit
+instead of requiring it to remain running. It does not share PID, mount or IPC
 namespaces, expose a listener/port, gain a Docker socket or host network, or
 join another bridge as an endpoint. The task runs under Product's UID:GID,
 read-only root, drop-ALL, no-new-privileges, the locked seccomp and a bounded
@@ -2506,7 +2509,15 @@ principal or a general `container:` network allowance.
 
 The task accepts only one run/Profile/artifact/target/initial-receipt-bound
 revoke operation. It first reads back the exact real, unexpired, connected
-binding and nonempty nonce, then calls the existing Product Store's
+binding and nonempty nonce. Its private PostgreSQL pool has exactly one
+connection, despite Product's unchanged four-connection pool and the shared
+SQL role's `CONNECTION LIMIT 4`. Admission counts all same-role sessions,
+including idle ones, and requires spare capacity. Each helper backend PID is
+tracked; replacement fails closed. The helper emits a bounded admission
+receipt while holding that connection and waits for a one-shot run-bound
+continuation. Before releasing it, the gate must observe a distinct Product
+SQL connection and Product's independent authenticated TLS readiness; failure
+closes the helper without mutation. It then calls the existing Product Store's
 `RevokeGuest` for that tenant and Guest ID. It cannot issue arbitrary SQL
 updates or target other tenants, IDs or generations. An unknown write result
 requires readback classification, never a blind retry. Independent readback
@@ -2519,6 +2530,19 @@ binding reconnect. The fixture must close its pool/guards/material registry,
 release its temporary process and leave no new bridge endpoint or SQL
 connection; cleanup must not disconnect or delete Product. A stopped Product,
 natural expiry or unrelated network fault cannot substitute for this gate.
+
+The live negative observation must parse an actual bounded Guest `/readyz`
+HTTP 503 (204 is ready) or independently inspect the exact Guest container's
+fail-closed exit; an arbitrary `docker exec`, timeout or network error is not
+revocation evidence. An exited Guest is not by itself proof that the old
+binding's reconnect authentication was denied. The component auth test
+must deterministically witness a denied reconnect and `ErrUnauthorized`
+termination; the real process gate still needs an attributable protocol or
+equivalent redacted witness before it may claim the full reconnect scenario.
+Continuous host/Docker capacity sampling starts before run-owned writers;
+sampling loss or low headroom cancels and stops exact run-labeled writer
+containers before zero-resource cleanup. These checks are preconditions, not
+release evidence.
 
 `Store.RevokeGuest` does not currently persist the reason or create a
 `security_audit`/`workspace_event` row. This local-gate task therefore records

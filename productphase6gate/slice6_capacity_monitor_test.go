@@ -4,6 +4,7 @@ package productphase6gate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
@@ -20,6 +21,7 @@ import (
 var errSlice6CapacityMonitorClosed = errors.New("Slice 6 capacity monitor closed")
 
 const slice6CapacityMonitorDiagnosticEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CAPACITY_MONITOR_DIAGNOSTIC"
+const slice6CapacityStopDiagnosticEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CAPACITY_STOP_DIAGNOSTIC"
 
 // slice6CapacityMonitor is a runtime safety interlock, not an observation of
 // scenario success. A final gate must install it before launching writers and
@@ -153,6 +155,86 @@ func parseSlice6DockerAvailable(document []byte) (int64, error) {
 		return 0, errSlice6Capacity
 	}
 	return available, nil
+}
+
+// Capacity loss is an emergency stop, not just cancellation of a Docker CLI.
+// Only exact run-labeled, inspected writer containers are stopped; the
+// read-only sampling container remains available until the monitor closes.
+func slice6StopRunOwnedWriters(run slice6DockerRun, observerID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	ids, err := run.labeledIDs(ctx, "container")
+	if err != nil {
+		return err
+	}
+	var writers []string
+	for _, id := range ids {
+		if id == observerID {
+			continue
+		}
+		raw, inspectErr := run.docker(ctx, "inspect", id)
+		var found []struct {
+			ID     string `json:"Id"`
+			Config struct{ Labels map[string]string }
+			State  struct{ Running bool }
+		}
+		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
+			found[0].ID != id || found[0].Config.Labels[slice6RunLabel] != run.id {
+			return errors.New("capacity stop writer ownership changed")
+		}
+		if found[0].State.Running {
+			writers = append(writers, id)
+		}
+	}
+	if len(writers) == 0 {
+		return nil
+	}
+	arguments := append([]string{"stop", "-t", "1"}, writers...)
+	_, stopErr, overflow := slice6DockerBounded(ctx, 8192, nil, arguments...)
+	if stopErr != nil || overflow {
+		arguments = append([]string{"kill"}, writers...)
+		if _, killErr, killOverflow := slice6DockerBounded(ctx, 8192, nil, arguments...); killErr != nil || killOverflow {
+			return errors.New("capacity loss could not stop exact run-owned writers")
+		}
+	}
+	for _, id := range writers {
+		raw, inspectErr := run.docker(ctx, "inspect", id)
+		var found []struct {
+			ID    string `json:"Id"`
+			State struct{ Running bool }
+		}
+		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
+			found[0].ID != id || found[0].State.Running {
+			return errors.New("capacity loss writer stop not observed")
+		}
+	}
+	return nil
+}
+
+func slice6StartCapacityObserver(ctx context.Context, run slice6DockerRun) (string, error) {
+	output, err, overflow := slice6DockerBounded(ctx, 256, nil,
+		"run", "-d", "--pull=never", "--network=none", "--restart=no",
+		"--name", "sr-p6-capacity-monitor-"+run.id, "--label", run.label(),
+		"--log-driver=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL",
+		"--security-opt=no-new-privileges:true", "--memory=67108864", "--cpus=0.2",
+		"--pids-limit=16", slice6CapacityImage, "sleep", "1500")
+	defer clear(output)
+	id := strings.TrimSpace(string(output))
+	if err != nil || overflow || len(id) != 64 || !lowerHexSlice6(id) {
+		return "", errors.New("capacity observer process start unconfirmed")
+	}
+	raw, err := run.docker(ctx, "inspect", id)
+	var found []struct {
+		ID     string `json:"Id"`
+		Config struct{ Labels map[string]string }
+		State  struct{ Running bool }
+	}
+	if err != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
+		found[0].ID != id || found[0].Config.Labels[slice6RunLabel] != run.id ||
+		!found[0].State.Running {
+		return "", errors.New("capacity observer identity unavailable")
+	}
+	return id, nil
 }
 
 func TestSlice6CapacityMonitorStopsOnThresholdAndSampleLoss(t *testing.T) {
@@ -324,5 +406,80 @@ func TestSlice6RunningCapacityMonitorRealDockerDiagnostic(t *testing.T) {
 	ids, err := run.labeledIDs(ctx, "container")
 	if err != nil || len(ids) != 0 {
 		t.Fatal("capacity-monitor diagnostic container retained")
+	}
+}
+
+// This no-issuer drill kills no unrelated process: a lost sample forces an
+// exact run-labeled writer to stop before the normal zero-resource cleanup.
+func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
+	if os.Getenv(slice6CapacityStopDiagnosticEnv) != "1" {
+		t.Skip("set " + slice6CapacityStopDiagnosticEnv + "=1 for no-issuer Docker stop drill")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("capacity stop drill exact zero cleanup: %v", err)
+		}
+	})
+	observerID, err := slice6StartCapacityObserver(ctx, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writerRaw, err := run.docker(ctx, "run", "-d", "--pull=never", "--network=none", "--restart=no",
+		"--name", "sr-p6-capacity-writer-"+run.id, "--label", run.label(),
+		"--log-driver=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL",
+		"--security-opt=no-new-privileges:true", "--memory=67108864", "--pids-limit=16",
+		slice6CapacityImage, "sleep", "30")
+	writerID := strings.TrimSpace(string(writerRaw))
+	if err != nil || len(writerID) != 64 || !lowerHexSlice6(writerID) {
+		t.Fatal("capacity stop drill writer start unconfirmed")
+	}
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var samples int
+	var stopErr error
+	monitor, err := startSlice6CapacityMonitor(ctx, slice6GuestStorageCapacityBudget(0),
+		100*time.Millisecond, 2*time.Second,
+		func(sampleContext context.Context) (slice6CapacityObservation, error) {
+			samples++
+			if samples == 2 {
+				return slice6CapacityObservation{}, errSlice6Capacity
+			}
+			return sampleSlice6RunningCapacity(sampleContext, run, root, observerID)
+		}, func(error) { stopErr = slice6StopRunOwnedWriters(run, observerID) })
+	if err != nil {
+		t.Fatal("capacity stop drill admission failed")
+	}
+	select {
+	case <-monitor.triggered:
+	case <-time.After(15 * time.Second):
+		t.Fatal("capacity stop drill did not trigger")
+	}
+	monitor.Close()
+	if stopErr != nil || monitor.Reason() == nil {
+		t.Fatalf("capacity stop drill stop=%v reason=%v", stopErr, monitor.Reason())
+	}
+	for _, probe := range []struct {
+		id   string
+		want bool
+	}{{writerID, false}, {observerID, true}} {
+		raw, inspectErr := run.docker(ctx, "inspect", probe.id)
+		var found []struct{ State struct{ Running bool } }
+		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
+			found[0].State.Running != probe.want {
+			t.Fatal("capacity stop drill writer/observer stop order unconfirmed")
+		}
+	}
+	if err := run.cleanup(ctx); err != nil {
+		t.Fatal("capacity stop drill exact cleanup failed")
 	}
 }

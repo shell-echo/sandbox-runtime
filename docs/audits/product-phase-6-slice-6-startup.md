@@ -4170,16 +4170,34 @@ run-owned memory caps against Docker VM memory with a reserve, and host/Docker
 disk headroom. The task shares Product's network namespace only, with
 separate PID/IPC, no new endpoint/port and no public signer or Guest key.
 After the Store mutation, the harness requires the command's exact confirmed
-receipt, clean exit/removal, absent PostgreSQL backend PID, Guest not-ready
-within a conservative 30-second start-to-close window, sustained not-ready
-after three seconds, and independent PostgreSQL readback of `revoked`, null
-nonce and still-unexpired binding; Product/Guest/PostgreSQL and Guest agents
-must keep their original PID1 and endpoint fingerprints. This is **code and
-component validation only**: no real live binding has been revoked and no
-formal challenge/welcome/reconnect transcript was captured. The no-issuer
-Docker namespace probe now also exercises the aggregate memory admission;
-it passed with exact resource cleanup. Tagged gate race tests and fixture
-race tests, tagged vet, ordinary full race/shuffle, ordinary vet, Product
-Contract lock and diff checks pass for this checkpoint. The full 16-scenario
-gate, release manifest and new issuer authorization remain open; Phase 6 is
-still **5/15**.
+receipt, clean exit/removal, absence of all recorded helper PostgreSQL backend
+PIDs, an explicit bounded Guest `/readyz` HTTP 503 or independently verified
+same-run fail-closed Guest exit, a second negative observation three seconds
+later, and independent PostgreSQL readback of `revoked`, null nonce and an
+unexpired binding. Product/PostgreSQL and Guest agents retain their original
+PID1 and endpoint fingerprints; the Guest PID1 is permitted to exit after
+revocation. This is **code and component validation only**: no real live
+binding has been revoked and no formal challenge/welcome/reconnect transcript
+was captured. The no-issuer Docker namespace probe exercised aggregate memory
+admission and exact cleanup. Phase 6 is still **5/15**.
+
+Follow-up 2026-10-03 (Sandbox capacity/reconnect review, no issuer): the
+live-revoke helper now uses a one-connection pool under the unchanged shared
+`product_runtime` SQL role limit of four. Admission counts idle and active
+same-role backends, records each helper backend PID, and rejects replacement.
+The helper holds its sole connection at a one-shot stdin handshake; only after
+the gate sees a distinct Product SQL backend and Product's independent HTTPS
+readiness may it continue to the single Store revoke. The Guest probe now
+parses exact HTTP 204/503 and fails on arbitrary Docker/timeout errors. A
+deterministic `guestagent` component test witnesses a denied reconnect and
+`ErrUnauthorized` termination; the real process harness deliberately makes
+the narrower claim of explicit not-ready or fail-closed exit, not an
+attributable reconnect denial. Capacity sampling with the Guest's additional
+3 GiB + 2 MiB budget now starts before run-owned writers and cancels/stops
+exact run-labeled writer containers on loss. A no-issuer real Docker drill
+verified stop-before-zero-cleanup, and a separate no-issuer Docker stdin
+handshake drill passed. R4 runtime images may pair with a later E fixture only
+when a machine-checked clean R4→E Git diff contains fixture-tagged command
+files, gate tests or docs, not ordinary runtime/build inputs. These are
+mechanism tests and implementation changes, **not** the real Vault issuer
+run, full 16-scenario gate or release evidence. Phase 6 remains **5/15**.

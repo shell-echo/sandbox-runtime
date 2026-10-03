@@ -132,6 +132,12 @@ func TestRotatedOrRevokedGuestCannotConnectAndAuthorityLossClosesChannel(t *test
 	case <-time.After(time.Second):
 		t.Fatal("revoked Agent did not terminate")
 	}
+	if auth.deniedAuthentications() < 1 {
+		t.Fatal("revoked Agent exited without an observed denied reconnect authentication")
+	}
+	if err := agent.Ready(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("revoked Agent readiness = %v; want unavailable", err)
+	}
 
 	newPublic, _, _ := ed25519.GenerateKey(rand.Reader)
 	auth.rotate(newPublic, 2)
@@ -182,13 +188,14 @@ func waitForCall(t *testing.T, hub *Hub, operation string, payload any) json.Raw
 }
 
 type memoryAuthenticator struct {
-	mu         sync.Mutex
-	publicKey  ed25519.PublicKey
-	generation int64
-	active     bool
-	connected  bool
-	nonce      string
-	authCount  int
+	mu          sync.Mutex
+	publicKey   ed25519.PublicKey
+	generation  int64
+	active      bool
+	connected   bool
+	nonce       string
+	authCount   int
+	deniedCount int
 }
 
 func newMemoryAuthenticator(publicKey ed25519.PublicKey, generation int64) *memoryAuthenticator {
@@ -200,10 +207,12 @@ func (a *memoryAuthenticator) Authenticate(_ context.Context, request AuthReques
 	defer a.mu.Unlock()
 	signing, err := request.SigningBytes()
 	if err != nil {
+		a.deniedCount++
 		return Identity{}, ErrUnauthorized
 	}
 	signature, err := request.SignatureBytes()
 	if err != nil || !a.active || a.connected || request.Hello.BindingGeneration != a.generation || !ed25519.Verify(a.publicKey, signing, signature) {
+		a.deniedCount++
 		return Identity{}, ErrUnauthorized
 	}
 	a.connected = true
@@ -242,6 +251,11 @@ func (a *memoryAuthenticator) authentications() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.authCount
+}
+func (a *memoryAuthenticator) deniedAuthentications() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.deniedCount
 }
 
 var _ Authenticator = (*memoryAuthenticator)(nil)

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,9 +29,93 @@ const slice6GuestBindingFixtureExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE
 const slice6GuestBindingFixtureProtocol = "sandbox-runtime.phase6-guest-binding-fixture.v1"
 const slice6GuestFixtureVolumeDockerEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_FIXTURE_VOLUME_DOCKER"
 const slice6GuestRevokeNamespaceDockerEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_REVOKE_NAMESPACE_DOCKER"
+const slice6GuestFixtureSourceRootEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_FIXTURE_SOURCE_ROOT"
+const slice6GuestFixtureSourceRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_FIXTURE_SOURCE_REVISION"
 
 type slice6GuestBindingFixtureArtifact struct {
 	Path, Digest, SourceRevision, ExpectedDigest string
+}
+
+func slice6AllowedGuestFixtureSourceDifference(path string) bool {
+	if strings.HasPrefix(path, "docs/") {
+		return true
+	}
+	if strings.HasPrefix(path, "productphase6gate/") && strings.HasSuffix(path, "_test.go") {
+		return true
+	}
+	if path == "guestagent/hub_test.go" {
+		return true
+	}
+	switch path {
+	case "cmd/phase6_guest_binding_fixture.go", "cmd/phase6_guest_binding_fixture_test.go",
+		"cmd/phase6_guest_revoke_fixture.go", "cmd/phase6_guest_revoke_fixture_test.go":
+		return true
+	}
+	return false
+}
+
+func TestSlice6GuestFixtureSourceDeltaClosedAllowlist(t *testing.T) {
+	for _, path := range []string{
+		"cmd/phase6_guest_revoke_fixture.go", "cmd/phase6_guest_binding_fixture_test.go",
+		"productphase6gate/slice6_capacity_monitor_test.go", "guestagent/hub_test.go",
+		"docs/adr/0055-phase-6-slice-6.md",
+	} {
+		if !slice6AllowedGuestFixtureSourceDifference(path) {
+			t.Fatalf("fixture-only path rejected: %s", path)
+		}
+	}
+	for _, path := range []string{
+		"go.mod", "go.sum", "cmd/product_postgres_v3.go", "guestagent/agent.go",
+		"productphase6gate/runtime.go", "internal/phase6security/profile.go", ".github/workflows/gate.yml",
+	} {
+		if slice6AllowedGuestFixtureSourceDifference(path) {
+			t.Fatalf("ordinary runtime/build drift admitted: %s", path)
+		}
+	}
+}
+
+// R4 runtime images may only be paired with an E fixture when Git proves
+// that no ordinary runtime or build input changed between the clean trees.
+// This is deliberately a narrow R4→E proof, not a generic compatibility bit.
+func slice6VerifyGuestFixtureSourceDelta(ctx context.Context, runtimeRoot, runtimeRevision,
+	fixtureRoot, fixtureRevision string) error {
+	if runtimeRoot == fixtureRoot || runtimeRevision == fixtureRevision ||
+		verifyCleanSlice6Source(ctx, runtimeRoot, runtimeRevision) != nil ||
+		verifyCleanSlice6Source(ctx, fixtureRoot, fixtureRevision) != nil {
+		return errors.New("separate clean R4 runtime and E fixture source unavailable")
+	}
+	ancestor := exec.CommandContext(ctx, "git", "merge-base", "--is-ancestor", runtimeRevision, fixtureRevision)
+	ancestor.Dir = fixtureRoot
+	if ancestor.Run() != nil {
+		return errors.New("fixture source does not descend from fixed runtime revision")
+	}
+	diff := exec.CommandContext(ctx, "git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z",
+		runtimeRevision, fixtureRevision)
+	diff.Dir = fixtureRoot
+	paths, err := diff.Output()
+	if err != nil || len(paths) == 0 || len(paths) > 32768 || paths[len(paths)-1] != 0 {
+		return errors.New("R4 to E source difference unavailable or unbounded")
+	}
+	for _, raw := range bytes.Split(paths[:len(paths)-1], []byte{0}) {
+		path := string(raw)
+		if !slice6AllowedGuestFixtureSourceDifference(path) {
+			return errors.New("ordinary runtime or dependency drift between R4 and E")
+		}
+	}
+	for _, name := range []string{"phase6_guest_binding_fixture.go", "phase6_guest_revoke_fixture.go"} {
+		path := filepath.Join(fixtureRoot, "cmd", name)
+		file, err := os.Open(path)
+		if err != nil {
+			return errors.New("E fixture source unavailable")
+		}
+		var prefix [40]byte
+		count, readErr := file.Read(prefix[:])
+		file.Close()
+		if readErr != nil && readErr != io.EOF || !bytes.HasPrefix(prefix[:count], []byte("//go:build phase6slice6fixture\n")) {
+			return errors.New("E fixture escaped fixture-only build tag")
+		}
+	}
+	return nil
 }
 
 type slice6GuestBindingFixtureInput struct {
@@ -57,9 +142,9 @@ type slice6GuestBindingFixtureReceipt struct {
 	IdempotentReplay  bool   `json:"idempotent_replay"`
 }
 
-// Build the fixture only from the same separately clean and immutable source
-// as the Profile and role candidates. This build tag never enters the normal
-// Product image or production command.
+// Build the fixture from a separately clean immutable E source only after the
+// caller has proved the exact R4→E fixture/gate/doc-only delta. This build
+// tag never enters the normal Product image or production command.
 func slice6BuildGuestBindingFixture(t *testing.T, ctx context.Context, sourceRoot, revision string) (slice6GuestBindingFixtureArtifact, error) {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(sourceRoot)

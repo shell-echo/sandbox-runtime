@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -128,6 +129,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
+	var guestCandidateImage string
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		external, images, err := slice6VaultLoadStaticInputs(ctx, static)
 		if err != nil {
@@ -135,6 +137,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		if err := slice6VaultPreflightAllStoredImages(ctx, external, images); err != nil {
 			t.Fatalf("pre-issuer fixed Docker image inventory: %v", err)
+		}
+		if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" {
+			binding, ok := images.LocalRoleTargets["core"]
+			if !ok || binding.Reference != binding.Digest {
+				t.Fatal("pre-issuer selected Guest core image identity unavailable")
+			}
+			guestCandidateImage = binding.Reference
 		}
 		t.Log("pre-issuer source, role/Desktop/Browser candidates, four complete external OCI archives and all fixed Docker launch references verified")
 	}
@@ -160,8 +169,14 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	var guestBindingFixture slice6GuestBindingFixtureArtifact
 	if os.Getenv(slice6GuestBindingFixtureEnv) == "1" {
+		fixtureRoot := os.Getenv(slice6GuestFixtureSourceRootEnv)
+		fixtureRevision := os.Getenv(slice6GuestFixtureSourceRevisionEnv)
+		if slice6VerifyGuestFixtureSourceDelta(ctx, static.sourceRoot, static.sourceRevision,
+			fixtureRoot, fixtureRevision) != nil {
+			t.Fatal("pre-issuer R4 runtime to E fixture-only source delta rejected")
+		}
 		fixture, fixtureErr := slice6BuildGuestBindingFixture(t, ctx,
-			static.sourceRoot, static.sourceRevision)
+			fixtureRoot, fixtureRevision)
 		guestBindingFixture = fixture
 		if fixtureErr != nil || slice6ApproveGuestBindingFixture(&guestBindingFixture,
 			os.Getenv(slice6GuestBindingFixtureExpectedDigestEnv)) != nil {
@@ -235,6 +250,49 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			}
 		}
 	})
+	var preIssuerGuestShellDigest string
+	if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" {
+		identity := phase6security.Slice6DesiredUIDGID()["guest-runtime"]
+		selected := phase6security.Principal{Name: "guest-runtime", ImageReference: guestCandidateImage,
+			ImageDigest: guestCandidateImage, UID: identity[0], GID: identity[1]}
+		preIssuerGuestShellDigest, err = slice6MeasureGuestShell(ctx, run, selected)
+		if err != nil || preIssuerGuestShellDigest == "" || slice6ProbeGuestUtilities(ctx, run, selected) != nil {
+			t.Fatal("selected Guest shell or bounded HTTP/df utilities unavailable before issuer allocation")
+		}
+		monitorID, monitorErr := slice6StartCapacityObserver(ctx, run)
+		if monitorErr != nil {
+			t.Fatal("pre-issuer capacity observer unavailable")
+		}
+		rootPath, pathErr := filepath.Abs("..")
+		if pathErr != nil {
+			t.Fatal("capacity monitor host source unavailable")
+		}
+		var stopMu sync.Mutex
+		var stopErr error
+		monitor, monitorErr := startSlice6CapacityMonitor(ctx, slice6GuestStorageCapacityBudget(0),
+			time.Second, 2*time.Second,
+			func(sampleContext context.Context) (slice6CapacityObservation, error) {
+				return sampleSlice6RunningCapacity(sampleContext, run, rootPath, monitorID)
+			}, func(reason error) {
+				cancel()
+				stopped := slice6StopRunOwnedWriters(run, monitorID)
+				stopMu.Lock()
+				stopErr = stopped
+				stopMu.Unlock()
+			})
+		if monitorErr != nil {
+			t.Fatal("pre-issuer continuous capacity admission unavailable")
+		}
+		defer monitor.Close()
+		t.Cleanup(func() {
+			stopMu.Lock()
+			defer stopMu.Unlock()
+			if monitor.Reason() != nil || stopErr != nil {
+				t.Errorf("continuous capacity monitor stopped run-owned writers: reason=%v stop=%v", monitor.Reason(), stopErr)
+			}
+		})
+		t.Log("pre-issuer selected Guest shell/utilities and continuous host/Docker capacity interlock admitted")
+	}
 	if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
 		slice6RequireTerminalOperatorV2Capability(t, ctx, run, terminalBinaryPath, terminalBinaryDigest)
 	}
@@ -717,16 +775,17 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																		onConnected = func(guestContainerID string) error {
 																			revoked, err := slice6RunGuestLiveRevoke(ctx, run, composed.Profile,
 																				productRuntimeID, guestContainerID, postgresServerID,
-																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles)
+																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles,
+																				productRuntimeObserver)
 																			if err == nil {
-																				t.Logf("finite same-netns Product Store revoke confirmed while Guest/Product PID1 remained live: generation=%d backend_pid=%d (private receipt; not production audit)",
+																				t.Logf("finite same-netns Product Store revoke confirmed with bounded Guest not-ready or fail-closed exit: generation=%d backend_pid=%d (private receipt; not production audit)",
 																					revoked.BindingGeneration, revoked.PostgresBackendPID)
 																			}
 																			return err
 																		}
 																	}
 																	guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
-																		guestBindingReceipt, guestSocketVolumes, anchorFiles, productRuntimeID, onConnected)
+																		guestBindingReceipt, guestSocketVolumes, anchorFiles, productRuntimeID, preIssuerGuestShellDigest, onConnected)
 																}
 															})
 													})

@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -147,5 +148,30 @@ func TestGuestRevokeFixtureOutcomeNeverRetriesUnknown(t *testing.T) {
 	after.ObservedAt = after.ExpiresAt
 	if _, err := guestRevokeFixtureOutcome(before, after, nil); err == nil {
 		t.Fatal("expired binding was accepted as live revocation")
+	}
+}
+
+func TestGuestRevokeFixtureRequiresOneExactProductContinuation(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	for _, test := range []struct {
+		input string
+		valid bool
+	}{
+		{"continue:" + runID + "\n", true},
+		{"", false}, {"continue:" + runID + "\nextra", false},
+		{"continue:" + strings.Repeat("b", 32) + "\n", false},
+		{"continue:" + runID, false},
+	} {
+		err := guestRevokeFixtureReadContinuation(bufio.NewReader(strings.NewReader(test.input)), runID)
+		if (err == nil) != test.valid {
+			t.Fatalf("continuation %q accepted=%t error=%v", test.input, err == nil, err)
+		}
+	}
+	tracker := &guestRevokeBackendTracker{}
+	if err := tracker.record(42); err != nil || len(tracker.snapshot()) != 1 {
+		t.Fatal("first fixture SQL backend was rejected")
+	}
+	if err := tracker.record(43); err == nil || len(tracker.snapshot()) != 2 {
+		t.Fatal("replacement fixture SQL backend was not tracked and rejected")
 	}
 }
