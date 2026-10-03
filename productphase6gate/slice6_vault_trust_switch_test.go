@@ -302,9 +302,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		"--mount", "type=bind,source="+configDir+",target=/vault/config,readonly",
 		"--mount", "type=bind,source="+dataDir+",target=/vault/data",
 		slice6VaultTestImage, "server")
-	candidateID := slice6CanonicalCreatedID(server, createErr)
 	recovered, recoverErr := slice6RecoverVaultContainer(ctx, run, vaultName)
-	if recoverErr != nil || recovered == "" || (candidateID != "" && candidateID != recovered) {
+	if recoverErr != nil || recovered == "" {
 		t.Fatalf("non-dev persistent Vault create outcome unresolved: create=%v recovery=%v", createErr, recoverErr)
 	}
 	serverID = recovered
@@ -313,9 +312,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("exact Vault container=%s anonymous-volume IDs=%v", serverID, implicitVaultVolumes)
-	started, startErr := run.docker(ctx, "start", serverID)
-	if startErr != nil || strings.TrimSpace(string(started)) != serverID {
-		t.Fatalf("non-dev persistent Vault start failed after exact create receipt: %v", startErr)
+	if err := slice6StartVaultFromCreateReceipt(ctx, server, createErr, serverID,
+		implicitVaultVolumes, run.docker); err != nil {
+		t.Fatalf("non-dev persistent Vault create/start failed; exact container retained for cleanup: %v", err)
 	}
 	if _, err := run.docker(ctx, "network", "connect", "--ip", credentialVaultIP,
 		"--alias", "vault.sandbox-runtime.test", credentialCreated.NetworkID, serverID); err != nil {

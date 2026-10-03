@@ -3931,8 +3931,9 @@ Docker Hub's canonical repository-digest spelling is normalized without
 changing the digest or accepting a different repository. Vault now uses
 `create`, validates its exact name/run label and two anonymous-volume IDs,
 then `start`; an invalid/lost create response is recovered only by exact
-name **and** run label, and an unresolved create remains a failed/unknown
-cleanup result. Preflight rejection before `create` has no anonymous-volume
+name **and** run label for cleanup, never as permission to start, and an
+unresolved create remains a failed/unknown cleanup result. Preflight
+rejection before `create` has no anonymous-volume
 assertion; completed creates retain the strict two-volume removal proof.
 The missing fixed external and network-probe caches were restored only by
 their pinned digests. A no-secret real Docker start-failure drill and the
@@ -3943,5 +3944,11 @@ archives. This is cache/preflight/component evidence only. A new Product
 runtime issuer-consuming run needs separate Sandbox authorization. The
 source-bound no-issuer full image-store admission passed for all 12 local
 role targets, Desktop, Browser, four external images and two auxiliary
-images after cache restoration; it did not create a container. Phase 6
+images after cache restoration; it did not create a container. A subsequent
+fail-closed correction forbids `start` even when exact name/label recovery
+succeeds if Docker `create` reported an error or a noncanonical ID. Unit
+regressions cover error, noncanonical, wrong-ID, exact success and unknown
+responses; separate no-secret real Docker drills recovered the two implicit
+volumes from the actual container ID and removed them for both simulated
+lost and noncanonical create responses without starting Vault. Phase 6
 remains **5/15**.

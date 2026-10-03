@@ -133,6 +133,24 @@ func slice6CanonicalCreatedID(output []byte, createErr error) string {
 	return id
 }
 
+func slice6VaultCreateAdmitted(output []byte, createErr error, recoveredID string) bool {
+	id := slice6CanonicalCreatedID(output, createErr)
+	return id != "" && id == recoveredID
+}
+
+func slice6StartVaultFromCreateReceipt(ctx context.Context, output []byte, createErr error,
+	recoveredID string, volumes []string, docker func(context.Context, ...string) ([]byte, error)) error {
+	if ctx == nil || ctx.Err() != nil || !slice6VaultCreateAdmitted(output, createErr, recoveredID) ||
+		len(volumes) != 2 || docker == nil {
+		return errors.New("Vault create response was not admitted for start")
+	}
+	started, err := docker(ctx, "start", recoveredID)
+	if err != nil || strings.TrimSpace(string(started)) != recoveredID {
+		return errors.New("Vault start failed after exact create receipt")
+	}
+	return nil
+}
+
 func slice6RecoverVaultContainerWithDocker(ctx context.Context, run slice6DockerRun, name string,
 	docker func(context.Context, ...string) ([]byte, error)) (string, error) {
 	if len(run.id) != 32 || !lowerHexSlice6(run.id) || name != "sr-p6-vault-switch-"+run.id {
@@ -316,6 +334,69 @@ func TestPhase6Slice6VaultStartFailureCleanup(t *testing.T) {
 	}
 	if err := slice6CheckImplicitVolumesRemoved(ctx, run, volumes); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPhase6Slice6VaultUncertainCreateCleanup(t *testing.T) {
+	if os.Getenv(slice6LedgerEnv) != "1" {
+		t.Skip("set " + slice6LedgerEnv + "=1")
+	}
+	for _, mode := range []string{"lost-response", "noncanonical-response"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+			defer cancel()
+			run, err := newSlice6DockerRun()
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := "sr-p6-vault-switch-" + run.id
+			var volumes []string
+			t.Cleanup(func() {
+				cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+				defer stop()
+				if err := run.cleanup(cleanup); err != nil {
+					t.Errorf("uncertain-create exact cleanup: %v", err)
+				}
+				if len(volumes) == 2 {
+					if err := slice6CheckImplicitVolumesRemoved(cleanup, run, volumes); err != nil {
+						t.Errorf("uncertain-create anonymous volumes: %v", err)
+					}
+				}
+			})
+			created, createErr := run.docker(ctx, "create", "--pull=never", "--name", name,
+				"--label", run.label(), "--network=none", "--user=20090:30090", "--cap-drop=ALL",
+				"--security-opt=no-new-privileges:true", "--read-only", "--log-driver=none",
+				"--memory=64m", "--cpus=0.25", "--pids-limit=16",
+				"--entrypoint=/phase6-intentionally-absent-executable", slice6VaultTestImage)
+			id := slice6CanonicalCreatedID(created, createErr)
+			recovered, recoverErr := slice6RecoverVaultContainer(ctx, run, name)
+			if id == "" || recoverErr != nil || recovered != id {
+				t.Fatal("uncertain-create drill could not prove exact container")
+			}
+			volumes, err = slice6VaultImplicitVolumes(ctx, run, recovered)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := created
+			responseErr := errors.New("simulated lost Docker create response")
+			if mode == "noncanonical-response" {
+				response = []byte("noncanonical Docker create response")
+				responseErr = nil
+			}
+			if err := slice6StartVaultFromCreateReceipt(ctx, response, responseErr, recovered, volumes,
+				func(_ context.Context, _ ...string) ([]byte, error) {
+					t.Fatal("uncertain create response invoked Vault start")
+					return nil, nil
+				}); err == nil {
+				t.Fatal("uncertain create response was admitted for Vault start")
+			}
+			if err := run.cleanup(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err := slice6CheckImplicitVolumesRemoved(ctx, run, volumes); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

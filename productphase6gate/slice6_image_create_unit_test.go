@@ -56,6 +56,12 @@ func TestSlice6VaultCreateResponseAndRecoveryUnit(t *testing.T) {
 		slice6CanonicalCreatedID([]byte(id+"\n"), nil) != id {
 		t.Fatal("Docker stderr or uncertain create response became a container ID")
 	}
+	if slice6VaultCreateAdmitted([]byte(id), errors.New("response lost"), id) ||
+		slice6VaultCreateAdmitted([]byte("Docker error"), nil, id) ||
+		slice6VaultCreateAdmitted([]byte(id), nil, strings.Repeat("c", 64)) ||
+		!slice6VaultCreateAdmitted([]byte(id+"\n"), nil, id) {
+		t.Fatal("uncertain create response incorrectly permitted Vault start")
+	}
 	inspect, err := json.Marshal([]map[string]any{{"Id": id, "Name": "/" + name,
 		"Config": map[string]any{"Labels": map[string]string{slice6RunLabel: run.id}}}})
 	if err != nil {
@@ -84,10 +90,45 @@ func TestSlice6VaultCreateResponseAndRecoveryUnit(t *testing.T) {
 	if err != nil || recovered != id || calls != 2 {
 		t.Fatalf("lost create response did not recover exact container: id=%s err=%v calls=%d", recovered, err, calls)
 	}
+	volumes := []string{strings.Repeat("d", 64), strings.Repeat("e", 64)}
+	for _, caseItem := range []struct {
+		name       string
+		output     []byte
+		createErr  error
+		startCalls int
+	}{
+		{"error with exact recovery", []byte(id), errors.New("response lost"), 0},
+		{"noncanonical with exact recovery", []byte("Docker error"), nil, 0},
+		{"wrong ID with exact recovery", []byte(strings.Repeat("c", 64)), nil, 0},
+		{"success with exact recovery", []byte(id + "\n"), nil, 1},
+	} {
+		t.Run(caseItem.name, func(t *testing.T) {
+			startCalls := 0
+			start := func(_ context.Context, args ...string) ([]byte, error) {
+				startCalls++
+				if len(args) != 2 || args[0] != "start" || args[1] != recovered {
+					t.Fatal("Vault start escaped exact recovered container")
+				}
+				return []byte(recovered + "\n"), nil
+			}
+			err := slice6StartVaultFromCreateReceipt(context.Background(), caseItem.output,
+				caseItem.createErr, recovered, volumes, start)
+			if startCalls != caseItem.startCalls || (err == nil) != (caseItem.startCalls == 1) {
+				t.Fatalf("create uncertainty escaped cleanup-only boundary: starts=%d err=%v", startCalls, err)
+			}
+		})
+	}
 	missing := func(_ context.Context, _ ...string) ([]byte, error) { return nil, nil }
 	recovered, err = slice6RecoverVaultContainerWithDocker(context.Background(), run, name, missing)
 	if err != nil || recovered != "" {
 		t.Fatalf("absent exact create result should remain unproved, not fabricate ID: %q %v", recovered, err)
+	}
+	if err := slice6StartVaultFromCreateReceipt(context.Background(), []byte(id), nil, recovered,
+		volumes, func(_ context.Context, _ ...string) ([]byte, error) {
+			t.Fatal("unknown create result invoked start")
+			return nil, nil
+		}); err == nil {
+		t.Fatal("unknown create result was admitted for start")
 	}
 	wrong := func(_ context.Context, args ...string) ([]byte, error) {
 		if args[0] == "ps" {
