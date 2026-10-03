@@ -198,9 +198,25 @@ Product material-agent TLS signer PID1 processes with managed leaves and
 exact socket cleanup. Product material-agent configuration is preflighted
 against both required bindings, and its separate PID1 opens both restricted
 listeners, resolves the real KVv2 identity key-ring for a cross-UID/GID
-Product owner, then drains with exact cleanup. Its PostgreSQL runtime DSN
-and the Product/Guest production commands have not yet run; this does not
-advance Slice 6.
+Product owner, then drains with exact cleanup. At that earlier checkpoint,
+its PostgreSQL runtime DSN and the Product/Guest production commands had not
+yet run; this did not advance Slice 6.
+
+The later E7 same-run component diagnostic at clean E
+`34d72e05a115aa8fccbe5b9c0d94896c2ba26fb3` did run independent
+Product and Guest PID1 processes against the locked PostgreSQL and Vault
+inputs. It crossed the earlier durable-revocation readback failure, checked
+the unexpired revoked binding with empty nonce in PostgreSQL, retained
+Product/PostgreSQL/Guest-agent identities and Product SQL availability, and
+cleaned exact run-owned resources to zero. The certificate controller still
+reported a sticky local credential-revoke error; the independent terminal
+operator separately confirmed remote revocation and a complete CRL. This
+bounded component pass does **not** prove reconnect, peer TLS revocation,
+CRL-source loss, the full frozen deployment inventory or the 16 scenarios,
+and it does not produce a Slice 6 manifest. The detailed E6 failed and E7
+passed records are in the
+[Slice 6 startup audit](../audits/product-phase-6-slice-6-startup.md).
+Phase 6 remains **5/15**.
 
 The initial external PostgreSQL leaf signing diagnostic is non-release:
 its v1 terminal plan did not confirm revocation of that added serial. A

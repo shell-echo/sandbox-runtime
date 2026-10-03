@@ -4645,3 +4645,55 @@ PostgreSQL case, `go vet ./...`, tagged Gate `go vet`, Product Contract lock
 verification and `git diff --check`. The no-issuer run's exact-label Docker
 container/network/volume inventory was empty after cleanup. These receipts
 do not change the failed E6 disposition or the **5/15** Phase 6 count.
+
+Follow-up 2026-10-04 (one separately Sandbox-authorized ordinary non-race
+real issuer diagnostic, **component PASS**, permission consumed): clean E
+`34d72e05a115aa8fccbe5b9c0d94896c2ba26fb3` (tree
+`e1c0609047fd9abaa1fafc7de0556ac7ecd74495`) and independent clean R/F
+`884fde822d9d9bad2abc428b5722403148fafcfa` (tree
+`c87fb2d672ed1396e463769bdf67863eadbb9fb3`) ran the unchanged
+functional scope with the same twelve role candidates, Desktop candidate,
+Browser publication and four selected external manifests. The formal
+PostgreSQL selected arm64 manifest was
+`sha256:2c942175a1255a9abe0366e48c1b401d9f50f835b04dfea13f111609b5530df7`,
+not the upstream index used in the no-issuer SQL regression. The Gate built
+the observer anew from E and matched approved SHA-256
+`7151292b6f4571892502d786c8486cdf24ac7b19bb25e2cf171eec5ad1b99123`;
+F fixture and R terminal matched their approved exact digests before issuer
+allocation. Run label
+`io.github.shell-echo.sandbox-runtime.phase6-slice6-run=c83334643195cf58aeaba5b54bbf2ec0`;
+Profile
+`sha256:e0701980a0413f33b8820132bb2b5f7d1d7ab6f7e16fbccdb4ce3e578ccc1926`.
+The 0600, 19,477-byte log is
+`/Users/echo/.codex/phase6-slice6-run-E7.EHgD5k/gate.log`, SHA-256
+`79b32dec6a4c071982841bf01b625435342be68051bd53dbe470b0bfad87c521`.
+The one tagged test exited zero after 479.29 seconds.
+
+The actual Guest PID1 reached connected `/readyz` while Product PID1 and
+both Guest agents remained live. The same-netns restricted task confirmed
+one Product Store mutation; a bounded Guest 503 or exact exit-1 observation
+followed. The successfully returned live-revoke function had first required
+an independent single-row `revoked||true` PostgreSQL readback with an empty
+nonce and DB-clock unexpired, helper SQL-backend absence, three seconds of
+non-recovery before natural expiry, unchanged Product/PostgreSQL PID1
+fingerprints, unchanged Guest PID1 or exact exit-1, unchanged Guest agent
+fingerprints, and a live Product SQL session. This control-flow success is
+not independent proof that the Guest 503/exit-1 was caused solely by business
+revocation. Product's ready → SQL-edge loss not-ready → same-PG ready check,
+initial durable binding and migration ledger/ownership/grant readbacks also
+passed in the same run.
+
+Both controllers wrote quiesce receipts; the certificate controller retained
+its sticky **local credential-revoke failure**. The independent v2 terminal
+operator separately confirmed three certificates, two token accessors,
+complete CRL and self-revoke, with private plan digest
+`sha256:4933a5f75af9c308b415007e6cad2652b04bf57c29904c8f63f24bd6fa049dc5`.
+That remote cleanup does not erase the local controller failure. The Gate's
+exact cleanup passed, and a separate read-only inventory found zero containers,
+networks and volumes under the exact run label and both recorded Vault
+anonymous-volume IDs absent. E, R and F worktrees remained clean. E6 remains
+failed. This E7 result is a same-run **component chain**, not the required
+full frozen deployment inventory and 16-scenario release gate, immutable
+manifest,
+publication or production-readiness result. No further issuer run is
+authorized by this pass; Phase 6 remains **5/15**.
