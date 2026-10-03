@@ -1,6 +1,7 @@
 package egressbroker
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -342,6 +343,25 @@ func ValidateTLSIdentity(state tls.ConnectionState, uri string, dnsNames, usages
 		return ErrDenied
 	}
 	if !state.HandshakeComplete || state.Version != tls.VersionTLS13 || len(state.PeerCertificates) < 1 || len(state.VerifiedChains) != 1 {
+		return ErrDenied
+	}
+	return validateCertificateIdentity(state.PeerCertificates[0], uri, dnsNames, parsed)
+}
+
+// ValidateTLSIdentityInVerifyConnection is for tls.Config.VerifyConnection
+// only. Go invokes that callback after standard chain verification but before
+// HandshakeComplete is set. Post-handshake callers must use ValidateTLSIdentity.
+func ValidateTLSIdentityInVerifyConnection(state tls.ConnectionState, uri string, dnsNames, usages []string) error {
+	parsed, err := parseUsages(usages)
+	if err != nil {
+		return ErrDenied
+	}
+	if state.HandshakeComplete || state.DidResume || state.Version != tls.VersionTLS13 ||
+		len(state.PeerCertificates) < 1 || state.PeerCertificates[0] == nil ||
+		len(state.PeerCertificates[0].Raw) == 0 || len(state.VerifiedChains) != 1 ||
+		len(state.VerifiedChains[0]) < 2 || state.VerifiedChains[0][0] == nil ||
+		state.VerifiedChains[0][1] == nil || len(state.VerifiedChains[0][1].Raw) == 0 ||
+		!bytes.Equal(state.PeerCertificates[0].Raw, state.VerifiedChains[0][0].Raw) {
 		return ErrDenied
 	}
 	return validateCertificateIdentity(state.PeerCertificates[0], uri, dnsNames, parsed)

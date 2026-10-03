@@ -435,3 +435,105 @@ func testTLS(t *testing.T, principalDigest, brokerDigest, principalName, brokerN
 		Certificates: []tls.Certificate{clientCertificate}, NextProtos: []string{ProtocolID}}
 	return serverTLS, clientTLS
 }
+
+func TestTLSIdentityDuringVerifyConnectionKeepsPostHandshakeBoundary(t *testing.T) {
+	server, client := testTLS(t, "", "", "client", "broker")
+	leaf, err := x509.ParseCertificate(server.Certificates[0].Certificate[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := x509.ParseCertificate(server.Certificates[0].Certificate[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := x509.ParseCertificate(client.Certificates[0].Certificate[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherURI, err := url.Parse("spiffe://sandbox-runtime.test/other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const uri = "spiffe://sandbox-runtime.test/broker"
+	state := tls.ConnectionState{Version: tls.VersionTLS13, PeerCertificates: []*x509.Certificate{leaf, issuer},
+		VerifiedChains: [][]*x509.Certificate{{leaf, issuer}}}
+	verify := func(candidate tls.ConnectionState) error {
+		return ValidateTLSIdentityInVerifyConnection(candidate, uri,
+			[]string{"broker.internal.test"}, []string{"server_auth"})
+	}
+	if err := verify(state); err != nil {
+		t.Fatalf("standard-verified handshake callback rejected: %v", err)
+	}
+	if err := ValidateTLSIdentity(state, uri, []string{"broker.internal.test"}, []string{"server_auth"}); err == nil {
+		t.Fatal("post-handshake identity check accepted an unfinished handshake")
+	}
+	completed := state
+	completed.HandshakeComplete = true
+	if err := ValidateTLSIdentity(completed, uri, []string{"broker.internal.test"}, []string{"server_auth"}); err != nil {
+		t.Fatalf("completed connection identity rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*tls.ConnectionState){
+		"completed early":   func(c *tls.ConnectionState) { c.HandshakeComplete = true },
+		"resumed":           func(c *tls.ConnectionState) { c.DidResume = true },
+		"wrong version":     func(c *tls.ConnectionState) { c.Version = tls.VersionTLS12 },
+		"missing chain":     func(c *tls.ConnectionState) { c.VerifiedChains = nil },
+		"short chain":       func(c *tls.ConnectionState) { c.VerifiedChains = [][]*x509.Certificate{{leaf}} },
+		"nil issuer":        func(c *tls.ConnectionState) { c.VerifiedChains[0][1] = nil },
+		"empty issuer DER":  func(c *tls.ConnectionState) { changed := *issuer; changed.Raw = nil; c.VerifiedChains[0][1] = &changed },
+		"ambiguous chains":  func(c *tls.ConnectionState) { c.VerifiedChains = append(c.VerifiedChains, c.VerifiedChains[0]) },
+		"unbound peer leaf": func(c *tls.ConnectionState) { c.PeerCertificates = []*x509.Certificate{other, issuer} },
+		"missing peer leaf": func(c *tls.ConnectionState) { c.PeerCertificates = nil },
+		"extra subject": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.Subject.CommonName = "extra"
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"missing URI": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.URIs = nil
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"wrong URI": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.URIs = []*url.URL{otherURI}
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"extra URI": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.URIs = []*url.URL{leaf.URIs[0], otherURI}
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"extra DNS": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.DNSNames = []string{"broker.internal.test", "other.test"}
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"wrong EKU": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+		"wrong key usage": func(c *tls.ConnectionState) {
+			changed := *leaf
+			changed.KeyUsage = x509.KeyUsageKeyEncipherment
+			c.PeerCertificates[0] = &changed
+			c.VerifiedChains[0][0] = &changed
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := state
+			candidate.PeerCertificates = append([]*x509.Certificate(nil), state.PeerCertificates...)
+			candidate.VerifiedChains = [][]*x509.Certificate{append([]*x509.Certificate(nil), state.VerifiedChains[0]...)}
+			mutate(&candidate)
+			if err := verify(candidate); err == nil {
+				t.Fatal("unsafe handshake identity admitted")
+			}
+		})
+	}
+}

@@ -1886,6 +1886,19 @@ the connection's cancellation context before tracking or sending its startup
 packet. Component observations and remaining gate gaps are recorded in the
 Slice 6 startup audit; they are not final Vault/topology evidence.
 
+Go invokes a client's `tls.Config.VerifyConnection` after standard server
+chain verification but before the handshake-complete bit is set. The direct
+PostgreSQL server-identity check therefore has a distinct handshake-time
+entry: it requires TLS 1.3, one verified chain with the presented leaf bound
+to its verified first certificate and a nonempty issuer, no resumption, and
+the same exact Subject/URI/DNS/EKU/KeyUsage predicate as established peers.
+The existing post-handshake identity check continues to require the
+handshake-complete bit. Neither entry can bypass standard CA verification,
+the PostgreSQL peer-CRL check or the own-client guard. A controlled real-pgx
+regression reproduced the former misuse before the peer guard and passed
+after correcting only this callback boundary; a new real Vault migration and
+the final Slice 6 release gate remain separate evidence requirements.
+
 ### Credential-controller Vault token-role authority (2026-09-28)
 
 The approved v2 controller uses operator-created, fixed named Vault token

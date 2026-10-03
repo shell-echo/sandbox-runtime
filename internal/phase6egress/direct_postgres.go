@@ -65,13 +65,16 @@ func NewDirectPostgres(ctx context.Context, profile phase6security.Profile, owne
 	remote := &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
 		RootCAs: serverRoots, ServerName: authority.ServerHost, GetClientCertificate: certificate}
 	remote.VerifyConnection = func(state tls.ConnectionState) error {
-		if egressbroker.ValidateTLSIdentity(state, authority.ServerURI,
-			[]string{authority.ServerHost}, []string{"server_auth"}) != nil {
-			return ErrUnavailable
-		}
-		return nil
+		return directPostgresVerifyServer(state, authority.ServerURI, authority.ServerHost)
 	}
 	return &DirectPostgres{authority: authority, remote: remote}, nil
+}
+
+func directPostgresVerifyServer(state tls.ConnectionState, uri, host string) error {
+	if egressbroker.ValidateTLSIdentityInVerifyConnection(state, uri, []string{host}, []string{"server_auth"}) != nil {
+		return ErrUnavailable
+	}
+	return nil
 }
 
 // Bind requires an already parsed exact DSN, then installs the fixed network

@@ -16,12 +16,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
@@ -54,8 +55,54 @@ func TestRealPostgresClientCRLActivation(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	clientCA, clientKey, _ := integrationCA(t, now, "postgres-client-crl-ca")
 	serverCA, serverKey, serverRoot := integrationCA(t, now, "postgres-server-crl-ca")
-	server := integrationLeaf(t, now, serverCA, serverKey, "postgres.sandbox-runtime.test", "",
+	server := integrationLeaf(t, now, serverCA, serverKey, "", "spiffe://sandbox-runtime.test/external/postgres",
 		"postgres.sandbox-runtime.test", x509.ExtKeyUsageServerAuth)
+	t.Run("same-ca-wrong-uri", func(t *testing.T) {
+		wrong := integrationLeaf(t, now, serverCA, serverKey, "",
+			"spiffe://sandbox-runtime.test/external/other", "postgres.sandbox-runtime.test",
+			x509.ExtKeyUsageServerAuth)
+		left, right := net.Pipe()
+		serverDone := make(chan error, 1)
+		go func() {
+			serverDone <- tls.Server(right, &tls.Config{MinVersion: tls.VersionTLS13,
+				MaxVersion: tls.VersionTLS13, Certificates: []tls.Certificate{wrong.Certificate}}).Handshake()
+		}()
+		var identityCallbacks atomic.Int32
+		client := tls.Client(left, &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+			ServerName: "postgres.sandbox-runtime.test", RootCAs: serverRoot,
+			VerifyConnection: func(state tls.ConnectionState) error {
+				if state.HandshakeComplete || len(state.VerifiedChains) != 1 {
+					return ErrUnavailable
+				}
+				identityCallbacks.Add(1)
+				return directPostgresVerifyServer(state, "spiffe://sandbox-runtime.test/external/postgres",
+					"postgres.sandbox-runtime.test")
+			}})
+		handshakeCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+		err := client.HandshakeContext(handshakeCtx)
+		stop()
+		_ = client.Close()
+		_ = right.Close()
+		select {
+		case <-serverDone:
+		case <-time.After(time.Second):
+			t.Fatal("synthetic TLS server did not close after identity refusal")
+		}
+		if err == nil || identityCallbacks.Load() != 1 {
+			t.Fatalf("same-CA server with wrong URI was admitted or bypassed: callback=%d error=%v",
+				identityCallbacks.Load(), err)
+		}
+	})
+	serverCRL := postgresTestCRL(t, now, serverCA, serverKey, 1, nil)
+	serverList, err := x509.ParseRevocationList(serverCRL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedServerCRL, err := workloadpki.VerifyCRLForIssuer(workloadpki.RevocationSnapshot{
+		DER: serverCRL, ThisUpdate: serverList.ThisUpdate, NextUpdate: serverList.NextUpdate}, serverCA.Raw, now)
+	if err != nil {
+		t.Fatal("synthetic server CRL was not complete and valid")
+	}
 	clientURI := "spiffe://sandbox-runtime.test/provider-browser-runtime"
 	bad := integrationLeaf(t, now, clientCA, clientKey, "browser_provider_runtime", clientURI, "", x509.ExtKeyUsageClientAuth)
 	good := integrationLeaf(t, now, clientCA, clientKey, "browser_provider_runtime", clientURI, "", x509.ExtKeyUsageClientAuth)
@@ -188,18 +235,42 @@ func TestRealPostgresClientCRLActivation(t *testing.T) {
 	if err := ownGuard.Refresh(ctx); err != nil {
 		t.Fatalf("client signer guard bootstrap failed: %v", err)
 	}
-	poolConfig, err := pgxpool.ParseConfig("postgres://browser_provider_runtime:runtime-secret@127.0.0.1:" + port + "/provider_browser?sslmode=verify-full")
+	poolConfig, err := pgxpool.ParseConfig("postgres://browser_provider_runtime:runtime-secret@postgres.sandbox-runtime.test:5432/provider_browser?sslmode=verify-full")
 	if err != nil {
 		t.Fatal(err)
 	}
 	selectedCertificate := bad.Certificate
 	poolConfig.MaxConns = 1
+	var incompleteCallbacks atomic.Int32
 	poolConfig.ConnConfig.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
 		ServerName: "postgres.sandbox-runtime.test", RootCAs: serverRoot,
-		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &selectedCertificate, nil }}
-	poolConfig.BeforeConnect = func(context.Context, *pgx.ConnConfig) error { return nil }
-	poolConfig.ConnConfig.AfterNetConnect = func(_ context.Context, _ *pgconn.Config, connection net.Conn) (net.Conn, error) {
-		return connection, nil
+		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &selectedCertificate, nil },
+		VerifyConnection: func(state tls.ConnectionState) error {
+			if !state.HandshakeComplete {
+				incompleteCallbacks.Add(1)
+			}
+			return directPostgresVerifyServer(state, "spiffe://sandbox-runtime.test/external/postgres",
+				"postgres.sandbox-runtime.test")
+		}}
+	poolConfig.ConnConfig.DialFunc = func(dialContext context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != "postgres.sandbox-runtime.test:5432" {
+			return nil, ErrUnavailable
+		}
+		return (&net.Dialer{}).DialContext(dialContext, "tcp", net.JoinHostPort("127.0.0.1", port))
+	}
+	poolConfig.ConnConfig.LookupFunc = func(_ context.Context, host string) ([]string, error) {
+		if host != "postgres.sandbox-runtime.test" {
+			return nil, ErrUnavailable
+		}
+		return []string{host}, nil
+	}
+	peerGuard := &combinedPostgresPeerGuard{crl: verifiedServerCRL}
+	peerAuthority := phase6security.Slice6PostgresAuthority{Owner: "provider-browser-runtime",
+		PeerEdgeID: "provider-browser-postgres", ServerHost: "postgres.sandbox-runtime.test",
+		ServerPort: 5432, Database: "provider_browser", SQLRole: "browser_provider_runtime",
+		ServerAnchor: phase6security.TrustAnchor{ID: "external-server-ca"}}
+	if err := BindPostgresPeerGuard(poolConfig, peerAuthority, peerGuard); err != nil {
+		t.Fatalf("server peer guard binding failed: %v", err)
 	}
 	if err := BindPostgresOwnGuard(poolConfig, ownGuard); err != nil {
 		t.Fatalf("client signer guard binding failed: %v", err)
@@ -216,7 +287,13 @@ func TestRealPostgresClientCRLActivation(t *testing.T) {
 	}()
 	owned, err := pool.Acquire(ctx)
 	if err != nil {
-		t.Fatalf("actual guarded PostgreSQL connection failed: %v", err)
+		t.Fatalf("actual guarded PostgreSQL connection failed before SQL: incompleteTLSCallbacks=%d peerChecks=%d: %v",
+			incompleteCallbacks.Load(), peerGuard.checks.Load(), err)
+	}
+	if incompleteCallbacks.Load() != 1 || peerGuard.checks.Load() != 1 || peerGuard.tracks.Load() != 1 {
+		owned.Release()
+		t.Fatalf("first physical PostgreSQL connection bypassed incomplete TLS callback or peer guard: callback=%d checks=%d tracks=%d",
+			incompleteCallbacks.Load(), peerGuard.checks.Load(), peerGuard.tracks.Load())
 	}
 	var actualRole string
 	if err := owned.QueryRow(ctx, "SELECT current_user").Scan(&actualRole); err != nil || actualRole != "browser_provider_runtime" {
@@ -307,7 +384,145 @@ func TestRealPostgresClientCRLActivation(t *testing.T) {
 	if len(ownGuard.active) != 0 {
 		t.Fatal("PostgreSQL pool close retained guarded client connections")
 	}
+	if peerGuard.tracks.Load() < 2 || peerGuard.forgets.Load() != peerGuard.tracks.Load() {
+		t.Fatalf("combined peer/client guard close retained connection: tracks=%d forgets=%d",
+			peerGuard.tracks.Load(), peerGuard.forgets.Load())
+	}
+	// The same disposable PostgreSQL instance now exercises failed first
+	// connections through both production binding functions. All certificates
+	// and CRLs are synthetic; no Vault signer or business schema is involved.
+	goodOnly := &fakePostgresOwnSource{snapshot: makeSnapshot(good)}
+	secondOwn := &PostgresOwnGuard{source: goodOnly, identity: clientIdentity, issuerDER: clientCA.Raw,
+		maximumStaleness: 30 * time.Second, timeout: 2 * time.Second, interval: 2 * time.Second,
+		closeBudget: time.Second, now: time.Now, active: make(map[net.Conn]postgresOwnSelection)}
+	defer secondOwn.Close()
+	if err := secondOwn.Refresh(ctx); err != nil {
+		t.Fatal("synthetic own-client guard did not refresh")
+	}
+	otherGood := integrationLeaf(t, now, clientCA, clientKey, "browser_provider_runtime", clientURI, "", x509.ExtKeyUsageClientAuth)
+	serverLeaf, err := x509.ParseCertificate(server.Certificate.Certificate[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedServerCRL := postgresTestCRL(t, now, serverCA, serverKey, 2,
+		[]x509.RevocationListEntry{{SerialNumber: serverLeaf.SerialNumber, RevocationTime: now}})
+	revokedList, err := x509.ParseRevocationList(revokedServerCRL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedRevoked, err := workloadpki.VerifyCRLForIssuer(workloadpki.RevocationSnapshot{
+		DER: revokedServerCRL, ThisUpdate: revokedList.ThisUpdate,
+		NextUpdate: revokedList.NextUpdate}, serverCA.Raw, now)
+	if err != nil {
+		t.Fatal("synthetic revoked server CRL was not complete and valid")
+	}
+	for _, scenario := range []struct {
+		name             string
+		certificate      tls.Certificate
+		crl              workloadpki.VerifiedCRL
+		wrongRoot        bool
+		expectedIdentity int32
+		expectedChecks   int32
+		expectedTracks   int32
+		expectedForgets  int32
+	}{
+		{name: "server-identity", certificate: good.Certificate, crl: verifiedServerCRL, wrongRoot: true},
+		{name: "server-revoked", certificate: good.Certificate, crl: verifiedRevoked,
+			expectedIdentity: 1, expectedChecks: 1},
+		{name: "own-leaf-mismatch", certificate: otherGood.Certificate, crl: verifiedServerCRL,
+			expectedIdentity: 1, expectedChecks: 1, expectedTracks: 1, expectedForgets: 1},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			negative, parseErr := pgxpool.ParseConfig("postgres://browser_provider_runtime:runtime-secret@postgres.sandbox-runtime.test:5432/provider_browser?sslmode=verify-full")
+			if parseErr != nil {
+				t.Fatal(parseErr)
+			}
+			negative.MaxConns = 1
+			roots := serverRoot
+			if scenario.wrongRoot {
+				_, _, roots = integrationCA(t, now, "untrusted-server-ca")
+			}
+			var identityCallbacks atomic.Int32
+			negative.ConnConfig.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+				ServerName: "postgres.sandbox-runtime.test", RootCAs: roots,
+				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return &scenario.certificate, nil
+				}, VerifyConnection: func(state tls.ConnectionState) error {
+					if state.HandshakeComplete {
+						return ErrUnavailable
+					}
+					identityCallbacks.Add(1)
+					return directPostgresVerifyServer(state, "spiffe://sandbox-runtime.test/external/postgres",
+						"postgres.sandbox-runtime.test")
+				}}
+			negative.ConnConfig.LookupFunc = poolConfig.ConnConfig.LookupFunc
+			negative.ConnConfig.DialFunc = poolConfig.ConnConfig.DialFunc
+			peer := &combinedPostgresPeerGuard{crl: scenario.crl}
+			if err := BindPostgresPeerGuard(negative, peerAuthority, peer); err != nil {
+				t.Fatal(err)
+			}
+			if err := BindPostgresOwnGuard(negative, secondOwn); err != nil {
+				t.Fatal(err)
+			}
+			var afterSQL atomic.Int32
+			negative.AfterConnect = func(context.Context, *pgx.Conn) error {
+				afterSQL.Add(1)
+				return nil
+			}
+			candidate, createErr := pgxpool.NewWithConfig(ctx, negative)
+			if createErr != nil {
+				t.Fatal(createErr)
+			}
+			attemptCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+			connection, acquireErr := candidate.Acquire(attemptCtx)
+			stop()
+			if connection != nil {
+				connection.Release()
+			}
+			candidate.Close()
+			if acquireErr == nil || afterSQL.Load() != 0 || identityCallbacks.Load() != scenario.expectedIdentity ||
+				peer.checks.Load() != scenario.expectedChecks ||
+				peer.tracks.Load() != scenario.expectedTracks ||
+				peer.forgets.Load() != scenario.expectedForgets {
+				t.Fatalf("negative first connection did not fail at its closed boundary: error=%v identity=%d peer=%d/%d/%d afterSQL=%d",
+					acquireErr, identityCallbacks.Load(), peer.checks.Load(), peer.tracks.Load(), peer.forgets.Load(), afterSQL.Load())
+			}
+		})
+	}
 }
+
+// This test peer source uses the same complete signed-CRL verifier as the
+// production guard, but not its Vault/Unix client or freshness state machine.
+// It isolates the actual pgx TLS callback and dual binding order.
+type combinedPostgresPeerGuard struct {
+	crl                     workloadpki.VerifiedCRL
+	checks, tracks, forgets atomic.Int32
+}
+
+func (g *combinedPostgresPeerGuard) CheckHandshake(ctx context.Context, state tls.ConnectionState) error {
+	g.checks.Add(1)
+	return g.check(ctx, state)
+}
+
+func (g *combinedPostgresPeerGuard) Track(_ net.Conn, state tls.ConnectionState) error {
+	if err := g.check(context.Background(), state); err != nil {
+		return err
+	}
+	g.tracks.Add(1)
+	return nil
+}
+
+func (g *combinedPostgresPeerGuard) check(ctx context.Context, state tls.ConnectionState) error {
+	if ctx.Err() != nil || state.Version != tls.VersionTLS13 || len(state.VerifiedChains) != 1 ||
+		len(state.VerifiedChains[0]) != 2 || len(state.PeerCertificates) == 0 ||
+		!state.PeerCertificates[0].Equal(state.VerifiedChains[0][0]) {
+		return ErrUnavailable
+	}
+	return g.crl.CheckPeer(state.VerifiedChains[0][0].Raw, state.VerifiedChains[0][1].Raw, time.Now())
+}
+
+func (g *combinedPostgresPeerGuard) Forget(net.Conn) { g.forgets.Add(1) }
+func (g *combinedPostgresPeerGuard) Ready() bool     { return g.crl.Number() != nil }
 
 func postgresTestCRL(t *testing.T, now time.Time, issuer *x509.Certificate, key *ecdsa.PrivateKey,
 	number int64, revoked []x509.RevocationListEntry) []byte {
