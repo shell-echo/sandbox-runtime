@@ -4265,3 +4265,41 @@ cleanup before outer signer/controller teardown; focused race tests cover
 failure, cancellation-style cleanup and `Goexit`. No terminal strictness,
 ordinary runtime image or Provider Contract was relaxed. Phase 6 stays
 **5/15** pending a fresh Sandbox decision and real-gate evidence.
+
+Follow-up 2026-10-03 (R4/E3, one further **authorized** real issuer
+diagnostic, **failed**): the first E3 invocation stopped before Vault or run
+allocation because the gate checkout was also supplied as the supposedly clean
+fixture source; the pre-issuer observer build had placed a temporary directory
+there. A separate clean checkout was fixed at E3 revision
+`19f60a14a31e5c6ddd0898c90a5a0a39e386b0a7`, tree
+`2240a15ab40fd9ad63ba0b422c18a1965620c560`. A no-issuer source-bound
+offline admission then passed in 124.41 seconds with exact Docker cleanup. The
+first invocation did not consume the real signing permission.
+
+The subsequent single real run `04d45efd81f8c5027ca3e944d65e5422` paired
+the same R4 runtime with E3 and froze Profile
+`sha256:c530b2ec54260ba2ebe5975af2e1e5f9924be22986d005a8342ba41a4ff8f709`.
+Its source, 21 fixed image references, E3 Guest fixture and Product observer
+hashes, R4 terminal operator hash, non-root mount probes and continuous capacity
+admission passed. A fresh local Vault and real server leaf were observed, so
+the signing permission was consumed. The 78-principal/12-candidate Profile and
+48 peer-CRL edge bindings were derived, explicitly without a live controller
+read. The first reported failure was `create exact run-owned controller
+private-config volume` after the 20-minute parent deadline; the capacity
+monitor reported `context deadline exceeded` and confirmed both emergency and
+final stop attempts without an error. The race-instrumented source/archive
+reopens consumed much of the budget, but the fixed safe error does not expose
+the exact Docker failure cause, so deadline causation is an inference. The
+test exited failed in 1245.17 seconds without controller PID1, Product
+migration/serve, external PostgreSQL leaf, Guest binding/PID1 or live revoke
+evidence. Strict v2 terminal cleanup did not run; Vault root self-revoke,
+accessor revocation, CRL readback and any credential-revocation conclusion
+remain unconfirmed. This run never signed a PostgreSQL leaf.
+
+Independent post-run inventory found zero containers, networks and volumes
+with the exact run label, and both recorded Vault anonymous volume IDs were
+absent. The separate R4/E3 source checkouts and temporary build directories
+were clean. Docker/file removal is not credential-revocation evidence. No
+automatic real issuer retry, Slice 6 release manifest, 16-scenario gate or
+production-readiness claim follows; Phase 6 remains **5/15** pending Sandbox
+review.
