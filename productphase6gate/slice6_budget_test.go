@@ -54,22 +54,35 @@ func (b slice6CapacityBudget) required() (host, docker int64, err error) {
 
 func (b slice6CapacityBudget) admit(observation slice6CapacityObservation) error {
 	host, docker, err := b.required()
-	if err != nil || observation.hostPhysicalAvailableBytes <= host ||
-		observation.dockerBackingAvailableBytes <= docker {
-		return errSlice6Capacity
+	if err != nil {
+		return &slice6CapacityFailure{stage: "admission", class: slice6CapacityInvalidInput}
 	}
-	return nil
+	return slice6CapacityThresholdFailure("admission", observation, host, docker)
 }
 
 // stopEarly applies after a stage has begun. It leaves room for one measured
 // polling burst, writes in the bounded stop delay, cleanup receipts and the
 // shared-host reserve. The caller must stop producers before run-owned cleanup.
 func (b slice6CapacityBudget) stopEarly(observation slice6CapacityObservation) bool {
+	return b.stopEarlyFailure(observation) != nil
+}
+
+func (b slice6CapacityBudget) stopEarlyFailure(observation slice6CapacityObservation) error {
+	host, docker, err := b.stopThresholds()
+	if err != nil {
+		return &slice6CapacityFailure{stage: "monitor", class: slice6CapacityInvalidInput}
+	}
+	return slice6CapacityThresholdFailure("monitor", observation, host, docker)
+}
+
+func (b slice6CapacityBudget) stopThresholds() (int64, int64, error) {
 	host, hostErr := slice6Sum(b.pollBurstBytes, b.stopLagBytes,
 		b.cleanupEvidenceBytes, b.sharedHostReserveBytes)
 	docker, dockerErr := slice6Sum(b.pollBurstBytes, b.stopLagBytes, b.dockerReserveBytes)
-	return hostErr != nil || dockerErr != nil ||
-		observation.hostPhysicalAvailableBytes <= host || observation.dockerBackingAvailableBytes <= docker
+	if hostErr != nil || dockerErr != nil {
+		return 0, 0, errSlice6Capacity
+	}
+	return host, docker, nil
 }
 
 func slice6Sum(values ...int64) (int64, error) {

@@ -4303,3 +4303,58 @@ were clean. Docker/file removal is not credential-revocation evidence. No
 automatic real issuer retry, Slice 6 release manifest, 16-scenario gate or
 production-readiness claim follows; Phase 6 remains **5/15** pending Sandbox
 review.
+
+Follow-up 2026-10-04 (one Sandbox-authorized ordinary, non-race R4/E3 issuer
+diagnostic, **failed**): run `7113b25683391e4a29a434d392dde62f`, Profile
+`sha256:4dfb9c04580c085b8be28e5248a1bd7483f2e037f35b0a0ab09ed8720de5786b`,
+used the same clean R4 runtime and E3 fixture. It reached the real Vault and
+PostgreSQL leaves, two controller PID1 processes, Product migration with the
+same-PostgreSQL ledger/grant readback, an initial durable Guest binding
+(generation 1, one event, one audit), and Product `serve` PID1 with
+ready→SQL-edge-loss not-ready→same-PG recovered-ready readback. The Guest
+material agent and break-glass replay/recovery component paths were observed.
+The Guest runtime PID1 and live revoke/reconnect were **not** observed. The
+capacity monitor stopped run-owned writers with only its former generic reason,
+so the at-event host threshold, Docker threshold, sampling/exec failure or
+parent-context cause cannot be distinguished retrospectively. A later host
+free-space read is not an at-event measurement. The quiesced certificate
+controller retained a sticky terminal credential-revoke failure; the separate
+v2 terminal operator confirmed three certs, two token accessors, complete CRL
+and self-revoke, but that receipt does not erase the controller error. Main
+Docker cleanup inherited the canceled business context and failed; its
+registered fallback then removed exact run-labeled containers/networks/volumes
+to zero, and both recorded anonymous Vault volumes were absent. This diagnostic
+does not establish the 16-scenario release gate or a manifest.
+
+Sandbox then directed an E-only observability and cleanup-order correction,
+with **no** further real issuer/business mutation run permitted. The capacity
+interlock now emits only closed stage/class, sample number, elapsed time,
+valid available/required or stop thresholds, context class and last-success
+age. Unknown or missing metrics are unavailable rather than zero; raw Docker,
+`df`, paths and environment are not emitted. It distinguishes input, host stat
+read/value, bounded Docker exec/output, `df` syntax/value, host/Docker/both
+thresholds, parent cancel/deadline, sample timeout and unknown while retaining
+`errors.Is(..., errSlice6Capacity)`. The monitor captures context state before
+its own cancellation and commits the first trigger before invoking the stop
+callback. The ordinary exit and `testing.T` fallback now share one independent
+45-second exact run-labeled cleanup deadline and preserve the first cleanup,
+business, capacity and terminal failures. Normal exit closes the monitor
+before removing its observer; fatal/`Goexit` cleanup remains registered.
+Create-unknown recovery, anonymous-volume readback and exact zero-resource
+assertion remain in the same cleanup path. No production runtime, fixture,
+observer binary, Provider Contract or threshold/cadence was changed.
+
+Deterministic tagged race tests cover failure classes and redaction, both
+thresholds, `df` integer/output overflow, parent cancellation versus sample
+timeout, normal-close sampling race, once-only stop and first-error cleanup.
+One opt-in no-issuer, no-Vault/PG/business-write Docker drill used fixed Alpine,
+one exact-label observer and at most two extra network-none, read-only
+containers. It passed an idle period and ten sequential create/remove
+perturbations without a natural monitor trigger, then deliberately injected
+one classified sample loss and observed both exact-run writers stopped and
+exact-label cleanup to zero in 8.07 seconds. This does **not** reproduce the
+old capacity incident or justify a new issuer run. Phase 6 remains **5/15**.
+Post-edit checks passed: `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, the focused `phase6slice6gate` race/shuffle test set,
+`go vet -tags=phase6slice6gate ./productphase6gate`, the fixed no-issuer
+Docker diagnostic, the Product Contract verifier and `git diff --check`.

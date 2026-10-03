@@ -141,6 +141,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	var migrationFailure error
 	var runtimeFailure error
 	var terminalFailure error
+	var capacityFailure error
+	var capacityStopFailure error
+	var closeCapacityMonitor func()
 	static := slice6VaultStaticInputsFromEnvironment()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		sourceRoot, err := filepath.EvalSymlinks(static.sourceRoot)
@@ -250,12 +253,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("exact Vault trust-switch Docker run label=%s", run.label())
+	cleanupGuard := &slice6BoundedRunCleanup{budget: 45 * time.Second}
 	var serverID string
 	var vaultCreateAttempted bool
 	var implicitVaultVolumes []string
 	t.Cleanup(func() {
-		cleanup, stop := context.WithTimeout(context.Background(), 45*time.Second)
-		defer stop()
+		cleanup := cleanupGuard.Context()
+		defer cleanupGuard.Close()
 		if vaultCreateAttempted && serverID == "" {
 			recovered, err := slice6RecoverVaultContainer(cleanup, run, "sr-p6-vault-switch-"+run.id)
 			if err != nil || recovered == "" {
@@ -272,7 +276,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				implicitVaultVolumes = volumes
 			}
 		}
-		if err := run.cleanup(cleanup); err != nil {
+		if err := cleanupGuard.Finish(run.cleanup); err != nil {
 			t.Errorf("exact Vault trust-switch Docker cleanup: %v", err)
 		}
 		if serverID != "" {
@@ -281,6 +285,18 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			} else {
 				t.Logf("exact Vault anonymous-volume IDs absent after cleanup: %v", implicitVaultVolumes)
 			}
+		}
+		if migrationFailure != nil {
+			t.Errorf("Product migration attempt failed after strict terminal and exact Docker cleanup: %v", migrationFailure)
+		}
+		if runtimeFailure != nil {
+			t.Errorf("Product runtime component failed after strict terminal and exact Docker cleanup: %v", runtimeFailure)
+		}
+		if terminalFailure != nil {
+			t.Errorf("strict terminal cleanup remained unconfirmed after exact Docker cleanup: %v", terminalFailure)
+		}
+		if capacityFailure != nil || capacityStopFailure != nil {
+			t.Errorf("continuous capacity interlock failed: reason=%v stop=%v", capacityFailure, capacityStopFailure)
 		}
 	})
 	var preIssuerGuestShellDigest string
@@ -322,6 +338,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if monitorErr != nil {
 			t.Fatal("pre-issuer continuous capacity admission unavailable")
 		}
+		closeCapacityMonitor = monitor.Close
 		defer monitor.Close()
 		t.Cleanup(func() {
 			// All nested process runners have returned and their deferred Docker
@@ -342,10 +359,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				}
 			}
 			stopMu.Lock()
-			defer stopMu.Unlock()
-			if monitor.Reason() != nil || stopErr != nil || finalStopErr != nil {
-				t.Errorf("continuous capacity monitor stopped run-owned writers: reason=%v emergency_stop=%v final_stop=%v", monitor.Reason(), stopErr, finalStopErr)
-			}
+			capacityStopFailure = errors.Join(stopErr, finalStopErr)
+			stopMu.Unlock()
+			capacityFailure = monitor.Reason()
 		})
 		t.Log("pre-issuer selected Guest shell/utilities and continuous host/Docker capacity interlock admitted")
 	}
@@ -1026,27 +1042,16 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 	}
 	revokeBootstrapRoot()
-	if err := run.cleanup(ctx); err != nil {
-		t.Fatalf("exact persistent Vault Docker cleanup: %v", err)
+	if closeCapacityMonitor != nil {
+		closeCapacityMonitor()
 	}
-	if err := slice6CheckImplicitVolumesRemoved(ctx, run, implicitVaultVolumes); err != nil {
-		t.Fatalf("exact persistent Vault anonymous-volume cleanup: %v", err)
-	}
-	if migrationFailure != nil {
-		t.Errorf("Product migration attempt failed after strict terminal and exact Docker cleanup: %v", migrationFailure)
-	}
-	if runtimeFailure != nil {
-		t.Errorf("Product runtime component failed after strict terminal and exact Docker cleanup: %v", runtimeFailure)
-	}
-	if terminalFailure != nil {
-		t.Errorf("strict terminal cleanup remained unconfirmed after exact Docker cleanup: %v", terminalFailure)
-	}
+	_ = cleanupGuard.Run(run.cleanup)
 	if os.Getenv(slice6CertificateProcessEnv) == "1" {
-		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance with exact Docker cleanup; final release scenarios remain unproved")
+		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance; exact Docker cleanup is checked at test exit and final release scenarios remain unproved")
 	} else if os.Getenv(slice6CredentialProcessEnv) == "1" {
-		t.Log("real file-backed non-dev Vault, same-run credential controller bootstrap PID1, ledger and private socket passed with exact Docker cleanup; certificate controller, managed switch and full Slice 6 gate remain unproved")
+		t.Log("real file-backed non-dev Vault, same-run credential controller bootstrap PID1, ledger and private socket were observed; exact Docker cleanup is checked at test exit and the full Slice 6 gate remains unproved")
 	} else {
-		t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected and exact Docker cleanup passed; no managed controller process launched")
+		t.Log("real file-backed non-dev Vault retained two fixed issuers and complete CRLs across final mTLS trust restart as independently observed at the controller address; both temporary trust directions were rejected, exact Docker cleanup is checked at test exit, and no managed controller process launched")
 	}
 }
 
