@@ -3985,3 +3985,33 @@ binding, and bounded, redacted Docker create categories with context/exit
 status. The corrected no-issuer source-bound admission passed after cache
 restoration. This remains component/preflight evidence; a fresh issuer run
 requires new explicit authorization and Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-03 (approved Product runtime component pass): Sandbox
+approved one issuer-consuming rerun bound to E
+`1e607f6fa498de136445800d2092c92df855ce34`, unchanged clean R3
+`923813f9a195ca7f49202ee11de4796ee6a8ef17`, Go 1.26.8 and the
+previously approved Product observer digest
+`sha256:7151292b6f4571892502d786c8486cdf24ac7b19bb25e2cf171eec5ad1b99123`.
+The single run `6f518819018b5ea95246a57c05f09c6d` passed in 409.91 seconds.
+Its pre-issuer source/archive/21-image admission and observer mount passed;
+the same-run 78-principal Profile digest was
+`sha256:b10950396fc683b041de332d2e84c9a330422e1b3df71749780f7dfdeaf9cef0`.
+The real finite task passed the previously failing create point and exercised
+nonce/JTI replay rejection. Independent PostgreSQL and Product `migrate v2`
+PID1 processes completed with same-PostgreSQL ledger, ownership and grant
+readback. Product `serve` PID1 then passed its exact seven-network/three-socket
+Profile, TLS `/readyz` ready → SQL-edge loss not-ready → original-PostgreSQL
+recovery ready, and a read-only `product_runtime` SQL session. The same-run
+Guest TLS/material-agent and break-glass consume/restart chain also passed,
+but the formal Guest production PID1 and Product↔Guest security edge were not
+exercised. The Product material helper's earlier “SQL login remains unproved”
+log describes only that helper; this later Product PID1 test did prove the
+runtime SQL session. Terminal cleanup confirmed three certificate revocations,
+two token accessors, complete CRL and self-revoke. After the passing test,
+an independent check found zero run-labeled containers, networks and volumes;
+both recorded Vault anonymous volumes were absent, and E/R3 were clean. This
+is Product runtime component evidence, **not** the same-run 16-scenario Slice 6
+release gate, immutable manifest, deployment or production qualification.
+Phase 6 remains **5/15**. The historical instruction above to stop after
+Slice 6 was superseded by the user's later request to continue subsequent
+Phase 6 slices after their own gates; it is not current work sequencing.
