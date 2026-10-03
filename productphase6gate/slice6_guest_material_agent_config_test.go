@@ -124,6 +124,131 @@ func slice6PrepareGuestAgentInputs(t *testing.T, ctx context.Context, run slice6
 	return result
 }
 
+// The Guest runtime owns a different signer from its material agent. This
+// closed projection checks the complete prior 67-directory supply, then
+// reserves only the existing Profile's guest-tls-agent subject socket.
+func slice6GuestRuntimeTLSInputPlan(profile phase6security.Profile, runID string,
+	existing map[string]string) (phase6security.TLSAgentBinding, error) {
+	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
+		len(runID) != 32 || !lowerHexSlice6(runID) {
+		return phase6security.TLSAgentBinding{}, errors.New("Guest runtime TLS Profile unavailable")
+	}
+	plan, err := slice6BuildGuestRuntimeLaunchPlan(profile)
+	binding, signer, subject, signerErr := profile.TLSAgentForSubject("guest-runtime")
+	guestAgent, materialSigner, materialSubject, guestAgentErr := profile.TLSAgentForSubject("guest-agent")
+	material, materialErr := profile.Slice6MaterialSocketForOwner("guest-runtime")
+	if err != nil || signerErr != nil || guestAgentErr != nil || materialErr != nil ||
+		signer.Name != "guest-tls-agent" || subject.Name != "guest-runtime" ||
+		materialSigner.Name != "guest-agent-tls-agent" || materialSubject.Name != "guest-agent" ||
+		material.AgentDeployment != materialSubject.Name || material.OwnerDeployment != subject.Name ||
+		binding.SocketStorageID != plan.TLSSocketID || material.SocketStorageID != plan.MaterialSocketID ||
+		binding.SocketStorageID == guestAgent.SocketStorageID ||
+		binding.SocketStorageID == material.SocketStorageID ||
+		binding.ControllerSocketStorageID == guestAgent.ControllerSocketStorageID ||
+		binding.AgentUID != signer.UID || binding.AgentGID != signer.GID ||
+		binding.SubjectUID != subject.UID || binding.SubjectGID != subject.GID ||
+		binding.DirectoryMode != 0o710 || binding.ControllerDirectoryMode != 0o710 ||
+		guestAgent.SocketStorageID == material.SocketStorageID ||
+		len(existing) != 67 || existing[binding.SocketStorageID] != "" {
+		return phase6security.TLSAgentBinding{}, errors.New("Guest runtime TLS signer boundary drift")
+	}
+	expected := make(map[string]bool, 67)
+	add := func(id string) bool {
+		if id == "" || expected[id] {
+			return false
+		}
+		expected[id] = true
+		return true
+	}
+	for _, issuer := range profile.CredentialIssuerSockets {
+		if !add(issuer.SocketStorageID) {
+			return phase6security.TLSAgentBinding{}, errors.New("Guest prior credential socket inventory drift")
+		}
+	}
+	if !add(profile.CertificateController.CredentialController.SocketStorageID) ||
+		!add(profile.CertificateController.SelfSocketStorageID) {
+		return phase6security.TLSAgentBinding{}, errors.New("Guest prior controller socket inventory drift")
+	}
+	for _, agent := range profile.TLSAgentBindings {
+		if !add(agent.ControllerSocketStorageID) {
+			return phase6security.TLSAgentBinding{}, errors.New("Guest prior certificate socket inventory drift")
+		}
+	}
+	for _, agent := range profile.PostgresClientAgents {
+		if !add(agent.ControllerSocketStorageID) {
+			return phase6security.TLSAgentBinding{}, errors.New("Guest prior PostgreSQL certificate socket inventory drift")
+		}
+	}
+	for _, socket := range profile.BreakGlassSockets {
+		if !add(socket.SocketStorageID) {
+			return phase6security.TLSAgentBinding{}, errors.New("Guest prior break-glass socket inventory drift")
+		}
+	}
+	if !add(guestAgent.SocketStorageID) || !add(material.SocketStorageID) ||
+		len(expected) != 67 || !expected[binding.ControllerSocketStorageID] {
+		return phase6security.TLSAgentBinding{}, errors.New("Guest prior agent socket inventory drift")
+	}
+	values := make(map[string]bool, 67)
+	for id, volume := range existing {
+		if !expected[id] || volume != "sr-p6-socket-"+id+"-"+runID || values[volume] {
+			return phase6security.TLSAgentBinding{}, errors.New("Guest prior socket missing or aliased")
+		}
+		values[volume] = true
+	}
+	return binding, nil
+}
+
+func slice6PrepareGuestRuntimeTLSAgentInputs(t *testing.T, ctx context.Context, run slice6DockerRun,
+	composed slice6VaultComposedInputs, existing map[string]string) map[string]string {
+	t.Helper()
+	binding, err := slice6GuestRuntimeTLSInputPlan(composed.Profile, run.id, existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guestAgent, _, _, _ := composed.Profile.TLSAgentForSubject("guest-agent")
+	material, _ := composed.Profile.Slice6MaterialSocketForOwner("guest-runtime")
+	for _, storageID := range []string{binding.ControllerSocketStorageID, guestAgent.SocketStorageID, material.SocketStorageID} {
+		if err := slice6VerifyGuestFixtureVolume(ctx, run, existing[storageID]); err != nil {
+			t.Fatal("Guest runtime TLS prior exact socket volume unavailable")
+		}
+	}
+	config, err := slice6BuildOrdinaryTLSAgentConfig(composed, "guest-runtime", "guest-tls-agent")
+	if err != nil || len(config) == 0 {
+		t.Fatal("Guest runtime TLS signer configuration unavailable")
+	}
+	clear(config)
+	profileBytes, err := json.Marshal(composed.Profile)
+	if err != nil {
+		t.Fatal("Guest runtime TLS signer Profile unavailable")
+	}
+	peerBytes, err := json.Marshal(composed.PeerSources)
+	if err != nil {
+		clear(profileBytes)
+		t.Fatal("Guest runtime TLS signer peer-CRL sources unavailable")
+	}
+	defer clear(profileBytes)
+	defer clear(peerBytes)
+	archive, err := phase6security.BuildSlice6PrivateConfigArchive(composed.Profile, "guest-tls-agent",
+		map[string][]byte{phase6security.Slice6ProfileConfigFile: profileBytes,
+			phase6security.Slice6PeerCRLSourcesFile: peerBytes})
+	if err != nil {
+		t.Fatal("Guest runtime TLS signer private config unavailable")
+	}
+	slice6PrepareOneControllerPrivateConfig(t, ctx, run, composed.Profile, "guest-tls-agent", archive)
+	result := make(map[string]string, 68)
+	for id, volume := range existing {
+		result[id] = volume
+	}
+	result[binding.SocketStorageID] = slice6PrepareOneControllerSocketVolume(t, ctx, run,
+		binding.SocketStorageID, binding.SocketDirectory, binding.AgentUID, binding.SubjectGID,
+		binding.DirectoryMode)
+	if len(result) != 68 || result[binding.SocketStorageID] == result[material.SocketStorageID] ||
+		result[binding.SocketStorageID] == result[guestAgent.SocketStorageID] {
+		t.Fatal("Guest runtime TLS signer socket was not independently allocated")
+	}
+	return result
+}
+
 func slice6BuildGuestMaterialAgentConfig(composed slice6VaultComposedInputs) ([]byte, error) {
 	return slice6BuildRuntimeMaterialAgentConfig(composed, "guest-agent", "guest-runtime", secretref.RoleGuest,
 		[]secretref.Purpose{secretref.PurposeGuestSigningKey})

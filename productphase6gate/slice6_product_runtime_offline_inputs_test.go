@@ -17,6 +17,7 @@ import (
 )
 
 const slice6ProductRuntimeOfflineInputsEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_RUNTIME_OFFLINE_INPUTS"
+const slice6GuestRuntimeTLSNoIssuerEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RUNTIME_TLS_NO_ISSUER"
 
 // This executes the Product runtime's source-bound config and private-volume
 // preparation against synthetic public CA certificates. It neither asks Vault
@@ -136,7 +137,7 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 	// These placeholders model only the exact 73 allocations in the prior
 	// controller→break-glass→Guest→Product→migration preparation sequence.
 	// They are not claimed as real volumes or running socket servers.
-	existing := slice6OfflinePriorProductRuntimeSockets(t, composed.Profile)
+	existing := slice6OfflinePriorProductRuntimeSockets(t, composed.Profile, run.id)
 	postgresSigner, _, _, _, _, err := composed.Profile.PostgresClientSignerForOwner("product-runtime")
 	if err != nil || len(existing) != 73 || existing[postgresSigner.SocketStorageID] != "" {
 		t.Fatalf("offline prior-socket inventory drift: count=%d error=%v", len(existing), err)
@@ -161,26 +162,90 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 	if os.Getenv(slice6GuestFixtureAdmissionNoIssuerEnv) == "1" {
 		slice6GuestFixtureAdmissionNoIssuer(t, ctx, run, static, composed, plan, result)
 	}
+	if os.Getenv(slice6GuestRuntimeTLSNoIssuerEnv) == "1" {
+		guestPrior := slice6OfflinePriorGuestSocketVolumes(t, composed.Profile, run.id)
+		direct, directErr := slice6GuestRuntimeTLSInputPlan(composed.Profile, run.id, guestPrior)
+		material, materialErr := composed.Profile.Slice6MaterialSocketForOwner("guest-runtime")
+		guestAgent, _, _, guestAgentErr := composed.Profile.TLSAgentForSubject("guest-agent")
+		if directErr != nil || materialErr != nil || guestAgentErr != nil ||
+			direct.SocketStorageID != guestPlan.TLSSocketID || material.SocketStorageID != guestPlan.MaterialSocketID {
+			t.Fatal("offline Product→Guest direct signer dependency graph unavailable")
+		}
+		clone := func() map[string]string {
+			copy := make(map[string]string, len(guestPrior))
+			for id, volume := range guestPrior {
+				copy[id] = volume
+			}
+			return copy
+		}
+		for _, changed := range []func(map[string]string){
+			func(values map[string]string) { delete(values, direct.ControllerSocketStorageID) },
+			func(values map[string]string) { delete(values, guestAgent.SocketStorageID) },
+			func(values map[string]string) { delete(values, material.SocketStorageID) },
+			func(values map[string]string) { values[material.SocketStorageID] = values[guestAgent.SocketStorageID] },
+			func(values map[string]string) { values[direct.SocketStorageID] = values[guestAgent.SocketStorageID] },
+			func(values map[string]string) {
+				values[material.SocketStorageID], values[guestAgent.SocketStorageID] =
+					values[guestAgent.SocketStorageID], values[material.SocketStorageID]
+			},
+		} {
+			values := clone()
+			changed(values)
+			if _, err := slice6GuestRuntimeTLSInputPlan(composed.Profile, run.id, values); err == nil {
+				t.Fatal("offline Guest direct signer admitted missing, aliased or cross-subject socket")
+			}
+		}
+		if !slice6OrdinaryTLSLabelAllowed("guest-runtime", "guest-tls-agent", "guest-runtime") ||
+			slice6OrdinaryTLSLabelAllowed("guest-runtime", "guest-tls-agent", "guest") ||
+			slice6OrdinaryTLSLabelAllowed("guest-agent", "guest-agent-tls-agent", "guest-runtime") {
+			t.Fatal("Guest runtime signer runner label could alias the Guest material signer")
+		}
+		for _, item := range []struct {
+			id, directory  string
+			uid, gid, mode uint32
+		}{
+			{direct.ControllerSocketStorageID, direct.ControllerSocketDirectory,
+				direct.ControllerUID, direct.AgentGID, direct.ControllerDirectoryMode},
+			{guestAgent.SocketStorageID, guestAgent.SocketDirectory,
+				guestAgent.AgentUID, guestAgent.SubjectGID, guestAgent.DirectoryMode},
+			{material.SocketStorageID, material.SocketDirectory,
+				material.AgentUID, material.OwnerGID, material.DirectoryMode},
+		} {
+			guestPrior[item.id] = slice6PrepareOneControllerSocketVolume(t, ctx, run,
+				item.id, item.directory, item.uid, item.gid, item.mode)
+		}
+		guestRuntimeSupply := slice6PrepareGuestRuntimeTLSAgentInputs(t, ctx, run, composed, guestPrior)
+		if len(guestPrior) != 67 || len(guestRuntimeSupply) != 68 ||
+			guestPrior[direct.SocketStorageID] != "" ||
+			guestRuntimeSupply[direct.SocketStorageID] == guestRuntimeSupply[material.SocketStorageID] ||
+			slice6VerifyGuestFixtureVolume(ctx, run, guestRuntimeSupply[direct.SocketStorageID]) != nil ||
+			slice6VerifyGuestFixtureVolume(ctx, run, "sr-p6-config-guest-tls-agent-"+run.id) != nil {
+			t.Fatal("offline Guest runtime direct signer config/socket identity unavailable")
+		}
+		t.Log("no-issuer Guest runtime direct signer Profile/peer config, controller edge, distinct subject socket, exact ownership and label admitted; no signer, Guest PID1, SQL or Vault started")
+	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("offline Product input exact Docker cleanup failed: %v", err)
 	}
 	cleaned = true
-	if os.Getenv(slice6GuestFixtureAdmissionNoIssuerEnv) == "1" {
+	if os.Getenv(slice6GuestRuntimeTLSNoIssuerEnv) == "1" {
+		t.Log("synthetic-CA source-bound Guest direct TLS signer and Product startup inputs admitted; all exact run-owned diagnostic resources cleaned to zero; no Vault issuance, SQL, signer or Guest/Product PID1")
+	} else if os.Getenv(slice6GuestFixtureAdmissionNoIssuerEnv) == "1" {
 		t.Log("synthetic-CA source-bound Guest/Product startup inputs and finite Guest fixture create/inspect admitted; all run-owned diagnostic containers/networks/volumes cleaned to zero; no Vault issuance, SQL, fixture execution or Guest/Product PID1")
 	} else {
 		t.Log("synthetic-CA source-bound Guest/Product startup inputs admitted; six Guest private files, four Product files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; four run-owned volumes cleaned to zero; no Vault issuance or Guest/Product PID1")
 	}
 }
 
-func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6security.Profile) map[string]string {
+func slice6OfflinePriorGuestSocketVolumes(t *testing.T, profile phase6security.Profile, runID string) map[string]string {
 	t.Helper()
-	result := make(map[string]string, 73)
+	result := make(map[string]string, 67)
 	add := func(id string) {
 		t.Helper()
 		if id == "" || result[id] != "" {
 			t.Fatal("offline prior socket identity missing or repeated")
 		}
-		result[id] = "offline-prior-socket-" + id
+		result[id] = "sr-p6-socket-" + id + "-" + runID
 	}
 	for _, binding := range profile.CredentialIssuerSockets {
 		add(binding.SocketStorageID)
@@ -202,10 +267,32 @@ func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6securit
 	if len(result) != 65 {
 		t.Fatalf("offline break-glass socket inventory=%d, want 65", len(result))
 	}
+	guestAgent, _, _, guestErr := profile.TLSAgentForSubject("guest-agent")
+	material, materialErr := profile.Slice6MaterialSocketForOwner("guest-runtime")
+	if guestErr != nil || materialErr != nil {
+		t.Fatal("offline Guest material socket authority unavailable")
+	}
+	add(guestAgent.SocketStorageID)
+	add(material.SocketStorageID)
+	if len(result) != 67 {
+		t.Fatalf("offline Guest socket inventory=%d, want 67", len(result))
+	}
+	return result
+}
+
+func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6security.Profile, runID string) map[string]string {
+	t.Helper()
+	result := slice6OfflinePriorGuestSocketVolumes(t, profile, runID)
+	add := func(id string) {
+		t.Helper()
+		if id == "" || result[id] != "" {
+			t.Fatal("offline Product socket identity missing or repeated")
+		}
+		result[id] = "offline-prior-socket-" + id
+	}
 	for _, item := range []struct {
 		owner, agentSubject string
 	}{
-		{owner: "guest-runtime", agentSubject: "guest-agent"},
 		{agentSubject: "product-runtime"},
 		{owner: "product-runtime", agentSubject: "product-runtime-agent"},
 		{owner: "product-migration-job", agentSubject: "product-migration-agent"},

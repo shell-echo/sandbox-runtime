@@ -4420,3 +4420,41 @@ clean, and the diagnostic log was mode 0600. Docker cleanup does not prove
 credential revocation. This run consumed its single issuer permission and
 does not authorize an automatic retry, complete the 16-scenario gate, or
 produce a release manifest. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (Sandbox-directed E-only Guest dependency correction;
+**no new issuer run**): the failed `c67fee…` diagnostic exposed a missing
+deployment edge in the gate, not evidence of a Provider, Contract or runtime
+change. The existing frozen Profile already binds a separate
+`guest-tls-agent` to `guest-runtime`. The gate now checks the complete prior
+67-socket Guest supply against each storage ID and same-run volume name,
+prepares that agent's source-bound private Profile/peer-CRL config and
+exclusive subject socket, and projects a separate
+68-socket map only into Guest runtime startup. The Guest material agent keeps
+its original 67-socket map; Product's original 67→74 chain is unchanged. A
+dedicated `guest-runtime` label selects the ordinary TLS-agent runner without
+using the older `guest` diagnostic label. The direct signer must report ready
+before Guest PID1 starts and remains alive through its callback; Guest PID1
+returns before the signer cleanup sequence. The runner's existing exact
+signer-socket cleanup, failure-path fallback and run-labeled Docker cleanup
+remain in force. The terminal operator derives certificate revocations from
+its ledger rather than a frozen count of three.
+
+The final opt-in, no-issuer Docker check used the fixed R4 source/role/Desktop
+candidate, locked Browser publication, four selected arm64 OCI manifests and
+synthetic public CA material. The four external archive components were
+independently reverified. Two earlier no-issuer attempts failed closed before
+Docker business startup because the diagnostic command first selected an R6
+Desktop candidate against R4 source, then used three top-level OCI index
+digests where selected arm64 manifest digests were required. Neither attempt
+issued credentials or tested the new Guest path. The corrected check admitted
+the full Product→Guest direct dependency plan, tested rejection of missing,
+aliased and swapped cross-subject sockets plus an incorrect signer label, then
+prepared and inspected the direct signer's
+private config, controller edge and distinct subject socket with exact
+UID/GID/0710/read-only checks. It passed in 120.85 seconds and cleaned all
+exact run-owned diagnostic resources to zero. It did **not** start Vault,
+PostgreSQL, the direct signer, Guest PID1 or Product PID1, issue a certificate,
+or prove live revoke. The `c67fee…` first error is addressed in the gate
+topology, but the real Guest path and the full release gate remain unproved;
+Phase 6 remains **5/15**. No further real issuer run is authorized by this
+offline result alone.

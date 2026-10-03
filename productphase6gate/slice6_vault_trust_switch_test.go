@@ -656,6 +656,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string
 		var guestSocketVolumes map[string]string
+		var guestRuntimeSocketVolumes map[string]string
 		var productSocketVolumes map[string]string
 		var productMaterialSocketVolumes map[string]string
 		var productMigrationSocketVolumes map[string]string
@@ -688,6 +689,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			if os.Getenv(slice6GuestMaterialEnv) == "1" {
 				guestSocketVolumes = slice6PrepareGuestAgentInputs(t, ctx, run, composed, breakGlassSocketVolumes)
 				t.Logf("same-run Guest signer/material socket allocations=2 combined=%d; exact private config readers prepared, no Guest agent launched", len(guestSocketVolumes))
+				if os.Getenv(slice6GuestRuntimeProcessEnv) == "1" {
+					guestRuntimeSocketVolumes = slice6PrepareGuestRuntimeTLSAgentInputs(t, ctx, run, composed, guestSocketVolumes)
+					t.Logf("same-run Guest runtime dedicated TLS signer socket allocation=1 combined=%d; direct signer not yet launched", len(guestRuntimeSocketVolumes))
+				}
 				if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
 					productSocketVolumes = slice6PrepareProductTLSAgentInputs(t, ctx, run, composed, guestSocketVolumes)
 					productTLSConfig, configErr := slice6BuildOrdinaryTLSAgentConfig(composed,
@@ -856,8 +861,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																			return err
 																		}
 																	}
-																	guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
-																		guestBindingReceipt, guestSocketVolumes, anchorFiles, productRuntimeID, preIssuerGuestShellDigest, onConnected)
+																	slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
+																		"guest-runtime", "guest-tls-agent", "guest-runtime",
+																		guestRuntimeSocketVolumes, anchorFiles, func() {
+																			guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
+																				guestBindingReceipt, guestRuntimeSocketVolumes, anchorFiles,
+																				productRuntimeID, preIssuerGuestShellDigest, onConnected)
+																		})
 																}
 															})
 														guestRuntimeFailure = slice6PreserveFirstFailure(guestRuntimeFailure, materialFailure)

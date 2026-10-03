@@ -37,6 +37,15 @@ func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6
 		"guest", socketVolumes, anchorFiles, onSignerReady)
 }
 
+func slice6OrdinaryTLSLabelAllowed(subjectDeployment, agentDeployment, label string) bool {
+	if subjectDeployment == "guest-runtime" || agentDeployment == "guest-tls-agent" || label == "guest-runtime" {
+		return subjectDeployment == "guest-runtime" && agentDeployment == "guest-tls-agent" && label == "guest-runtime"
+	}
+	return label == "guest" || label == "product" || label == "product-material" ||
+		label == "product-migration-material" || label == "product-migration-postgres" ||
+		label == "product-runtime-postgres"
+}
+
 func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, subjectDeployment, agentDeployment, label string,
 	socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
@@ -69,9 +78,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		principal.UID == 0 || principal.GID == 0 || !principal.ReadOnlyRootFilesystem ||
 		!principal.NoNewPrivileges || !slices.Equal(principal.DroppedCapabilities, []string{"ALL"}) ||
 		len(principal.Networks) != 1 || principal.Networks[0] != "network-"+agentDeployment ||
-		(label != "guest" && label != "product" && label != "product-material" &&
-			label != "product-migration-material" && label != "product-migration-postgres" &&
-			label != "product-runtime-postgres") {
+		!slice6OrdinaryTLSLabelAllowed(subjectDeployment, agentDeployment, label) {
 		t.Fatal("ordinary TLS-agent immutable Profile identity drift")
 	}
 	cpuContrast := label == "guest" && os.Getenv(slice6GuestTLSCPUContrastEnv) == "1"

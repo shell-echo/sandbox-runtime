@@ -115,7 +115,7 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	if err != nil || binding.Protocol != slice6GuestBindingFixtureProtocol || binding.RunID != run.id ||
 		binding.ProfileDigest != profile.ProfileDigest || binding.GuestID == "" ||
 		binding.BindingGeneration != 1 || !binding.IdempotentReplay ||
-		len(socketVolumes) != 67 || len(productID) != 64 || !lowerHexSlice6(productID) {
+		len(socketVolumes) != 68 || len(productID) != 64 || !lowerHexSlice6(productID) {
 		return errors.New("Guest PID1 has no same-run Product binding or source-bound placement")
 	}
 	product, err := slice6InspectProductRuntimeMember(ctx, run, productID)
