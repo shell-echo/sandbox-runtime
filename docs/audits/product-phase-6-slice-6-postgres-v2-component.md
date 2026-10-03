@@ -762,3 +762,60 @@ under the exact run label, both anonymous volume IDs absent, and no local
 `.sr-vault-trust-switch-*` directory. Physical deletion and revocation are
 reported separately. This is a failed component gate, not a migration or
 Slice 6 release pass; Phase 6 remains **5/15**.
+
+### No-new-issuer first-connection investigation
+
+Source inspection found that `runMigrationV2` starts its existing 60-second
+context before constructing the material registry and direct PostgreSQL
+client, then calls `pgxpool.Ping` only after pool creation. The locked pgx
+v5.9.2 pool is lazy; its `Ping` acquires one physical connection and runs one
+empty query. The R11 category therefore cannot identify whether the failure
+was caller-budget exhaustion, exact dial, TLS/guard/client certificate,
+PostgreSQL startup authentication, `AfterConnect` SQL validation or the Ping
+query. Docker's event history no longer contained the migration container's
+start/die events at the time of a later read-only query, so no exact PID1
+duration is reconstructed from those events. The harness checked requested
+pre-start IPAM addresses, not a live effective migration endpoint; that
+observation cannot be retroactively invented after exact cleanup.
+
+Three independently disposable no-Vault PostgreSQL Docker components passed:
+`TestRealMigrationPreDDLPrivilege` (3.51s),
+`TestRealPostgresClientCRLActivation` (2.54s) and
+`TestRealSharedPostgresNineSourceHBA` (13.92s). The latter exercised all nine
+source addresses plus wrong role, database, SCRAM password, missing client
+certificate and wrong CN denials. A separate post-test query found no
+`p6-migration-ddl-*`, `p6-pg-crl-*` or `p6-shared-hba-*` containers, networks
+or volumes. These isolate components with synthetic credentials and do not
+establish the R11 combined connection or identify its root cause.
+
+Sandbox approved a private, one-shot migration-only closed classifier and a
+strict E observer for a successor source revision, with no new issuer run.
+Focused race fault injection covers original-hook call count, exact dial,
+TLS/guard callback, `AfterConnect`, typed PostgreSQL rejection, acquire versus
+query, caller cancellation/deadline priority, malicious private text,
+existing peer-CRL sentinels and concurrent pool close. It caught a typed-nil
+`*pgxpool.Conn` interface panic in the new diagnostic's first cancellation
+test; the production adapter now converts the failed `Acquire` to a true nil
+interface before `Release` can be called. A disposable no-Vault PostgreSQL
+classifier integration exercises healthy Ping, synthetic `AfterConnect`
+failure and wrong-password server rejection. Its first version was flaky
+because `pg_isready` could observe PostgreSQL's temporary initialization
+server; after waiting for the final initialization marker and loopback
+forwarding, five consecutive runs passed. Its exact test containers were
+absent afterward. This fixture correction is **not** an explanation of the
+already deleted R11 run. No production timeout, identity, SQL privilege,
+network path or CRL policy was relaxed; Phase 6 remains **5/15**.
+
+The diagnostic runtime source was frozen as R2
+`01c581afb9b77b2028677fe98a999a5e25d0c75c` (tree
+`f9044c18bcc701677ae269b1e9ce4737462910e4`) and opened in a separate
+clean checkout. The complete `go test -race -shuffle=on -count=1 ./...`
+(including `internal/phase6security` 341.047s), `go vet ./...`, tagged E
+race/vet package, Product Contract lock verifier and diff check passed on the
+working source before this freeze. The disposable classifier PostgreSQL
+integration passed five consecutive runs after final-init admission. The E
+producer/strict-observer parity test then passed under race against the
+independent clean R2 checkout. These remain source and component checks; no
+R2 role/Desktop candidate image, real Vault migration, release scenario or
+manifest has been admitted by this result. Another issuer-consuming run
+requires separate Sandbox review, and Phase 6 remains **5/15**.

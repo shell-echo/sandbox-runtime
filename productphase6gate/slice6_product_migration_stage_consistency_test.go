@@ -18,8 +18,8 @@ import (
 )
 
 // This is the E-only producer/consumer gate for the frozen runtime source.
-// It derives the stage set from R9's actual Go declaration and verifies the
-// formatter's switch before checking the independent bounded observer.
+// It derives the stage and class sets from the frozen runtime's actual Go
+// declarations before checking the independent bounded observer.
 func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 	root := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT")
 	revision := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION")
@@ -54,6 +54,34 @@ func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != "migration-connect-peer-bootstrap-"+class {
 			t.Fatalf("frozen peer class %q is not observable: %q", class, got)
 		}
+	}
+	pingSource, err := os.ReadFile(filepath.Join(root, "cmd", "postgres_migration_failure.go"))
+	if err != nil || len(pingSource) == 0 || len(pingSource) > 20<<10 {
+		t.Fatal("bounded frozen migration ping producer is unavailable")
+	}
+	pingClasses, err := slice6FrozenMigrationPingClassSet(pingSource)
+	if err != nil || len(pingClasses) != 10 ||
+		strings.Count(string(pingSource), "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=") != 1 {
+		t.Fatalf("frozen migration ping projection is not closed: %v", err)
+	}
+	for _, class := range pingClasses {
+		line := "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=" + class
+		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != "migration-ping-"+class {
+			t.Fatalf("frozen ping class %q is not observable: %q", class, got)
+		}
+	}
+	for _, class := range classes {
+		if class == "unknown" {
+			continue
+		}
+		line := "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=peer-crl-" + class
+		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != "migration-ping-peer-crl-"+class {
+			t.Fatalf("frozen ping peer class %q is not observable: %q", class, got)
+		}
+	}
+	migrationSource, err := os.ReadFile(filepath.Join(root, "cmd", "postgres_migration_v2.go"))
+	if err != nil || strings.Count(string(migrationSource), "probeMigrationPool(ctx, pool)") != 1 {
+		t.Fatal("frozen migration command does not use its one-shot closed ping probe")
 	}
 	for _, stage := range stages {
 		line := "migration v2 PostgreSQL connection is unavailable: stage=" + stage
@@ -90,6 +118,69 @@ func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 	}
 	if got := slice6MigrationFailureCategory([]byte("migration v2 PostgreSQL connection is unavailable\n")); got != "migration-connect" {
 		t.Fatal("legacy generic migration category regressed")
+	}
+}
+
+func slice6FrozenMigrationPingClassSet(source []byte) ([]string, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), "postgres_migration_failure.go", source, 0)
+	if err != nil {
+		return nil, err
+	}
+	var classes []string
+	seen := make(map[string]bool)
+	prefix := false
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range group.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok || len(value.Names) != 1 || !strings.HasPrefix(value.Names[0].Name, "migration") {
+				continue
+			}
+			if len(value.Values) != 1 {
+				return nil, errors.New("migration ping class has no exact literal")
+			}
+			literal, ok := value.Values[0].(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				return nil, errors.New("migration ping class is not a string literal")
+			}
+			class, decodeErr := strconv.Unquote(literal.Value)
+			if decodeErr != nil || class == "" || len(class) > 32 || seen[class] {
+				return nil, errors.New("migration ping class is invalid")
+			}
+			seen[class] = true
+			if value.Names[0].Name == "migrationPeerCRLPrefix" {
+				if class != "peer-crl-" {
+					return nil, errors.New("migration ping peer prefix drift")
+				}
+				prefix = true
+				continue
+			}
+			classes = append(classes, class)
+		}
+	}
+	if !prefix {
+		return nil, errors.New("migration ping peer prefix unavailable")
+	}
+	return classes, nil
+}
+
+func TestSlice6MigrationPingCurrentSourceParser(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "cmd", "postgres_migration_failure.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classes, err := slice6FrozenMigrationPingClassSet(source)
+	if err != nil || len(classes) != 10 {
+		t.Fatalf("current migration ping class declaration is not closed: %v", err)
+	}
+	for _, class := range classes {
+		line := "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=" + class + "\n"
+		if slice6MigrationFailureCategory([]byte(line)) != "migration-ping-"+class {
+			t.Fatalf("current migration ping class %q is not observable", class)
+		}
 	}
 }
 
@@ -220,6 +311,11 @@ func TestSlice6MigrationStageUsesActualBoundedCapture(t *testing.T) {
 		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\n", "migration-connect-peer-bootstrap-unknown"},
 		{"extra stdout\n", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\n", "unknown"},
 		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\nsecond line\n", "unknown"},
+		{"", "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=exact-dial\n", "migration-ping-exact-dial"},
+		{"", "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=server-rejected\n", "migration-ping-server-rejected"},
+		{"", "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=SCRAM-password\n", "unknown"},
+		{"extra stdout\n", "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=exact-dial\n", "unknown"},
+		{"", "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=exact-dial\nsecond line\n", "unknown"},
 		{"", "password=private\n", "unknown"},
 	}
 	for _, class := range []string{"local-guard", "parent-canceled", "parent-deadline",
@@ -228,6 +324,17 @@ func TestSlice6MigrationStageUsesActualBoundedCapture(t *testing.T) {
 		candidates = append(candidates, struct{ stdout, stderr, category string }{
 			stderr:   "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=" + class + "\n",
 			category: "migration-connect-peer-bootstrap-" + class,
+		})
+	}
+	for _, class := range []string{"caller-canceled", "caller-deadline", "before-connect", "exact-dial",
+		"tls-or-guard", "after-connect-sql", "server-rejected", "pool-acquire", "ping-query", "unknown",
+		"peer-crl-local-guard", "peer-crl-parent-canceled", "peer-crl-parent-deadline",
+		"peer-crl-internal-deadline", "peer-crl-agent-request-build", "peer-crl-agent-socket-peer",
+		"peer-crl-agent-transport", "peer-crl-agent-response", "peer-crl-guard-binding",
+		"peer-crl-crl-semantic"} {
+		candidates = append(candidates, struct{ stdout, stderr, category string }{
+			stderr:   "migration v2 PostgreSQL readiness is unavailable: stage=ping: class=" + class + "\n",
+			category: "migration-ping-" + class,
 		})
 	}
 	for _, candidate := range candidates {

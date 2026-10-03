@@ -322,6 +322,28 @@ func slice6MigrationFailureCategory(output []byte) string {
 		}
 		return "unknown"
 	}
+	const pingPrefix = "migration v2 PostgreSQL readiness is unavailable: stage=ping: class="
+	if bytes.HasPrefix(line, []byte(pingPrefix)) {
+		for _, class := range []string{
+			"caller-canceled", "caller-deadline", "before-connect", "exact-dial",
+			"tls-or-guard", "after-connect-sql", "server-rejected", "pool-acquire",
+			"ping-query", "unknown",
+		} {
+			if string(line) == pingPrefix+class {
+				return "migration-ping-" + class
+			}
+		}
+		for _, class := range []string{
+			"local-guard", "parent-canceled", "parent-deadline", "internal-deadline",
+			"agent-request-build", "agent-socket-peer", "agent-transport", "agent-response",
+			"guard-binding", "crl-semantic",
+		} {
+			if string(line) == pingPrefix+"peer-crl-"+class {
+				return "migration-ping-peer-crl-" + class
+			}
+		}
+		return "unknown"
+	}
 	for _, candidate := range []struct{ marker, category string }{
 		{"Phase 6 core startup Profile is unavailable", "core-profile"},
 		{"Phase 6 core startup configuration is unavailable", "core-config"},
