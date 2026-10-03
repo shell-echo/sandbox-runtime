@@ -2594,3 +2594,23 @@ with unchanged external Browser publication and unchanged selected external
 OCI inputs. E-only observer and independent fixture deltas must be rechecked
 against the new R; no cross-source exception is inferred. Candidate building
 and another real Vault issuer attempt require separate Sandbox review.
+
+### Slice 6 independent same-revision Guest fixture source pairing (2026-10-04)
+
+Sandbox reviewed a source-pairing exception for the new clean R candidate:
+the finite, build-tag-only Guest fixture may be built from a **different clean
+checkout at the exact same R commit and tree**. The original strict-descendant
+mode remains available only for a nonempty bounded diff in the existing
+fixture/gate/docs allowlist. An older ancestor, unrelated history, ordinary
+runtime or dependency drift, dirty tracked/untracked files, an incorrect
+HEAD/tree, a non-top-level or aliased checkout, and a failed Git command are
+all rejected. This is not an R/E compatibility assertion or a general
+production-fixture exception.
+
+Both fixture source files must retain the exact fixture-only build tag. With
+the locked Go 1.26.8 target and cleared `GOFLAGS`, ordinary `go list` must
+exclude them and tagged `go list` must include them. The actual Linux/arm64
+binary is separately built with the locked flags and must match an externally
+approved digest before even a no-issuer admission. This source-pair check
+does not authorize Vault issuance, bypass a Gate observation, or advance
+Phase 6 beyond **5/15**.

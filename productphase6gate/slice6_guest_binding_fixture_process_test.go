@@ -74,45 +74,133 @@ func TestSlice6GuestFixtureSourceDeltaClosedAllowlist(t *testing.T) {
 	}
 }
 
-// R4 runtime images may only be paired with an E fixture when Git proves
-// that no ordinary runtime or build input changed between the clean trees.
-// This is deliberately a narrow R4→E proof, not a generic compatibility bit.
-func slice6VerifyGuestFixtureSourceDelta(ctx context.Context, runtimeRoot, runtimeRevision,
+// A fixture may use the exact frozen runtime source from an independent clean
+// checkout, or a strict descendant whose only changes are fixture/gate/docs.
+// Neither mode grants compatibility to ordinary runtime or build-input drift.
+func slice6VerifyGuestFixtureSourcePair(ctx context.Context, runtimeRoot, runtimeRevision,
 	fixtureRoot, fixtureRevision string) error {
-	if runtimeRoot == fixtureRoot || runtimeRevision == fixtureRevision ||
+	if ctx == nil || ctx.Err() != nil || len(runtimeRevision) != 40 || !lowerHexSlice6(runtimeRevision) ||
+		len(fixtureRevision) != 40 || !lowerHexSlice6(fixtureRevision) ||
+		!absoluteCleanSlice6Path(runtimeRoot) || !absoluteCleanSlice6Path(fixtureRoot) {
+		return errors.New("fixture source pair is invalid")
+	}
+	runtimeCanonical, runtimeErr := filepath.EvalSymlinks(runtimeRoot)
+	fixtureCanonical, fixtureErr := filepath.EvalSymlinks(fixtureRoot)
+	runtimeInfo, runtimeStatErr := os.Lstat(runtimeRoot)
+	fixtureInfo, fixtureStatErr := os.Lstat(fixtureRoot)
+	if runtimeErr != nil || fixtureErr != nil || runtimeStatErr != nil || fixtureStatErr != nil ||
+		runtimeCanonical == fixtureCanonical || runtimeInfo == nil || fixtureInfo == nil ||
+		!runtimeInfo.IsDir() || !fixtureInfo.IsDir() ||
+		runtimeInfo.Mode()&os.ModeSymlink != 0 || fixtureInfo.Mode()&os.ModeSymlink != 0 ||
+		slice6FixtureSourceTopLevel(ctx, runtimeRoot, runtimeCanonical) != nil ||
+		slice6FixtureSourceTopLevel(ctx, fixtureRoot, fixtureCanonical) != nil ||
 		verifyCleanSlice6Source(ctx, runtimeRoot, runtimeRevision) != nil ||
 		verifyCleanSlice6Source(ctx, fixtureRoot, fixtureRevision) != nil {
-		return errors.New("separate clean R4 runtime and E fixture source unavailable")
+		return errors.New("separate clean runtime and fixture source unavailable")
 	}
-	ancestor := exec.CommandContext(ctx, "git", "merge-base", "--is-ancestor", runtimeRevision, fixtureRevision)
-	ancestor.Dir = fixtureRoot
-	if ancestor.Run() != nil {
-		return errors.New("fixture source does not descend from fixed runtime revision")
+	runtimeTree, runtimeTreeErr := slice6FixtureSourceTree(ctx, runtimeRoot)
+	fixtureTree, fixtureTreeErr := slice6FixtureSourceTree(ctx, fixtureRoot)
+	if runtimeTreeErr != nil || fixtureTreeErr != nil {
+		return errors.New("fixture source tree unavailable")
+	}
+	sameRevision := runtimeRevision == fixtureRevision
+	if sameRevision {
+		if runtimeTree != fixtureTree {
+			return errors.New("same-revision fixture source tree drift")
+		}
+	} else {
+		ancestor := exec.CommandContext(ctx, "git", "merge-base", "--is-ancestor", runtimeRevision, fixtureRevision)
+		ancestor.Dir = fixtureRoot
+		if ancestor.Run() != nil {
+			return errors.New("fixture source does not descend from fixed runtime revision")
+		}
 	}
 	diff := exec.CommandContext(ctx, "git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z",
 		runtimeRevision, fixtureRevision)
 	diff.Dir = fixtureRoot
 	paths, err := diff.Output()
-	if err != nil || len(paths) == 0 || len(paths) > 32768 || paths[len(paths)-1] != 0 {
-		return errors.New("R4 to E source difference unavailable or unbounded")
+	if err != nil || len(paths) > 32768 || sameRevision && len(paths) != 0 ||
+		!sameRevision && (len(paths) == 0 || paths[len(paths)-1] != 0) {
+		return errors.New("runtime to fixture source difference unavailable or unbounded")
 	}
-	for _, raw := range bytes.Split(paths[:len(paths)-1], []byte{0}) {
-		path := string(raw)
-		if !slice6AllowedGuestFixtureSourceDifference(path) {
-			return errors.New("ordinary runtime or dependency drift between R4 and E")
+	if !sameRevision {
+		for _, raw := range bytes.Split(paths[:len(paths)-1], []byte{0}) {
+			if !slice6AllowedGuestFixtureSourceDifference(string(raw)) {
+				return errors.New("ordinary runtime or dependency drift between runtime and fixture")
+			}
 		}
 	}
 	for _, name := range []string{"phase6_guest_binding_fixture.go", "phase6_guest_revoke_fixture.go"} {
 		path := filepath.Join(fixtureRoot, "cmd", name)
+		info, statErr := os.Lstat(path)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() < 40 || info.Size() > 1<<20 {
+			return errors.New("fixture build-tagged source unavailable")
+		}
 		file, err := os.Open(path)
 		if err != nil {
-			return errors.New("E fixture source unavailable")
+			return errors.New("fixture build-tagged source unavailable")
 		}
 		var prefix [40]byte
 		count, readErr := file.Read(prefix[:])
 		file.Close()
 		if readErr != nil && readErr != io.EOF || !bytes.HasPrefix(prefix[:count], []byte("//go:build phase6slice6fixture\n")) {
-			return errors.New("E fixture escaped fixture-only build tag")
+			return errors.New("fixture escaped fixture-only build tag")
+		}
+	}
+	return slice6VerifyGuestFixtureGoSelection(ctx, fixtureRoot)
+}
+
+func slice6FixtureSourceTopLevel(ctx context.Context, root, canonical string) error {
+	command := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+	command.Dir = root
+	output, err := command.Output()
+	if err != nil || strings.TrimSpace(string(output)) != canonical {
+		return errors.New("fixture source root is not the checkout top-level")
+	}
+	return nil
+}
+
+func slice6FixtureSourceTree(ctx context.Context, root string) (string, error) {
+	command := exec.CommandContext(ctx, "git", "rev-parse", "HEAD^{tree}")
+	command.Dir = root
+	output, err := command.Output()
+	tree := strings.TrimSpace(string(output))
+	if err != nil || len(tree) != 40 || !lowerHexSlice6(tree) {
+		return "", errors.New("fixture source tree unavailable")
+	}
+	return tree, nil
+}
+
+// Go file selection is checked with the same locked target architecture and
+// cleared GOFLAGS as the fixture build. This is separate from the later
+// byte-exact sealed-binary digest approval.
+func slice6VerifyGuestFixtureGoSelection(ctx context.Context, root string) error {
+	environment := append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=arm64",
+		"GOTOOLCHAIN=local", "GOFLAGS=", "GOPROXY=off", "GOSUMDB=off")
+	version := exec.CommandContext(ctx, "go", "env", "GOVERSION")
+	version.Dir, version.Env = root, environment
+	versionOutput, versionErr := version.Output()
+	if versionErr != nil || string(bytes.TrimSpace(versionOutput)) != "go1.26.8" {
+		return errors.New("fixture source selection requires locked Go")
+	}
+	for _, selection := range []struct {
+		arguments []string
+		want      bool
+	}{
+		{[]string{"list", "-mod=readonly", "-json", "./cmd"}, false},
+		{[]string{"list", "-tags=phase6slice6fixture", "-mod=readonly", "-json", "./cmd"}, true},
+	} {
+		command := exec.CommandContext(ctx, "go", selection.arguments...)
+		command.Dir, command.Env = root, environment
+		output, err := command.Output()
+		var listed struct{ GoFiles []string }
+		if err != nil || len(output) > 256<<10 || json.Unmarshal(output, &listed) != nil {
+			return errors.New("fixture Go file selection unavailable")
+		}
+		for _, name := range []string{"phase6_guest_binding_fixture.go", "phase6_guest_revoke_fixture.go"} {
+			if slices.Contains(listed.GoFiles, name) != selection.want {
+				return errors.New("fixture Go build-tag selection drift")
+			}
 		}
 	}
 	return nil
@@ -155,8 +243,8 @@ func (failure slice6GuestFixtureFailure) Error() string {
 
 func (failure slice6GuestFixtureFailure) Unwrap() error { return failure.cause }
 
-// Build the fixture from a separately clean immutable E source only after the
-// caller has proved the exact R4→E fixture/gate/doc-only delta. This build
+// Build the fixture from a separately clean immutable F source only after the
+// caller has proved the exact R/F pairing. This build
 // tag never enters the normal Product image or production command.
 func slice6BuildGuestBindingFixture(t *testing.T, ctx context.Context, sourceRoot, revision string) (slice6GuestBindingFixtureArtifact, error) {
 	t.Helper()

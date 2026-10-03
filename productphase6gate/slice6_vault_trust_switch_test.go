@@ -207,9 +207,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if os.Getenv(slice6GuestBindingFixtureEnv) == "1" {
 		fixtureRoot := os.Getenv(slice6GuestFixtureSourceRootEnv)
 		fixtureRevision := os.Getenv(slice6GuestFixtureSourceRevisionEnv)
-		if slice6VerifyGuestFixtureSourceDelta(ctx, static.sourceRoot, static.sourceRevision,
+		if slice6VerifyGuestFixtureSourcePair(ctx, static.sourceRoot, static.sourceRevision,
 			fixtureRoot, fixtureRevision) != nil {
-			t.Fatal("pre-issuer R4 runtime to E fixture-only source delta rejected")
+			t.Fatal("pre-issuer runtime to fixture source pair rejected")
 		}
 		fixture, fixtureErr := slice6BuildGuestBindingFixture(t, ctx,
 			fixtureRoot, fixtureRevision)

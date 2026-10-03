@@ -4553,3 +4553,45 @@ read-only/mode/digest checks and four run-owned Docker volumes passed exact
 cleanup in 115.15 seconds. This is a construction-only regression using old
 R4 inputs, not compatibility evidence for the changed runtime, a new
 candidate, connected Guest PID1, Vault issuance or live revocation.
+
+Follow-up 2026-10-04 (Sandbox-authorized **no-issuer** new R candidate): the
+corrected Guest v3/readiness code was committed as
+`884fde822d9d9bad2abc428b5722403148fafcfa`, tree
+`c87fb2d672ed1396e463769bdf67863eadbb9fb3`. All twelve local role
+targets and the Desktop runtime were rebuilt for `linux/arm64/v8` from this
+clean source; their local manifests/OCI archives are under
+`/Users/echo/.codex/phase6-slice6-candidates-R884fde8.6bEh1r` and
+`/Users/echo/.codex/phase6-desktop-R884fde8.MkmuXJ`. The new R static input
+admission passed in 58.22 seconds, image-store admission passed in 59.62
+seconds, and the no-issuer Product/Guest offline builder/configuration check
+passed in 118.23 seconds with exact four-volume cleanup. These checks reused
+the locked Browser publication and independently verified selected external
+archives; they did not start Guest PID1, issue Vault credentials or establish
+connected readiness. No image was published or signed for this result.
+
+Independent clean R and F worktrees at distinct canonical paths now both
+select that exact commit and tree. The E-only source-pair amendment accepts
+the same-revision/same-tree case or the pre-existing strictly allowlisted
+descendant case, rejecting dirty, aliased, wrong-revision, ancestor,
+unrelated and ordinary runtime/dependency changes. Both fixture files retain
+the exact build tag and locked Go target selection was exercised with and
+without the tag. The actual R/F no-issuer source-pair test passed. A fixture
+binary built from F under the locked Linux/arm64 flags was 39,645,657 bytes,
+mode 0555, SHA-256
+`3b581d68cebbf64c5bf27657a28b24bba19c534df60dbfc31104d3f4bff88af7`;
+its exact digest was externally approved by Sandbox **only for no-issuer
+Docker admission**. The independently
+built R terminal operator was 9,965,229 bytes, mode 0555, SHA-256
+`d9dd4bd4b47bf2a12e6e7cf88473e51522442f58e74224800c898a60763e2444`.
+With that approval, the source-pair check, locked fixture rebuild/digest
+readback, non-root networkless executable probe, and finite Docker
+create/inspect admission passed in 126.46 seconds. The fixture container
+remained unstarted; only a separate networkless `--help` executable probe
+ran, not a business fixture operation. The test cleaned its exact run-labeled
+containers, networks and volumes to zero. An additional read-only Docker inventory found
+no resources with the Slice 6 run-label key. No SQL fixture mutation, Guest or
+Product PID1, Vault issuer or live revocation was exercised. The E amendment's
+complete regression passed full repository race/shuffle, the complete tagged
+Slice 6 gate package race/shuffle, `go vet ./...`, Product Contract lock verification,
+and `git diff --check`. Its commit is separate from this offline result. No real
+issuer retry is authorized by these results; Phase 6 remains **5/15**.

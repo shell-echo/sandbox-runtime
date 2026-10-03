@@ -37,7 +37,7 @@ func slice6GuestFixtureAdmissionNoIssuer(t *testing.T, ctx context.Context, run 
 	}
 	fixtureRoot := os.Getenv(slice6GuestFixtureSourceRootEnv)
 	fixtureRevision := os.Getenv(slice6GuestFixtureSourceRevisionEnv)
-	if err := slice6VerifyGuestFixtureSourceDelta(ctx, static.sourceRoot, static.sourceRevision,
+	if err := slice6VerifyGuestFixtureSourcePair(ctx, static.sourceRoot, static.sourceRevision,
 		fixtureRoot, fixtureRevision); err != nil {
 		t.Fatal("no-issuer Guest fixture source pairing unavailable")
 	}
@@ -45,6 +45,10 @@ func slice6GuestFixtureAdmissionNoIssuer(t *testing.T, ctx context.Context, run 
 	if err != nil || slice6ApproveGuestBindingFixture(&artifact,
 		os.Getenv(slice6GuestBindingFixtureExpectedDigestEnv)) != nil {
 		t.Fatal("no-issuer Guest fixture artifact is not externally approved")
+	}
+	identity := phase6security.Slice6DesiredUIDGID()["product-runtime"]
+	if err := slice6ProbeGuestBindingFixtureMount(ctx, artifact, identity[0], identity[1]); err != nil {
+		t.Fatal("no-issuer Guest fixture non-root networkless probe failed")
 	}
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(composed.Profile) != nil ||
 		len(socketVolumes) != 74 || plan.ServiceNetwork.Name != "service-product-postgres" {
