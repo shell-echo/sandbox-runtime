@@ -721,3 +721,44 @@ Docker run or issuer, in 0.09 seconds under race. The tagged E package race
 suite, vet and diff check passed. This is pre-issuer component evidence only;
 the approved one-time real Vault→Product migration gate remains separate,
 and Phase 6 remains **5/15**.
+
+## R11 single real migration attempt: first pool ping failed (2026-10-03)
+
+The one Sandbox-approved real attempt used immutable runtime R
+`ac525c615bfb788607da716ce8736e7babfd8fd0` and separate gate E
+`fa77a5152dbf72513f677fc33cfc64861acc2beb`. Run
+`23facffa64d091eebe19885a0b450770` passed the pre-issuer source and
+complete-image preflight, then composed all eleven source-bound stages and
+launched real Vault, PostgreSQL and both controller PID1 processes. The
+Profile digest was
+`sha256:464dcaa1a321cbdb5a3a1dea56bba2e24560b5bf76e03503076de603cfba544c`;
+the mounted PostgreSQL leaf DER digest was
+`sha256:26f9d2a83ca5bb9601ec9aa1127dce972abaad234c720e6243d92342ee78e80e`.
+The two Product migration TLS agents reached their signer sockets after
+21.212 and 20.781 seconds respectively at the unchanged 50m CPU, 64 MiB,
+16-PID Profile limits, both under the 45-second socket-ready bound.
+
+The independent Product migration PID1 exited 1 with the strict closed
+category `migration-ping`, bounded output shape `one-lf/1-64`, and state
+`exited|1|false|0|started-set|finished-set|state-error-none`. The read-only
+same-database SQL observation was `ledger-absent-catalog-0-0-0-0`: no
+confirmed Product business DDL. This passed the previous
+`migration-connect-peer-bootstrap` failure point: construction returned a
+pool after initial peer and own-client guard refresh. It did **not** prove
+that a PostgreSQL network connection, TLS handshake, SCRAM authentication or
+`AfterConnect` privilege verification succeeded. The CLI deliberately wraps
+all `pgxpool.Ping` causes in the same generic line; the present evidence
+cannot assign a more specific cause. No same-issuer retry is authorized or
+performed.
+
+Both controller PID1 processes persisted quiesce receipts. The independent
+same-R terminal operator confirmed three certificate revocations, two token
+accessor revocations, a complete CRL and self-revocation under private plan
+digest `sha256:79da10de395af57acdfbb221e4388fcb2ae4b855840438b7b529f74ded1d615d`.
+PostgreSQL stopped before terminal cleanup. The test reported exact Docker
+cleanup and both captured Vault anonymous-volume IDs absent. A separate
+read-only post-run query found zero containers, networks and named volumes
+under the exact run label, both anonymous volume IDs absent, and no local
+`.sr-vault-trust-switch-*` directory. Physical deletion and revocation are
+reported separately. This is a failed component gate, not a migration or
+Slice 6 release pass; Phase 6 remains **5/15**.
