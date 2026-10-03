@@ -527,3 +527,168 @@ and `git diff --check` passed. The tagged Docker
 Alpine image; a separate query found no `p6-pki-` test containers or volumes.
 These are source, component and socket-isolation results, not a new
 source-bound Product migration or release observation.
+
+## R10 immutable inputs and pre-issuer correction (2026-10-03)
+
+R10 source `1b07a0ea6ccc7979475a414c88d6899a511424a8` was rebuilt as
+twelve clean-source role candidates plus one Desktop candidate. The separate
+source checkout and the candidate manifests were clean and bound to that same
+revision. The role/Desktop/Browser preflight passed; the four complete pinned
+external archives and five-name topology component also passed. These are
+static input checks, not a live migration result.
+
+Two subsequent invocations of the real Vault trust-switch test failed because
+of test-operator input errors, not an observed migration failure. The first
+used an older terminal-operator source checkout and failed before Docker or
+issuer creation. The second used a selected-manifest-only Vault OCI tar in
+place of its complete 171 MB archive. It started non-dev Vault, generated the
+general and broker CAs and signed the final Vault server/controller client
+leaves, then failed at source-bound profile composition with `external image
+archives`. It never launched the managed certificate controller or Product
+migration PID1. Docker run-labeled cleanup returned without error and a
+separate broad-name query found no remaining `sr-p6-` resources, but the
+anonymous-volume exact IDs were not retained through that early exit. The
+later terminal operator and bootstrap root revocation steps were skipped.
+Resource deletion is not revocation proof; no receipt is retroactively
+inferred for the deleted run.
+
+Sandbox approved one corrected R10 real run, conditional on a test-only
+pre-issuer static-input gate and early-exit cleanup check. The live harness
+now freezes source/root/revision, terminal source, role/Desktop/Browser
+candidate and all four external archive locations/digests once. It checks
+the clean source and fully reopens those immutable image inputs before
+allocating a Docker run or launching Vault; composition still independently
+reopens the same snapshot after issuer creation. A no-issuer regression
+rejects both a stale source revision and the selected-only Vault archive.
+The harness logs the exact run label, Vault container ID and both anonymous
+volume IDs and checks their absence in `t.Cleanup`, including failure paths
+that exit before the ordinary terminal block. Exact Docker deletion evidence
+remains distinct from Vault token/certificate revocation evidence. None of
+these harness changes require rebuilding R10 runtime candidates or advance
+Phase 6 beyond **5/15**.
+
+The one approved corrected-input R10 run used the complete Vault archive and
+the same R10 source for the terminal operator. Pre-issuer static verification
+passed before Docker allocation; all eleven source-bound composition stages,
+including final source reopening, passed. The real Vault, PostgreSQL PID1,
+both controller PID1 processes and Product migration material/PostgreSQL TLS
+agents started under their reviewed identities. The migration PID1 still
+exited 1 at `migration-connect-peer-bootstrap`, with output shape
+`one-lf/65-128` and read-only SQL summary
+`ledger-absent-catalog-0-0-0-0`. A connection or DDL remains unconfirmed.
+This same-stage result does not prove which part of the agent/controller/Vault
+peer-CRL pull failed or that the R10 permit repair caused the failure.
+
+Run label `ba3e519f47bf67e213b22d5dd3b36d99` and Vault container
+`4b4d2ecad9ad2038a6d6a3460c4bacd893694b8e1fe7fab3e8ecada9f38e494d`
+were observed. Both exact Vault anonymous-volume IDs were captured and their
+post-cleanup absence verified. The independent terminal operator confirmed
+three certificate serials, two token accessors, complete CRL and self-revoke
+under receipt plan
+`sha256:4246d9962b94a038e740be0509c61b261b6704ab99899254511773b15ff59b7a`.
+PostgreSQL stopped; exact Docker cleanup returned no error; a separate
+run-label query found zero containers, networks and named volumes. This is a
+failed migration component run, not a Slice 6 release manifest. The next
+diagnostic must change method and cannot simply repeat issuer-consuming R10.
+Phase 6 remains **5/15**.
+
+### No-new-issuer Product migration peer-CRL cost sample
+
+The next diagnostic used a complete synthetic final Profile, its full fixed
+peer-source inventory and owner `product-migration-job`; it did not reuse
+historical run credentials or reconstruct the removed run. A Linux/arm64
+test binary (`sha256:b88ed30f2a69437f35dbd2a241528841dc1b7bbe6130395b2a66b9bd202cc660`)
+was built from the R10 base plus benchmark source
+`sha256:d02b6f031fc3f5a14996b201f0b879c79e9dab686f9b0e727cde91438129fec5`.
+It ran in one-shot, non-root, cap-dropped, read-only, networkless containers
+using the locally pinned Alpine image. Exact test-labeled containers,
+networks and volumes were zero after the runs.
+
+Under the reviewed TLS-agent limit of 50m CPU, 64 MiB memory and 16 PIDs,
+one `IsSlice6FinalPostgresPeerEdge` call took 7.097 seconds and one
+`AuthorizedSourceID` call took 7.510 seconds. The explicit sequence of one
+owner-edge check plus two source authorizations (agent and controller in one
+50m container, so **not** the real two-container timing) took 21.798 seconds.
+The reviewer's controller limit of 200m CPU, 128 MiB and 32 PIDs gave a
+two-iteration `AuthorizedSourceID` mean of 1.145 seconds per call. Each
+authorization allocated about 59 MB cumulatively; this is **not** peak RSS.
+The agent's actual first-pull code invokes both owner-edge check and source
+authorization before its controller call, while `PeerCRLGuard` bounds the
+entire initial pull to 2 seconds. These synthetic component measurements show
+that the current repeated immutable-Profile validation is incompatible with
+that budget under the tested quota. They do not prove that it was the sole
+cause of the deleted R10 run's peer-bootstrap failure; no same-run inner
+timing/error-class receipt survived cleanup. A constructor-time validated,
+private fixed-binding lookup was proposed to Sandbox, with no CRL cache,
+policy relaxation, timeout increase or new issuer run authorized by this
+sample alone.
+
+### Successor private-index and closed failure-class checkpoint
+
+Sandbox approved a constructor-time private authority index and local-only
+closed peer-bootstrap failure classification in one successor runtime revision.
+Runtime R `ac525c615bfb788607da716ce8736e7babfd8fd0` (tree
+`756ebed251898520c4713e44e5f68c79f377d537`) freezes the changes but
+has not consumed a new issuer. A strict private-copy constructor validates the
+same typed Profile/source snapshot before compiling exact
+profile/mapping/edge/principal/direction/anchor/issuer/owner bindings. Agent
+and controller use independent indexes; the controller's signer purpose and
+PostgreSQL owner come from its separately copied policy. The old public
+`AuthorizedSourceID` still fully validates arbitrary mutable documents.
+Neither index caches CRL evidence or changes freshness, signature, nonce,
+Unix peer, deadline, Vault read, timeout or drain behavior. Direct controller
+tests reject ordinary-to-PostgreSQL, PostgreSQL-to-ordinary and wrong-owner
+reads before Vault authority; agent tests reject mapping/owner drift before
+controller. Complete-source equivalence covers nine PostgreSQL owners plus
+ordinary and DNS edges, mutation, duplicate/zero and concurrent lookup.
+
+The local diagnostic distinguishes `local-guard`, parent cancellation or
+deadline, internal deadline, agent request build, socket/peer, transport,
+generic agent error/unverifiable response, guard binding, CRL semantics and
+`unknown`. Parent context wins when both parent and internal timers fire.
+An agent error frame cannot be called a controller rejection. Error text stays
+generic, raw causes are not unwrapped, and only the migration one-shot CLI
+projects an exact stage/class line. The E-only bounded observer rejects
+unreviewed, multiline, duplicate and oversized output; producer/consumer
+source matching remains a freeze-time gate. Component fault injection covers
+the major branches and a long malicious error string.
+
+For constructor cost, an opt-in synthetic final-Profile/full-source fixture
+was exported without issuer use (`profile.json`
+`sha256:e5770cffabfe2575967b39f61016bf36ff72a91d13fd35011a57e09fbd944c9e`,
+`sources.json`
+`sha256:6848e55cae6b07ca535d03c1d0939463598cb9d8e74ca7cfe0f2b9976f7036ba`).
+The actual `NewPostgresControllerPeerCRLProvider` constructor was measured
+under the reviewed agent 50m CPU/64 MiB/16-PID quota, non-root, read-only,
+cap-dropped and networkless. Its first private-index version took 12.099
+seconds and 109.8 MB cumulative allocation (one iteration). Reusing the
+already validated private snapshot and the source validation's own
+PostgreSQL-owner projection reduced the same constructor to 6.690 seconds
+and 61.3 MB cumulative allocation (one iteration); the latter binary is
+`sha256:50be26c4c8a7d48e146076786be0a0fe734c19a6d012a71fad45647161684cb7`.
+The prior 50m compiled-lookup samples were 15.9–42.0 microseconds, two
+iterations each; a 200m controller compiled lookup was 9.3 microseconds,
+one iteration. These tiny samples are component observations, not an SLO.
+Allocation numbers are cumulative, not peak RSS. The measured constructor
+excludes initial file decode, CLI configuration and manager bootstrap, so it
+cannot alone prove the 45-second socket-ready startup gate. The 2-second
+Product migration peer-CRL first-pull budget is a different clock; the TLS
+agent's `manager.Bootstrap` has its own 15-second parent deadline, started
+after provider construction. None of these values was changed. Constructor
+drift rejection passed against the same fixture on the host. This opt-in test is skipped by the
+default `./...` suite unless
+`SANDBOX_RUNTIME_PEERCRL_CONSTRUCTOR_FIXTURE_DIR` points to that fixture; it
+was separately executed with fixed host test binary
+`sha256:85a2d4f0f9abcd124a8a14fc3636c344ec93447e1b563279321465cd9e84d401`
+using `-test.run '^TestPostgresControllerPeerCRLProviderConstructorRejectsDrift$'`
+and passed. The full repository `go test -race -shuffle=on -count=1 ./...`,
+`go vet ./...`, Product Contract lock and diff checks passed before R froze.
+The tagged Docker distinct-UID TLS-agent and two-agent certificate-controller
+tests passed with separate post-test zero container/volume queries. From a
+separate clean checkout of R, the E-only producer/strict-observer test passed
+under race. These are component and source-coherence checks, not a live
+issuer/SQL result. All labeled benchmark containers were
+independently queried absent after `--rm`; no Vault token, certificate,
+PostgreSQL DDL or Slice 6 release evidence was created. Phase 6 remains
+**5/15** pending source-bound real gate and strict
+manifest.

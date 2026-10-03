@@ -40,9 +40,28 @@ func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 	if err != nil || len(stages) != 13 {
 		t.Fatalf("frozen migration stage set is not closed: %v", err)
 	}
+	classSource, err := os.ReadFile(filepath.Join(root, "internal", "phase6tls", "peercrl_failure.go"))
+	if err != nil || len(classSource) == 0 || len(classSource) > 16<<10 {
+		t.Fatal("bounded frozen peer failure producer is unavailable")
+	}
+	classes, err := slice6FrozenPeerFailureClassSet(classSource)
+	if err != nil || len(classes) != 11 ||
+		strings.Count(string(source), "closedMigrationPeerClass(startup.peerClass)") != 1 {
+		t.Fatalf("frozen peer failure projection is not closed: %v", err)
+	}
+	for _, class := range classes {
+		line := "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=" + class
+		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != "migration-connect-peer-bootstrap-"+class {
+			t.Fatalf("frozen peer class %q is not observable: %q", class, got)
+		}
+	}
 	for _, stage := range stages {
 		line := "migration v2 PostgreSQL connection is unavailable: stage=" + stage
 		want := "migration-connect-" + stage
+		if stage == "peer-bootstrap" {
+			line += ": class=unknown"
+			want += "-unknown"
+		}
 		if got := slice6MigrationFailureCategory([]byte(line + "\n")); got != want {
 			t.Fatalf("frozen producer stage %q is not observable: %q", stage, got)
 		}
@@ -56,6 +75,8 @@ func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{
+		"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap",
+		"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=controller-denied",
 		"migration v2 PostgreSQL connection is unavailable: stage=unknown",
 		"migration v2 PostgreSQL connection is unavailable: stage=tls-client",
 		"migration v2 PostgreSQL connection is unavailable: stage=dsn-binding",
@@ -70,6 +91,42 @@ func TestSlice6FrozenMigrationStagesMatchBoundedObserver(t *testing.T) {
 	if got := slice6MigrationFailureCategory([]byte("migration v2 PostgreSQL connection is unavailable\n")); got != "migration-connect" {
 		t.Fatal("legacy generic migration category regressed")
 	}
+}
+
+func slice6FrozenPeerFailureClassSet(source []byte) ([]string, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), "peercrl_failure.go", source, 0)
+	if err != nil {
+		return nil, err
+	}
+	var classes []string
+	seen := make(map[string]bool)
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range group.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok || len(value.Names) != 1 || !strings.HasPrefix(value.Names[0].Name, "PeerCRL") ||
+				!strings.HasSuffix(value.Names[0].Name, "Failure") {
+				continue
+			}
+			if len(value.Values) != 1 {
+				return nil, errors.New("peer failure class has no exact literal")
+			}
+			literal, ok := value.Values[0].(*ast.BasicLit)
+			if !ok || literal.Kind != token.STRING {
+				return nil, errors.New("peer failure class is not a literal")
+			}
+			class, decodeErr := strconv.Unquote(literal.Value)
+			if decodeErr != nil || class == "" || len(class) > 32 || seen[class] {
+				return nil, errors.New("peer failure class is invalid")
+			}
+			seen[class] = true
+			classes = append(classes, class)
+		}
+	}
+	return classes, nil
 }
 
 func slice6FrozenMigrationStageSet(source []byte) ([]string, error) {
@@ -157,14 +214,23 @@ func slice6FrozenMigrationStageSet(source []byte) ([]string, error) {
 func TestSlice6MigrationStageUsesActualBoundedCapture(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	for _, candidate := range []struct {
+	candidates := []struct {
 		stdout, stderr, category string
 	}{
-		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n", "migration-connect-peer-bootstrap"},
-		{"extra stdout\n", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\n", "unknown"},
-		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap\nsecond line\n", "unknown"},
+		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\n", "migration-connect-peer-bootstrap-unknown"},
+		{"extra stdout\n", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\n", "unknown"},
+		{"", "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=unknown\nsecond line\n", "unknown"},
 		{"", "password=private\n", "unknown"},
-	} {
+	}
+	for _, class := range []string{"local-guard", "parent-canceled", "parent-deadline",
+		"internal-deadline", "agent-request-build", "agent-socket-peer", "agent-transport",
+		"agent-response", "guard-binding", "crl-semantic"} {
+		candidates = append(candidates, struct{ stdout, stderr, category string }{
+			stderr:   "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class=" + class + "\n",
+			category: "migration-connect-peer-bootstrap-" + class,
+		})
+	}
+	for _, candidate := range candidates {
 		command := exec.CommandContext(ctx, "sh", "-c", "printf '%s' \"$1\"; printf '%s' \"$2\" >&2; exit 1",
 			"stage-capture", candidate.stdout, candidate.stderr)
 		captured, err, overflow := slice6CaptureBounded(command, 16<<10, nil)
@@ -174,4 +240,12 @@ func TestSlice6MigrationStageUsesActualBoundedCapture(t *testing.T) {
 		}
 		clear(captured)
 	}
+	command := exec.CommandContext(ctx, "sh", "-c", "printf '%s' \"$1\" >&2; exit 1", "long-capture",
+		"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class="+strings.Repeat("x", 32768))
+	captured, err, overflow := slice6CaptureBounded(command, 16<<10, nil)
+	if err == nil || !overflow || slice6MigrationFailureCategory(captured) != "unknown" {
+		clear(captured)
+		t.Fatal("oversized diagnostic escaped strict bounded capture")
+	}
+	clear(captured)
 }

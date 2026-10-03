@@ -73,9 +73,9 @@ type slice6TerminalOperatorInput struct {
 
 // Build before signing the short-lived operator leaf or minting its token.
 // The executable is a separate clean-source artifact, not an Alpine layer.
-func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot string) (string, string) {
+func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot, sourceRoot, sourceRevision string) (string, string) {
 	t.Helper()
-	sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR_SOURCE_ROOT"))
+	sourceRoot, err := filepath.EvalSymlinks(sourceRoot)
 	if err != nil || !filepath.IsAbs(sourceRoot) {
 		t.Fatal("terminal operator requires independent clean source checkout")
 	}
@@ -83,9 +83,7 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot 
 	if err != nil || verifyCleanSlice6Source(ctx, sourceRoot, strings.TrimSpace(string(revisionDocument))) != nil {
 		t.Fatal("terminal operator source is not an immutable clean revision")
 	}
-	profileSource, profileErr := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
-	if profileErr != nil || sourceRoot != profileSource ||
-		strings.TrimSpace(string(revisionDocument)) != os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION") {
+	if strings.TrimSpace(string(revisionDocument)) != sourceRevision {
 		t.Fatal("terminal operator source must be the exact independently clean Profile/candidate source revision")
 	}
 	version, err := exec.CommandContext(ctx, "go", "env", "GOVERSION").Output()

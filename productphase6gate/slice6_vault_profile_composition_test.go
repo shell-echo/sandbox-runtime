@@ -37,7 +37,7 @@ type slice6VaultComposedInputs struct {
 }
 
 func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root, runID string,
-	general, broker slice6VaultRoot) slice6VaultComposedInputs {
+	general, broker slice6VaultRoot, static slice6VaultStaticInputs) slice6VaultComposedInputs {
 	t.Helper()
 	directory := filepath.Join(root, "composition")
 	if err := os.Mkdir(directory, 0o700); err != nil {
@@ -111,7 +111,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		sum := sha256.Sum256([]byte(domain + "\x00" + runID))
 		return "sha256:" + hex.EncodeToString(sum[:])
 	}
-	sourceRoot := os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT")
+	sourceRoot := static.sourceRoot
 	operatorBinary := filepath.Join(directory, "phase6-break-glass-operator")
 	build := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
 		"-ldflags=-buildid=", "-o", operatorBinary, "./cmd/phase6-break-glass-operator")
@@ -128,22 +128,13 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		Images: phase6profilebuilder.ImageDraftInputs{
 			RunID: runID, EnvironmentDigest: identityDigest("slice6-diagnostic-environment"),
 			PrincipalProfileDigest: identityDigest("slice6-diagnostic-principal-profile"),
-			SourceRoot:             sourceRoot, SourceRevision: os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_REVISION"),
-			RoleCandidateDirectory: os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_ROLE_CANDIDATES"),
-			DesktopCandidatePath:   os.Getenv("SANDBOX_RUNTIME_DESKTOP_CANDIDATE_MANIFEST"),
-			BrowserArchivePath:     os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_BROWSER_ARCHIVE"),
+			SourceRoot:             sourceRoot, SourceRevision: static.sourceRevision,
+			RoleCandidateDirectory: static.roleCandidates,
+			DesktopCandidatePath:   static.desktopCandidate,
+			BrowserArchivePath:     static.browserArchive,
 		},
-		TrustAnchors: anchors,
-		ExternalImages: phase6profilebuilder.ExternalImageInputs{SourceRoot: sourceRoot, Platform: "linux/arm64/v8",
-			Vault: phase6profilebuilder.ExternalArchive{Path: os.Getenv("SANDBOX_RUNTIME_PHASE6_VAULT_ARCHIVE"),
-				SelectedManifestDigest: os.Getenv("SANDBOX_RUNTIME_PHASE6_VAULT_SELECTED")},
-			Postgres: phase6profilebuilder.ExternalArchive{Path: os.Getenv("SANDBOX_RUNTIME_PHASE6_POSTGRES_ARCHIVE"),
-				SelectedManifestDigest: os.Getenv("SANDBOX_RUNTIME_PHASE6_POSTGRES_SELECTED")},
-			Valkey: phase6profilebuilder.ExternalArchive{Path: os.Getenv("SANDBOX_RUNTIME_PHASE6_VALKEY_ARCHIVE"),
-				SelectedManifestDigest: os.Getenv("SANDBOX_RUNTIME_PHASE6_VALKEY_SELECTED")},
-			DNS: phase6profilebuilder.ExternalArchive{Path: os.Getenv("SANDBOX_RUNTIME_PHASE6_DNS_ARCHIVE"),
-				SelectedManifestDigest: os.Getenv("SANDBOX_RUNTIME_PHASE6_DNS_SELECTED")},
-		},
+		TrustAnchors:             anchors,
+		ExternalImages:           static.external,
 		DNSClientCA:              phase6profilebuilder.DNSClientCAInput{BundlePath: brokerPath, IssuerID: broker.ID},
 		EgressKeys:               writeKeys(phase6security.Slice6DesiredEgressAuthorityNames()),
 		CertificateKeys:          writeKeys(phase6security.Slice6DesiredCertificateKeyIDs()),

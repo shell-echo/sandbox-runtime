@@ -309,6 +309,19 @@ func slice6MigrationFailureCategory(output []byte) string {
 	if bytes.ContainsAny(line, "\n\r\x00") {
 		return "unknown"
 	}
+	const peerPrefix = "migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap: class="
+	if bytes.HasPrefix(line, []byte(peerPrefix)) {
+		for _, class := range []string{
+			"local-guard", "parent-canceled", "parent-deadline", "internal-deadline",
+			"agent-request-build", "agent-socket-peer", "agent-transport", "agent-response",
+			"guard-binding", "crl-semantic", "unknown",
+		} {
+			if string(line) == peerPrefix+class {
+				return "migration-connect-peer-bootstrap-" + class
+			}
+		}
+		return "unknown"
+	}
 	for _, candidate := range []struct{ marker, category string }{
 		{"Phase 6 core startup Profile is unavailable", "core-profile"},
 		{"Phase 6 core startup configuration is unavailable", "core-config"},
@@ -332,7 +345,6 @@ func slice6MigrationFailureCategory(output []byte) string {
 		{"migration v2 PostgreSQL connection is unavailable: stage=signer-client", "migration-connect-signer-client"},
 		{"migration v2 PostgreSQL connection is unavailable: stage=peer-role", "migration-connect-peer-role"},
 		{"migration v2 PostgreSQL connection is unavailable: stage=peer-guard-construction", "migration-connect-peer-guard-construction"},
-		{"migration v2 PostgreSQL connection is unavailable: stage=peer-bootstrap", "migration-connect-peer-bootstrap"},
 		{"migration v2 PostgreSQL connection is unavailable: stage=TLS-client", "migration-connect-TLS-client"},
 		{"migration v2 PostgreSQL connection is unavailable: stage=material-resolve", "migration-connect-material-resolve"},
 		{"migration v2 PostgreSQL connection is unavailable: stage=DSN-binding", "migration-connect-DSN-binding"},

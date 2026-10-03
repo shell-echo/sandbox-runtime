@@ -75,8 +75,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	var migrationFailure error
 	var terminalFailure error
+	static := slice6VaultStaticInputsFromEnvironment()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
-		sourceRoot, err := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_SOURCE_ROOT"))
+		sourceRoot, err := filepath.EvalSymlinks(static.sourceRoot)
 		if err != nil {
 			t.Fatal("source-bound Vault composition needs a readable clean source checkout")
 		}
@@ -95,11 +96,17 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
+		if err := slice6VaultPreflightStaticInputs(ctx, static); err != nil {
+			t.Fatalf("pre-issuer static source and complete archive preflight: %v", err)
+		}
+		t.Log("pre-issuer source, role/Desktop/Browser candidates and four complete external OCI archives verified")
+	}
 	// Build the finite operator from its own clean source checkpoint before
 	// this test creates any run-private files or short-lived Vault authority.
 	var terminalBinaryPath, terminalBinaryDigest string
 	if os.Getenv(slice6TerminalOperatorEnv) == "1" {
-		operatorSource, sourceErr := filepath.EvalSymlinks(os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERATOR_SOURCE_ROOT"))
+		operatorSource, sourceErr := filepath.EvalSymlinks(static.terminalSourceRoot)
 		if sourceErr != nil || !filepath.IsAbs(operatorSource) {
 			t.Fatal("terminal operator source path unavailable")
 		}
@@ -114,17 +121,36 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				t.Errorf("remove exact private operator build directory: %v", removeErr)
 			}
 		})
-		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory)
+		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory,
+			static.terminalSourceRoot, static.sourceRevision)
 	}
 	run, err := newSlice6DockerRun()
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("exact Vault trust-switch Docker run label=%s", run.label())
+	var serverID string
+	var implicitVaultVolumes []string
 	t.Cleanup(func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 45*time.Second)
 		defer stop()
+		if serverID != "" && len(implicitVaultVolumes) != 2 {
+			volumes, err := slice6VaultImplicitVolumes(cleanup, run, serverID)
+			if err != nil {
+				t.Errorf("exact Vault anonymous-volume IDs unconfirmed before cleanup: %v", err)
+			} else {
+				implicitVaultVolumes = volumes
+			}
+		}
 		if err := run.cleanup(cleanup); err != nil {
 			t.Errorf("exact Vault trust-switch Docker cleanup: %v", err)
+		}
+		if serverID != "" {
+			if err := slice6CheckImplicitVolumesRemoved(cleanup, run, implicitVaultVolumes); err != nil {
+				t.Errorf("exact Vault anonymous-volume cleanup unconfirmed: %v", err)
+			} else {
+				t.Logf("exact Vault anonymous-volume IDs absent after cleanup: %v", implicitVaultVolumes)
+			}
 		}
 	})
 	if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
@@ -222,14 +248,15 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		"--mount", "type=bind,source="+configDir+",target=/vault/config,readonly",
 		"--mount", "type=bind,source="+dataDir+",target=/vault/data",
 		slice6VaultTestImage, "server")
-	serverID := strings.TrimSpace(string(server))
+	serverID = strings.TrimSpace(string(server))
 	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
 		t.Fatalf("non-dev persistent Vault start failed: %v", err)
 	}
-	implicitVaultVolumes, err := slice6VaultImplicitVolumes(ctx, run, serverID)
+	implicitVaultVolumes, err = slice6VaultImplicitVolumes(ctx, run, serverID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("exact Vault container=%s anonymous-volume IDs=%v", serverID, implicitVaultVolumes)
 	if _, err := run.docker(ctx, "network", "connect", "--ip", credentialVaultIP,
 		"--alias", "vault.sandbox-runtime.test", credentialCreated.NetworkID, serverID); err != nil {
 		t.Fatal("connect real Vault to exact credential-controller bridge")
@@ -402,7 +429,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		rootRevoked = true
 	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
-		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker)
+		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
 		var socketVolumes map[string]string
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string
