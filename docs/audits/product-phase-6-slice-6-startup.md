@@ -4314,14 +4314,18 @@ same-PostgreSQL ledger/grant readback, an initial durable Guest binding
 ready→SQL-edge-loss not-ready→same-PG recovered-ready readback. The Guest
 material agent and break-glass replay/recovery component paths were observed.
 The Guest runtime PID1 and live revoke/reconnect were **not** observed. The
-capacity monitor stopped run-owned writers with only its former generic reason,
-so the at-event host threshold, Docker threshold, sampling/exec failure or
-parent-context cause cannot be distinguished retrospectively. A later host
+capacity monitor stopped run-owned writers with only its former generic reason.
+At that revision, normal cleanup removed the observer **before** closing the
+monitor, so the monitor could also have fired during cleanup; the log has no
+causal timestamp proving it fired before the Guest branch ended. The at-event
+host threshold, Docker threshold, sampling/exec failure or parent-context
+cause cannot be distinguished retrospectively, and the capacity stop is
+**not** established as the cause of missing Guest evidence. A later host
 free-space read is not an at-event measurement. The quiesced certificate
 controller retained a sticky terminal credential-revoke failure; the separate
 v2 terminal operator confirmed three certs, two token accessors, complete CRL
 and self-revoke, but that receipt does not erase the controller error. Main
-Docker cleanup inherited the canceled business context and failed; its
+Docker cleanup was attempted with the canceled business context and failed; its
 registered fallback then removed exact run-labeled containers/networks/volumes
 to zero, and both recorded anonymous Vault volumes were absent. This diagnostic
 does not establish the 16-scenario release gate or a manifest.
@@ -4358,3 +4362,20 @@ Post-edit checks passed: `go test -race -shuffle=on -count=1 ./...`,
 `go vet ./...`, the focused `phase6slice6gate` race/shuffle test set,
 `go vet -tags=phase6slice6gate ./productphase6gate`, the fixed no-issuer
 Docker diagnostic, the Product Contract verifier and `git diff --check`.
+
+Sandbox review identified and approved one further E-only error-reporting
+connection before any new issuer run: the Vault gate's pre-issuer monitor
+admission and the direct no-issuer diagnostic admission call sites now print
+the monitor's already-closed, bounded failure rather than replacing it with a
+generic message. A deterministic admission test asserts the safe
+`stage=admission class=invalid-input` projection. This changes no admission
+decision, threshold, poll interval, sample timeout, stop action or runtime
+artifact. The historical `7113…` monitor alert may have been caused by the
+observer's removal during ordinary cleanup; its old log cannot order that
+alert against the missing Guest runtime evidence. The audit therefore does
+not assign the Guest failure to capacity. A further single real issuer run
+requires a clean, independently validated E-only successor revision and is
+not evidence already obtained here.
+The successor's focused tagged race/shuffle test, tagged vet, full repository
+race/shuffle/count-one test, ordinary vet, Product Contract verifier and diff
+check passed before it was selected for any further real issuer diagnostic.

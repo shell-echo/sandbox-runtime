@@ -336,7 +336,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 				stopMu.Unlock()
 			})
 		if monitorErr != nil {
-			t.Fatal("pre-issuer continuous capacity admission unavailable")
+			t.Fatalf("pre-issuer continuous capacity admission unavailable: %v", monitorErr)
 		}
 		closeCapacityMonitor = monitor.Close
 		defer monitor.Close()

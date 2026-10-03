@@ -708,6 +708,12 @@ func TestSlice6CapacityMonitorRejectsBadAdmissionAndClosesWithoutStop(t *testing
 		func(context.Context) (slice6CapacityObservation, error) { return slice6CapacityObservation{}, nil },
 		func(error) {}); err == nil {
 		t.Fatal("inadequate initial capacity admitted")
+	} else {
+		var failure *slice6CapacityFailure
+		if !errors.As(err, &failure) || failure.class != slice6CapacityInvalidInput ||
+			!strings.Contains(err.Error(), "stage=admission class=invalid-input") {
+			t.Fatalf("initial admission lost its safe classification: %v", err)
+		}
 	}
 	stopped := make(chan error, 1)
 	monitor, err := startSlice6CapacityMonitor(t.Context(), budget, time.Second, time.Second,
@@ -1010,7 +1016,7 @@ func TestSlice6RunningCapacityMonitorRealDockerDiagnostic(t *testing.T) {
 	monitor, err := startSlice6CapacityMonitor(ctx, slice6TopologyBudget(0), 500*time.Millisecond, 2*time.Second,
 		sample, func(reason error) { stopped <- reason })
 	if err != nil {
-		t.Fatal("real Docker capacity-monitor admission failed")
+		t.Fatalf("real Docker capacity-monitor admission failed: %v", err)
 	}
 	select {
 	case reason := <-stopped:
@@ -1071,7 +1077,7 @@ func TestSlice6CapacitySamplingPerturbationNoIssuerDocker(t *testing.T) {
 			stopResult <- slice6StopRunOwnedWritersContext(stopContext, run, observerID)
 		})
 	if err != nil {
-		t.Fatal("no-issuer capacity admission failed")
+		t.Fatalf("no-issuer capacity admission failed: %v", err)
 	}
 	defer monitor.Close()
 	select {
@@ -1228,7 +1234,7 @@ func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 			return sampleSlice6RunningCapacity(sampleContext, run, root, observerID)
 		}, func(error) { stopErr = slice6StopRunOwnedWritersWith(ctx, run.id, observerID, ops) })
 	if err != nil {
-		t.Fatal("capacity stop drill admission failed")
+		t.Fatalf("capacity stop drill admission failed: %v", err)
 	}
 	select {
 	case <-monitor.triggered:
