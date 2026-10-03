@@ -156,7 +156,8 @@ func loadGuestAuthority(ctx context.Context, cfg *config.DataPlaneProcessConfig)
 		}
 		if phase6security.VerifySlice6GuestStorageMounts(slice6Profile) != nil ||
 			verifyGuestV3DependencyShape(dependency) != nil || verifyGuestV3Toolchain(dependency.Toolchains[0]) != nil ||
-			verifyGuestV3Directories() != nil || verifyGuestV3StorageReceipts(dependency.StorageIdentity) != nil {
+			verifyGuestV3Directories() != nil || verifyGuestV3StorageReceipts(dependency.StorageIdentity) != nil ||
+			guestdevelopment.VerifyClosedState(dependency.StateRoot) != nil {
 			return GuestAuthority{}, errors.New("Guest storage or toolchain authority mismatch")
 		}
 		for _, input := range []struct{ filename, path string }{

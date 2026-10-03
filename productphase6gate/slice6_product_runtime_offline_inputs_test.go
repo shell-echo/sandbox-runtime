@@ -74,6 +74,25 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		PEM:         brokerPEM,
 		Certificate: brokerCertificate}
 	composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
+	// This is a construction-only Guest authority fixture. The ID is not a
+	// durable Product binding, and the old R3 shell digest is not future-R
+	// executable evidence.
+	guestInputs, guestInputErr := slice6BuildGuestRuntimeInputs(composed, run.id,
+		"gst-phase6-offline", 1,
+		"sha256:dd10691d81c84f0182f5af5f1583d566ddc0b9d0d9fc46b41b99b83c398306dd")
+	if guestInputErr != nil || len(guestInputs) != 6 {
+		t.Fatalf("offline Guest private startup input construction failed: count=%d err=%v", len(guestInputs), guestInputErr)
+	}
+	if _, err := slice6BuildGuestRuntimeInputs(composed, run.id, "gst-phase6-offline", 0,
+		"sha256:dd10691d81c84f0182f5af5f1583d566ddc0b9d0d9fc46b41b99b83c398306dd"); err == nil {
+		t.Fatal("Guest input construction accepted a missing Product binding generation")
+	}
+	guestArchive, err := phase6security.BuildSlice6PrivateConfigArchive(composed.Profile,
+		"guest-runtime", guestInputs)
+	if err != nil {
+		t.Fatal("Guest private config archive unavailable")
+	}
+	slice6PrepareOneControllerPrivateConfig(t, ctx, run, composed.Profile, "guest-runtime", guestArchive)
 	config, err := slice6BuildProductRuntimeConfig(composed)
 	if err != nil {
 		t.Fatalf("source-bound Product runtime config rejected: %v", err)
@@ -124,7 +143,7 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		}
 		want := 0
 		if resource == "volume" {
-			want = 3 // Product config, PG-agent config, Product PG signer socket.
+			want = 4 // Guest config, Product config, PG-agent config, Product PG signer socket.
 		}
 		if len(ids) != want {
 			t.Fatalf("offline Product %s resources=%d, want %d", resource, len(ids), want)
@@ -134,7 +153,7 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		t.Fatalf("offline Product input exact Docker cleanup failed: %v", err)
 	}
 	cleaned = true
-	t.Log("synthetic-CA source-bound Product runtime config and observer binary admitted; four Product private files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; three run-owned volumes cleaned to zero; no Vault issuance or Product PID1")
+	t.Log("synthetic-CA source-bound Guest/Product startup inputs admitted; six Guest private files, four Product files, two PG-agent files and one signer socket passed exact Docker mode/digest/read-only checks; four run-owned volumes cleaned to zero; no Vault issuance or Guest/Product PID1")
 }
 
 func slice6OfflinePriorProductRuntimeSockets(t *testing.T, profile phase6security.Profile) map[string]string {

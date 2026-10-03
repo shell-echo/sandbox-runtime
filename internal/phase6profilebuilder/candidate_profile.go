@@ -118,6 +118,10 @@ func buildSlice6CandidateProfile(draft KeyedStaticDraft) (phase6security.Profile
 	if err != nil {
 		return phase6security.Profile{}, ErrInvalidCandidateProfile
 	}
+	principals, err = phase6security.AttachSlice6GuestStorageMounts(principals)
+	if err != nil {
+		return phase6security.Profile{}, ErrInvalidCandidateProfile
+	}
 	principals, err = phase6security.AttachSlice6PrivateConfigMounts(principals)
 	if err != nil {
 		return phase6security.Profile{}, ErrInvalidCandidateProfile

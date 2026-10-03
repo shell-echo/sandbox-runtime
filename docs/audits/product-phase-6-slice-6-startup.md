@@ -4034,3 +4034,36 @@ storage. Docker named volumes have no hard quota; deep-path metadata/inode
 limits and full Development capacity remain Slice 8 gaps. No new issuer was
 run. The accepted R3 Product component result remains historical and Phase 6
 remains **5/15**.
+
+Follow-up 2026-10-03 (Guest persistent-state closure and offline startup):
+the source-bound final Profile composer was missing the new Guest storage
+attachment even though the desired Profile path had it; the offline
+composition test found this before any issuer use, and the composer now
+attaches the same closed mounts. Guest v3 now checks a closed state directory
+before material resolution: only the receipt and two 8192-byte-bounded
+materialization documents are permitted, no symlink or group-writable file
+is accepted, and unknown/oversized/corrupt/crash-temporary entries fail
+closed without deleting evidence. Focused race tests cover the negative cases
+and receipt survival across commit, rollback and restart. A synthetic-CA
+offline source-bound composition has passed; it is not a Vault-issued Guest
+certificate, Product-owned durable Guest binding, formal Guest PID1 or release
+scenario. The six-file Guest v3 private configuration was checked in a
+separate no-issuer Docker volume drill: the source-bound composition and
+real Guest private-config volume passed ownership, mode, exact file digest,
+read-only denial and four-volume exact cleanup in 119.61 seconds. The
+synthetic Guest ID/generation is construction input only, not Product-owned
+PostgreSQL binding evidence. The full repository race/shuffle suite, ordinary
+and tagged Slice 6 vet, Product Contract lock verifier and diff check passed
+after these source changes. Phase 6 remains **5/15**.
+
+Sandbox then approved an initial-binding-only local fixture plan, not an
+issuer run: one source/binary-digest-bound, finite, build-tag-only process
+may use the original Product runtime UID:GID, fixed PostgreSQL IP, runtime
+SQL role, material socket and remote TLS signer before Product PID1 starts.
+It must create/read back Workspace and Guest binding through the real Product
+Store, then close every dependency and release that endpoint before Product
+occupies it. A ready-slot seed is limited to exact run-owned tenant,
+workspace, slot and expected generation with one-row CAS/readback. No HBA,
+production API, migration/admin privilege or Guest private-key expansion is
+approved. This plan is not yet implemented or executed and cannot prove
+live binding revocation; its later mutation path needs separate review.

@@ -2434,6 +2434,13 @@ their exact paths, storage IDs, direction and logical candidate sizes of
 Guest starts; Docker name and label are checked before container creation so
 that Docker cannot silently create a missing volume. The one-shot preparation
 writer has no network, exits before Guest, and owns no runtime authority.
+The persistent state directory admits only its run/storage receipt and the
+two existing bounded materialization documents. Each document is read through
+a no-symlink descriptor with a size bound before allocation or JSON decoding;
+regular-file type, Guest ownership and mode 0600 are required. An unknown
+entry, oversized/corrupt document or crash-leftover atomic temporary file
+fails startup and is retained for diagnosis, never silently reset to empty.
+Successful commit, rollback and restart preserve the run/storage receipt.
 
 `/outputs` and `/tmp` are separate 8 MiB tmpfs mounts, mode 0700, Guest-owned,
 `noexec,nosuid,nodev`; their combined 16 MiB is inside the existing 128 MiB
@@ -2458,3 +2465,25 @@ low headroom. A no-secret Docker mount probe is component evidence only;
 it does not establish Guest PID1, Product–Guest authentication, the 16-scenario
 gate, an immutable evidence manifest or production readiness. Phase 6 remains
 **5/15**.
+
+The local gate may seed one initial Product-owned Guest binding only through a
+separately digest-bound, finite, build-tag-only fixture process before formal
+Product PID1 occupies its PostgreSQL source endpoint. The fixture borrows the
+existing `product-runtime` UID:GID, fixed IP, runtime SQL role, material-agent
+socket, PostgreSQL TLS signer, read-only Profile/peer-CRL/trust inputs and
+strict v3 PostgreSQL connection path **sequentially**, never concurrently
+with Product. It must use the real Product Store and GuestService to create
+and read back the run-owned Workspace/binding/event/audit. A narrowly scoped
+ready-slot seed may update only the exact run-owned tenant/workspace/slot and
+expected generation with one-row CAS and readback; it is not Provider
+provisioning evidence. The Guest public key must be the one corresponding to
+the actual run-owned Vault Guest signing key; that private key never enters
+the fixture. The fixture exits, closes its pool/guards/material registry and
+releases its endpoint before formal Product starts. It has no migration/admin
+SQL power, public test route, extra HBA source, new persistent volume or
+production command. Failure forbids Product startup and enters independent
+cleanup. This exception proves at most initial durable provisioning, not live
+binding revocation while Product and Guest are running; that later mutation
+path requires separate review. Removing the build-tag-only fixture/task and
+discarding the run-owned database rolls back this local-gate exception without
+an online schema or permission change.

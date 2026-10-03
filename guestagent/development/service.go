@@ -16,8 +16,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/shell-echo/sandbox-runtime/guestagent"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -37,6 +39,8 @@ const (
 	backupName              = ".sandbox-runtime-backup"
 	markerName              = "materialization.json"
 	transactionName         = "materialization-transaction.json"
+	maxStateDocumentBytes   = 8192
+	maxClosedStateBytes     = 1 << 20
 )
 
 var (
@@ -669,11 +673,27 @@ func removeTransaction(stateRoot string) error {
 }
 
 func readStateDocument(stateRoot, name string, value any) (bool, error) {
-	document, err := os.ReadFile(filepath.Join(stateRoot, name))
-	if errors.Is(err, os.ErrNotExist) {
+	fd, err := unix.Open(filepath.Join(stateRoot, name), unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, syscall.ENOENT) {
 		return false, nil
 	}
-	if err != nil || len(document) == 0 || len(document) > 8192 {
+	if err != nil {
+		return false, ErrIntegrity
+	}
+	file := os.NewFile(uintptr(fd), name)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return false, ErrIntegrity
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 ||
+		stat.Uid != uint32(os.Getuid()) || stat.Gid != uint32(os.Getgid()) ||
+		info.Size() < 1 || info.Size() > maxStateDocumentBytes {
+		return false, ErrIntegrity
+	}
+	document, err := io.ReadAll(io.LimitReader(file, maxStateDocumentBytes+1))
+	if err != nil || len(document) == 0 || len(document) > maxStateDocumentBytes {
 		return false, ErrIntegrity
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(document)))
@@ -684,10 +704,65 @@ func readStateDocument(stateRoot, name string, value any) (bool, error) {
 	return true, nil
 }
 
+// VerifyClosedState is required for the Phase 6 persistent Guest volume.
+// A crash-leftover temporary file or unknown entry is retained for operator
+// diagnosis and fails startup; recovery never treats corrupt state as empty.
+// The receipt content is validated by the calling role against the run ID.
+func VerifyClosedState(stateRoot string) error {
+	directory, err := os.Open(stateRoot)
+	if err != nil {
+		return ErrIntegrity
+	}
+	defer directory.Close()
+	names, err := directory.Readdirnames(4)
+	if err != nil && !errors.Is(err, io.EOF) || len(names) < 1 || len(names) > 3 {
+		return ErrIntegrity
+	}
+	seen := make(map[string]bool, len(names))
+	var total int64
+	for _, name := range names {
+		limit := int64(maxStateDocumentBytes)
+		switch name {
+		case StorageIdentityFileName:
+			limit = 256
+		case markerName, transactionName:
+		default:
+			return ErrIntegrity
+		}
+		if seen[name] {
+			return ErrIntegrity
+		}
+		seen[name] = true
+		info, err := os.Lstat(filepath.Join(stateRoot, name))
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 ||
+			info.Size() < 1 || info.Size() > limit {
+			return ErrIntegrity
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != uint32(os.Getuid()) || stat.Gid != uint32(os.Getgid()) {
+			return ErrIntegrity
+		}
+		total += info.Size()
+		if total > maxClosedStateBytes {
+			return ErrIntegrity
+		}
+	}
+	if !seen[StorageIdentityFileName] {
+		return ErrIntegrity
+	}
+	if _, err := readMarker(stateRoot); err != nil {
+		return ErrIntegrity
+	}
+	if _, err := readTransaction(stateRoot); err != nil {
+		return ErrIntegrity
+	}
+	return nil
+}
+
 func writeStateDocument(stateRoot, targetName string, value any) error {
 	document, err := json.Marshal(value)
-	if err != nil {
-		return err
+	if err != nil || len(document) < 1 || len(document) > maxStateDocumentBytes {
+		return ErrIntegrity
 	}
 	temporary, err := os.CreateTemp(stateRoot, ".materialization-*.tmp")
 	if err != nil {

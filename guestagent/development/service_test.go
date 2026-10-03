@@ -17,6 +17,10 @@ func TestServiceMaterializesExactWorkspaceAndReportsHealth(t *testing.T) {
 	if err := os.WriteFile(identity, []byte("operator-owned-volume"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	stateIdentity := filepath.Join(state, StorageIdentityFileName)
+	if err := os.WriteFile(stateIdentity, []byte("operator-owned-state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(workspace, "old.txt"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -49,12 +53,18 @@ func TestServiceMaterializesExactWorkspaceAndReportsHealth(t *testing.T) {
 	if got, err := os.ReadFile(identity); err != nil || string(got) != "operator-owned-volume" {
 		t.Fatalf("operator volume identity was replaced by workspace commit: %v", err)
 	}
+	if got, err := os.ReadFile(stateIdentity); err != nil || string(got) != "operator-owned-state" {
+		t.Fatalf("operator state identity was replaced by workspace commit: %v", err)
+	}
 	document := healthJSON(t, health)
 	if strings.Contains(document, workspace) || strings.Contains(document, state) || strings.Contains(document, "credential") {
 		t.Fatalf("health exposed private coordinates: %s", document)
 	}
 
 	reconstructed := testService(t, workspace, state)
+	if err := VerifyClosedState(state); err != nil {
+		t.Fatalf("restart lost closed persistent state: %v", err)
+	}
 	recovered, err := reconstructed.Health(context.Background())
 	if err != nil || !recovered.Ready || recovered.WorkspaceRevision != request.WorkspaceRevision {
 		t.Fatalf("reconstructed health=%+v err=%v", recovered, err)
@@ -97,6 +107,10 @@ func TestServiceIntegrityFailureAndRollbackPreserveWorkspace(t *testing.T) {
 
 func TestServiceRollsBackCommittedWorkspaceBeforeFinalize(t *testing.T) {
 	workspace, state := testRoots(t)
+	stateIdentity := filepath.Join(state, StorageIdentityFileName)
+	if err := os.WriteFile(stateIdentity, []byte("operator-owned-state"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(workspace, "keep.txt"), []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +139,12 @@ func TestServiceRollsBackCommittedWorkspaceBeforeFinalize(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace, "new.txt")); !os.IsNotExist(err) {
 		t.Fatalf("committed replacement survived rollback: %v", err)
 	}
+	if got, err := os.ReadFile(stateIdentity); err != nil || string(got) != "operator-owned-state" {
+		t.Fatalf("operator state identity was replaced by rollback: %v", err)
+	}
+	if err := VerifyClosedState(state); err != nil {
+		t.Fatalf("rollback lost closed persistent state: %v", err)
+	}
 	health, err := service.Health(context.Background())
 	if err != nil || health.Ready {
 		t.Fatalf("health=%+v err=%v", health, err)
@@ -150,6 +170,75 @@ func TestServiceRecoversInterruptedSwapFromBackup(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(workspace, "original.txt"))
 	if err != nil || string(got) != "original" {
 		t.Fatalf("recovered content=%q err=%v", got, err)
+	}
+}
+
+func TestVerifyClosedPersistentStateRejectsCorruptionAndCrashResidue(t *testing.T) {
+	newState := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, StorageIdentityFileName), []byte("receipt"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeMarker(root, marker{StartupID: "dev-state", TemplateRevision: digestOf("template"),
+			WorkspaceRevision: "rev-state", ManifestDigest: digestOf("manifest")}); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeTransaction(root, transaction{StartupID: "dev-state"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyClosedState(root); err != nil {
+			t.Fatalf("valid closed state rejected: %v", err)
+		}
+		return root
+	}
+	for name, mutate := range map[string]func(*testing.T, string){
+		"oversized": func(t *testing.T, root string) {
+			if err := os.WriteFile(filepath.Join(root, markerName), []byte(strings.Repeat("x", maxStateDocumentBytes+1)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"corrupt": func(t *testing.T, root string) {
+			if err := os.WriteFile(filepath.Join(root, markerName), []byte("not-json"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"symlink": func(t *testing.T, root string) {
+			if err := os.Remove(filepath.Join(root, markerName)); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(root, transactionName), filepath.Join(root, markerName)); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"unknown": func(t *testing.T, root string) {
+			if err := os.WriteFile(filepath.Join(root, "unknown.json"), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"crash temporary": func(t *testing.T, root string) {
+			if err := os.WriteFile(filepath.Join(root, ".materialization-crash.tmp"), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"missing receipt": func(t *testing.T, root string) {
+			if err := os.Remove(filepath.Join(root, StorageIdentityFileName)); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"writable mode": func(t *testing.T, root string) {
+			if err := os.Chmod(filepath.Join(root, transactionName), 0o640); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := newState(t)
+			mutate(t, root)
+			if VerifyClosedState(root) == nil {
+				t.Fatal("corrupt or unreviewed Guest persistent state accepted")
+			}
+		})
 	}
 }
 
