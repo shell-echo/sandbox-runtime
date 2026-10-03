@@ -3912,3 +3912,36 @@ service process, delivery/consume chain and final gate still need a rebuilt
 clean-source candidate and live observations. The complete repository
 race/shuffle suite, ordinary vet, Product Contract lock verifier and diff
 check passed after the code correction. Phase 6 remains **5/15**.
+
+Checkpoint 2026-10-03 (Product PID1 pre-issuer image admission recovery):
+the first approved Product runtime component attempt, run label
+`9aa04d490f668b3d577befb7b01757b6`, stopped at Docker exit 125 before
+Vault startup, issuer allocation or Product PID1. The pinned Vault
+`repo@sha256` reference was absent from the local Docker store despite valid
+source-bound OCI archives. The run-labeled container/network/volume inventory
+was zero afterward, but the harness had copied Docker error text into its
+container-ID variable; it therefore could not produce an exact historical
+anonymous-volume receipt. That missing receipt is **not** reconstructed as a
+successful cleanup proof. This attempt supplies no Product/SQL/fault evidence.
+
+The repaired pre-issuer path checks every fixed external, local-role,
+Desktop, Browser, Alpine-carrier and network-probe Docker reference after
+source/archive verification and before any live network or issuer material.
+Docker Hub's canonical repository-digest spelling is normalized without
+changing the digest or accepting a different repository. Vault now uses
+`create`, validates its exact name/run label and two anonymous-volume IDs,
+then `start`; an invalid/lost create response is recovered only by exact
+name **and** run label, and an unresolved create remains a failed/unknown
+cleanup result. Preflight rejection before `create` has no anonymous-volume
+assertion; completed creates retain the strict two-volume removal proof.
+The missing fixed external and network-probe caches were restored only by
+their pinned digests. A no-secret real Docker start-failure drill and the
+existing two-volume cleanup drill passed without starting Vault or an issuer.
+The four external images' stopped-container selection tests rechecked the
+index, selected arm64 manifest and OCI config against the complete private
+archives. This is cache/preflight/component evidence only. A new Product
+runtime issuer-consuming run needs separate Sandbox authorization. The
+source-bound no-issuer full image-store admission passed for all 12 local
+role targets, Desktop, Browser, four external images and two auxiliary
+images after cache restoration; it did not create a container. Phase 6
+remains **5/15**.

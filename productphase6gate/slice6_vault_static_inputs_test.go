@@ -45,29 +45,34 @@ func slice6VaultStaticInputsFromEnvironment() slice6VaultStaticInputs {
 }
 
 func slice6VaultPreflightStaticInputs(ctx context.Context, input slice6VaultStaticInputs) error {
+	_, _, err := slice6VaultLoadStaticInputs(ctx, input)
+	return err
+}
+
+func slice6VaultLoadStaticInputs(ctx context.Context, input slice6VaultStaticInputs) (phase6profilebuilder.ExternalImageSupply, phase6profilebuilder.ImageSupply, error) {
 	if ctx == nil || ctx.Err() != nil || !absoluteCleanSlice6Path(input.sourceRoot) ||
 		!absoluteCleanSlice6Path(input.terminalSourceRoot) ||
 		len(input.sourceRevision) != 40 || !lowerHexSlice6(input.sourceRevision) {
-		return errors.New("Vault source-bound static inputs unavailable")
+		return phase6profilebuilder.ExternalImageSupply{}, phase6profilebuilder.ImageSupply{}, errors.New("Vault source-bound static inputs unavailable")
 	}
 	source, sourceErr := filepath.EvalSymlinks(input.sourceRoot)
 	terminal, terminalErr := filepath.EvalSymlinks(input.terminalSourceRoot)
 	if sourceErr != nil || terminalErr != nil || source != terminal ||
 		verifyCleanSlice6Source(ctx, source, input.sourceRevision) != nil {
-		return errors.New("Vault and terminal operator must use the same clean source revision")
+		return phase6profilebuilder.ExternalImageSupply{}, phase6profilebuilder.ImageSupply{}, errors.New("Vault and terminal operator must use the same clean source revision")
 	}
 	external, err := phase6profilebuilder.LoadExternalImageSupply(ctx, input.external)
 	if err != nil || len(external.Bindings()) != len(phase6security.Slice6DesiredExternalServiceNames()) ||
 		external.VerifySources(ctx) != nil {
-		return errors.New("Vault complete external image archives unavailable")
+		return phase6profilebuilder.ExternalImageSupply{}, phase6profilebuilder.ImageSupply{}, errors.New("Vault complete external image archives unavailable")
 	}
 	images, err := phase6profilebuilder.LoadImageSupply(ctx, input.sourceRoot, input.sourceRevision,
 		input.roleCandidates, input.desktopCandidate, input.browserArchive)
 	if err != nil || len(images.LocalRoleTargets) != len(phase6security.Slice6DesiredLocalRoleTargets()) ||
 		images.Platform != input.external.Platform || images.VerifySources(ctx) != nil {
-		return errors.New("Vault source-bound role, Desktop or Browser image supply unavailable")
+		return phase6profilebuilder.ExternalImageSupply{}, phase6profilebuilder.ImageSupply{}, errors.New("Vault source-bound role, Desktop or Browser image supply unavailable")
 	}
-	return nil
+	return external, images, nil
 }
 
 // Exercise the exact live gate's complete static admission without creating
@@ -82,6 +87,22 @@ func TestSlice6VaultPreIssuerStaticInputAcceptance(t *testing.T) {
 		t.Fatalf("complete pre-issuer static admission unavailable: %v", err)
 	}
 	t.Log("clean source, terminal source, twelve roles, Desktop, Browser and four complete external OCI archives admitted without Docker run or issuer")
+}
+
+func TestSlice6VaultPreIssuerImageStoreAdmission(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_IMAGE_STORE_ADMISSION") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_IMAGE_STORE_ADMISSION=1 for fixed Docker image inventory")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Minute)
+	defer cancel()
+	external, images, err := slice6VaultLoadStaticInputs(ctx, slice6VaultStaticInputsFromEnvironment())
+	if err != nil {
+		t.Fatalf("complete source-bound preissuer inputs: %v", err)
+	}
+	if err := slice6VaultPreflightAllStoredImages(ctx, external, images); err != nil {
+		t.Fatalf("fixed Docker image inventory before create: %v", err)
+	}
+	t.Log("fixed external, role, Desktop, Browser, Alpine and network-probe Docker image references admitted without create or issuer")
 }
 
 // This uses the same admission function as the live gate, but never allocates

@@ -116,10 +116,14 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
-		if err := slice6VaultPreflightStaticInputs(ctx, static); err != nil {
+		external, images, err := slice6VaultLoadStaticInputs(ctx, static)
+		if err != nil {
 			t.Fatalf("pre-issuer static source and complete archive preflight: %v", err)
 		}
-		t.Log("pre-issuer source, role/Desktop/Browser candidates and four complete external OCI archives verified")
+		if err := slice6VaultPreflightAllStoredImages(ctx, external, images); err != nil {
+			t.Fatalf("pre-issuer fixed Docker image inventory: %v", err)
+		}
+		t.Log("pre-issuer source, role/Desktop/Browser candidates, four complete external OCI archives and all fixed Docker launch references verified")
 	}
 	var productRuntimeObserver slice6ProductRuntimeObserver
 	if os.Getenv(slice6ProductRuntimeProcessEnv) == "1" {
@@ -169,10 +173,19 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	t.Logf("exact Vault trust-switch Docker run label=%s", run.label())
 	var serverID string
+	var vaultCreateAttempted bool
 	var implicitVaultVolumes []string
 	t.Cleanup(func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 45*time.Second)
 		defer stop()
+		if vaultCreateAttempted && serverID == "" {
+			recovered, err := slice6RecoverVaultContainer(cleanup, run, "sr-p6-vault-switch-"+run.id)
+			if err != nil || recovered == "" {
+				t.Errorf("exact Vault create outcome and anonymous-volume ownership remain unknown: %v", err)
+			} else {
+				serverID = recovered
+			}
+		}
 		if serverID != "" && len(implicitVaultVolumes) != 2 {
 			volumes, err := slice6VaultImplicitVolumes(cleanup, run, serverID)
 			if err != nil {
@@ -279,7 +292,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	user := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
-	server, err := run.docker(ctx, "run", "-d", "--pull=never", "--name", "sr-p6-vault-switch-"+run.id,
+	vaultName := "sr-p6-vault-switch-" + run.id
+	vaultCreateAttempted = true
+	server, createErr := run.docker(ctx, "create", "--pull=never", "--name", vaultName,
 		"--label", run.label(), "--network", created.NetworkID, "--ip", vaultIP,
 		"--network-alias", "vault.sandbox-runtime.test", "--user", user,
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
@@ -287,15 +302,21 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		"--mount", "type=bind,source="+configDir+",target=/vault/config,readonly",
 		"--mount", "type=bind,source="+dataDir+",target=/vault/data",
 		slice6VaultTestImage, "server")
-	serverID = strings.TrimSpace(string(server))
-	if err != nil || len(serverID) != 64 || !lowerHexSlice6(serverID) {
-		t.Fatalf("non-dev persistent Vault start failed: %v", err)
+	candidateID := slice6CanonicalCreatedID(server, createErr)
+	recovered, recoverErr := slice6RecoverVaultContainer(ctx, run, vaultName)
+	if recoverErr != nil || recovered == "" || (candidateID != "" && candidateID != recovered) {
+		t.Fatalf("non-dev persistent Vault create outcome unresolved: create=%v recovery=%v", createErr, recoverErr)
 	}
+	serverID = recovered
 	implicitVaultVolumes, err = slice6VaultImplicitVolumes(ctx, run, serverID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("exact Vault container=%s anonymous-volume IDs=%v", serverID, implicitVaultVolumes)
+	started, startErr := run.docker(ctx, "start", serverID)
+	if startErr != nil || strings.TrimSpace(string(started)) != serverID {
+		t.Fatalf("non-dev persistent Vault start failed after exact create receipt: %v", startErr)
+	}
 	if _, err := run.docker(ctx, "network", "connect", "--ip", credentialVaultIP,
 		"--alias", "vault.sandbox-runtime.test", credentialCreated.NetworkID, serverID); err != nil {
 		t.Fatal("connect real Vault to exact credential-controller bridge")

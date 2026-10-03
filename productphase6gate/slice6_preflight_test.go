@@ -265,8 +265,17 @@ func verifyLoadedSlice6Image(principal phase6security.Principal, document []byte
 	if json.Unmarshal(document, &images) != nil || len(images) != 1 || images[0].ID != principal.ImageDigest || images[0].OS != "linux" {
 		return errors.New("Slice 6 Docker store identity differs from profile")
 	}
-	if principal.ImageLocation == "registry" && !slices.Contains(images[0].RepoDigests, principal.ImageReference) {
-		return errors.New("Slice 6 registry image reference is absent from Docker store")
+	if principal.ImageLocation == "registry" {
+		matched := false
+		for _, digest := range images[0].RepoDigests {
+			if slice6SameCanonicalRepoDigest(principal.ImageReference, digest) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return errors.New("Slice 6 registry image reference is absent from Docker store")
+		}
 	}
 	platform := "linux/" + images[0].Architecture
 	if images[0].Variant != "" {

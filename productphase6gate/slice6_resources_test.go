@@ -115,6 +115,61 @@ func (run slice6DockerRun) cleanup(ctx context.Context) error {
 	return errors.Join(failures...)
 }
 
+// Docker create can succeed even when its response is lost. Only an exact
+// name plus the unpredictable run label may recover that container; absence
+// after an ambiguous create is not proof that no anonymous volume was made.
+func slice6RecoverVaultContainer(ctx context.Context, run slice6DockerRun, name string) (string, error) {
+	return slice6RecoverVaultContainerWithDocker(ctx, run, name, run.docker)
+}
+
+func slice6CanonicalCreatedID(output []byte, createErr error) string {
+	if createErr != nil {
+		return ""
+	}
+	id := strings.TrimSpace(string(output))
+	if len(id) != 64 || !lowerHexSlice6(id) {
+		return ""
+	}
+	return id
+}
+
+func slice6RecoverVaultContainerWithDocker(ctx context.Context, run slice6DockerRun, name string,
+	docker func(context.Context, ...string) ([]byte, error)) (string, error) {
+	if len(run.id) != 32 || !lowerHexSlice6(run.id) || name != "sr-p6-vault-switch-"+run.id {
+		return "", errors.New("invalid exact Vault recovery identity")
+	}
+	output, err := docker(ctx, "ps", "-aq", "--no-trunc", "--filter", "name=^/"+name+"$",
+		"--filter", "label="+run.label())
+	if err != nil {
+		return "", errors.New("exact Vault create outcome cannot be queried")
+	}
+	ids := strings.Fields(string(output))
+	if len(ids) > 1 {
+		return "", errors.New("ambiguous exact Vault create outcome")
+	}
+	if len(ids) == 0 {
+		return "", nil
+	}
+	id := ids[0]
+	if len(id) != 64 || !lowerHexSlice6(id) {
+		return "", errors.New("invalid recovered Vault container ID")
+	}
+	inspect, err := docker(ctx, "inspect", id)
+	var containers []struct {
+		ID     string `json:"Id"`
+		Name   string `json:"Name"`
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"Config"`
+	}
+	if err != nil || json.Unmarshal(inspect, &containers) != nil || len(containers) != 1 ||
+		containers[0].ID != id || containers[0].Name != "/"+name ||
+		containers[0].Config.Labels[slice6RunLabel] != run.id {
+		return "", errors.New("recovered Vault container identity mismatch")
+	}
+	return id, nil
+}
+
 func slice6VaultImplicitVolumes(ctx context.Context, run slice6DockerRun, containerID string) ([]string, error) {
 	if len(containerID) != 64 || !lowerHexSlice6(containerID) {
 		return nil, errors.New("invalid exact Vault container identity")
@@ -204,6 +259,57 @@ func TestPhase6Slice6AnonymousVolumeCleanup(t *testing.T) {
 	volumes, err := slice6VaultImplicitVolumes(ctx, run, id)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := run.cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := slice6CheckImplicitVolumesRemoved(ctx, run, volumes); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// This is a no-secret failure drill: Docker creates the pinned Vault image's
+// two anonymous volumes, then fails to start a deliberately absent executable.
+// It must never start a Vault process or allocate an issuer.
+func TestPhase6Slice6VaultStartFailureCleanup(t *testing.T) {
+	if os.Getenv(slice6LedgerEnv) != "1" {
+		t.Skip("set " + slice6LedgerEnv + "=1")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "sr-p6-vault-switch-" + run.id
+	var volumes []string
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("failed-start Vault exact cleanup: %v", err)
+		}
+		if len(volumes) == 2 {
+			if err := slice6CheckImplicitVolumesRemoved(cleanup, run, volumes); err != nil {
+				t.Errorf("failed-start Vault anonymous volumes: %v", err)
+			}
+		}
+	})
+	created, createErr := run.docker(ctx, "create", "--pull=never", "--name", name, "--label", run.label(),
+		"--network=none", "--user=20090:30090", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
+		"--read-only", "--log-driver=none", "--memory=64m", "--cpus=0.25", "--pids-limit=16",
+		"--entrypoint=/phase6-intentionally-absent-executable", slice6VaultTestImage)
+	id := slice6CanonicalCreatedID(created, createErr)
+	recovered, recoverErr := slice6RecoverVaultContainer(ctx, run, name)
+	if id == "" || recoverErr != nil || recovered != id {
+		t.Fatal("failed-start drill could not prove exact created Vault container")
+	}
+	volumes, err = slice6VaultImplicitVolumes(ctx, run, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.docker(ctx, "start", id); err == nil {
+		t.Fatal("deliberately absent executable unexpectedly started")
 	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatal(err)
