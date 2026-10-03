@@ -51,7 +51,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 		}
 		path := filepath.Join(directory, anchor.ID+".pem")
 		if err := os.WriteFile(path, bundle, 0o400); err != nil {
-			t.Fatal("write real purpose-bound public trust anchor")
+			t.Fatal("write supplied purpose-bound public trust anchor")
 		}
 		anchors[anchor.ID] = path
 	}
@@ -145,7 +145,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	candidate, err := phase6profilebuilder.ComposeSlice6CandidateProfile(ctx, input, time.Now().UTC())
 	if err != nil || candidate.Profile.Validate() != nil ||
 		phase6security.VerifySlice6FinalGateProfile(candidate.Profile) != nil {
-		t.Fatalf("real-issuer source-bound profile composition failed: %v", err)
+		t.Fatalf("supplied-issuer source-bound profile composition failed: %v", err)
 	}
 	diagnostics := candidate.Diagnostics()
 	if diagnostics.ImageSupplyLoads != 2 || diagnostics.ExternalArchivePasses != 2 ||
@@ -166,7 +166,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	}
 	verified, err := phase6security.VerifyFile(profilePath)
 	if err != nil || verified.ProfileDigest != candidate.Profile.ProfileDigest || len(verified.Principals) != 78 {
-		t.Fatal("reopen real-issuer source-bound profile")
+		t.Fatal("reopen supplied-issuer source-bound profile")
 	}
 	if err := verifySlice6ControllerKeyHandoff(verified, input.CertificateKeys); err != nil {
 		t.Fatalf("same-run sealed-FD controller key handoff failed: %v", err)
@@ -218,7 +218,7 @@ func slice6VaultComposeCandidateProfile(t *testing.T, ctx context.Context, root,
 	if ctx.Err() != nil || candidate.VerifySources(ctx, time.Now().UTC()) == nil {
 		t.Fatal("post-freeze source mutation was not rejected")
 	}
-	t.Logf("real-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d peer_crl_edges=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
+	t.Logf("supplied-issuer source-bound desired Profile=%s principals=%d role_candidates=%d loaded_images=%d peer_crl_edges=%d; gate input preflight only, no controller launch, external service-chain or Slice 6 evidence",
 		verified.ProfileDigest, len(verified.Principals), len(gateInput.roleCandidates), loadedImages, len(peerSources.Edges))
 	return slice6VaultComposedInputs{ProfilePath: profilePath, Profile: verified,
 		PeerSourcesPath: peerSourcesPath, PeerSources: peerSources,

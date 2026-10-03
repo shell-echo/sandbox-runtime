@@ -1027,3 +1027,39 @@ the Guest security edge, public E2E, deployment, a signed evidence manifest
 and production readiness remain unproved here. The sticky controller failure
 remains recorded even though the accepted independent terminal procedure
 completed. No manifest was generated and Phase 6 remains **5/15**.
+
+### Product runtime private-input continuation without issuer (2026-10-03)
+
+An opt-in offline test at the gate-source worktree used the unchanged clean R3
+source `923813f9a195ca7f49202ee11de4796ee6a8ef17`, its fixed role and
+Desktop candidates, the locked Browser publication and four complete external
+OCI archives. Two already-existing public Go test CA certificates supplied
+non-Vault trust-anchor bytes; this test generated no CA, leaf, Vault token or
+new credential. The full eleven-stage source-bound Profile composition,
+strict gate-input preflight, image-store identity and source-mutation denial
+passed with 78 principals, twelve role candidates, fourteen loaded images and
+48 peer-CRL edge bindings.
+
+The test executed Product runtime v3 TOML construction and strict roundtrip
+validation after correcting the ordinary peer-CRL role call to bind the
+Product principal digest, rather than its deployment name. It then derived
+the exact 73 *prior* socket identities from the Profile's ordered preparation
+bindings as explicit **placeholders**, not live volumes. Restricted Docker
+preparation and non-root readback checked the Product runtime's four private
+files, its PostgreSQL TLS agent's two private files, and the new Product
+PostgreSQL signer socket directory. Both private file directories had the
+expected owner, mode 0700, exact file inventory, mode 0600, SHA-256 digests
+and read-only write denial. The three run-owned Docker volumes were removed;
+the exact run label had zero containers, networks and volumes afterward.
+
+The passing locked-Go-1.26.8 command was `go test -tags=phase6slice6gate
+-run '^TestSlice6ProductRuntimeOfflineInputs$' -count=1 -timeout=25m -v
+./productphase6gate` with the documented R3 source/OCI environment; it
+completed in 121.29 seconds. Two earlier test-only failures are not concealed:
+an unsuitable public CA fixture lacked CRL-signing usage, and an initial
+placeholder implementation incorrectly counted all 118 Profile socket IDs
+instead of the prior 73. Neither failed run reached a live issuer; the second
+did execute and admit the Product TOML before rejecting its placeholder map.
+This is private-input **component** evidence only. No real prior 73 sockets,
+Product PID1, runtime SQL, Guest handshake, sixteen-scenario gate or release
+manifest was exercised. Phase 6 remains **5/15**.

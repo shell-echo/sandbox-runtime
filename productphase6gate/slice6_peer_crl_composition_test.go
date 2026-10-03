@@ -22,7 +22,7 @@ func slice6VaultComposePeerCRLSources(t *testing.T, directory string,
 	t.Helper()
 	if profile.Validate() != nil || general.Certificate == nil || broker.Certificate == nil ||
 		general.ID == broker.ID || general.Certificate.Equal(broker.Certificate) {
-		t.Fatal("two independent real issuer sources are unavailable")
+		t.Fatal("two independent supplied issuer sources are unavailable")
 	}
 	issuerDigest := func(root slice6VaultRoot) string {
 		sum := sha256.Sum256(root.Certificate.Raw)

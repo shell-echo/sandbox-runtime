@@ -28,7 +28,7 @@ func slice6BuildProductRuntimeConfig(composed slice6VaultComposedInputs) ([]byte
 	postgres, err := profile.ResolveSlice6FinalPostgresAuthority("product-runtime")
 	material, materialErr := profile.Slice6MaterialSocketForOwner("product-runtime")
 	tlsBinding, tlsAgent, subject, tlsErr := profile.TLSAgentForSubject("product-runtime")
-	peerRole, peerErr := phase6security.DerivePeerCRLRoleDocument(profile, composed.PeerSources, "product-runtime")
+	peerRole, peerErr := phase6security.DerivePeerCRLRoleDocument(profile, composed.PeerSources, subject.PrincipalDigest)
 	postgresRole, postgresErr := phase6security.DerivePostgresPeerCRLRoleDocument(profile, composed.PeerSources, "product-runtime")
 	plan, planErr := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	var bindings []secretref.Binding

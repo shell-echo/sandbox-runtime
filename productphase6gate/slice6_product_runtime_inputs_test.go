@@ -76,7 +76,7 @@ func slice6PrepareProductRuntimeInputs(t *testing.T, ctx context.Context, run sl
 		clear(profileBytes)
 		t.Fatal(err)
 	}
-	peerRole, err := phase6security.DerivePeerCRLRoleDocument(profile, composed.PeerSources, owner.Name)
+	peerRole, err := phase6security.DerivePeerCRLRoleDocument(profile, composed.PeerSources, owner.PrincipalDigest)
 	if err != nil || len(peerRole.Edges) == 0 {
 		clear(profileBytes)
 		clear(peerBytes)
