@@ -4529,3 +4529,27 @@ E3 source trees were clean. Docker cleanup is not proof of credential
 revocation. This single real issuer permission is consumed, does not complete
 the 16-scenario release gate, and does not produce a manifest. Phase 6 remains
 **5/15**.
+
+Post-run source analysis (not a second issuer observation): the E5 Gate
+builder emitted the exact Guest v3 `urn:sandbox-runtime:guest:no-recording`
+marker, while the runtime `/readyz` path passed it to `secretref.Parse`, which
+accepts only `file://`, `secret://` and `kms://`. Consequently the emitted
+configuration could not reach a successful readiness result on that runtime.
+This is a deterministic necessary blocker, not evidence that it was the only
+cause of E5's 45-second failure. The correction confines the marker to Guest
+production v3 and shares validation between startup and readiness; the Gate
+now requires an explicit bounded HTTP 204 under one fixed deadline. These are
+unaccepted runtime-plus-E source changes. R4 images cannot serve as fixed
+runtime candidates; no new candidate or real issuer result is claimed.
+
+No-issuer regression on the corrected Gate source: the clean R4 source and
+its archived 12 role/Desktop candidates, locked Browser publication and four
+external OCI archives passed static input admission. The opt-in offline
+Product/Guest input test then called the actual Guest Gate generator,
+decoded its emitted startup TOML as the runtime configuration, accepted the
+exact Guest v3 marker through both startup and shared readiness validation,
+and rejected a fake `kms://` replacement. Synthetic-CA private config,
+read-only/mode/digest checks and four run-owned Docker volumes passed exact
+cleanup in 115.15 seconds. This is a construction-only regression using old
+R4 inputs, not compatibility evidence for the changed runtime, a new
+candidate, connected Guest PID1, Vault issuance or live revocation.

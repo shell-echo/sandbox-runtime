@@ -3,6 +3,7 @@
 package productphase6gate
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/pem"
@@ -13,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/spf13/viper"
 )
 
 const slice6ProductRuntimeOfflineInputsEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_RUNTIME_OFFLINE_INPUTS"
@@ -92,6 +95,29 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		"gst-phase6-offline", 1, guestShellDigest)
 	if guestInputErr != nil || len(guestInputs) != 6 {
 		t.Fatalf("offline Guest private startup input construction failed: count=%d err=%v", len(guestInputs), guestInputErr)
+	}
+	// Exercise the actual gate generator's startup bytes through the runtime
+	// configuration decoder and the same recording-authority entrypoint used
+	// by both startup validation and roleprocess.checkReadiness.
+	startup := guestInputs[phase6security.Slice6StartupConfigFile]
+	parser := viper.New()
+	parser.SetConfigType("toml")
+	if err := parser.ReadConfig(bytes.NewReader(startup)); err != nil {
+		t.Fatalf("Guest gate startup did not parse: %v", err)
+	}
+	var guestConfig config.DataPlaneProcessConfig
+	section := parser.Sub("guest_process")
+	if section == nil || section.UnmarshalExact(&guestConfig) != nil {
+		t.Fatal("Guest gate startup did not decode as runtime config")
+	}
+	guestConfig.Role = config.DataPlaneGuest
+	if guestConfig.Authority.RecordingKeyRef != config.GuestV3NoRecordingReference ||
+		guestConfig.Validate() != nil || guestConfig.ValidateRecordingAuthority() != nil {
+		t.Fatal("Guest gate startup did not satisfy the exact shared v3 recording authority")
+	}
+	guestConfig.Authority.RecordingKeyRef = "kms://recording/phase6/guest"
+	if guestConfig.Validate() == nil || guestConfig.ValidateRecordingAuthority() == nil {
+		t.Fatal("Guest gate startup accepted a fake recording key")
 	}
 	if _, err := slice6BuildGuestRuntimeInputs(composed, run.id, "gst-phase6-offline", 0,
 		guestShellDigest); err == nil {

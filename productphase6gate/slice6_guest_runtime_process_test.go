@@ -197,52 +197,167 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		productEdge.NetworkID, internal.NetworkID); err != nil {
 		return err
 	}
-	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
-	deadline := time.Now().Add(45 * time.Second)
-	for time.Now().Before(deadline) && ctx.Err() == nil {
-		guest, inspectErr := slice6InspectProductRuntimeMember(ctx, run, id)
-		if inspectErr != nil || guest.ID != id || guest.Name != "/sr-p6-guest-runtime-"+run.id {
-			return errors.New("Guest PID1 stopped or restarted before connected readiness")
+	if err := slice6AwaitGuestConnected(ctx, 45*time.Second, 250*time.Millisecond,
+		func(check context.Context) (bool, error) {
+			guest, inspectErr := slice6InspectProductRuntimeMember(check, run, id)
+			if inspectErr == nil {
+				if guest.ID != id || guest.Name != "/sr-p6-guest-runtime-"+run.id {
+					return false, errors.New("Guest PID1 identity drift")
+				}
+				return true, nil
+			}
+			// A failed inspect is not evidence of exit. Confirm the exact
+			// container's stopped state without surfacing daemon output.
+			state, stateErr, overflow := slice6DockerBounded(check, 256, nil,
+				"inspect", "--format", "{{.State.Running}}", id)
+			defer clear(state)
+			if !overflow && stateErr == nil && string(state) == "false\n" {
+				return false, nil
+			}
+			return false, errors.New("Guest PID1 inspect unavailable")
+		}, func(check context.Context) (int, error) {
+			return slice6ProbeGuestReady(check, id)
+		}); err != nil {
+		return err
+	}
+	if _, err := observeSlice6ProfileNetwork(ctx, run, productEdge.NetworkID, plan.ProductNetwork,
+		map[string]string{"product-runtime": productID, "guest-runtime": id}); err != nil {
+		return errors.New("Guest Product bridge actual membership drift")
+	}
+	if _, err := observeSlice6ProfileNetwork(ctx, run, internal.NetworkID, plan.InternalNetwork,
+		map[string]string{"guest-runtime": id}); err != nil {
+		return errors.New("Guest isolated internal bridge actual membership drift")
+	}
+	t.Log("real independent Guest PID1 reached connected /readyz while Product PID1 and both Guest agents remained live; same-run two-edge network membership observed")
+	if onConnected != nil {
+		before, beforeErr := slice6InspectProductRuntimeMember(ctx, run, id)
+		if beforeErr != nil {
+			return errors.New("Guest PID1 identity unavailable before dependent gate")
 		}
-		probe, probeErr := run.docker(ctx, "exec", "--user", owner, id,
-			"/bin/busybox", "wget", "-qO-", "http://127.0.0.1:8086/readyz")
-		if probeErr == nil && len(probe) <= 1024 {
-			if _, err := observeSlice6ProfileNetwork(ctx, run, productEdge.NetworkID, plan.ProductNetwork,
-				map[string]string{"product-runtime": productID, "guest-runtime": id}); err != nil {
-				return errors.New("Guest Product bridge actual membership drift")
+		if err := onConnected(id); err != nil {
+			return errors.Join(errors.New("Guest live dependent gate failed"), err)
+		}
+		guest, err := slice6InspectProductRuntimeMember(ctx, run, id)
+		if err == nil {
+			if slice6RuntimeMemberFingerprint(guest, true) != slice6RuntimeMemberFingerprint(before, true) {
+				return errors.New("Guest PID1 changed during live dependent gate")
 			}
-			if _, err := observeSlice6ProfileNetwork(ctx, run, internal.NetworkID, plan.InternalNetwork,
-				map[string]string{"guest-runtime": id}); err != nil {
-				return errors.New("Guest isolated internal bridge actual membership drift")
+		} else if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
+			stopped, stateErr := slice6GuestStoppedAfterRevoke(ctx, run, id, before)
+			if stateErr != nil || !stopped {
+				return errors.New("Guest PID1 post-revoke exit was not verified")
 			}
-			t.Log("real independent Guest PID1 reached connected /readyz while Product PID1 and both Guest agents remained live; same-run two-edge network membership observed")
-			if onConnected != nil {
-				before, beforeErr := slice6InspectProductRuntimeMember(ctx, run, id)
-				if beforeErr != nil {
-					return errors.New("Guest PID1 identity unavailable before dependent gate")
-				}
-				if err := onConnected(id); err != nil {
-					return errors.Join(errors.New("Guest live dependent gate failed"), err)
-				}
-				guest, err := slice6InspectProductRuntimeMember(ctx, run, id)
-				if err == nil {
-					if slice6RuntimeMemberFingerprint(guest, true) != slice6RuntimeMemberFingerprint(before, true) {
-						return errors.New("Guest PID1 changed during live dependent gate")
-					}
-				} else if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
-					stopped, stateErr := slice6GuestStoppedAfterRevoke(ctx, run, id, before)
-					if stateErr != nil || !stopped {
-						return errors.New("Guest PID1 post-revoke exit was not verified")
-					}
-				} else {
-					return errors.New("Guest PID1 changed during live dependent gate")
-				}
-			}
+		} else {
+			return errors.New("Guest PID1 changed during live dependent gate")
+		}
+	}
+	return nil
+}
+
+// The deadline is created before the first inspect and is inherited by each
+// Docker inspect/exec. Only a parsed HTTP 204 is connected readiness; a 503
+// remains a negative observation, and command failure never becomes success.
+func slice6AwaitGuestConnected(parent context.Context, budget, interval time.Duration,
+	inspect func(context.Context) (bool, error), probe func(context.Context) (int, error)) error {
+	if parent == nil || budget <= 0 || interval <= 0 || inspect == nil || probe == nil {
+		return errors.New("Guest readiness probe configuration invalid")
+	}
+	ctx, cancel := context.WithTimeout(parent, budget)
+	defer cancel()
+	last := "not_sampled"
+	samples := 0
+	for ctx.Err() == nil {
+		alive, err := inspect(ctx)
+		if ctx.Err() != nil {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("Guest PID1 inspect unavailable before connected readiness; last=%s samples=%d", last, samples)
+		}
+		if !alive {
+			return fmt.Errorf("Guest PID1 exited before connected readiness; last=%s samples=%d", last, samples)
+		}
+		status, err := probe(ctx)
+		samples++
+		if ctx.Err() != nil {
+			break
+		}
+		if status == 204 && err == nil {
 			return nil
 		}
-		time.Sleep(250 * time.Millisecond)
+		if status == 503 && err == nil {
+			last = "http_503"
+		} else {
+			last = "probe_unavailable"
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
 	}
-	return errors.New("Guest PID1 did not reach connected readiness within fixed deadline")
+	if parent.Err() != nil {
+		return fmt.Errorf("Guest PID1 readiness canceled; last=%s samples=%d", last, samples)
+	}
+	return fmt.Errorf("Guest PID1 did not reach connected readiness within fixed deadline; last=%s samples=%d", last, samples)
+}
+
+func TestSlice6GuestConnectedReadinessRequires204WithinTotalBudget(t *testing.T) {
+	alive := func(context.Context) (bool, error) { return true, nil }
+	for _, test := range []struct {
+		name   string
+		probe  func(context.Context) (int, error)
+		budget time.Duration
+		want   string
+	}{
+		{"explicit 204", func(context.Context) (int, error) { return 204, nil }, time.Second, ""},
+		{"persistent 503", func(context.Context) (int, error) { return 503, nil }, 100 * time.Millisecond, "last=http_503"},
+		{"command unavailable", func(context.Context) (int, error) { return 0, errors.New("raw daemon detail") }, 100 * time.Millisecond, "last=probe_unavailable"},
+		{"mismatched 204 error", func(context.Context) (int, error) { return 204, errors.New("raw daemon detail") }, 100 * time.Millisecond, "last=probe_unavailable"},
+		{"late 204", func(ctx context.Context) (int, error) { <-ctx.Done(); return 204, nil }, 100 * time.Millisecond, "last=not_sampled"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			start := time.Now()
+			err := slice6AwaitGuestConnected(context.Background(), test.budget, time.Millisecond, alive, test.probe)
+			if test.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.want) ||
+				strings.Contains(err.Error(), "raw daemon detail") || time.Since(start) > time.Second {
+				t.Fatalf("bounded readiness error = %v", err)
+			}
+		})
+	}
+	if err := slice6AwaitGuestConnected(context.Background(), time.Second, time.Millisecond,
+		func(context.Context) (bool, error) { return false, nil }, func(context.Context) (int, error) { return 204, nil }); err == nil || !strings.Contains(err.Error(), "exited") {
+		t.Fatalf("exited Guest was not distinguished: %v", err)
+	}
+	if err := slice6AwaitGuestConnected(context.Background(), time.Second, time.Millisecond,
+		func(context.Context) (bool, error) { return false, errors.New("raw daemon detail") },
+		func(context.Context) (int, error) { return 204, nil }); err == nil || !strings.Contains(err.Error(), "inspect unavailable") || strings.Contains(err.Error(), "raw daemon detail") {
+		t.Fatalf("unavailable inspect was not bounded: %v", err)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := slice6AwaitGuestConnected(canceled, time.Second, time.Millisecond, alive,
+		func(context.Context) (int, error) { t.Fatal("canceled parent reached probe"); return 204, nil }); err == nil || !strings.Contains(err.Error(), "canceled") || !strings.Contains(err.Error(), "samples=0") {
+		t.Fatalf("canceled parent admitted readiness: %v", err)
+	}
+	var inspectDeadline, probeDeadline time.Time
+	err := slice6AwaitGuestConnected(context.Background(), 100*time.Millisecond, time.Millisecond,
+		func(ctx context.Context) (bool, error) { inspectDeadline, _ = ctx.Deadline(); return true, nil },
+		func(ctx context.Context) (int, error) {
+			probeDeadline, _ = ctx.Deadline()
+			<-ctx.Done()
+			return 204, nil
+		})
+	if err == nil || inspectDeadline.IsZero() || !inspectDeadline.Equal(probeDeadline) {
+		t.Fatalf("inspect/exec did not share one fixed deadline: %v", err)
+	}
 }
 
 // Both the real PID1 gate and the no-issuer created-container diagnostic use

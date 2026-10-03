@@ -16,7 +16,6 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6profile"
 	"github.com/shell-echo/sandbox-runtime/internal/secretfile"
-	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 	"github.com/shell-echo/sandbox-runtime/providerapi"
 	providerprocess "github.com/shell-echo/sandbox-runtime/providerapi/process"
 	"github.com/shell-echo/sandbox-runtime/server"
@@ -203,7 +202,7 @@ func checkReadiness(ctx context.Context, cfg *config.DataPlaneProcessConfig, gra
 		}
 		clear(contents)
 	}
-	if _, err := secretref.Parse(cfg.Authority.RecordingKeyRef); err != nil {
+	if err := cfg.ValidateRecordingAuthority(); err != nil {
 		return errors.New("role recording authority is unavailable")
 	}
 	if cfg.Authority.ReleaseProfile != "" {

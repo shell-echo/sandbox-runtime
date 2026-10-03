@@ -136,7 +136,7 @@ dependency_timeout_seconds = 5
 credential_file = "/run/phase6/config/credential-authority.json"
 dependency_file = "/run/phase6/config/dependency-authority.json"
 policy_file = "/run/phase6/config/policy-authority.json"
-recording_key_reference = "urn:sandbox-runtime:guest:no-recording"
+recording_key_reference = %q
 
 [guest_process.tls]
 security_profile_path = "/run/phase6/config/profile.json"
@@ -163,7 +163,7 @@ cache_seconds = 30
 id = %q
 provider = "guest-agent"
 document = %q
-`, config.DataPlaneProductionSchemaV3, origin, profile.ProfileDigest, peerRole.Digest(),
+`, config.DataPlaneProductionSchemaV3, origin, config.GuestV3NoRecordingReference, profile.ProfileDigest, peerRole.Digest(),
 		composed.PeerSources.Digest(), tlsBinding.SocketPath, tlsBinding.AgentUID, tlsBinding.AgentGID,
 		config.UnixWorkloadMaterialProviderV2, material.SocketPath, material.AgentUID,
 		material.AgentGID, material.OwnerGID, signingID, string(signingBytes)))

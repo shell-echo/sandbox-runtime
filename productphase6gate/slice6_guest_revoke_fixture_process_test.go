@@ -250,6 +250,18 @@ func TestSlice6GuestReadyProbeRequiresExplicitHTTPStatus(t *testing.T) {
 			}
 		})
 	}
+	for _, sample := range []struct {
+		output   []byte
+		overflow bool
+	}{
+		{[]byte("HTTP/1.1 204 No Content\n"), true},
+		{[]byte(strings.Repeat("a", 4097) + "HTTP/1.1 204 No Content\n"), false},
+		{nil, false},
+	} {
+		if status, err := slice6ParseGuestReadyProbe(sample.output, nil, sample.overflow); status != 0 || err == nil {
+			t.Fatalf("oversized/unavailable probe accepted: status=%d err=%v", status, err)
+		}
+	}
 }
 
 func slice6GuestStoppedAfterRevoke(ctx context.Context, run slice6DockerRun, id string,

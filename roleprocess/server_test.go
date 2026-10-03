@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/secretref"
 )
 
 func TestPrivateRoleShutdownNormalizesClosedListener(t *testing.T) {
@@ -133,6 +134,41 @@ func TestApplicationGraphUsesExplicitReadiness(t *testing.T) {
 	}
 	if readyCalls != 1 {
 		t.Fatalf("readiness calls = %d; want 1", readyCalls)
+	}
+}
+
+func TestGuestV3RecordingSentinelReachesButCannotBypassGraph(t *testing.T) {
+	if _, err := secretref.Parse(config.GuestV3NoRecordingReference); err == nil {
+		t.Fatal("old readiness parser would not reject the Guest sentinel")
+	}
+	directory := t.TempDir()
+	value := *config.GuestProcess
+	value.Enabled = true
+	value.Role = config.DataPlaneGuest
+	value.SchemaVersion = config.DataPlaneProductionSchemaV3
+	value.DeploymentLevel = config.ProviderProductionLevel
+	value.Authority.CredentialFile = filepath.Join(directory, "credential")
+	value.Authority.DependencyFile = filepath.Join(directory, "dependency")
+	value.Authority.PolicyFile = filepath.Join(directory, "policy")
+	value.Authority.RecordingKeyRef = config.GuestV3NoRecordingReference
+	for _, path := range []string{value.Authority.CredentialFile, value.Authority.DependencyFile, value.Authority.PolicyFile} {
+		if err := os.WriteFile(path, []byte("authority"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	called := 0
+	graph := ApplicationGraph{Ready: func(context.Context) error { called++; return nil }}
+	if err := checkReadiness(context.Background(), &value, graph); err != nil || called != 1 {
+		t.Fatalf("Guest v3 sentinel did not reach graph: err=%v calls=%d", err, called)
+	}
+	value.Authority.RecordingKeyRef = "kms://recording/phase6/guest"
+	if err := checkReadiness(context.Background(), &value, graph); err == nil || called != 1 {
+		t.Fatalf("fake Guest v3 key reached graph: err=%v calls=%d", err, called)
+	}
+	value.Authority.RecordingKeyRef = config.GuestV3NoRecordingReference
+	graph.Ready = func(context.Context) error { called++; return errors.New("disconnected") }
+	if err := checkReadiness(context.Background(), &value, graph); err == nil || called != 2 {
+		t.Fatalf("graph failure advertised readiness: err=%v calls=%d", err, called)
 	}
 }
 

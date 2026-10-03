@@ -2564,3 +2564,33 @@ audit remain Slice 8 obligations and a later full-product release gate. Both
 tag-only tasks can be removed and their run-owned database discarded without
 changing a production API, schema, network or HBA rule. Neither task alone
 authorizes a Vault issuer run or advances Phase 6 beyond **5/15**.
+
+### Slice 6 Guest v3 recording-authority and readiness correction (2026-10-04)
+
+The outbound Guest v3 production role does not own a recording key. Its sole
+accepted `recording_key_reference` is the exact role-config constant
+`urn:sandbox-runtime:guest:no-recording`. This marker is not a secret URI and
+must never be parsed or resolved as a `file://`, `secret://` or `kms://` key.
+Startup configuration validation and live process readiness use the same
+closed validator: empty or variant markers, arbitrary URNs, and fake key
+references fail for Guest v3; the marker fails for every other role, schema
+or deployment level. Older valid secret references retain their existing
+behavior. Guest still requires its independent signing key, TLS signer,
+peer-CRL, material and authenticated Product connection. Product/Gateway
+recording ownership and fail-closed requirements in ADR 0046 are unchanged.
+
+The real Guest PID1 gate now accepts readiness only from the existing bounded
+HTTP probe's explicit 204; parsed 503 is negative, and command failure is
+unavailable, not a successful body read. One fixed 45-second child deadline
+starts before the first inspect/exec and bounds every sample. The retained
+error is limited to redacted last status and sample count; exact stopped
+container state is distinguished from an unavailable inspect. This is a
+source-level correction, not proof of a live connected Guest or revocation.
+It changes runtime code as well as gate code: old R4 role images cannot be
+reused as the fixed runtime. Under the current strict C=R admission rule,
+the next reviewed runtime revision requires a clean freeze and all local
+role/Desktop candidates rebuilt from that source, independently reverified
+with unchanged external Browser publication and unchanged selected external
+OCI inputs. E-only observer and independent fixture deltas must be rechecked
+against the new R; no cross-source exception is inferred. Candidate building
+and another real Vault issuer attempt require separate Sandbox review.

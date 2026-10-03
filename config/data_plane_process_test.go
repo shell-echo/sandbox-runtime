@@ -309,7 +309,7 @@ func TestGuestProductionV3RetainsOnlySigningKeyMaterial(t *testing.T) {
 	value.DeploymentLevel = ProviderProductionLevel
 	value.OutboundURL = "wss://10.16.0.3:8449/agent"
 	value.Authority = DataPlaneAuthorityConfig{CredentialFile: path("credential"), DependencyFile: path("dependency"),
-		PolicyFile: path("policy"), RecordingKeyRef: "kms://recording/phase6/guest"}
+		PolicyFile: path("policy"), RecordingKeyRef: GuestV3NoRecordingReference}
 	value.TLS = DataPlaneTLSConfig{SecurityProfilePath: path("profile"), SecurityProfileDigest: "sha256:" + strings.Repeat("a", 64),
 		PeerCRLRoleFile: path("peer-role"), PeerCRLRoleDigest: "sha256:" + strings.Repeat("b", 64),
 		PeerCRLSourceMappingDigest: "sha256:" + strings.Repeat("c", 64),
@@ -328,6 +328,12 @@ func TestGuestProductionV3RetainsOnlySigningKeyMaterial(t *testing.T) {
 		t.Fatalf("valid Guest v3: %v", err)
 	}
 	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"old fake recording key": func(candidate *DataPlaneProcessConfig) {
+			candidate.Authority.RecordingKeyRef = "kms://recording/phase6/guest"
+		},
+		"missing recording sentinel": func(candidate *DataPlaneProcessConfig) {
+			candidate.Authority.RecordingKeyRef = ""
+		},
 		"static TLS key": func(candidate *DataPlaneProcessConfig) { candidate.TLS.ClientPrivateKeyBindingID = "old-key" },
 		"raw TLS key":    func(candidate *DataPlaneProcessConfig) { candidate.TLS.ClientPrivateKeyFile = path("old.pem") },
 		"missing signing key": func(candidate *DataPlaneProcessConfig) {
@@ -345,6 +351,49 @@ func TestGuestProductionV3RetainsOnlySigningKeyMaterial(t *testing.T) {
 				t.Fatal("Guest v3 accepted invalid material or TLS authority")
 			}
 		})
+	}
+}
+
+func TestRecordingAuthorityGuestV3ExactSentinel(t *testing.T) {
+	base := DataPlaneProcessConfig{Role: DataPlaneGuest, SchemaVersion: DataPlaneProductionSchemaV3,
+		DeploymentLevel: ProviderProductionLevel,
+		Authority:       DataPlaneAuthorityConfig{RecordingKeyRef: GuestV3NoRecordingReference}}
+	if err := base.ValidateRecordingAuthority(); err != nil {
+		t.Fatalf("exact Guest v3 no-recording sentinel: %v", err)
+	}
+	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
+		"empty":            func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef = "" },
+		"old fake key":     func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef = "kms://recording/phase6/guest" },
+		"fake secret key":  func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef = "secret://guest/no-recording" },
+		"fake file key":    func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef = "file:///tmp/guest/no-recording" },
+		"arbitrary URN":    func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef = "urn:sandbox-runtime:guest:recording" },
+		"sentinel variant": func(c *DataPlaneProcessConfig) { c.Authority.RecordingKeyRef += "/" },
+		"wrong role":       func(c *DataPlaneProcessConfig) { c.Role = DataPlaneGateway },
+		"wrong schema":     func(c *DataPlaneProcessConfig) { c.SchemaVersion = DataPlaneProductionSchemaV2 },
+		"wrong level":      func(c *DataPlaneProcessConfig) { c.DeploymentLevel = ProviderLocalCandidateLevel },
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := base
+			mutate(&value)
+			if err := value.ValidateRecordingAuthority(); err == nil {
+				t.Fatal("invalid Guest no-recording authority accepted")
+			}
+		})
+	}
+	for _, role := range []DataPlaneRole{DataPlaneGateway, DataPlaneBrowser, DataPlaneDesktop} {
+		value := base
+		value.Role = role
+		value.Authority.RecordingKeyRef = "kms://recording/phase6/" + string(role)
+		if err := value.ValidateRecordingAuthority(); err != nil {
+			t.Fatalf("%s valid recording reference rejected: %v", role, err)
+		}
+	}
+	legacy := base
+	legacy.SchemaVersion = DataPlaneLegacyLocalCandidateSchema
+	legacy.DeploymentLevel = ProviderLocalCandidateLevel
+	legacy.Authority.RecordingKeyRef = "file:///tmp/recording-key"
+	if err := legacy.ValidateRecordingAuthority(); err != nil {
+		t.Fatalf("legacy valid recording reference rejected: %v", err)
 	}
 }
 

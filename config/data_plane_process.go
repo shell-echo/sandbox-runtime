@@ -21,6 +21,9 @@ const (
 	DataPlaneLegacyLocalCandidateSchema = "sandbox-runtime.data-plane-process.legacy-local-candidate.v1"
 	DataPlaneProductionSchemaV2         = "sandbox-runtime.data-plane-process.v2"
 	DataPlaneProductionSchemaV3         = "sandbox-runtime.data-plane-process.v3"
+	// GuestV3NoRecordingReference states that this outbound Guest role does not
+	// own a recording key. It is not a resolvable secret reference.
+	GuestV3NoRecordingReference = "urn:sandbox-runtime:guest:no-recording"
 
 	DataPlaneGateway DataPlaneRole = "gateway"
 	DataPlaneGuest   DataPlaneRole = "guest"
@@ -159,8 +162,8 @@ func (c *DataPlaneProcessConfig) Validate() error {
 			return err
 		}
 	}
-	if c.Authority.RecordingKeyRef == "" || len(c.Authority.RecordingKeyRef) > 256 || strings.TrimSpace(c.Authority.RecordingKeyRef) != c.Authority.RecordingKeyRef || strings.ContainsAny(c.Authority.RecordingKeyRef, "\x00\r\n") {
-		return fmt.Errorf("%s recording key reference is invalid", c.Role)
+	if err := c.ValidateRecordingAuthority(); err != nil {
+		return err
 	}
 	paths := []string{filepath.Clean(c.Authority.CredentialFile), filepath.Clean(c.Authority.DependencyFile), filepath.Clean(c.Authority.PolicyFile)}
 	if c.Authority.ReleaseProfile != "" {
@@ -259,6 +262,31 @@ func (c *DataPlaneProcessConfig) Validate() error {
 		if err := c.validateProductionMaterials(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ValidateRecordingAuthority is shared by startup and live readiness. Guest
+// production v3 has no recording key; every other role/schema keeps the
+// existing secret-reference contract. This does not relax Product/Gateway
+// recording policy or make a sentinel resolvable by secretref.Parse.
+func (c *DataPlaneProcessConfig) ValidateRecordingAuthority() error {
+	if c == nil {
+		return errors.New("data-plane process configuration is required")
+	}
+	ref := c.Authority.RecordingKeyRef
+	invalid := func() error { return fmt.Errorf("%s recording key reference is invalid", c.Role) }
+	if c.Role == DataPlaneGuest && c.SchemaVersion == DataPlaneProductionSchemaV3 && c.DeploymentLevel == ProviderProductionLevel {
+		if ref != GuestV3NoRecordingReference {
+			return invalid()
+		}
+		return nil
+	}
+	if len(ref) > 256 || strings.TrimSpace(ref) != ref || strings.ContainsAny(ref, "\x00\r\n") {
+		return invalid()
+	}
+	if _, err := secretref.Parse(ref); err != nil {
+		return invalid()
 	}
 	return nil
 }
