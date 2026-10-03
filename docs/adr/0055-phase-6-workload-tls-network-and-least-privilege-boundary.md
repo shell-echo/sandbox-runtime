@@ -2614,3 +2614,28 @@ binary is separately built with the locked flags and must match an externally
 approved digest before even a no-issuer admission. This source-pair check
 does not authorize Vault issuance, bypass a Gate observation, or advance
 Phase 6 beyond **5/15**.
+
+### Slice 6 Guest durable-revocation readback correction (2026-10-04)
+
+One separately authorized real-issuer diagnostic reached a connected Guest
+PID1, then failed the independent persisted-revocation readback. That run is
+retained as **failed**; the fixture's confirmed mutation receipt and a
+temporarily non-ready Guest do not substitute for the durable database check.
+The readback SQL already tested the original conjunctive condition: exact
+tenant and Guest row, `state=revoked`, empty connection nonce, and
+`expires_at>clock_timestamp()` in PostgreSQL. Its boolean expression was
+explicitly cast to text before concatenation, but the Gate compared the
+result with PostgreSQL's *uncast* short boolean spelling `t`. The cast result
+is `true`, so the comparison was inconsistent with its own SQL.
+
+The E-only correction accepts exactly one canonical `revoked||true` row with
+one newline. It does not relax the SQL condition, accept both spellings, trim
+extra whitespace, or turn a missing/duplicate row, nonempty nonce, expired
+row, command error or output overflow into success. A disposable networkless
+arm64 PostgreSQL check executes the same read-only SQL and `psql` flags across
+positive and negative rows. It uses the pinned upstream PostgreSQL index,
+not the exact E6 selected OCI archive manifest, and is **not** evidence of a
+successful live revocation. A scoped audit found the other explicit boolean
+text-cast Product migration assertions compare `true`/`false` correctly;
+integer text casts do not share this mismatch. A fresh real-issuer Gate needs
+separate review and authorization. Phase 6 remains **5/15**.

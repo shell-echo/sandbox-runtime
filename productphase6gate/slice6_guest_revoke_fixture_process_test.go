@@ -563,19 +563,71 @@ func slice6VerifyGuestRevokePersisted(ctx context.Context, postgresID, runID, gu
 		strings.ContainsAny(guestID, "\x00\n\r") {
 		return errors.New("persisted revoke observation target invalid")
 	}
-	script := []byte("BEGIN READ ONLY;\nSET LOCAL statement_timeout='3000ms';\n" +
-		"SELECT state||'|'||COALESCE(connection_nonce,'')||'|'||" +
-		"(expires_at>clock_timestamp())::text FROM sandbox_runtime_product.guest_bindings " +
-		"WHERE tenant_id='tenant-phase6-" + runID + "' AND guest_id=:'guest_id';\nCOMMIT;\n")
+	script := slice6GuestRevokePersistedScript(runID)
 	defer clear(script)
 	out, err, overflow := slice6DockerBounded(ctx, 128, script, "exec", "-i", "-u", "70:70", postgresID,
 		"psql", "-X", "-w", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
 		"-v", "guest_id="+guestID, "-U", "postgres", "-d", "product", "-f", "-")
 	defer clear(out)
-	if err != nil || overflow || strings.TrimSpace(string(out)) != "revoked||t" {
+	return slice6CheckGuestRevokePersistedOutput(out, err, overflow)
+}
+
+func slice6GuestRevokePersistedScript(runID string) []byte {
+	return []byte("BEGIN READ ONLY;\nSET LOCAL statement_timeout='3000ms';\n" +
+		"SELECT state||'|'||COALESCE(connection_nonce,'')||'|'||" +
+		"(expires_at>clock_timestamp())::text FROM sandbox_runtime_product.guest_bindings " +
+		"WHERE tenant_id='tenant-phase6-" + runID + "' AND guest_id=:'guest_id';\nCOMMIT;\n")
+}
+
+// The SQL casts the DB-time boolean to text before concatenation. PostgreSQL
+// renders that as "true"/"false", unlike a bare boolean column's "t"/"f".
+// Accept exactly one canonical row; no whitespace, duplicate row or fallback
+// truthy spelling can substitute for durable revoked+empty-nonce+unexpired.
+func slice6CheckGuestRevokePersistedOutput(out []byte, commandErr error, overflow bool) error {
+	if commandErr != nil || overflow {
+		return errors.New("persisted revoke read-only observation unavailable")
+	}
+	if !bytes.Equal(out, []byte("revoked||true\n")) {
 		return errors.New("old Guest identity was not persistently revoked with no nonce before expiry")
 	}
 	return nil
+}
+
+func TestSlice6GuestRevokePersistedOutputClosed(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	script := slice6GuestRevokePersistedScript(runID)
+	defer clear(script)
+	if !bytes.Contains(script, []byte("(expires_at>clock_timestamp())::text")) ||
+		!bytes.Contains(script, []byte("tenant_id='tenant-phase6-"+runID+"' AND guest_id=:'guest_id'")) ||
+		!bytes.HasPrefix(script, []byte("BEGIN READ ONLY;\nSET LOCAL statement_timeout='3000ms';\n")) {
+		t.Fatal("persisted revoke SQL lost DB-time or parameter authority")
+	}
+	for _, test := range []struct {
+		name     string
+		output   string
+		command  error
+		overflow bool
+		want     bool
+	}{
+		{"exact revoked empty nonce unexpired", "revoked||true\n", nil, false, true},
+		{"bare boolean spelling", "revoked||t\n", nil, false, false},
+		{"expired", "revoked||false\n", nil, false, false},
+		{"not revoked", "connected||true\n", nil, false, false},
+		{"nonce present", "revoked|nonce|true\n", nil, false, false},
+		{"missing row", "", nil, false, false},
+		{"duplicate row", "revoked||true\nrevoked||true\n", nil, false, false},
+		{"whitespace drift", " revoked||true\n", nil, false, false},
+		{"missing newline", "revoked||true", nil, false, false},
+		{"SQL failure", "revoked||true\n", errors.New("private SQL diagnostic"), false, false},
+		{"overflow", "revoked||true\n", nil, true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := slice6CheckGuestRevokePersistedOutput([]byte(test.output), test.command, test.overflow)
+			if (err == nil) != test.want || err != nil && strings.Contains(err.Error(), "private SQL diagnostic") {
+				t.Fatalf("closed persisted revoke output verdict: %v", err)
+			}
+		})
+	}
 }
 
 // Limits, not sampled RSS, are counted so simultaneous run-owned processes

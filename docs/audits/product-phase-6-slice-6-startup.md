@@ -4595,3 +4595,53 @@ complete regression passed full repository race/shuffle, the complete tagged
 Slice 6 gate package race/shuffle, `go vet ./...`, Product Contract lock verification,
 and `git diff --check`. Its commit is separate from this offline result. No real
 issuer retry is authorized by these results; Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (one Sandbox-authorized ordinary non-race real issuer
+diagnostic, **failed**, permission consumed): clean E4 source
+`32a9fa1fdb3abc2bc05a8d7a973bcb30bcbc1f74`, independent clean R/F
+`884fde822d9d9bad2abc428b5722403148fafcfa`, selected R candidates and
+locked external archives ran under exact Docker label
+`io.github.shell-echo.sandbox-runtime.phase6-slice6-run=f2277f0729bc587e52d59d23815e78ce`.
+The 0600 log is
+`/Users/echo/.codex/phase6-slice6-run-E6.froPzU/gate.log`. Pre-issuer
+source/archive/observer/fixture/terminal digests matched. Vault, PostgreSQL,
+both controllers, Product migration and durable initial Guest binding passed;
+Product PID1 recovered readiness after a SQL-edge loss. Both Guest agents,
+break-glass consume/recovery and **actual Guest PID1 connected `/readyz` 204**
+passed while Product and agents remained live. The first retained business
+failure was `Product live dependent gate failed` → `Guest live dependent gate
+failed` → `old Guest identity was not persistently revoked with no nonce before
+expiry`. The fixture's confirmed mutation receipt and temporary Guest
+non-readiness did not pass that independent persisted readback. The later
+Product/PG/agent liveness checks did not run. Two controllers quiesced; the
+certificate controller retained its sticky credential-revoke failure. The
+independent terminal operator confirmed three certificates, two token
+accessors, complete CRL and self-revoke, but did not rewrite the controller's
+failure. Exact run-label Docker container/network/volume inventory returned
+zero, including the two recorded Vault anonymous volumes. No 16-scenario
+release result or evidence manifest was produced. Phase 6 remains **5/15**.
+
+Post-run diagnosis, **not** a corrected live-issuer observation: the read-only
+SQL explicitly used `(expires_at>clock_timestamp())::text`, whose output under
+the Gate's exact `psql -X -w -q -A -t -v ON_ERROR_STOP=1` flags is `true` for
+an unexpired row. The old Gate expected `revoked||t`, which a matching row
+could not produce. A narrowly scoped E-only patch keeps the original SQL and
+compares exactly one `revoked||true\n` row; all other output and command
+failures remain closed. Pure tests cover wrong spelling, expired/unrevoked/
+nonce-present/missing/duplicate rows, whitespace, SQL failure and overflow.
+An opt-in no-issuer networkless PostgreSQL arm64 Docker test used the same
+formal SQL/psql path, passed the positive and negative persisted-row cases,
+and cleaned its exact run label to zero. Its pinned upstream index is not the
+exact E6 selected OCI archive manifest. Sibling explicit boolean `::text`
+Product migration assertions already expect `true`/`false`; the other scoped
+casts are integer fields. This narrows a false-negative mechanism but does
+not prove the E6 row was actually persisted as intended or authorize another
+issuer run.
+
+The E-only successor passed `go test -race -shuffle=on -count=1 ./...`
+(including the 339.639-second `internal/phase6security` package), the complete
+tagged Slice 6 Gate package race/shuffle run with the opt-in no-issuer
+PostgreSQL case, `go vet ./...`, tagged Gate `go vet`, Product Contract lock
+verification and `git diff --check`. The no-issuer run's exact-label Docker
+container/network/volume inventory was empty after cleanup. These receipts
+do not change the failed E6 disposition or the **5/15** Phase 6 count.
