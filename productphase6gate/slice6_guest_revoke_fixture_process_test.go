@@ -487,7 +487,7 @@ func slice6RunGuestLiveRevoke(parent context.Context, run slice6DockerRun, profi
 		} else {
 			stopped, stateErr := slice6GuestStoppedAfterRevoke(ctx, run, guestContainerID, guest)
 			if stateErr != nil || !stopped {
-				return slice6GuestRevokeFixtureReceipt{}, errors.New("Guest readiness probe failed without a verified fail-closed process exit")
+				return slice6GuestRevokeFixtureReceipt{}, errors.New("Guest readiness probe failed without exact post-mutation exit1 observation")
 			}
 			closed = true
 			break
@@ -509,7 +509,7 @@ func slice6RunGuestLiveRevoke(parent context.Context, run slice6DockerRun, profi
 	} else {
 		stopped, stateErr := slice6GuestStoppedAfterRevoke(ctx, run, guestContainerID, guest)
 		if stateErr != nil || !stopped {
-			return slice6GuestRevokeFixtureReceipt{}, errors.New("Guest post-revoke probe failed without verified fail-closed exit")
+			return slice6GuestRevokeFixtureReceipt{}, errors.New("Guest post-mutation probe failed without exact exit1 observation")
 		}
 	}
 	if !time.Now().Before(expiresAt) {

@@ -4172,7 +4172,7 @@ separate PID/IPC, no new endpoint/port and no public signer or Guest key.
 After the Store mutation, the harness requires the command's exact confirmed
 receipt, clean exit/removal, absence of all recorded helper PostgreSQL backend
 PIDs, an explicit bounded Guest `/readyz` HTTP 503 or independently verified
-same-run fail-closed Guest exit, a second negative observation three seconds
+same-run Guest exit1 of unproven cause, a second negative observation three seconds
 later, and independent PostgreSQL readback of `revoked`, null nonce and an
 unexpired binding. Product/PostgreSQL and Guest agents retain their original
 PID1 and endpoint fingerprints; the Guest PID1 is permitted to exit after
@@ -4191,7 +4191,7 @@ readiness may it continue to the single Store revoke. The Guest probe now
 parses exact HTTP 204/503 and fails on arbitrary Docker/timeout errors. A
 deterministic `guestagent` component test witnesses a denied reconnect and
 `ErrUnauthorized` termination; the real process harness deliberately makes
-the narrower claim of explicit not-ready or fail-closed exit, not an
+the narrower claim of explicit not-ready or post-mutation exit1, not an
 attributable reconnect denial. Capacity sampling with the Guest's additional
 3 GiB + 2 MiB budget now starts before run-owned writers and cancels/stops
 exact run-labeled writer containers on loss. A no-issuer real Docker drill
@@ -4201,3 +4201,26 @@ when a machine-checked clean R4→E Git diff contains fixture-tagged command
 files, gate tests or docs, not ordinary runtime/build inputs. These are
 mechanism tests and implementation changes, **not** the real Vault issuer
 run, full 16-scenario gate or release evidence. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-03 (capacity-stop race correction, no issuer): Sandbox
+accepted the exact R4 runtime/E fixture split and the sealed helper digest,
+but found that the first capacity-stop implementation returned immediately
+when an enumerated container disappeared during nested cleanup. It could
+therefore miss still-running Product/PostgreSQL/Vault writers. The corrected
+gate treats only Docker's exact `no such object: <same ID>` as confirmed
+disappearance, retains ambiguous inspection failures, and attempts stop/kill
+for every separately verified same-run target. Two bounded inventory passes
+and a final active-writer readback catch late starts; after the nested runners
+unwind, a second sweep uses the **same** original 90-second stop budget before
+the registered exact run cleanup, so no new writer can start after that
+lifecycle barrier. A deterministic multi-target test covers first-target
+deletion, target-specific stop failure with later writer still processed,
+foreign-run protection and a late writer. A real no-issuer Docker drill then
+deleted its first enumerated writer while another continued, observed the
+second stop and an unrelated run still live, and cleaned both labels to zero.
+The first drill exposed a leading newline in Docker's exact missing-object
+response; the parser now accepts only those two exact wire spellings. These
+checks do not prove the full topology or authorize a Vault issuer run.
+Actual Guest exit1 remains a post-mutation observation of **unproven cause**,
+not confirmed authorization denial or completed old-binding reconnect gate.
+Phase 6 remains **5/15**.

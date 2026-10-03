@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,52 +165,154 @@ func parseSlice6DockerAvailable(document []byte) (int64, error) {
 func slice6StopRunOwnedWriters(run slice6DockerRun, observerID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	ids, err := run.labeledIDs(ctx, "container")
+	return slice6StopRunOwnedWritersContext(ctx, run, observerID)
+}
+
+func slice6StopRunOwnedWritersContext(ctx context.Context, run slice6DockerRun, observerID string) error {
+	return slice6StopRunOwnedWritersWith(ctx, run.id, observerID, slice6DockerWriterStopOps(run))
+}
+
+func slice6DockerWriterStopOps(run slice6DockerRun) slice6WriterStopOps {
+	return slice6WriterStopOps{
+		list:    func(ctx context.Context) ([]string, error) { return run.labeledIDs(ctx, "container") },
+		inspect: slice6InspectWriterForStop,
+		stop: func(ctx context.Context, id string) error {
+			output, err, overflow := slice6DockerBounded(ctx, 256, nil, "stop", "-t", "1", id)
+			defer clear(output)
+			if err != nil || overflow || strings.TrimSpace(string(output)) != id {
+				return errors.New("exact capacity writer stop unconfirmed")
+			}
+			return nil
+		},
+		kill: func(ctx context.Context, id string) error {
+			output, err, overflow := slice6DockerBounded(ctx, 256, nil, "kill", id)
+			defer clear(output)
+			if err != nil || overflow || strings.TrimSpace(string(output)) != id {
+				return errors.New("exact capacity writer kill unconfirmed")
+			}
+			return nil
+		},
+	}
+}
+
+type slice6WriterStopState struct {
+	exists, running bool
+	owner           string
+}
+
+type slice6WriterStopOps struct {
+	list    func(context.Context) ([]string, error)
+	inspect func(context.Context, string) (slice6WriterStopState, error)
+	stop    func(context.Context, string) error
+	kill    func(context.Context, string) error
+}
+
+func slice6InspectWriterForStop(ctx context.Context, id string) (slice6WriterStopState, error) {
+	if len(id) != 64 || !lowerHexSlice6(id) {
+		return slice6WriterStopState{}, errors.New("capacity writer identity invalid")
+	}
+	format := fmt.Sprintf("{{.Id}}|{{index .Config.Labels %q}}|{{.State.Running}}", slice6RunLabel)
+	output, err, overflow := slice6DockerBounded(ctx, 256, nil, "inspect", "--format", format, id)
+	defer clear(output)
+	missing := "error: no such object: " + id + "\n"
+	if !overflow && err != nil && (string(output) == missing || string(output) == "\n"+missing) {
+		return slice6WriterStopState{}, nil
+	}
+	if err != nil || overflow {
+		return slice6WriterStopState{}, errors.New("capacity writer state ambiguous")
+	}
+	parts := strings.Split(strings.TrimSuffix(string(output), "\n"), "|")
+	if len(parts) != 3 || parts[0] != id || (parts[2] != "true" && parts[2] != "false") {
+		return slice6WriterStopState{}, errors.New("capacity writer state malformed")
+	}
+	return slice6WriterStopState{exists: true, owner: parts[1], running: parts[2] == "true"}, nil
+}
+
+func slice6StopRunOwnedWritersWith(ctx context.Context, runID, observerID string, ops slice6WriterStopOps) error {
+	if ctx == nil || ctx.Err() != nil || len(runID) != 32 || !lowerHexSlice6(runID) ||
+		len(observerID) != 64 || !lowerHexSlice6(observerID) ||
+		ops.list == nil || ops.inspect == nil || ops.stop == nil || ops.kill == nil {
+		return errors.New("capacity writer stop authority invalid")
+	}
+	var failures []error
+	inspectOwned := func(id string) (slice6WriterStopState, error) {
+		if len(id) != 64 || !lowerHexSlice6(id) {
+			return slice6WriterStopState{}, errors.New("capacity inventory identity invalid")
+		}
+		state, err := ops.inspect(ctx, id)
+		if err != nil || state.exists && state.owner != runID {
+			return slice6WriterStopState{}, errors.New("capacity writer ownership observation ambiguous")
+		}
+		return state, nil
+	}
+	for pass := 0; pass < 2; pass++ {
+		ids, err := ops.list(ctx)
+		if err != nil {
+			failures = append(failures, errors.New("capacity run-owned writer inventory unavailable"))
+		} else {
+			for _, id := range ids {
+				if id == observerID {
+					continue
+				}
+				state, inspectErr := inspectOwned(id)
+				if inspectErr != nil {
+					failures = append(failures, inspectErr)
+					continue
+				}
+				if !state.exists || !state.running {
+					continue
+				}
+				stopErr := ops.stop(ctx, id)
+				state, inspectErr = inspectOwned(id)
+				if inspectErr != nil {
+					failures = append(failures, inspectErr)
+					continue
+				}
+				if stopErr != nil && state.exists {
+					failures = append(failures, stopErr)
+				}
+				if !state.exists || !state.running {
+					continue
+				}
+				killErr := ops.kill(ctx, id)
+				state, inspectErr = inspectOwned(id)
+				if inspectErr != nil {
+					failures = append(failures, inspectErr)
+					continue
+				}
+				if state.exists && state.running {
+					failures = append(failures, errors.New("capacity writer remained active after stop/kill"))
+				} else if killErr != nil {
+					failures = append(failures, killErr)
+				}
+			}
+		}
+		if pass == 0 {
+			timer := time.NewTimer(100 * time.Millisecond)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+			}
+			timer.Stop()
+		}
+	}
+	ids, err := ops.list(ctx)
 	if err != nil {
-		return err
-	}
-	var writers []string
-	for _, id := range ids {
-		if id == observerID {
-			continue
-		}
-		raw, inspectErr := run.docker(ctx, "inspect", id)
-		var found []struct {
-			ID     string `json:"Id"`
-			Config struct{ Labels map[string]string }
-			State  struct{ Running bool }
-		}
-		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
-			found[0].ID != id || found[0].Config.Labels[slice6RunLabel] != run.id {
-			return errors.New("capacity stop writer ownership changed")
-		}
-		if found[0].State.Running {
-			writers = append(writers, id)
+		failures = append(failures, errors.New("capacity final writer inventory unavailable"))
+	} else {
+		for _, id := range ids {
+			if id == observerID {
+				continue
+			}
+			state, inspectErr := inspectOwned(id)
+			if inspectErr != nil {
+				failures = append(failures, inspectErr)
+			} else if state.exists && state.running {
+				failures = append(failures, errors.New("capacity final run-owned writer still active"))
+			}
 		}
 	}
-	if len(writers) == 0 {
-		return nil
-	}
-	arguments := append([]string{"stop", "-t", "1"}, writers...)
-	_, stopErr, overflow := slice6DockerBounded(ctx, 8192, nil, arguments...)
-	if stopErr != nil || overflow {
-		arguments = append([]string{"kill"}, writers...)
-		if _, killErr, killOverflow := slice6DockerBounded(ctx, 8192, nil, arguments...); killErr != nil || killOverflow {
-			return errors.New("capacity loss could not stop exact run-owned writers")
-		}
-	}
-	for _, id := range writers {
-		raw, inspectErr := run.docker(ctx, "inspect", id)
-		var found []struct {
-			ID    string `json:"Id"`
-			State struct{ Running bool }
-		}
-		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
-			found[0].ID != id || found[0].State.Running {
-			return errors.New("capacity loss writer stop not observed")
-		}
-	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func slice6StartCapacityObserver(ctx context.Context, run slice6DockerRun) (string, error) {
@@ -235,6 +339,120 @@ func slice6StartCapacityObserver(ctx context.Context, run slice6DockerRun) (stri
 		return "", errors.New("capacity observer identity unavailable")
 	}
 	return id, nil
+}
+
+func TestSlice6CapacityStopContinuesAcrossVanishedAndFailedWriters(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	observer := strings.Repeat("f", 64)
+	vanished, failing := strings.Repeat("1", 64), strings.Repeat("2", 64)
+	live, foreign := strings.Repeat("3", 64), strings.Repeat("4", 64)
+	for _, test := range []struct {
+		name      string
+		ids       []string
+		states    map[string]slice6WriterStopState
+		wantError bool
+	}{
+		{"enumerated target vanished", []string{vanished, live}, map[string]slice6WriterStopState{
+			vanished: {}, live: {exists: true, running: true, owner: runID},
+		}, false},
+		{"one failed, other run untouched", []string{failing, live, foreign}, map[string]slice6WriterStopState{
+			failing: {exists: true, running: true, owner: runID},
+			live:    {exists: true, running: true, owner: runID},
+			foreign: {exists: true, running: true, owner: strings.Repeat("b", 32)},
+		}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stopped []string
+			var killed []string
+			ops := slice6WriterStopOps{
+				list: func(context.Context) ([]string, error) { return append([]string(nil), test.ids...), nil },
+				inspect: func(_ context.Context, id string) (slice6WriterStopState, error) {
+					return test.states[id], nil
+				},
+				stop: func(_ context.Context, id string) error {
+					stopped = append(stopped, id)
+					if id == failing {
+						return errors.New("target-specific stop failure")
+					}
+					state := test.states[id]
+					state.running = false
+					test.states[id] = state
+					return nil
+				},
+				kill: func(_ context.Context, id string) error {
+					killed = append(killed, id)
+					return errors.New("target-specific kill failure")
+				},
+			}
+			err := slice6StopRunOwnedWritersWith(t.Context(), runID, observer, ops)
+			if (err != nil) != test.wantError || test.states[live].running || !slices.Contains(stopped, live) ||
+				slices.Contains(stopped, foreign) || slices.Contains(killed, foreign) ||
+				slices.Contains(stopped, vanished) ||
+				test.wantError && (!slices.Contains(stopped, failing) || !slices.Contains(killed, failing) ||
+					!test.states[foreign].running) {
+				t.Fatalf("multi-target stop err=%v stopped=%v killed=%v", err, stopped, killed)
+			}
+		})
+	}
+}
+
+func TestSlice6CapacityStopCatchesBoundedLateWriter(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	observer, first, late := strings.Repeat("f", 64), strings.Repeat("1", 64), strings.Repeat("2", 64)
+	states := map[string]slice6WriterStopState{
+		first: {exists: true, running: true, owner: runID},
+		late:  {exists: true, running: true, owner: runID},
+	}
+	listed := 0
+	var stopped []string
+	ops := slice6WriterStopOps{
+		list: func(context.Context) ([]string, error) {
+			listed++
+			if listed == 1 {
+				return []string{first}, nil
+			}
+			return []string{first, late}, nil
+		},
+		inspect: func(_ context.Context, id string) (slice6WriterStopState, error) { return states[id], nil },
+		stop: func(_ context.Context, id string) error {
+			stopped = append(stopped, id)
+			state := states[id]
+			state.running = false
+			states[id] = state
+			return nil
+		},
+		kill: func(context.Context, string) error { return errors.New("unexpected kill") },
+	}
+	if err := slice6StopRunOwnedWritersWith(t.Context(), runID, observer, ops); err != nil ||
+		listed != 3 || !slices.Contains(stopped, first) || !slices.Contains(stopped, late) {
+		t.Fatalf("late writer stop err=%v lists=%d stopped=%v", err, listed, stopped)
+	}
+}
+
+func TestSlice6CapacityStopRetainsAmbiguousInspectAndStopsOthers(t *testing.T) {
+	runID := strings.Repeat("a", 32)
+	observer, ambiguous, live := strings.Repeat("f", 64), strings.Repeat("1", 64), strings.Repeat("2", 64)
+	running := true
+	var stopped []string
+	ops := slice6WriterStopOps{
+		list: func(context.Context) ([]string, error) { return []string{ambiguous, live}, nil },
+		inspect: func(_ context.Context, id string) (slice6WriterStopState, error) {
+			if id == ambiguous {
+				return slice6WriterStopState{}, errors.New("ambiguous daemon response")
+			}
+			return slice6WriterStopState{exists: true, owner: runID, running: running}, nil
+		},
+		stop: func(_ context.Context, id string) error {
+			stopped = append(stopped, id)
+			running = false
+			return nil
+		},
+		kill: func(context.Context, string) error { return errors.New("unexpected kill") },
+	}
+	if err := slice6StopRunOwnedWritersWith(t.Context(), runID, observer, ops); err == nil ||
+		running || !slices.Equal(stopped, []string{live}) {
+		t.Fatalf("ambiguous inspect did not preserve failure and stop later writer: stopped=%v", stopped)
+	}
 }
 
 func TestSlice6CapacityMonitorStopsOnThresholdAndSampleLoss(t *testing.T) {
@@ -409,8 +627,8 @@ func TestSlice6RunningCapacityMonitorRealDockerDiagnostic(t *testing.T) {
 	}
 }
 
-// This no-issuer drill kills no unrelated process: a lost sample forces an
-// exact run-labeled writer to stop before the normal zero-resource cleanup.
+// This no-issuer drill deletes one enumerated writer concurrently, then proves
+// another exact-run writer stops while an independent run keeps running.
 func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 	if os.Getenv(slice6CapacityStopDiagnosticEnv) != "1" {
 		t.Skip("set " + slice6CapacityStopDiagnosticEnv + "=1 for no-issuer Docker stop drill")
@@ -432,21 +650,62 @@ func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writerRaw, err := run.docker(ctx, "run", "-d", "--pull=never", "--network=none", "--restart=no",
-		"--name", "sr-p6-capacity-writer-"+run.id, "--label", run.label(),
-		"--log-driver=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL",
-		"--security-opt=no-new-privileges:true", "--memory=67108864", "--pids-limit=16",
-		slice6CapacityImage, "sleep", "30")
-	writerID := strings.TrimSpace(string(writerRaw))
-	if err != nil || len(writerID) != 64 || !lowerHexSlice6(writerID) {
-		t.Fatal("capacity stop drill writer start unconfirmed")
+	otherRun, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if err := otherRun.cleanup(cleanup); err != nil {
+			t.Errorf("foreign capacity run cleanup: %v", err)
+		}
+	})
+	startWriter := func(owner slice6DockerRun, suffix string) string {
+		t.Helper()
+		raw, startErr := owner.docker(ctx, "run", "-d", "--pull=never", "--network=none", "--restart=no",
+			"--name", "sr-p6-capacity-writer-"+suffix+"-"+owner.id, "--label", owner.label(),
+			"--log-driver=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL",
+			"--security-opt=no-new-privileges:true", "--memory=67108864", "--pids-limit=16",
+			slice6CapacityImage, "sleep", "30")
+		id := strings.TrimSpace(string(raw))
+		if startErr != nil || len(id) != 64 || !lowerHexSlice6(id) {
+			t.Fatal("capacity stop drill writer start unconfirmed")
+		}
+		return id
+	}
+	vanishedID := startWriter(run, "vanish")
+	writerID := startWriter(run, "live")
+	foreignID := startWriter(otherRun, "foreign")
 	root, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var samples int
 	var stopErr error
+	ops := slice6DockerWriterStopOps(run)
+	list := ops.list
+	deleted := false
+	ops.list = func(ctx context.Context) ([]string, error) {
+		ids, err := list(ctx)
+		if err != nil || deleted {
+			return ids, err
+		}
+		if !slices.Contains(ids, vanishedID) {
+			return nil, errors.New("concurrent-delete target missing from run inventory")
+		}
+		deleted = true
+		if _, err := run.docker(ctx, "rm", "-f", "-v", vanishedID); err != nil {
+			return nil, errors.New("enumerated writer concurrent deletion unavailable")
+		}
+		ordered := []string{vanishedID}
+		for _, id := range ids {
+			if id != vanishedID {
+				ordered = append(ordered, id)
+			}
+		}
+		return ordered, nil
+	}
 	monitor, err := startSlice6CapacityMonitor(ctx, slice6GuestStorageCapacityBudget(0),
 		100*time.Millisecond, 2*time.Second,
 		func(sampleContext context.Context) (slice6CapacityObservation, error) {
@@ -455,7 +714,7 @@ func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 				return slice6CapacityObservation{}, errSlice6Capacity
 			}
 			return sampleSlice6RunningCapacity(sampleContext, run, root, observerID)
-		}, func(error) { stopErr = slice6StopRunOwnedWriters(run, observerID) })
+		}, func(error) { stopErr = slice6StopRunOwnedWritersWith(ctx, run.id, observerID, ops) })
 	if err != nil {
 		t.Fatal("capacity stop drill admission failed")
 	}
@@ -465,13 +724,16 @@ func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 		t.Fatal("capacity stop drill did not trigger")
 	}
 	monitor.Close()
-	if stopErr != nil || monitor.Reason() == nil {
+	if stopErr != nil || monitor.Reason() == nil || !deleted {
 		t.Fatalf("capacity stop drill stop=%v reason=%v", stopErr, monitor.Reason())
+	}
+	if vanished, inspectErr := slice6InspectWriterForStop(ctx, vanishedID); inspectErr != nil || vanished.exists {
+		t.Fatal("first enumerated writer was not confirmed deleted")
 	}
 	for _, probe := range []struct {
 		id   string
 		want bool
-	}{{writerID, false}, {observerID, true}} {
+	}{{writerID, false}, {observerID, true}, {foreignID, true}} {
 		raw, inspectErr := run.docker(ctx, "inspect", probe.id)
 		var found []struct{ State struct{ Running bool } }
 		if inspectErr != nil || json.Unmarshal(raw, &found) != nil || len(found) != 1 ||
@@ -481,5 +743,8 @@ func TestSlice6CapacityLossStopsRealDockerWriter(t *testing.T) {
 	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatal("capacity stop drill exact cleanup failed")
+	}
+	if err := otherRun.cleanup(ctx); err != nil {
+		t.Fatal("foreign capacity run exact cleanup failed")
 	}
 }

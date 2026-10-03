@@ -269,13 +269,19 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		var stopMu sync.Mutex
 		var stopErr error
+		var stopContext context.Context
+		var stopCancel context.CancelFunc
 		monitor, monitorErr := startSlice6CapacityMonitor(ctx, slice6GuestStorageCapacityBudget(0),
 			time.Second, 2*time.Second,
 			func(sampleContext context.Context) (slice6CapacityObservation, error) {
 				return sampleSlice6RunningCapacity(sampleContext, run, rootPath, monitorID)
 			}, func(reason error) {
 				cancel()
-				stopped := slice6StopRunOwnedWriters(run, monitorID)
+				bounded, release := context.WithTimeout(context.Background(), 90*time.Second)
+				stopMu.Lock()
+				stopContext, stopCancel = bounded, release
+				stopMu.Unlock()
+				stopped := slice6StopRunOwnedWritersContext(bounded, run, monitorID)
 				stopMu.Lock()
 				stopErr = stopped
 				stopMu.Unlock()
@@ -285,10 +291,27 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		defer monitor.Close()
 		t.Cleanup(func() {
+			// All nested process runners have returned and their deferred Docker
+			// creates/starts are over by this point. This bounded second sweep is
+			// the lifecycle barrier after the asynchronous emergency stop and
+			// before the earlier-registered exact run cleanup.
+			var finalStopErr error
+			if monitor.Reason() != nil {
+				stopMu.Lock()
+				bounded := stopContext
+				release := stopCancel
+				stopMu.Unlock()
+				if bounded == nil || release == nil {
+					finalStopErr = errors.New("capacity stop budget unavailable")
+				} else {
+					finalStopErr = slice6StopRunOwnedWritersContext(bounded, run, monitorID)
+					release()
+				}
+			}
 			stopMu.Lock()
 			defer stopMu.Unlock()
-			if monitor.Reason() != nil || stopErr != nil {
-				t.Errorf("continuous capacity monitor stopped run-owned writers: reason=%v stop=%v", monitor.Reason(), stopErr)
+			if monitor.Reason() != nil || stopErr != nil || finalStopErr != nil {
+				t.Errorf("continuous capacity monitor stopped run-owned writers: reason=%v emergency_stop=%v final_stop=%v", monitor.Reason(), stopErr, finalStopErr)
 			}
 		})
 		t.Log("pre-issuer selected Guest shell/utilities and continuous host/Docker capacity interlock admitted")
@@ -778,7 +801,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																				guestBindingFixture, guestBindingReceipt, productRuntimeSocketVolumes, anchorFiles,
 																				productRuntimeObserver)
 																			if err == nil {
-																				t.Logf("finite same-netns Product Store revoke confirmed with bounded Guest not-ready or fail-closed exit: generation=%d backend_pid=%d (private receipt; not production audit)",
+																				t.Logf("finite same-netns Product Store mutation confirmed; Guest post-mutation 503/exit1 observed, cause unproven: generation=%d backend_pid=%d (private receipt; not production audit)",
 																					revoked.BindingGeneration, revoked.PostgresBackendPID)
 																			}
 																			return err

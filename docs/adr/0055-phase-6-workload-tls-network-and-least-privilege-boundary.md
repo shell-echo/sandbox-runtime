@@ -2493,9 +2493,10 @@ additional source/binary-digest-bound, build-tag-only, finite local-gate task.
 It may share the **exact running Product container's network namespace** with
 `--network=container:<same-run-Product-ID>` while Product and Guest retain
 their original PID1 and start time **at admission**. After a denied reconnect,
-the Guest is allowed to terminate fail-closed; the gate must verify its exact
+the Guest may terminate; the gate must verify its exact
 same-run container, original start time, no restart/OOM and expected exit
-instead of requiring it to remain running. It does not share PID, mount or IPC
+code without claiming that the exit cause was authorization denial, instead
+of requiring it to remain running. It does not share PID, mount or IPC
 namespaces, expose a listener/port, gain a Docker socket or host network, or
 join another bridge as an endpoint. The task runs under Product's UID:GID,
 read-only root, drop-ALL, no-new-privileges, the locked seccomp and a bounded
@@ -2533,9 +2534,10 @@ natural expiry or unrelated network fault cannot substitute for this gate.
 
 The live negative observation must parse an actual bounded Guest `/readyz`
 HTTP 503 (204 is ready) or independently inspect the exact Guest container's
-fail-closed exit; an arbitrary `docker exec`, timeout or network error is not
+post-mutation exit1; an arbitrary `docker exec`, timeout or network error is not
 revocation evidence. An exited Guest is not by itself proof that the old
-binding's reconnect authentication was denied. The component auth test
+binding's reconnect authentication was denied; its cause remains unproven.
+The component auth test
 must deterministically witness a denied reconnect and `ErrUnauthorized`
 termination; the real process gate still needs an attributable protocol or
 equivalent redacted witness before it may claim the full reconnect scenario.
@@ -2543,6 +2545,15 @@ Continuous host/Docker capacity sampling starts before run-owned writers;
 sampling loss or low headroom cancels and stops exact run-labeled writer
 containers before zero-resource cleanup. These checks are preconditions, not
 release evidence.
+The emergency stop must not abandon later writers when an earlier enumerated
+container is removed concurrently by a nested runner. Exact same-ID Docker
+absence counts as already stopped; ambiguous inspection or target-specific
+stop failures are retained while the loop attempts every other verified
+same-run target. Bounded re-enumeration and a final no-active-writer readback
+run before exact cleanup. Once the main runner has unwound, a final sweep uses
+the remainder of the original 90-second stop budget as a lifecycle barrier:
+no new writer may start after that point. A foreign run label is never a stop
+target. This is a safety interlock, not a release-scenario result.
 
 `Store.RevokeGuest` does not currently persist the reason or create a
 `security_audit`/`workspace_event` row. This local-gate task therefore records
