@@ -102,6 +102,7 @@ func runMigrationV2(parent context.Context, timeout time.Duration, value migrati
 		ClientAgentGID: value.ClientAgentGID, PeerCRLRoleFile: value.PeerCRLRoleFile,
 		PeerCRLRoleDigest: value.PeerCRLRoleDigest, PeerCRLSourceMappingDigest: value.PeerCRLSourceMappingDigest,
 		OperationTimeout: min(timeout, 30*time.Second), MaxConnections: value.MaxConnections,
+		MigrationDiagnostic: true,
 		AfterConnect: func(connectionCtx context.Context, connection *pgx.Conn) error {
 			return phase6egress.VerifyBoundMigrationDDLConnection(connectionCtx, connection,
 				authority.Database, authority.SQLRole)
@@ -111,8 +112,8 @@ func runMigrationV2(parent context.Context, timeout time.Duration, value migrati
 		return migrationPostgresConnectError(err)
 	}
 	defer closePool()
-	if err := pool.Ping(ctx); err != nil {
-		return errors.New("migration v2 PostgreSQL readiness is unavailable")
+	if err := probeMigrationPool(ctx, pool); err != nil {
+		return err
 	}
 	// AfterConnect has already verified target, login and bounded DDL privilege
 	// on the connection before ApplyMigrations can issue its first statement.

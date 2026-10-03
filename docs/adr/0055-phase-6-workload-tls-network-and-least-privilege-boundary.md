@@ -2367,3 +2367,38 @@ migration's exact stage/class output is accepted only by a bounded, strict
 observer. This correction is not a successful release gate or a production
 readiness claim. Phase 6 remains **5/15** until a new source-bound real gate
 and strict evidence pass.
+
+### Product migration first-connection failure boundary (2026-10-03)
+
+The R11 real migration passed initial peer and own-client revocation guard
+refresh but failed at its first `pgxpool.Ping`. Pool construction is lazy, so
+that observation does not establish TCP, TLS, PostgreSQL authentication or
+the pre-DDL `AfterConnect` SQL check. The prior generic readiness line cannot
+identify which failed; no source change may retrospectively classify R11.
+
+For the one-shot Product/Provider migration path only, the approved local
+diagnostic wraps existing `BeforeConnect`, exact `DialFunc`, TLS/guard
+`AfterNetConnect` and `AfterConnect` callbacks at their failure returns.
+Each wrapper executes the original once and returns a private closed error
+with generic text, no stored raw cause and preserved `errors.Is` sentinels.
+The locked pgx v5.9.2 `Pool.Ping` implementation is expanded privately into
+one `Acquire`, one `Release` and one connection `Ping`; no extra connection,
+SQL query, retry or new network path is authorized. The caller's existing
+60-second migration context takes priority over a pool constructor's
+separate context. Typed PostgreSQL errors may only be classified as a server
+rejection, not automatically as an HBA or SCRAM failure. TLS and guard
+tracking failures remain a conservative combined class unless an existing
+peer-CRL closed class survives wrapping. Anything not evidenced returns a
+closed unknown/acquire class. The only outward projection is the migration
+CLI's finite `stage=ping: class=...` line, checked by the separate bounded
+E observer; Product/Provider runtime errors stay generic.
+
+The R11 issue remains of unknown cause. Controlled, no-Vault PostgreSQL
+components and this classifier's synthetic fault injection can reject a
+candidate implementation error but cannot substitute for another reviewed
+source-bound real gate. The same 45-second agent socket, 15-second agent
+bootstrap, two-second peer pull and 60-second migration startup budgets,
+Profile CPU/memory/PID limits, identities, CRL policy and SQL grants remain
+unchanged. This local diagnostic can be reverted as ordinary source without
+schema, wire or data migration. No new issuer run is authorized by its
+implementation alone; Phase 6 remains **5/15**.

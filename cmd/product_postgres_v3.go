@@ -76,6 +76,7 @@ type directV3PostgresSettings struct {
 	OperationTimeout                                               time.Duration
 	MaxConnections, MinConnections                                 int32
 	AfterConnect                                                   func(context.Context, *pgx.Conn) error
+	MigrationDiagnostic                                            bool
 }
 
 // directPostgresStage is a closed, local-only startup diagnostic. It never
@@ -281,6 +282,11 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL connection verification is unavailable")
 	}
 	poolConfig.AfterConnect = settings.AfterConnect
+	if settings.MigrationDiagnostic && bindMigrationConnectionDiagnostic(ctx, poolConfig) != nil {
+		ownGuard.Close()
+		guard.Close()
+		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL connection diagnostic is unavailable")
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		ownGuard.Close()
