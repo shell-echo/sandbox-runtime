@@ -4458,3 +4458,32 @@ or prove live revoke. The `c67fee…` first error is addressed in the gate
 topology, but the real Guest path and the full release gate remain unproved;
 Phase 6 remains **5/15**. No further real issuer run is authorized by this
 offline result alone.
+
+Follow-up 2026-10-04 (Sandbox-reviewed E-only Guest create-state correction;
+**no real issuer run**): independent review of the preceding commit found that
+the Guest container verifier demanded an effective Docker `NetworkID` before
+`docker start`. The repository's existing finite Guest fixture already
+distinguishes requested pre-start IPAM from running effective identity, and
+Docker may leave the created container's effective ID empty. This was a
+verified source-level mismatch, not an observed failure of a real Guest PID1.
+The Guest gate now uses that same strict stage distinction for both approved
+networks: exactly one name-or-ID key and requested IP per edge before start,
+with an empty effective ID allowed only then; after start it requires the two
+actual network IDs, assigned IPs and requested IPAM values. Missing, unknown,
+duplicate, swapped and wrong-ID/IP endpoints fail closed. The running
+network witness is tied to the same labeled Guest PID1 and does not replace
+the later actual bridge-membership/readiness checks.
+
+The real Guest PID1 gate and no-issuer diagnostic now share one closed Docker
+`create` request for the selected image, non-root identity, private config,
+two subject sockets, three business storage mounts, trust anchors, seccomp,
+read-only root and exact tmpfs options (size, mode, UID/GID and hardening).
+The corrected no-issuer diagnostic created the same Guest container on
+`guest-product`, connected `network-guest-runtime`, inspected all requested
+network/mount/tmpfs/resource constraints, confirmed state `created` and PID
+zero, removed that container, then cleaned all exact run-owned resources to
+zero. It passed in 143.30 seconds. It did **not** start Guest, Product, their
+agents, PostgreSQL or Vault, and did not issue or revoke credentials. This is
+Docker lifecycle mechanism evidence only; running effective networks, Guest
+ready/live revoke and all 16 release scenarios remain unproved. Phase 6 stays
+**5/15** pending a separately authorized real issuer gate.

@@ -222,7 +222,51 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 			slice6VerifyGuestFixtureVolume(ctx, run, "sr-p6-config-guest-tls-agent-"+run.id) != nil {
 			t.Fatal("offline Guest runtime direct signer config/socket identity unavailable")
 		}
-		t.Log("no-issuer Guest runtime direct signer Profile/peer config, controller edge, distinct subject socket, exact ownership and label admitted; no signer, Guest PID1, SQL or Vault started")
+		anchorFiles := slice6PrepareTrustAnchorVolumes(t, ctx, run, composed)
+		guestStorage := slice6PrepareGuestStorageVolumes(t, ctx, run,
+			guestPlan.Principal.UID, guestPlan.Principal.GID)
+		if err := slice6ValidateGuestStorageVolumes(ctx, run, guestStorage); err != nil {
+			t.Fatal("offline Guest storage volume identity unavailable")
+		}
+		productNetwork, err := createSlice6ProfileNetwork(ctx, run, guestPlan.ProductNetwork)
+		if err != nil {
+			t.Fatal("offline Guest Product network unavailable")
+		}
+		internalNetwork, err := createSlice6ProfileNetwork(ctx, run, guestPlan.InternalNetwork)
+		if err != nil {
+			t.Fatal("offline Guest internal network unavailable")
+		}
+		seccomp := filepath.Join(sourceDir, "profiles", "phase6", "security", "originals",
+			"moby-default-seccomp-836ae4d3.json")
+		guestArgs, err := slice6GuestRuntimeCreateArguments(ctx, run, composed.Profile, guestPlan,
+			productNetwork.NetworkID, "sr-p6-config-guest-runtime-"+run.id,
+			guestStorage, guestRuntimeSupply, anchorFiles, seccomp)
+		if err != nil {
+			t.Fatal("offline Guest exact create arguments unavailable")
+		}
+		created, err := run.docker(ctx, guestArgs...)
+		guestID := strings.TrimSpace(string(created))
+		if err != nil || len(guestID) != 64 || !lowerHexSlice6(guestID) {
+			t.Fatal("offline Guest create without start failed")
+		}
+		if _, err := run.docker(ctx, "network", "connect", "--ip", guestPlan.InternalIP,
+			internalNetwork.NetworkID, guestID); err != nil {
+			t.Fatal("offline Guest second network connect without start failed")
+		}
+		if err := slice6VerifyGuestRuntimeContainer(ctx, run, guestID, guestPlan,
+			productNetwork.NetworkID, internalNetwork.NetworkID,
+			"sr-p6-config-guest-runtime-"+run.id, guestStorage, guestRuntimeSupply,
+			anchorFiles, seccomp); err != nil {
+			t.Fatalf("offline Guest created-container boundary unavailable: %v", err)
+		}
+		state, err := run.docker(ctx, "inspect", "--format", "{{.State.Status}}:{{.State.Pid}}", guestID)
+		if err != nil || strings.TrimSpace(string(state)) != "created:0" {
+			t.Fatal("offline Guest diagnostic unexpectedly started")
+		}
+		if _, err := run.docker(ctx, "rm", "-f", "-v", guestID); err != nil {
+			t.Fatal("offline Guest exact created-container removal failed")
+		}
+		t.Log("no-issuer Guest runtime direct signer inputs and exact two-network Guest create/inspect passed; Guest remained created with PID 0, no signer, SQL or Vault started")
 	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatalf("offline Product input exact Docker cleanup failed: %v", err)

@@ -165,60 +165,12 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		return err
 	}
 	seccomp := filepath.Join(root, "profiles", "phase6", "security", "originals", "moby-default-seccomp-836ae4d3.json")
-	seccompDocument, err := os.ReadFile(seccomp)
-	seccompDigest := sha256.Sum256(seccompDocument)
-	clear(seccompDocument)
-	if err != nil || plan.Principal.SeccompDigest != "sha256:"+hex.EncodeToString(seccompDigest[:]) {
-		return errors.New("Guest PID1 seccomp source drift")
-	}
-	private, _ := phase6security.Slice6PrivateConfigMount("guest-runtime")
 	configVolume := "sr-p6-config-guest-runtime-" + run.id
-	if err := slice6VerifyGuestFixtureVolume(ctx, run, configVolume); err != nil {
-		return err
-	}
-	anchors, err := slice6AnchorMountArguments(profile, "guest-runtime", anchorFiles)
+	args, err := slice6GuestRuntimeCreateArguments(ctx, run, profile, plan, productEdge.NetworkID,
+		configVolume, storage, socketVolumes, anchorFiles, seccomp)
 	if err != nil {
 		return err
 	}
-	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
-	tmpfs := func(target string) string {
-		return target + ":rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=" +
-			strconv.FormatUint(uint64(plan.Principal.UID), 10) + ",gid=" +
-			strconv.FormatUint(uint64(plan.Principal.GID), 10)
-	}
-	args := []string{"create", "--pull=never", "--name", "sr-p6-guest-runtime-" + run.id,
-		"--label", run.label(), "--log-driver=none", "--network", productEdge.NetworkID,
-		"--ip", plan.ProductIP, "--restart=no", "--user", owner, "--cap-drop=ALL",
-		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccomp,
-		"--read-only", "--memory", strconv.FormatInt(plan.Principal.Resources.MemoryBytes, 10),
-		"--cpus", strconv.FormatFloat(float64(plan.Principal.Resources.CPUMillis)/1000, 'f', 3, 64),
-		"--pids-limit", strconv.FormatInt(plan.Principal.Resources.PIDs, 10),
-		"--mount", "type=volume,src=" + configVolume + ",dst=" + private.Target + ",readonly",
-		"--tmpfs", tmpfs(phase6security.Slice6GuestOutputsRoot),
-		"--tmpfs", tmpfs(phase6security.Slice6GuestTempRoot)}
-	for _, mount := range plan.Principal.Mounts {
-		switch mount.Kind {
-		case "private_socket":
-			volume := socketVolumes[mount.StorageID]
-			if volume == "" || slice6VerifyGuestFixtureVolume(ctx, run, volume) != nil {
-				return errors.New("Guest private signer socket volume missing")
-			}
-			args = append(args, "--mount", "type=volume,src="+volume+",dst="+mount.Target+",readonly")
-		case "guest_storage":
-			volume := storage[mount.StorageID]
-			if volume == "" {
-				return errors.New("Guest storage volume missing")
-			}
-			option := "type=volume,src=" + volume + ",dst=" + mount.Target
-			if mount.ReadOnly {
-				option += ",readonly"
-			}
-			args = append(args, "--mount", option)
-		}
-	}
-	args = append(args, anchors...)
-	args = append(args, plan.Principal.ImageReference, "--config",
-		private.Target+"/"+phase6security.Slice6StartupConfigFile, "guest", "serve")
 	created, err := run.docker(ctx, args...)
 	id := strings.TrimSpace(string(created))
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
@@ -241,6 +193,11 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	if _, err := run.docker(ctx, "start", id); err != nil {
 		return errors.New("start independent Guest PID1")
 	}
+	if err := slice6VerifyGuestRuntimeRunningNetworks(ctx, run, id, plan,
+		productEdge.NetworkID, internal.NetworkID); err != nil {
+		return err
+	}
+	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) && ctx.Err() == nil {
 		guest, inspectErr := slice6InspectProductRuntimeMember(ctx, run, id)
@@ -286,6 +243,72 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		time.Sleep(250 * time.Millisecond)
 	}
 	return errors.New("Guest PID1 did not reach connected readiness within fixed deadline")
+}
+
+// Both the real PID1 gate and the no-issuer created-container diagnostic use
+// this one closed Docker request. The latter never starts Guest or its peers.
+func slice6GuestRuntimeCreateArguments(ctx context.Context, run slice6DockerRun,
+	profile phase6security.Profile, plan slice6GuestRuntimeLaunchPlan, productNetworkID,
+	configVolume string, storage, sockets, anchorFiles map[string]string, seccomp string) ([]string, error) {
+	if len(productNetworkID) != 64 || !lowerHexSlice6(productNetworkID) ||
+		configVolume != "sr-p6-config-guest-runtime-"+run.id ||
+		slice6VerifyGuestFixtureVolume(ctx, run, configVolume) != nil {
+		return nil, errors.New("Guest PID1 private config or network unavailable")
+	}
+	seccompDocument, err := os.ReadFile(seccomp)
+	seccompDigest := sha256.Sum256(seccompDocument)
+	clear(seccompDocument)
+	if err != nil || plan.Principal.SeccompDigest != "sha256:"+hex.EncodeToString(seccompDigest[:]) {
+		return nil, errors.New("Guest PID1 seccomp source drift")
+	}
+	private, ok := phase6security.Slice6PrivateConfigMount("guest-runtime")
+	if !ok {
+		return nil, errors.New("Guest PID1 private mount unavailable")
+	}
+	anchors, err := slice6AnchorMountArguments(profile, "guest-runtime", anchorFiles)
+	if err != nil {
+		return nil, err
+	}
+	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
+	tmpfs := func(target string) string {
+		return target + ":rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=" +
+			strconv.FormatUint(uint64(plan.Principal.UID), 10) + ",gid=" +
+			strconv.FormatUint(uint64(plan.Principal.GID), 10)
+	}
+	args := []string{"create", "--pull=never", "--name", "sr-p6-guest-runtime-" + run.id,
+		"--label", run.label(), "--log-driver=none", "--network", productNetworkID,
+		"--ip", plan.ProductIP, "--restart=no", "--user", owner, "--cap-drop=ALL",
+		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccomp,
+		"--read-only", "--memory", strconv.FormatInt(plan.Principal.Resources.MemoryBytes, 10),
+		"--cpus", strconv.FormatFloat(float64(plan.Principal.Resources.CPUMillis)/1000, 'f', 3, 64),
+		"--pids-limit", strconv.FormatInt(plan.Principal.Resources.PIDs, 10),
+		"--mount", "type=volume,src=" + configVolume + ",dst=" + private.Target + ",readonly",
+		"--tmpfs", tmpfs(phase6security.Slice6GuestOutputsRoot),
+		"--tmpfs", tmpfs(phase6security.Slice6GuestTempRoot)}
+	for _, mount := range plan.Principal.Mounts {
+		switch mount.Kind {
+		case "private_socket":
+			volume := sockets[mount.StorageID]
+			if volume == "" || slice6VerifyGuestFixtureVolume(ctx, run, volume) != nil {
+				return nil, errors.New("Guest private signer socket volume missing")
+			}
+			args = append(args, "--mount", "type=volume,src="+volume+",dst="+mount.Target+",readonly")
+		case "guest_storage":
+			volume := storage[mount.StorageID]
+			if volume == "" {
+				return nil, errors.New("Guest storage volume missing")
+			}
+			option := "type=volume,src=" + volume + ",dst=" + mount.Target
+			if mount.ReadOnly {
+				option += ",readonly"
+			}
+			args = append(args, "--mount", option)
+		}
+	}
+	args = append(args, anchors...)
+	args = append(args, plan.Principal.ImageReference, "--config",
+		private.Target+"/"+phase6security.Slice6StartupConfigFile, "guest", "serve")
+	return args, nil
 }
 
 func slice6VerifyGuestRuntimeContainer(ctx context.Context, run slice6DockerRun, id string,
@@ -343,19 +366,13 @@ func slice6VerifyGuestRuntimeContainer(ctx context.Context, run slice6DockerRun,
 		len(found[0].NetworkSettings.Networks) != 2 {
 		return errors.New("Guest created-container identity or least-privilege drift")
 	}
-	for name, want := range map[string]struct{ id, ip string }{
-		plan.ProductNetwork.Name:  {productNetworkID, plan.ProductIP},
-		plan.InternalNetwork.Name: {internalNetworkID, plan.InternalIP},
-	} {
-		observed, ok := found[0].NetworkSettings.Networks[name]
-		if !ok || observed.NetworkID != want.id || observed.IPAMConfig.IPv4Address != want.ip {
-			return errors.New("Guest fixed network or IP drift")
-		}
+	if err := slice6ValidateGuestRuntimeCreatedNetworks(found[0].NetworkSettings.Networks,
+		plan, productNetworkID, internalNetworkID); err != nil {
+		return err
 	}
 	for _, target := range []string{phase6security.Slice6GuestOutputsRoot, phase6security.Slice6GuestTempRoot} {
-		options := found[0].HostConfig.Tmpfs[target]
-		if !strings.Contains(options, "size=8388608") || !strings.Contains(options, "noexec") ||
-			!strings.Contains(options, "nosuid") || !strings.Contains(options, "nodev") {
+		if !slice6GuestRuntimeTmpfsMatches(found[0].HostConfig.Tmpfs[target],
+			plan.Principal.UID, plan.Principal.GID) {
 			return errors.New("Guest bounded tmpfs drift")
 		}
 	}
@@ -400,4 +417,114 @@ func slice6VerifyGuestRuntimeContainer(ctx context.Context, run slice6DockerRun,
 		return errors.New("Guest mount inventory incomplete")
 	}
 	return nil
+}
+
+func slice6GuestRuntimeTmpfsMatches(options string, uid, gid uint32) bool {
+	actual := strings.Split(options, ",")
+	want := []string{"rw", "noexec", "nosuid", "nodev", "size=8388608", "mode=0700",
+		"uid=" + strconv.FormatUint(uint64(uid), 10),
+		"gid=" + strconv.FormatUint(uint64(gid), 10)}
+	slices.Sort(actual)
+	slices.Sort(want)
+	return slices.Equal(actual, want)
+}
+
+type slice6GuestNetworkExpectation struct {
+	id, name, ip string
+}
+
+func slice6GuestRuntimeNetworkExpectations(plan slice6GuestRuntimeLaunchPlan,
+	productNetworkID, internalNetworkID string) ([2]slice6GuestNetworkExpectation, error) {
+	want := [2]slice6GuestNetworkExpectation{
+		{productNetworkID, plan.ProductNetwork.Name, plan.ProductIP},
+		{internalNetworkID, plan.InternalNetwork.Name, plan.InternalIP},
+	}
+	if len(want[0].id) != 64 || len(want[1].id) != 64 ||
+		!lowerHexSlice6(want[0].id) || !lowerHexSlice6(want[1].id) ||
+		want[0].id == want[1].id || want[0].name == "" || want[1].name == "" ||
+		want[0].name == want[1].name || want[0].ip == "" || want[1].ip == "" {
+		return [2]slice6GuestNetworkExpectation{}, errors.New("Guest two-network target invalid")
+	}
+	return want, nil
+}
+
+// Docker can leave the effective NetworkID unset on a created container. The
+// requested endpoint must still be present once, under exactly its name or ID.
+func slice6ValidateGuestRuntimeCreatedNetworks(networks map[string]slice6MigrationNetworkEndpoint,
+	plan slice6GuestRuntimeLaunchPlan, productNetworkID, internalNetworkID string) error {
+	want, err := slice6GuestRuntimeNetworkExpectations(plan, productNetworkID, internalNetworkID)
+	if err != nil || len(networks) != 2 {
+		return errors.New("Guest created two-network inventory drift")
+	}
+	for _, target := range want {
+		byID, hasID := networks[target.id]
+		byName, hasName := networks[target.name]
+		if hasID == hasName {
+			return errors.New("Guest created network key missing or duplicated")
+		}
+		key, endpoint := target.id, byID
+		if hasName {
+			key, endpoint = target.name, byName
+		}
+		if err := slice6ValidateGuestFixtureCreatedNetwork(
+			map[string]slice6MigrationNetworkEndpoint{key: endpoint},
+			target.id, target.name, target.ip); err != nil {
+			return errors.New("Guest created requested network or IP drift")
+		}
+	}
+	return nil
+}
+
+func slice6ValidateGuestRuntimeRunningNetworks(networks map[string]slice6GuestFixtureRunningEndpoint,
+	plan slice6GuestRuntimeLaunchPlan, productNetworkID, internalNetworkID string) error {
+	want, err := slice6GuestRuntimeNetworkExpectations(plan, productNetworkID, internalNetworkID)
+	if err != nil || len(networks) != 2 {
+		return errors.New("Guest running two-network inventory drift")
+	}
+	for _, target := range want {
+		byID, hasID := networks[target.id]
+		byName, hasName := networks[target.name]
+		if hasID == hasName {
+			return errors.New("Guest running network key missing or duplicated")
+		}
+		key, endpoint := target.id, byID
+		if hasName {
+			key, endpoint = target.name, byName
+		}
+		if err := slice6ValidateGuestFixtureRunningNetwork(
+			map[string]slice6GuestFixtureRunningEndpoint{key: endpoint},
+			target.id, target.name, target.ip); err != nil {
+			return errors.New("Guest running effective network or IP drift")
+		}
+	}
+	return nil
+}
+
+func slice6VerifyGuestRuntimeRunningNetworks(ctx context.Context, run slice6DockerRun, id string,
+	plan slice6GuestRuntimeLaunchPlan, productNetworkID, internalNetworkID string) error {
+	member, err := slice6InspectProductRuntimeMember(ctx, run, id)
+	if err != nil || member.ID != id || member.Name != "/sr-p6-guest-runtime-"+run.id {
+		return errors.New("Guest running network witness PID1 unavailable")
+	}
+	raw, err := run.docker(ctx, "inspect", id)
+	var observed []struct {
+		ID     string `json:"Id"`
+		Name   string
+		Config struct{ Labels map[string]string }
+		State  struct {
+			Running bool
+			Pid     int
+		}
+		NetworkSettings struct {
+			Networks map[string]slice6GuestFixtureRunningEndpoint
+		}
+	}
+	if err != nil || json.Unmarshal(raw, &observed) != nil || len(observed) != 1 ||
+		observed[0].ID != id || observed[0].Name != member.Name ||
+		observed[0].Config.Labels[slice6RunLabel] != run.id ||
+		!observed[0].State.Running || observed[0].State.Pid != member.State.Pid {
+		return errors.New("Guest running network witness inspect unavailable")
+	}
+	return slice6ValidateGuestRuntimeRunningNetworks(observed[0].NetworkSettings.Networks,
+		plan, productNetworkID, internalNetworkID)
 }
