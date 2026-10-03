@@ -1,0 +1,97 @@
+# Phase 6 Slice 6 frozen scenario gap (2026-10-04)
+
+This is a work queue against `phase6security.RequiredSlice6Scenarios()` and
+`productphase6gate/slice6_plan_test.go`, not a scenario receipt or acceptance
+manifest. E7's same-run Product/Guest component pass used a clean E34d72/R884/F884
+source trio and exact cleanup. Its 0600 log and limitations are in the
+[startup audit](product-phase-6-slice-6-startup.md). No frozen scenario has a
+same-run raw receipt from a complete deployment inventory; Phase 6 remains
+**5/15**. Every future receipt must bind one new run ID, source/profile,
+actual source and target instances, raw probes and cleanup. E7 cannot be
+spliced into that new run.
+
+| Frozen scenario | Three required assertions | Existing real signal or scaffold | Missing direct same-run probe |
+| --- | --- | --- | --- |
+| `browser_cdp_and_capacity_replay` | `real_cdp_version`; `finite_capacity`; `same_authority_replay_denied` | Browser backend real-CDP component; frozen route | CDP command, capacity denial and authority replay on the final Browser/executor edge |
+| `browser_external_witness_isolation` | `distinct_external_identities`; `grant_isolation`; `restore_domain_isolation` | Source-bound PostgreSQL/Valkey image supply and role policies | Separate Browser witness SQL and Valkey roles, negative grants and independent restore domains |
+| `cross_role_and_tenant_denial` | `wrong_peer_denied`; `wrong_route_denied`; `cross_tenant_denied` | Frozen trust-edge mapping | Actual mTLS/route/tenant substitution attempts against final Provider edges |
+| `desktop_media_input_and_cleanup` | `broker_in_parent_observed`; `real_rtp_and_input`; `exact_dynamic_cleanup` | Earlier signed-broker/real Desktop component gates | Parent broker identity, RTP/input and dynamic cleanup within the final deployment run |
+| `direct_egress_and_metadata_denial` | `role_direct_ip_denied`; `metadata_denied`; `alias_only_egress` | Egress-broker and policy components | Real Product role direct-IP, metadata and allowed-alias probes under final network policy |
+| `dns_rebinding_and_alternate_path_denial` | `rebinding_denied`; `alternate_path_denied`; `dns_receipt_observed` | Pinned CoreDNS archive and DNS checker components | Actual rebinding and alternate-path attempts with DNS receipt on the final egress edge |
+| `external_dependency_loss` | `witness_loss_closes_admission`; `capacity_loss_closes_admission`; `bounded_recovery` | E7 Product SQL loss/recovery is a different edge | Browser action-history PostgreSQL and capacity-Valkey loss/recovery while Browser ingress lives |
+| `guest_auth_and_reconnect` | `signed_challenge_welcome`; `binding_revoke_denied`; `upgraded_socket_drain` | E7 Guest ready, durable revoked/empty-nonce readback and 503/exit-1; no direct lifecycle receipt | Bind accepted signed hello/welcome, original upgraded socket closure, and a fresh old-identity attempt rejected *because of* revoked binding, with Product/PG/agents healthy |
+| `least_privilege_active_probes` | `complete_container_inventory`; `effective_uid_gid`; `seccomp_capability_mount_limits` | E7 inspects a subset of actual containers | Complete frozen inventory and active UID/GID/seccomp/capability/mount checks for every deployment |
+| `mtls_identity_and_downgrade_denial` | `wrong_certificate_denied`; `plaintext_denied`; `legacy_downgrade_denied` | Real managed mTLS component paths | Three negative client attempts on the final Gateway/Provider private edge |
+| `policy_authority_loss_and_revocation` | `authority_loss_closes_egress`; `revoked_policy_denied`; `fresh_state_required` | Policy-authority/broker components | Live Product egress authority-loss, revoke and stale-state denial |
+| `provider_and_executor_restart` | `distinct_process_instances`; `retained_authority`; `stale_admission_denied` | Earlier independent role/backend components | Actual Provider and executor replacement, retained authority readback and stale admission denial |
+| `resource_exhaustion_denial` | `bounded_product_requests`; `bounded_gateway_connections`; `bounded_workers` | E7 host/Docker capacity interlock is test safety, not role saturation | Finite Product/Gateway/worker saturation and recovery on final roles |
+| `revoked_leaf_and_crl_rollback_denial` | `vault_revoked_leaf_denied`; `active_socket_drain`; `crl_rollback_denied` | E7 terminal revokes at shutdown, not an active peer test | Live Vault leaf revoke, timed upgraded-socket drain and stale/rollback CRL rejection |
+| `role_and_controller_drain` | `bounded_sigterm`; `active_socket_close`; `exact_lease_socket_cleanup` | E7 controller quiesce plus exact component cleanup; sticky local revoke failure remains | Timed Browser/Desktop role drain, active socket closure and complete lease/socket cleanup |
+| `vault_pki_rotation_and_loss` | `fresh_issue_and_overlap`; `live_rotation`; `loss_closes_admission` | E7 root trust cutover and managed leaf issuance | Concurrent old/new leaf overlap, live rotation and Vault-source-loss admission denial |
+
+## Guest-edge observability decision needed before a new issuer run
+
+`guestagent.Agent.Ready` is true only after a signed hello and validated
+welcome, so E7's connected Guest `/readyz` is useful client success evidence.
+But the role readiness also depends on material and CRL health. In
+`guestagent/agent.go`, every welcome-read error becomes `ErrUnauthorized`;
+`guestagent/hub.go` closes on authority loss with `CloseNow` without exposing
+a transport lifecycle receipt; and `product/adapter/postgres/guest.go`
+currently returns the same `ErrForbidden` for revoked state and an invalid
+signature. After revocation, a 503 or exit 1 plus a durable SQL row therefore
+cannot identify a fresh old-key handshake attempt or directly prove that the
+original upgraded WebSocket closed. Product/PG/agent health controls narrow,
+but do not eliminate, transport/CRL/material explanations.
+
+An E-only networkless Docker probe confirmed `docker start -a` can capture a
+bounded stdout line even when `--log-driver=none`; the disposable non-root,
+read-only, no-network Alpine container exited zero and its exact label cleaned
+to zero. This establishes only a possible carrier, not a Product/Guest
+lifecycle signal or a production evidence receipt.
+
+Options for Sandbox review:
+
+1. Existing `/readyz`, PostgreSQL row, container/agent fingerprints and
+   read-only `/proc/net/tcp` or Docker inspect: no R rebuild, but cannot
+   distinguish business denial from transport/CRL loss or tie an original
+   upgraded connection to a fresh denied attempt. Reject as final proof.
+2. Recommended **minimal closed lifecycle receipt** from the existing
+   Product Hub/Authenticator and Guest Agent, captured from each exact PID1
+   by an E-only bounded `docker start -a` collector while keeping Docker
+   `log-driver=none`. Correlate both sides by a SHA-256 digest of the existing
+   random client nonce, never the nonce itself. Product emits only accepted
+   signed hello/welcome, original authority-stale close/close-complete, and
+   fresh signed old-identity rejection with an explicit DB-observed revoked
+   reason; Guest emits welcome-validated and old transport-closed/attempted
+   reconnect. Every event has closed version, monotonic sequence, event kind,
+   nonce digest, binding generation and bounded monotonic/wall time. The Gate
+   binds the stream to its exact Docker container ID and run ID; it retains
+   no raw frames, keys, tokens, signatures, addresses or unredacted IDs.
+   `product/adapter/postgres/guest.go` must distinguish a validated signature
+   on a revoked row from invalid signature and store unavailability without
+   changing admission. `guestagent/hub.go` and `guestagent/agent.go` provide
+   lifecycle hooks; Product/Guest production composition supplies a bounded,
+   nonblocking writer. The E collector rejects gaps, duplicates, overflow,
+   timeout, source/instance drift and missing healthy controls. The callback
+   must never block the Hub or change handshake timing; lost receipt makes
+   evidence unavailable, not admission success. No new network principal,
+   credential, socket, mount, TTL or Provider Contract field is needed.
+3. A dedicated private Unix receipt socket or writable evidence volume could
+   persist events without attaching stdout, but adds a mount, protocol,
+   reader authority and cleanup surface to the frozen profile; it is not a
+   smaller first change. A new public/private HTTP diagnostic endpoint would
+   be a larger security boundary and is rejected here.
+
+Option 2 still changes runtime R, even if no wire API changes. It requires a
+new clean R/F checkpoint and rebuilding/rechecking the source-bound twelve
+role candidates and Desktop candidate (and any changed fixture digest), not
+relabeling R884 images. Production stdout exposure depends on deployment
+logging policy, so the event schema must be metadata-only and opt-in under a
+closed private profile, with strict line/count ceilings and no arbitrary
+logging fallback. Attached collectors can lag, disconnect or cancel; the
+nonblocking bounded queue must fail closed for evidence and be joined on
+role drain, never hold connection callbacks or retain secret buffers. Rollback
+is to remove the optional receipt emission/collector and keep the existing
+runtime behavior and E7 component boundary, with no schema or Provider
+Contract migration. No runtime change or further issuer run is authorized by
+this proposal alone.
