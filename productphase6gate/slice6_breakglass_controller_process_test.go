@@ -890,9 +890,9 @@ func slice6FiniteBreakGlassTask(t *testing.T, ctx context.Context, run slice6Doc
 		"--mount", "type=bind,src="+composed.BreakGlassOperatorBinary+",dst="+task.Executable+",readonly",
 		"--mount", "type=volume,src="+volume+",dst="+task.Mount.Target+",readonly",
 		"--entrypoint="+task.Executable, task.ImageReference)
-	id := strings.TrimSpace(string(created))
-	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
-		t.Fatal("create finite break-glass task")
+	id := slice6CanonicalCreatedID(created, err)
+	if id == "" {
+		t.Fatalf("create finite break-glass task: %s", slice6DockerCreateFailure(ctx, created, err))
 	}
 	inspect, err := run.docker(ctx, "inspect", id)
 	var observed []struct {

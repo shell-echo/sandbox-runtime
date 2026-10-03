@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 func TestSlice6StoredImageAdmissionUnit(t *testing.T) {
@@ -44,6 +46,132 @@ func TestSlice6StoredImageAdmissionUnit(t *testing.T) {
 	err = slice6CheckStoredImages(context.Background(), items, "", inspect)
 	if err == nil || !strings.Contains(err.Error(), "identity_mismatch=[vault shared-reference]") {
 		t.Fatalf("wrong image identity was accepted: %v", err)
+	}
+}
+
+func TestSlice6AuxiliaryImageAdmissionIncludesFiniteOperator(t *testing.T) {
+	items := slice6RequiredAuxiliaryImages()
+	if len(items) != 3 || items[0].digest == items[2].digest ||
+		items[2].reference != "docker.io/library/alpine@"+items[2].digest {
+		t.Fatal("finite task index collapsed into the prep Alpine image")
+	}
+	document := func(item slice6AuxiliaryImage, imageID string) []byte {
+		repoDigests := []string{}
+		if item.registry {
+			repoDigests = append(repoDigests, item.reference)
+		}
+		encoded, err := json.Marshal([]map[string]any{{
+			"Id": imageID, "Os": "linux", "Architecture": "arm64",
+			"RepoDigests": repoDigests, "Descriptor": map[string]string{"digest": imageID},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	called := 0
+	missingTask := func(_ context.Context, reference string) ([]byte, error) {
+		called++
+		for _, item := range items {
+			if item.reference == reference {
+				if item.name == "break-glass-operator-task" {
+					return nil, errors.New("No such image")
+				}
+				return document(item, item.digest), nil
+			}
+		}
+		t.Fatal("unknown auxiliary image reference")
+		return nil, nil
+	}
+	err := slice6PreflightAuxiliaryImagesWithInspect(context.Background(), items, missingTask)
+	if err == nil || !strings.Contains(err.Error(), "missing=[break-glass-operator-task]") || called != 3 {
+		t.Fatalf("selected Alpine present concealed missing finite-task index: err=%v calls=%d", err, called)
+	}
+	missingAndDrift := func(_ context.Context, reference string) ([]byte, error) {
+		for _, item := range items {
+			if item.reference == reference {
+				if item.name == "network-probe" {
+					return nil, errors.New("No such image")
+				}
+				if item.name == "break-glass-operator-task" {
+					return document(item, "sha256:"+strings.Repeat("f", 64)), nil
+				}
+				return document(item, item.digest), nil
+			}
+		}
+		t.Fatal("unknown auxiliary image reference")
+		return nil, nil
+	}
+	err = slice6PreflightAuxiliaryImagesWithInspect(context.Background(), items, missingAndDrift)
+	if err == nil || !strings.Contains(err.Error(), "missing=[network-probe]") ||
+		!strings.Contains(err.Error(), "identity_mismatch=[break-glass-operator-task]") {
+		t.Fatalf("multiple fixed-image faults were not reported together: %v", err)
+	}
+	revision := strings.Repeat("a", 40)
+	digest := "sha256:" + strings.Repeat("b", 64)
+	artifact := phase6security.Slice6BreakGlassExecutableArtifact{
+		ID: "break-glass-operator", SourceRevision: revision, SourceTreeDigest: digest,
+		Toolchain: "go1.26.8", ToolchainDigest: digest,
+		BuildTarget:     "./cmd/phase6-break-glass-operator",
+		BuildParameters: phase6security.Slice6BreakGlassBuildParameters,
+		Platform:        "linux/arm64/v8", BinaryDigest: digest, BinaryBytes: 1,
+		ContainerPath: "/phase6-break-glass-operator", CarrierReference: items[2].reference,
+		CarrierIndexDigest:            phase6security.Slice6BreakGlassCarrierIndexDigest,
+		CarrierSelectedManifestDigest: phase6security.Slice6BreakGlassCarrierManifestDigest,
+		CarrierConfigDigest:           phase6security.Slice6BreakGlassCarrierConfigDigest,
+		CarrierPlatform:               "linux/arm64/v8",
+	}
+	task := phase6security.Slice6BreakGlassOperatorTask{ImageReference: items[2].reference,
+		ExecutableArtifactID: artifact.ID, Executable: artifact.ContainerPath,
+		ExecutableMount: phase6security.Mount{Target: artifact.ContainerPath,
+			Kind: "read_only_executable", ReadOnly: true,
+			StorageID: "break-glass-operator-source-binary"}}
+	profile := phase6security.Profile{Revision: "slice6-" + revision,
+		BreakGlassExecutableArtifact: artifact,
+		BreakGlassOperatorTasks:      make([]phase6security.Slice6BreakGlassOperatorTask, 8)}
+	for index := range profile.BreakGlassOperatorTasks {
+		profile.BreakGlassOperatorTasks[index] = task
+	}
+	if err := slice6VerifyComposedTaskCarrier(profile); err != nil {
+		t.Fatalf("composed task carrier rejected matching preissuer index: %v", err)
+	}
+	profile.BreakGlassOperatorTasks[7].ImageReference = items[0].reference
+	if err := slice6VerifyComposedTaskCarrier(profile); err == nil {
+		t.Fatal("composed task silently downgraded to selected prep-Alpine digest")
+	}
+}
+
+func TestSlice6DockerCreateFailureIsBoundedAndRedacted(t *testing.T) {
+	exitErr := exec.CommandContext(t.Context(), "sh", "-c", "exit 125").Run()
+	if exitErr == nil {
+		t.Fatal("failed to construct nonzero Docker-like exit")
+	}
+	for _, candidate := range []struct {
+		name, output, category string
+	}{
+		{"image", "Error response from daemon: No such image: private.example.test/image@sha256:abc", "missing_image"},
+		{"mount", "invalid mount config for type bind: /private/path", "mount"},
+		{"name", "Conflict. The container name /private-name is already in use", "name_conflict"},
+		{"resource", "no space left on device: /private/path", "resource"},
+		{"unknown", "daemon response for /private/path token=secret", "unknown"},
+		{"oversized", strings.Repeat("No such image", 500), "unknown"},
+	} {
+		t.Run(candidate.name, func(t *testing.T) {
+			result := slice6DockerCreateFailure(context.Background(), []byte(candidate.output), exitErr)
+			if result != "class="+candidate.category+" exit=125 context=active" ||
+				strings.Contains(result, "private") || strings.Contains(result, "secret") ||
+				len(result) > 80 {
+				t.Fatalf("Docker create category leaked or changed: %q", result)
+			}
+		})
+	}
+	if actual := slice6DockerCreateFailure(context.Background(), []byte("untrusted"), nil); actual != "class=noncanonical_response exit=0 context=active" {
+		t.Fatalf("successful noncanonical create response was not classified: %s", actual)
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if actual := slice6DockerCreateFailure(cancelled, []byte("No such image"), context.Canceled); actual != "class=context exit=unknown context=cancelled" {
+		t.Fatalf("context cancellation was misclassified as missing image: %s", actual)
 	}
 }
 

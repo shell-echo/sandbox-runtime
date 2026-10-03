@@ -489,6 +489,9 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
+		if err := slice6VerifyComposedTaskCarrier(composed.Profile); err != nil {
+			t.Fatal(err)
+		}
 		var socketVolumes map[string]string
 		var certificateSocketVolumes map[string]string
 		var breakGlassSocketVolumes map[string]string

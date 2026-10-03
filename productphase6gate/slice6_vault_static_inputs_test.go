@@ -102,7 +102,11 @@ func TestSlice6VaultPreIssuerImageStoreAdmission(t *testing.T) {
 	if err := slice6VaultPreflightAllStoredImages(ctx, external, images); err != nil {
 		t.Fatalf("fixed Docker image inventory before create: %v", err)
 	}
-	t.Log("fixed external, role, Desktop, Browser, Alpine and network-probe Docker image references admitted without create or issuer")
+	if required, err := slice6VaultRequiredStoredImages(external, images); err != nil ||
+		len(required) != 18 || len(slice6RequiredAuxiliaryImages()) != 3 {
+		t.Fatal("current live-path Docker reference inventory is incomplete")
+	}
+	t.Log("21 fixed external, role, Desktop, Browser, prep/terminal/observer, network-probe and finite-task Docker references admitted without create or issuer")
 }
 
 // This uses the same admission function as the live gate, but never allocates

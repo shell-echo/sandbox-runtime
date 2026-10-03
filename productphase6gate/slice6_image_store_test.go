@@ -103,8 +103,14 @@ func slice6VaultPreflightAllStoredImages(ctx context.Context, external phase6pro
 	images phase6profilebuilder.ImageSupply) error {
 	// Collect both inventories before rejecting; a missing external reference
 	// must not conceal a missing auxiliary image until the next issuer run.
-	return errors.Join(slice6VaultPreflightStoredImages(ctx, external, images),
-		slice6PreflightAuxiliaryImages(ctx))
+	storedErr := slice6VaultPreflightStoredImages(ctx, external, images)
+	auxiliaryErr := slice6PreflightAuxiliaryImages(ctx)
+	if (storedErr != nil || auxiliaryErr != nil) && ctx != nil {
+		if _, err := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}").Output(); err != nil {
+			return errors.New("Docker daemon unavailable during complete fixed image inventory")
+		}
+	}
+	return errors.Join(storedErr, auxiliaryErr)
 }
 
 func slice6CheckStoredImages(ctx context.Context, items []slice6StoredImage, sourceRevision string,
@@ -169,21 +175,65 @@ func slice6DeploymentForImageTarget(target string) string {
 	return ""
 }
 
-// Alpine is used by private volume and SQL carrier jobs; the network probe
-// uses a local image ID. Both are outside the role/external supply maps.
+type slice6AuxiliaryImage struct {
+	name, reference, digest string
+	registry                bool
+}
+
+// These are the current live harness's non-deployment create/run references:
+// volume/SQL/terminal/observer Alpine, network diagnostics, and the eight
+// finite break-glass tasks' shared carrier. The last reference comes from
+// the locked Profile authority, not the selected manifest or a mutable tag.
+func slice6RequiredAuxiliaryImages() []slice6AuxiliaryImage {
+	return []slice6AuxiliaryImage{
+		{"alpine-prep-terminal-observer", slice6PinnedAlpineImage,
+			"sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c", true},
+		{"network-probe", slice6NetworkProbeImageID, slice6NetworkProbeImageID, false},
+		{"break-glass-operator-task", "docker.io/library/alpine@" + phase6security.Slice6BreakGlassCarrierIndexDigest,
+			phase6security.Slice6BreakGlassCarrierIndexDigest, true},
+	}
+}
+
+func slice6VerifyComposedTaskCarrier(profile phase6security.Profile) error {
+	carrier := slice6RequiredAuxiliaryImages()[2]
+	artifact := profile.BreakGlassExecutableArtifact
+	if phase6security.VerifySlice6BreakGlassExecutableArtifact(profile) != nil ||
+		artifact.CarrierReference != carrier.reference || artifact.CarrierIndexDigest != carrier.digest ||
+		artifact.CarrierSelectedManifestDigest != phase6security.Slice6BreakGlassCarrierManifestDigest ||
+		artifact.CarrierConfigDigest != phase6security.Slice6BreakGlassCarrierConfigDigest ||
+		len(profile.BreakGlassOperatorTasks) != 8 {
+		return errors.New("composed break-glass carrier differs from preissuer Docker admission")
+	}
+	for _, task := range profile.BreakGlassOperatorTasks {
+		if task.ImageReference != carrier.reference {
+			return errors.New("finite break-glass task image differs from admitted carrier")
+		}
+	}
+	return nil
+}
+
 func slice6PreflightAuxiliaryImages(ctx context.Context) error {
+	return slice6PreflightAuxiliaryImagesWithInspect(ctx, slice6RequiredAuxiliaryImages(),
+		func(ctx context.Context, reference string) ([]byte, error) {
+			return exec.CommandContext(ctx, "docker", "image", "inspect", reference).Output()
+		})
+}
+
+func slice6PreflightAuxiliaryImagesWithInspect(ctx context.Context, items []slice6AuxiliaryImage,
+	inspect func(context.Context, string) ([]byte, error)) error {
 	if ctx == nil || ctx.Err() != nil {
 		return errors.New("fixed auxiliary Docker image context unavailable")
 	}
+	if len(items) == 0 || inspect == nil {
+		return errors.New("fixed auxiliary Docker image inventory unavailable")
+	}
 	missing := make([]string, 0)
 	mismatch := make([]string, 0)
-	for _, item := range []struct {
-		name, reference, digest string
-	}{
-		{"alpine-carrier", slice6PinnedAlpineImage, "sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c"},
-		{"network-probe", slice6NetworkProbeImageID, slice6NetworkProbeImageID},
-	} {
-		document, err := exec.CommandContext(ctx, "docker", "image", "inspect", item.reference).Output()
+	for _, item := range items {
+		if item.name == "" || item.reference == "" || item.digest == "" || ctx.Err() != nil {
+			return errors.New("fixed auxiliary Docker image inventory changed")
+		}
+		document, err := inspect(ctx, item.reference)
 		var images []struct {
 			ID           string   `json:"Id"`
 			OS           string   `json:"Os"`
@@ -200,7 +250,7 @@ func slice6PreflightAuxiliaryImages(ctx context.Context) error {
 		if len(document) == 0 || len(document) > 2<<20 || json.Unmarshal(document, &images) != nil ||
 			len(images) != 1 || images[0].ID != item.digest || images[0].OS != "linux" ||
 			images[0].Architecture != "arm64" ||
-			(item.name == "alpine-carrier" &&
+			(item.registry &&
 				(!slice6HasRepoDigest(images[0].RepoDigests, item.reference) ||
 					images[0].Descriptor == nil || images[0].Descriptor.Digest != item.digest)) {
 			mismatch = append(mismatch, item.name)

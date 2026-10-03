@@ -138,6 +138,50 @@ func slice6VaultCreateAdmitted(output []byte, createErr error, recoveredID strin
 	return id != "" && id == recoveredID
 }
 
+// Diagnostic-only classification. Never print Docker's combined output: it
+// can contain private bind paths or daemon details, and an unknown response
+// must never be promoted to a missing-image conclusion.
+func slice6DockerCreateFailure(ctx context.Context, output []byte, createErr error) string {
+	contextState := "active"
+	if ctx == nil {
+		contextState = "invalid"
+	} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		contextState = "deadline"
+	} else if errors.Is(ctx.Err(), context.Canceled) {
+		contextState = "cancelled"
+	}
+	exitState := "unknown"
+	var exitErr *exec.ExitError
+	if errors.As(createErr, &exitErr) {
+		exitState = fmt.Sprintf("%d", exitErr.ExitCode())
+	} else if createErr == nil {
+		exitState = "0"
+	}
+	category := "unknown"
+	if contextState != "active" {
+		category = "context"
+	} else if createErr == nil {
+		category = "noncanonical_response"
+	} else if len(output) > 0 && len(output) <= 4096 && !bytes.ContainsRune(output, '\x00') {
+		lower := strings.ToLower(string(output))
+		switch {
+		case strings.Contains(lower, "no such image"), strings.Contains(lower, "unable to find image"):
+			category = "missing_image"
+		case strings.Contains(lower, "invalid mount config"),
+			strings.Contains(lower, "bind source path does not exist"),
+			strings.Contains(lower, "mounts denied"):
+			category = "mount"
+		case strings.Contains(lower, "container name") && strings.Contains(lower, "already in use"):
+			category = "name_conflict"
+		case strings.Contains(lower, "no space left on device"),
+			strings.Contains(lower, "cannot allocate memory"),
+			strings.Contains(lower, "resource exhausted"):
+			category = "resource"
+		}
+	}
+	return fmt.Sprintf("class=%s exit=%s context=%s", category, exitState, contextState)
+}
+
 func slice6StartVaultFromCreateReceipt(ctx context.Context, output []byte, createErr error,
 	recoveredID string, volumes []string, docker func(context.Context, ...string) ([]byte, error)) error {
 	if ctx == nil || ctx.Err() != nil || !slice6VaultCreateAdmitted(output, createErr, recoveredID) ||

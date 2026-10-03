@@ -3924,8 +3924,8 @@ container-ID variable; it therefore could not produce an exact historical
 anonymous-volume receipt. That missing receipt is **not** reconstructed as a
 successful cleanup proof. This attempt supplies no Product/SQL/fault evidence.
 
-The repaired pre-issuer path checks every fixed external, local-role,
-Desktop, Browser, Alpine-carrier and network-probe Docker reference after
+The then-repaired pre-issuer path checked fixed external, local-role,
+Desktop, Browser, Alpine-preparation and network-probe Docker references after
 source/archive verification and before any live network or issuer material.
 Docker Hub's canonical repository-digest spelling is normalized without
 changing the digest or accepting a different repository. Vault now uses
@@ -3942,7 +3942,7 @@ The four external images' stopped-container selection tests rechecked the
 index, selected arm64 manifest and OCI config against the complete private
 archives. This is cache/preflight/component evidence only. A new Product
 runtime issuer-consuming run needs separate Sandbox authorization. The
-source-bound no-issuer full image-store admission passed for all 12 local
+source-bound no-issuer admission passed for the then-enumerated 12 local
 role targets, Desktop, Browser, four external images and two auxiliary
 images after cache restoration; it did not create a container. A subsequent
 fail-closed correction forbids `start` even when exact name/label recovery
@@ -3952,3 +3952,36 @@ responses; separate no-secret real Docker drills recovered the two implicit
 volumes from the actual container ID and removed them for both simulated
 lost and noncanonical create responses without starting Vault. Phase 6
 remains **5/15**.
+
+Checkpoint 2026-10-03 (finite task carrier omitted from the prior admission):
+the one approved run `0f7ce67ed9637b0bfef15a1df5a49ddf` passed source and
+Docker admission, composed/reopened the 78-principal Profile, started the
+Vault/controllers/PostgreSQL chain and completed a separate Product
+`migrate v2` PID1 with same-PostgreSQL ledger/ownership/grant readback. It then
+failed at the first finite break-glass task `docker create`, **before**
+Product `serve` PID1, readyz, runtime SQL or network fault. The locked task
+reference was `docker.io/library/alpine@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40`;
+Docker reported that exact image absent. The prior admission had checked the
+distinct `d858...` prep/terminal/observer reference and `85fe...` network
+probe but not the finite task's index. Therefore its “all fixed references”
+claim was incorrect. The same run's terminal operator confirmed three
+certificate revocations, two token accessors, complete CRL and self-revoke;
+the two recorded Vault anonymous volumes were absent after cleanup, and the
+run-labeled container/network/volume inventories were zero. This is a failed
+Product component attempt, not Product runtime or Slice 6 success.
+
+The offline correction adds the finite task's **index** from the locked
+Profile authority to pre-issuer batch admission, separate from its selected
+manifest. With `d858...` present but `fd791...` absent, a complete no-issuer
+source-bound admission rejected `missing=[break-glass-operator-task]` before
+any container creation. The original `fd791...` digest was then pulled from
+its registry; no tag, lock or candidate image was substituted. A no-secret,
+stopped-container drill used the same reference and finite-task read-only
+executable/socket mount shape, verified the raw index, selected arm64
+manifest, config and layers against a private Docker export, and removed its
+exact container and socket volume without starting an operator or issuer.
+Unit regressions cover batch missing/drift, artifact/task-vs-admission
+binding, and bounded, redacted Docker create categories with context/exit
+status. The corrected no-issuer source-bound admission passed after cache
+restoration. This remains component/preflight evidence; a fresh issuer run
+requires new explicit authorization and Phase 6 remains **5/15**.
