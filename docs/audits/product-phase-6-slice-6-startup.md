@@ -4487,3 +4487,45 @@ agents, PostgreSQL or Vault, and did not issue or revoke credentials. This is
 Docker lifecycle mechanism evidence only; running effective networks, Guest
 ready/live revoke and all 16 release scenarios remain unproved. Phase 6 stays
 **5/15** pending a separately authorized real issuer gate.
+
+Follow-up 2026-10-04 (one Sandbox-authorized ordinary non-race real issuer
+diagnostic, **failed**, no retry authorized): clean E-only gate/observer
+revision `81788808bc5f03cb7e07e150a30cc98ba0c40e2b`, fixed clean R4
+runtime/terminal source and independent E3 fixture ran under exact label
+`45361d9b18338f5fff47ad74341030b8`, Profile
+`sha256:df809ccab4a4f5edc99050001cb72169fdf14911c72dd04ed56949e2b8233d1a`.
+The 0600 diagnostic log is
+`/Users/echo/.codex/phase6-slice6-run-E5.6EtkG8/gate.log`. Pre-issuer
+source/archive/image, immutable binary hashes, non-root mount and continuous
+capacity admission passed. The run reached real Vault and PostgreSQL, both
+controller PID1 processes, Product migration with same-PG ledger/ownership/
+grant readback, initial durable Guest binding (generation 1, one event and
+audit), Product serve ready→SQL-edge loss not-ready→same-PG recovery, and
+Guest material-agent/break-glass consumption and recovery.
+
+The previous `Guest private signer socket volume missing` gate failure was
+actually crossed: the separate `guest-tls-agent` private config/socket was
+allocated; that PID1 issued a managed leaf and opened its listener in 21.05
+seconds. The Guest runtime gate then returned from its created-container
+check, `docker start` and running two-network check into the fixed readiness
+loop. This is a conclusion from the branch's control flow and the subsequent
+error, not a claim that Guest reached connected readiness. The first retained
+business error was `Product live dependent gate failed` → `Guest PID1 did not
+reach connected readiness within fixed deadline` after 45 seconds. No Guest
+ready, live revoke, post-revoke 503 or exit-1 observation occurred. The
+existing `/readyz` aggregates startup, Guest material resolution, peer-CRL
+readiness and authenticated Product connection; the sanitized log does not
+identify which prerequisite failed, so no cause is assigned. No capacity
+trigger or emergency-stop error was reported.
+
+Both controllers persisted quiesce receipts, but the certificate controller
+retained its sticky terminal credential-revoke failure. The independent v2
+terminal operator confirmed three certificates, two token accessors, complete
+CRL and self-revoke; that receipt does not erase the controller error. The
+main exact Docker cleanup reported no error. Independent read-only post-run
+inventory found zero containers, networks and volumes with the exact label;
+both recorded Vault anonymous-volume IDs were absent, and the gate, R4 and
+E3 source trees were clean. Docker cleanup is not proof of credential
+revocation. This single real issuer permission is consumed, does not complete
+the 16-scenario release gate, and does not produce a manifest. Phase 6 remains
+**5/15**.
