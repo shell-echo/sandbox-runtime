@@ -67,6 +67,11 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			os.Getenv(slice6ProductPostgresDSNEnv) != "1") {
 		t.Fatal("Product migration PID1 requires same-run PostgreSQL, private inputs and both signers")
 	}
+	if os.Getenv(slice6ProductRuntimeInputsEnv) == "1" &&
+		(os.Getenv(slice6ProductMigrationInputsEnv) != "1" ||
+			os.Getenv(slice6ProductMaterialInputsEnv) != "1") {
+		t.Fatal("Product runtime inputs require the complete migration and runtime material socket supply")
+	}
 	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" && os.Getenv(slice6ProductMigrationJobEnv) != "1" {
 		t.Fatal("controlled pre-DDL failure requires the real Product migration chain")
 	}
@@ -437,6 +442,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var productSocketVolumes map[string]string
 		var productMaterialSocketVolumes map[string]string
 		var productMigrationSocketVolumes map[string]string
+		var productRuntimeSocketVolumes map[string]string
 		var guestPublicKeyDigest string
 		var productIdentityDigest string
 		var productRuntimeDSNDigest string
@@ -509,6 +515,15 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 							}
 							clear(migrationPostgresConfig)
 							t.Logf("same-run Product migration signer/material/PostgreSQL socket allocations=3 combined=%d; migration job not launched", len(productMigrationSocketVolumes))
+							if os.Getenv(slice6ProductRuntimeInputsEnv) == "1" {
+								productRuntimeSocketVolumes = slice6PrepareProductRuntimeInputs(t, ctx, run, composed, productMigrationSocketVolumes)
+								runtimePostgresConfig, runtimePostgresErr := slice6BuildProductPostgresSignerConfig(composed, "product-runtime")
+								if runtimePostgresErr != nil {
+									t.Fatal("Product runtime PostgreSQL signer config unavailable")
+								}
+								clear(runtimePostgresConfig)
+								t.Logf("same-run Product runtime PostgreSQL signer socket allocation=1 combined=%d; Product runtime process not launched", len(productRuntimeSocketVolumes))
+							}
 						}
 					}
 				}

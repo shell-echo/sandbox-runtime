@@ -45,13 +45,19 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	var binding phase6security.TLSAgentBinding
 	var principal, subject phase6security.Principal
 	var err error
-	postgresPurpose := agentDeployment == "product-migration-postgres-tls-agent"
+	postgresPurpose := agentDeployment == "product-migration-postgres-tls-agent" ||
+		agentDeployment == "product-postgres-tls-agent"
 	if postgresPurpose {
 		var postgres phase6security.PostgresClientAgentBinding
 		var target phase6security.Slice6PostgresSignerTarget
 		postgres, target, principal, subject, _, err = profile.PostgresClientSignerForOwner(subjectDeployment)
-		if err == nil && (target.AgentDeployment != agentDeployment || !target.Migration ||
-			target.DatabaseName != "product" || target.SQLRole != "product_migrator") {
+		expectedRole := "product_runtime"
+		if subjectDeployment == "product-migration-job" {
+			expectedRole = "product_migrator"
+		}
+		if err == nil && (target.AgentDeployment != agentDeployment ||
+			target.Migration != (subjectDeployment == "product-migration-job") ||
+			target.DatabaseName != "product" || target.SQLRole != expectedRole) {
 			err = phase6security.ErrInvalidProfile
 		}
 		binding = postgres.TLSAgentBinding
@@ -64,7 +70,8 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		!principal.NoNewPrivileges || !slices.Equal(principal.DroppedCapabilities, []string{"ALL"}) ||
 		len(principal.Networks) != 1 || principal.Networks[0] != "network-"+agentDeployment ||
 		(label != "guest" && label != "product" && label != "product-material" &&
-			label != "product-migration-material" && label != "product-migration-postgres") {
+			label != "product-migration-material" && label != "product-migration-postgres" &&
+			label != "product-runtime-postgres") {
 		t.Fatal("ordinary TLS-agent immutable Profile identity drift")
 	}
 	cpuContrast := label == "guest" && os.Getenv(slice6GuestTLSCPUContrastEnv) == "1"
@@ -103,7 +110,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	}
 	var config []byte
 	if postgresPurpose {
-		config, err = slice6BuildProductMigrationPostgresSignerConfig(composed)
+		config, err = slice6BuildProductPostgresSignerConfig(composed, subjectDeployment)
 	} else {
 		config, err = slice6BuildOrdinaryTLSAgentConfig(composed, subjectDeployment, agentDeployment)
 	}

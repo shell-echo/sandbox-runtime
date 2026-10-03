@@ -14,18 +14,34 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 )
 
-// Build only the reviewed migration-job PostgreSQL-purpose v4 signer. An
+// Build only the reviewed Product migration PostgreSQL-purpose v4 signer. An
 // ordinary Vault/material TLS signer cannot impersonate this SQL client.
 func slice6BuildProductMigrationPostgresSignerConfig(composed slice6VaultComposedInputs) ([]byte, error) {
+	return slice6BuildProductPostgresSignerConfig(composed, "product-migration-job")
+}
+
+// The runtime and migration owners have distinct PostgreSQL roles, sockets,
+// certificate identities and source-bound signer policies.
+func slice6BuildProductPostgresSignerConfig(composed slice6VaultComposedInputs, owner string) ([]byte, error) {
 	profile := composed.Profile
+	var expectedAgent, expectedRole string
+	var expectedMigration bool
+	switch owner {
+	case "product-migration-job":
+		expectedAgent, expectedRole, expectedMigration = "product-migration-postgres-tls-agent", "product_migrator", true
+	case "product-runtime":
+		expectedAgent, expectedRole = "product-postgres-tls-agent", "product_runtime"
+	default:
+		return nil, errors.New("Product PostgreSQL signer owner unavailable")
+	}
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
 		composed.PeerSources.Validate(profile) != nil {
-		return nil, errors.New("Product migration PostgreSQL signer Profile unavailable")
+		return nil, errors.New("Product PostgreSQL signer Profile unavailable")
 	}
-	binding, target, agent, subject, anchor, err := profile.PostgresClientSignerForOwner("product-migration-job")
-	if err != nil || target.AgentDeployment != "product-migration-postgres-tls-agent" ||
-		target.SubjectDeployment != "product-migration-job" || target.DatabaseName != "product" ||
-		target.SQLRole != "product_migrator" || !target.Migration ||
+	binding, target, agent, subject, anchor, err := profile.PostgresClientSignerForOwner(owner)
+	if err != nil || target.AgentDeployment != expectedAgent ||
+		target.SubjectDeployment != owner || target.DatabaseName != "product" ||
+		target.SQLRole != expectedRole || target.Migration != expectedMigration ||
 		agent.Name != target.AgentDeployment || subject.Name != target.SubjectDeployment ||
 		anchor.ID != "postgres-client-ca" || binding.IssuerAnchorID != anchor.ID ||
 		binding.CommonName != target.SQLRole || subject.TLS == nil ||
