@@ -106,7 +106,7 @@ func TestSlice6SelectedGuestImageUtilitiesNoIssuer(t *testing.T) {
 func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, binding slice6GuestBindingFixtureReceipt,
 	socketVolumes, anchorFiles map[string]string, productID, preIssuerShellDigest string,
-	onConnected func(string) error) (resultErr error) {
+	receipts *slice6GuestReceiptPair, onConnected func(string) error) (resultErr error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(parent, 3*time.Minute)
 	defer cancel()
@@ -117,6 +117,9 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		binding.BindingGeneration != 1 || !binding.IdempotentReplay ||
 		len(socketVolumes) != 68 || len(productID) != 64 || !lowerHexSlice6(productID) {
 		return errors.New("Guest PID1 has no same-run Product binding or source-bound placement")
+	}
+	if composed.PrivateGuestReceipt && receipts == nil {
+		return errors.New("Guest private receipt collector unavailable")
 	}
 	product, err := slice6InspectProductRuntimeMember(ctx, run, productID)
 	if err != nil || product.ID != productID || product.Name != "/sr-p6-product-runtime-"+run.id {
@@ -144,6 +147,7 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	if err != nil {
 		return err
 	}
+	startupDigest := slice6ReceiptConfigDigest(files[phase6security.Slice6StartupConfigFile])
 	archive, err := phase6security.BuildSlice6PrivateConfigArchive(profile, "guest-runtime", files)
 	for _, value := range files {
 		clear(value)
@@ -190,7 +194,15 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		internal.NetworkID, configVolume, storage, socketVolumes, anchorFiles, seccomp); err != nil {
 		return err
 	}
-	if _, err := run.docker(ctx, "start", id); err != nil {
+	var receiptCapture *slice6GuestReceiptCapture
+	if composed.PrivateGuestReceipt {
+		receiptCapture, err = slice6StartGuestReceiptCapture(t, ctx, id, "guest",
+			profile.ProfileDigest, startupDigest)
+		if err != nil {
+			return errors.New("start attached Guest PID1 receipt capture")
+		}
+		defer receiptCapture.abort()
+	} else if _, err := run.docker(ctx, "start", id); err != nil {
 		return errors.New("start independent Guest PID1")
 	}
 	if err := slice6VerifyGuestRuntimeRunningNetworks(ctx, run, id, plan,
@@ -250,6 +262,19 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		} else {
 			return errors.New("Guest PID1 changed during live dependent gate")
 		}
+	}
+	if receiptCapture != nil {
+		expectedExit := 0
+		if os.Getenv(slice6GuestLiveRevokeEnv) == "1" {
+			expectedExit = 1
+		} else if err := slice6StopReceiptContainer(ctx, run, id); err != nil {
+			return errors.New("Guest PID1 graceful receipt shutdown unavailable")
+		}
+		records, err := receiptCapture.verifyStopped(ctx, run, id, expectedExit)
+		if err != nil {
+			return errors.New("Guest PID1 private receipt unavailable")
+		}
+		receipts.Guest = records
 	}
 	return nil
 }

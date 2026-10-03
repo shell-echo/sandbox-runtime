@@ -74,18 +74,19 @@ type DataPlaneAuthorityConfig struct {
 // supplied through role-specific private references and are not projected by
 // the process probe.
 type DataPlaneProcessConfig struct {
-	SchemaVersion   string                   `mapstructure:"schema_version"`
-	Enabled         bool                     `mapstructure:"enabled"`
-	DeploymentLevel ProviderDeploymentLevel  `mapstructure:"deployment_level"`
-	Public          option.HTTP              `mapstructure:"public"`
-	Private         option.HTTP              `mapstructure:"private"`
-	Probe           option.HTTP              `mapstructure:"probe"`
-	TLS             DataPlaneTLSConfig       `mapstructure:"tls"`
-	Authority       DataPlaneAuthorityConfig `mapstructure:"authority"`
-	Materials       RoleMaterialsConfig      `mapstructure:"materials"`
-	Drain           DataPlaneDrainConfig     `mapstructure:"drain"`
-	OutboundURL     string                   `mapstructure:"outbound_url"`
-	Role            DataPlaneRole            `mapstructure:"-"`
+	SchemaVersion       string                   `mapstructure:"schema_version"`
+	Enabled             bool                     `mapstructure:"enabled"`
+	DeploymentLevel     ProviderDeploymentLevel  `mapstructure:"deployment_level"`
+	Public              option.HTTP              `mapstructure:"public"`
+	Private             option.HTTP              `mapstructure:"private"`
+	Probe               option.HTTP              `mapstructure:"probe"`
+	TLS                 DataPlaneTLSConfig       `mapstructure:"tls"`
+	Authority           DataPlaneAuthorityConfig `mapstructure:"authority"`
+	Materials           RoleMaterialsConfig      `mapstructure:"materials"`
+	Drain               DataPlaneDrainConfig     `mapstructure:"drain"`
+	OutboundURL         string                   `mapstructure:"outbound_url"`
+	Role                DataPlaneRole            `mapstructure:"-"`
+	PrivateGuestReceipt bool                     `mapstructure:"private_guest_receipt"`
 }
 
 const (
@@ -129,6 +130,10 @@ var (
 func (c *DataPlaneProcessConfig) Validate() error {
 	if c == nil {
 		return errors.New("data-plane process configuration is required")
+	}
+	if c.PrivateGuestReceipt && (!c.Enabled || c.Role != DataPlaneGuest ||
+		c.SchemaVersion != DataPlaneProductionSchemaV3 || c.DeploymentLevel != ProviderProductionLevel) {
+		return errors.New("private Guest receipt requires the explicit v3 Guest role")
 	}
 	if !c.Enabled {
 		return nil

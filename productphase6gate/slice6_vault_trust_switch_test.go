@@ -37,6 +37,7 @@ const slice6VaultTrustSwitchEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_TRUST_SWI
 const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTGRES_DSN"
 const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_SOURCE_REVISION"
 const slice6ProductObserverExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_EXPECTED_DIGEST"
+const slice6GuestReceiptEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RECEIPT"
 
 // Nested callbacks may already have recorded the primary failure before an
 // enclosing process returns its cleanup result. Never replace that failure
@@ -631,6 +632,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
 		t.Fatal("real Guest material requires same-run scoped Vault access")
 	}
+	if os.Getenv(slice6GuestReceiptEnv) == "1" &&
+		(os.Getenv(slice6GuestLiveRevokeEnv) != "1" ||
+			os.Getenv(slice6GuestRuntimeProcessEnv) != "1" ||
+			os.Getenv(slice6ProductRuntimeProcessEnv) != "1") {
+		t.Fatal("private Guest receipt requires the same-run Product, Guest and live revoke chain")
+	}
 	rootRevoked := false
 	revokeBootstrapRoot := func() {
 		t.Helper()
@@ -649,6 +656,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
+		composed.PrivateGuestReceipt = os.Getenv(slice6GuestReceiptEnv) == "1"
 		if err := slice6VerifyComposedTaskCarrier(composed.Profile); err != nil {
 			t.Fatal(err)
 		}
@@ -837,6 +845,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 										runWork := func() {
 											slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
 												var guestBindingReceipt slice6GuestBindingFixtureReceipt
+												var guestReceiptPair slice6GuestReceiptPair
 												var guestRuntimeFailure error
 												var productRuntimeID string
 												runGuestChain := func() {
@@ -866,7 +875,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																		guestRuntimeSocketVolumes, anchorFiles, func() {
 																			guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
 																				guestBindingReceipt, guestRuntimeSocketVolumes, anchorFiles,
-																				productRuntimeID, preIssuerGuestShellDigest, onConnected)
+																				productRuntimeID, preIssuerGuestShellDigest, &guestReceiptPair, onConnected)
 																		})
 																}
 															})
@@ -906,8 +915,15 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																						}
 																						productFailure := slice6RunProductRuntimePID1(t, ctx, run, composed,
 																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver,
+																							&guestReceiptPair,
 																							func(id string) error { productRuntimeID = id; runGuestChain(); return guestRuntimeFailure })
 																						runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, productFailure)
+																						if runtimeFailure == nil && composed.PrivateGuestReceipt {
+																							runtimeFailure = guestReceiptPair.verifyRevoke(guestBindingReceipt.BindingGeneration)
+																							if runtimeFailure == nil {
+																								t.Log("private Product/Guest PID1 stdout receipts joined to the same signed attempts and PG revocation; component evidence only")
+																							}
+																						}
 																					})
 																				if runtimeFailure != nil {
 																					return runtimeFailure

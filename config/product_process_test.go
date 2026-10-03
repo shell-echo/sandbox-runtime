@@ -146,6 +146,17 @@ func TestProductV3RequiresPinnedLiveSignerWithoutLocalTLSMaterial(t *testing.T) 
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("valid Product v3: %v", err)
 	}
+	withReceipt := *valid
+	withReceipt.PrivateGuestReceipt = true
+	if err := withReceipt.Validate(); err != nil {
+		t.Fatalf("Product v3 private Guest receipt rejected: %v", err)
+	}
+	oldReceipt := *valid
+	oldReceipt.SchemaVersion = ProductProductionSchemaV2
+	oldReceipt.PrivateGuestReceipt = true
+	if err := oldReceipt.Validate(); err == nil {
+		t.Fatal("Product v2 enabled private Guest receipt")
+	}
 	for name, mutate := range map[string]func(*ProductProcessConfig){
 		"v2 certificate": func(c *ProductProcessConfig) { c.TLS.CertificateBindingID = "product-tls-certificate" },
 		"v2 key":         func(c *ProductProcessConfig) { c.TLS.PrivateKeyBindingID = "product-tls-private-key" },

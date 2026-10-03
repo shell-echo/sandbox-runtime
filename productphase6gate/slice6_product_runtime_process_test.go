@@ -39,7 +39,8 @@ type slice6ProductRuntimeEndpoint struct {
 // relay identity or a guest/SQL/credential network.
 func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, postgresID string, socketVolumes, anchorFiles map[string]string,
-	observer slice6ProductRuntimeObserver, onReady func(string) error) (resultErr error) {
+	observer slice6ProductRuntimeObserver, receipts *slice6GuestReceiptPair,
+	onReady func(string) error) (resultErr error) {
 	t.Helper()
 	budget := 4 * time.Minute
 	if onReady != nil {
@@ -53,6 +54,18 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 	plan, err := slice6BuildProductRuntimeLaunchPlan(composed.Profile)
 	if err != nil || len(socketVolumes) != 74 || len(postgresID) != 64 || !lowerHexSlice6(postgresID) {
 		return errors.New("Product runtime same-run authority unavailable")
+	}
+	var receiptConfigDigest string
+	if composed.PrivateGuestReceipt {
+		if receipts == nil || onReady == nil {
+			return errors.New("Product private Guest receipt chain unavailable")
+		}
+		startup, configErr := slice6BuildProductRuntimeConfig(composed)
+		if configErr != nil {
+			return errors.New("Product private Guest receipt startup authority unavailable")
+		}
+		receiptConfigDigest = slice6ReceiptConfigDigest(startup)
+		clear(startup)
 	}
 	if err := slice6VerifyApprovedProductRuntimeObserver(observer); err != nil {
 		return err
@@ -166,7 +179,15 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 		socketVolumes, anchorFiles, profile); err != nil {
 		return err
 	}
-	if _, err := run.docker(parent, "start", id); err != nil {
+	var receiptCapture *slice6GuestReceiptCapture
+	if composed.PrivateGuestReceipt {
+		receiptCapture, err = slice6StartGuestReceiptCapture(t, parent, id, "product",
+			profile.ProfileDigest, receiptConfigDigest)
+		if err != nil {
+			return errors.New("start attached Product runtime PID1 receipt capture")
+		}
+		defer receiptCapture.abort()
+	} else if _, err := run.docker(parent, "start", id); err != nil {
 		return errors.New("start independent Product runtime PID1")
 	}
 	initialReady, err := slice6ObserveProductReady(parent, run, profile, plan, endpoints,
@@ -242,6 +263,16 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 		if err := slice6AssertProductRuntimeFaultState(parent, run, id, postgresID, endpoints, true, baseline); err != nil {
 			return errors.New("Product PID1 or SQL endpoint changed during dependent gate")
 		}
+	}
+	if receiptCapture != nil {
+		if err := slice6StopReceiptContainer(parent, run, id); err != nil {
+			return errors.New("Product PID1 graceful receipt shutdown unavailable")
+		}
+		records, err := receiptCapture.verifyStopped(parent, run, id, 0)
+		if err != nil {
+			return errors.New("Product PID1 private Guest receipt unavailable")
+		}
+		receipts.Product = records
 	}
 	return nil
 }

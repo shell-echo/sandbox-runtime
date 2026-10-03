@@ -327,6 +327,21 @@ func TestGuestProductionV3RetainsOnlySigningKeyMaterial(t *testing.T) {
 	if err := value.Validate(); err != nil {
 		t.Fatalf("valid Guest v3: %v", err)
 	}
+	withReceipt := *value
+	withReceipt.PrivateGuestReceipt = true
+	if err := withReceipt.Validate(); err != nil {
+		t.Fatalf("Guest v3 private receipt rejected: %v", err)
+	}
+	wrongRoleReceipt := withReceipt
+	wrongRoleReceipt.Role = DataPlaneBrowser
+	if err := wrongRoleReceipt.Validate(); err == nil {
+		t.Fatal("non-Guest role enabled private Guest receipt")
+	}
+	wrongSchemaReceipt := withReceipt
+	wrongSchemaReceipt.SchemaVersion = DataPlaneProductionSchemaV2
+	if err := wrongSchemaReceipt.Validate(); err == nil {
+		t.Fatal("Guest v2 enabled private Guest receipt")
+	}
 	for name, mutate := range map[string]func(*DataPlaneProcessConfig){
 		"old fake recording key": func(candidate *DataPlaneProcessConfig) {
 			candidate.Authority.RecordingKeyRef = "kms://recording/phase6/guest"

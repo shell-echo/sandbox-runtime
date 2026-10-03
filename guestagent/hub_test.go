@@ -170,6 +170,103 @@ func TestChallengeSignatureCannotBeReplayedAgainstAnotherChallenge(t *testing.T)
 	}
 }
 
+func TestAttemptDigestBindsBothNoncesAndCanonicalRequest(t *testing.T) {
+	challengeNonce, _ := randomNonce()
+	clientNonce, _ := randomNonce()
+	request := AuthRequest{
+		Hello: Hello{Type: "hello", GuestID: "gst-test", BindingGeneration: 1,
+			ProtocolVersion: ProtocolVersion, Capabilities: []string{"guest.health", "guest.files"}, ClientNonce: clientNonce},
+		Challenge: Challenge{Type: "challenge", Nonce: challengeNonce,
+			ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)},
+	}
+	digest, err := request.AttemptDigest()
+	if err != nil || len(digest) != len("sha256:")+64 {
+		t.Fatalf("AttemptDigest() length/error = %d/%v", len(digest), err)
+	}
+	reordered := request
+	reordered.Hello.Capabilities = []string{"guest.files", "guest.health"}
+	if got, err := reordered.AttemptDigest(); err != nil || got != digest {
+		t.Fatalf("canonical capability order changed digest: %v", err)
+	}
+	mutations := []func(*AuthRequest){
+		func(value *AuthRequest) { value.Challenge.Nonce, _ = randomNonce() },
+		func(value *AuthRequest) { value.Hello.ClientNonce, _ = randomNonce() },
+		func(value *AuthRequest) { value.Hello.BindingGeneration++ },
+		func(value *AuthRequest) { value.Hello.Capabilities = []string{"guest.health"} },
+	}
+	for i, mutate := range mutations {
+		changed := request
+		mutate(&changed)
+		if got, err := changed.AttemptDigest(); err != nil || got == digest {
+			t.Fatalf("mutation %d was not bound: %v", i, err)
+		}
+	}
+	invalid := request
+	invalid.Hello.ClientNonce = "invalid"
+	if got, err := invalid.AttemptDigest(); !errors.Is(err, ErrInvalid) || got != "" {
+		t.Fatalf("invalid request digest = %q, %v", got, err)
+	}
+}
+
+func TestPrivateObservationCorrelatesInstalledPeerAndCompletedTransportClose(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	auth := newMemoryAuthenticator(publicKey, 1)
+	productEvents := make(chan Observation, 32)
+	guestEvents := make(chan Observation, 32)
+	hub, err := NewHub(HubOptions{Authenticator: auth, AuthorityPollPeriod: 10 * time.Millisecond,
+		Observation: func(value Observation) { productEvents <- value }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	agent, err := NewAgent(AgentOptions{URL: "ws" + strings.TrimPrefix(server.URL, "http"),
+		GuestID: "gst-test", BindingGeneration: 1, PrivateKey: privateKey,
+		Handlers:    map[string]OperationHandler{"guest.health": func(context.Context, json.RawMessage) (any, error) { return true, nil }},
+		Observation: func(value Observation) { guestEvents <- value }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- agent.Run(ctx) }()
+	_ = waitForCall(t, hub, "guest.health", nil)
+	installed := awaitObservation(t, productEvents, ObservationProductPeerInstalled)
+	accepted := awaitObservation(t, guestEvents, ObservationGuestWelcomeAccepted)
+	if installed.AttemptDigest == "" || installed.AttemptDigest != accepted.AttemptDigest {
+		t.Fatal("Product and Guest did not bind the same installed attempt")
+	}
+	hub.Disconnect("tenant-test", "wrk-test", "primary-code")
+	closed := awaitObservation(t, productEvents, ObservationProductCloseCompleted)
+	terminated := awaitObservation(t, guestEvents, ObservationGuestReadTerminated)
+	if closed.AttemptDigest != installed.AttemptDigest || terminated.AttemptDigest != installed.AttemptDigest ||
+		closed.Reason != "operator_disconnect" {
+		t.Fatalf("completed-close correlation/reason mismatch: %q", closed.Reason)
+	}
+	cancel()
+	select {
+	case <-result:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Agent did not stop")
+	}
+}
+
+func awaitObservation(t *testing.T, events <-chan Observation, kind string) Observation {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case value := <-events:
+			if value.Event == kind {
+				return value
+			}
+		case <-deadline:
+			t.Fatalf("missing private observation %s", kind)
+		}
+	}
+}
+
 func waitForCall(t *testing.T, hub *Hub, operation string, payload any) json.RawMessage {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

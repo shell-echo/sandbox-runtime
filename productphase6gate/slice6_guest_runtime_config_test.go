@@ -114,6 +114,7 @@ schema_version = %q
 enabled = true
 deployment_level = "production"
 outbound_url = %q
+private_guest_receipt = %t
 
 [guest_process.public]
 host = "127.0.0.1"
@@ -163,7 +164,7 @@ cache_seconds = 30
 id = %q
 provider = "guest-agent"
 document = %q
-`, config.DataPlaneProductionSchemaV3, origin, config.GuestV3NoRecordingReference, profile.ProfileDigest, peerRole.Digest(),
+`, config.DataPlaneProductionSchemaV3, origin, composed.PrivateGuestReceipt, config.GuestV3NoRecordingReference, profile.ProfileDigest, peerRole.Digest(),
 		composed.PeerSources.Digest(), tlsBinding.SocketPath, tlsBinding.AgentUID, tlsBinding.AgentGID,
 		config.UnixWorkloadMaterialProviderV2, material.SocketPath, material.AgentUID,
 		material.AgentGID, material.OwnerGID, signingID, string(signingBytes)))

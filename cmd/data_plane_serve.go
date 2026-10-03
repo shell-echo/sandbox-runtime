@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/shell-echo/sandbox-runtime/config"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6guestreceipt"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/roleprocess"
 	"github.com/spf13/cobra"
 )
@@ -55,13 +57,29 @@ func runDataPlaneServe(ctx context.Context, role config.DataPlaneRole, section s
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	var guestReceipt *phase6guestreceipt.Recorder
+	if role == config.DataPlaneGuest && cfg.PrivateGuestReceipt {
+		profile, profileErr := phase6security.VerifySlice6ProfileForDeployment(cfg.TLS.SecurityProfilePath, "guest-runtime")
+		if profileErr != nil || profile.ProfileDigest != cfg.TLS.SecurityProfileDigest {
+			return errors.New("private Guest receipt profile is unavailable")
+		}
+		guestReceipt, profileErr = newLocalGuestReceipt("guest-runtime", profile, cfg.OutboundURL)
+		if profileErr != nil {
+			return profileErr
+		}
+		defer sealLocalGuestReceipt(guestReceipt)
+	}
 	var err error
 	var graph roleprocess.ApplicationGraph
 	switch role {
 	case config.DataPlaneGateway:
 		graph, err = roleprocess.NewGatewayApplicationGraph(ctx, cfg)
 	case config.DataPlaneGuest:
-		graph, err = roleprocess.NewGuestApplicationGraph(ctx, cfg)
+		if guestReceipt != nil {
+			graph, err = roleprocess.NewGuestApplicationGraphWithObservation(ctx, cfg, guestReceipt.Sink)
+		} else {
+			graph, err = roleprocess.NewGuestApplicationGraph(ctx, cfg)
+		}
 	case config.DataPlaneBrowser, config.DataPlaneDesktop:
 		// Provider remains the sole handoff/runtime authority. These role
 		// processes are restricted opaque executor relays and do not own

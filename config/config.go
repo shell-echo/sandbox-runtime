@@ -16,11 +16,14 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
@@ -46,6 +49,28 @@ const (
 // loaders holds every registered section loader, populated by package inits.
 var loaders []loader
 
+var phase6CoreStartup struct {
+	sync.RWMutex
+	deployment string
+	digest     string
+}
+
+// Phase6CoreStartupDigest is populated only by successful, exact-byte Phase 6
+// core FD startup loading. An ordinary config file or environment cannot opt
+// into private local-candidate Guest receipt emission.
+func Phase6CoreStartupDigest(deployment string) (string, bool) {
+	phase6CoreStartup.RLock()
+	defer phase6CoreStartup.RUnlock()
+	return phase6CoreStartup.digest, phase6CoreStartup.deployment == deployment && phase6CoreStartup.digest != ""
+}
+
+func clearPhase6CoreStartup() {
+	phase6CoreStartup.Lock()
+	phase6CoreStartup.deployment = ""
+	phase6CoreStartup.digest = ""
+	phase6CoreStartup.Unlock()
+}
+
 // register adds a section loader; it is called from each section's init.
 func register(l loader) {
 	loaders = append(loaders, l)
@@ -68,6 +93,7 @@ func newViper() *viper.Viper {
 // used). An explicitly requested file that is missing, or any malformed file,
 // is fatal. Environment variables always override file and default values.
 func Load(path string) error {
+	clearPhase6CoreStartup()
 	v := newViper()
 
 	explicit := path != ""
@@ -107,6 +133,7 @@ var phase6CoreSections = map[string]string{
 // back to the ordinary default config file. The outer command is responsible
 // for proving the Profile, file ownership and running deployment first.
 func LoadPhase6CoreBytes(document []byte, deployment string) error {
+	clearPhase6CoreStartup()
 	section, known := phase6CoreSections[deployment]
 	if !known || len(document) == 0 || len(document) > 64<<10 {
 		return errors.New("Phase 6 core startup configuration is unavailable")
@@ -150,7 +177,15 @@ func LoadPhase6CoreBytes(document []byte, deployment string) error {
 		v.GetString(section+".schema_version") != version || !v.GetBool(section+".enabled") {
 		return errors.New("Phase 6 core role schema or application mode is invalid")
 	}
-	return loadViper(v)
+	if err := loadViper(v); err != nil {
+		return err
+	}
+	sum := sha256.Sum256(document)
+	phase6CoreStartup.Lock()
+	phase6CoreStartup.deployment = deployment
+	phase6CoreStartup.digest = "sha256:" + hex.EncodeToString(sum[:])
+	phase6CoreStartup.Unlock()
+	return nil
 }
 
 func loadViper(v *viper.Viper) error {

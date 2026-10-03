@@ -2639,3 +2639,81 @@ successful live revocation. A scoped audit found the other explicit boolean
 text-cast Product migration assertions compare `true`/`false` correctly;
 integer text casts do not share this mismatch. A fresh real-issuer Gate needs
 separate review and authorization. Phase 6 remains **5/15**.
+
+### Slice 6 local-candidate Guest receipt observation (2026-10-04)
+
+The E7 local issuer diagnostic established connected Guest PID1, durable
+revoked-row readback and non-recovery, but not the cause of a fresh old-key
+denial or the original upgraded socket's two-sided drain. Sandbox approved a
+private, opt-in Product/Guest receipt to close that observability gap without
+changing the Guest wire, Provider Contract, Product authorization, TLS/CRL
+policy, database schema, or any production service endpoint.
+
+The switch is `private_guest_receipt` in only the Product/Guest v3 typed
+startup sections. Their existing `production` deployment level remains
+unchanged; the switch defaults off and all other roles, older schemas and
+disabled sections reject it. Before any receipt is emitted, each process
+requires its exact FD-loaded startup document SHA-256, complete pinned
+Profile, real `guest-product` boundary, and both runtime principals with
+`ImageLocation=local`, `ImageReference=ImageDigest`, and the Profile's already
+valid `oci_manifest` or `oci_index` shape. Runtime checks are configuration
+admission, **not** provenance. E must separately verify the source-bound local
+candidate archive, descriptor/config, Docker inspect, process launch and
+actual attached container against the same Profile/config digests. Registry,
+published, mixed-local/registry or `local_config` profiles cannot enable the
+receipt. The switch is not placed in a release template.
+
+Both endpoints derive the attempt correlation as SHA-256 of the fixed
+`sandbox-runtime-phase6-guest-attempt-v1` domain plus the existing validated
+canonical `AuthRequest.SigningBytes()`. That binds challenge, client nonce,
+identity, generation, protocol and sorted capabilities without emitting raw
+nonces, signing bytes, signature, key, identity or address. The optional
+PostgreSQL `validated_revoked` path uses the original joined, locked row in
+the same transaction and checks key digest, signature, signed tuple, protocol,
+generation, DB-time expiry and intersecting capability before classifying a
+revoked state. Missing row, wrong signature or tuple, expired row, capability
+or generation mismatch, SQL/context uncertainty and dependency loss cannot
+be reclassified as a verified revoke. With the switch off, the prior
+authentication query/short-circuit path remains in use.
+
+The closed receipt protocol is `sandbox-runtime.phase6-guest-receipt.v1`.
+Product events are `product_auth_accepted`, `product_welcome_written`,
+`product_peer_installed`, `product_authority_stale`,
+`product_close_completed` and `product_validated_revoked`; Guest events are
+`guest_hello_written`, `guest_welcome_accepted` and
+`guest_read_terminated`. `begin` and `seal` delimit each role's stream.
+`product_close_completed` is emitted only after the first actual `CloseNow`
+returns successfully; Guest termination is emitted only after its read loop
+and transport close return. `authority_stale` is not itself a revocation
+claim. E must match an installed original attempt, its Product close result,
+its Guest-side termination, and a distinct fresh signed revoked attempt;
+one 503, exit 1, closed `done` channel or close intent is insufficient.
+
+Only a Linux, non-TTY FIFO stdout can carry the optional stream. A single
+writer reopens the exact already-open stdout FIFO through `/proc/self/fd`,
+requires the same device/inode, a separately nonblocking open-file
+description, unchanged original blocking flags and `CLOEXEC`; it does not
+use `dup`, Docker access or another runtime mount. The callback performs only
+a bounded local enqueue. Limits are 256 events, 64 queued records, 512 bytes
+per line, 128 KiB total and 250 ms per nonblocking line write. The caller's
+existing shutdown budget provides at most two seconds to seal/join; cancellation
+actively stops and joins the writer. Overflow, invalid event, write error,
+missing/truncated seal, nonzero dropped count, sequence/count mismatch,
+unknown/duplicate/noncanonical JSON, wrong role/profile/config digest or
+illegal per-attempt transition makes the evidence unavailable. E captures
+stdout only into a 0700 private directory and 0600 file with Docker
+`log-driver=none`, not shared logs. Sequence and elapsed time order events
+within one process only; E uses its actual mutation/capture boundaries for
+cross-process order. Failure to observe never grants authorization or changes
+Guest reconnect policy. Other platforms or unsupported stdout fail the
+opt-in startup closed. Removing the switch/emitter/collector is a bounded
+rollback with no migration.
+
+The actual non-TTY pinned arm64 container probe now passes healthy sealed
+output and a deliberately unread attached-output stress case that confirms
+the writer reports invalid completion and joins before the attach is released.
+Pure Linux tests also check unchanged original flags, `CLOEXEC` across a real
+child exec, exact fd closure, overflow, cancellation and blocked-pipe join.
+These are carrier/component checks only. The original E7 result, R884/F884
+artifacts and the 16-scenario issuer/release gate remain unchanged and
+unpassed; Phase 6 stays **5/15**.

@@ -382,6 +382,14 @@ func verifyGuestV3StorageReceipts(identity string) error {
 // from the typed authority contract. It returns no inbound handler and never
 // invents Product identity or capabilities.
 func NewGuestApplicationGraph(ctx context.Context, cfg *config.DataPlaneProcessConfig) (ApplicationGraph, error) {
+	return NewGuestApplicationGraphWithObservation(ctx, cfg, nil)
+}
+
+// NewGuestApplicationGraphWithObservation is the opt-in local-candidate
+// evidence variant. The sink is pre-admitted by the command and must enqueue
+// without I/O; it does not participate in Guest authority decisions.
+func NewGuestApplicationGraphWithObservation(ctx context.Context, cfg *config.DataPlaneProcessConfig,
+	observe guestagent.ObservationSink) (ApplicationGraph, error) {
 	if ctx == nil {
 		return ApplicationGraph{}, errors.New("Guest construction context is required")
 	}
@@ -411,6 +419,7 @@ func NewGuestApplicationGraph(ctx context.Context, cfg *config.DataPlaneProcessC
 		PrivateKey:        authority.PrivateKey, Handlers: service.Handlers(),
 		ReconnectBackoff: time.Duration(authority.Policy.ReconnectBackoffMillis) * time.Millisecond,
 		HTTPClient:       authority.HTTPClient,
+		Observation:      observe,
 	})
 	clear(authority.PrivateKey)
 	if err != nil {

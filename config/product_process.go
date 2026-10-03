@@ -47,6 +47,7 @@ type ProductProcessConfig struct {
 	Postgres                   ProductPostgresConfig  `mapstructure:"postgres"`
 	Identity                   ProductIdentityConfig  `mapstructure:"identity"`
 	Materials                  ProductMaterialsConfig `mapstructure:"materials"`
+	PrivateGuestReceipt        bool                   `mapstructure:"private_guest_receipt"`
 }
 
 // ProductTLSConfig selects either explicit historical v2 material bindings or
@@ -124,6 +125,9 @@ func defaultProductProcessConfig() *ProductProcessConfig {
 func (c *ProductProcessConfig) Validate() error {
 	if c == nil {
 		return errors.New("product_process configuration is required")
+	}
+	if c.PrivateGuestReceipt && (!c.Enabled || c.SchemaVersion != ProductProductionSchemaV3 || c.DeploymentLevel != ProductProductionLevel) {
+		return errors.New("Product private Guest receipt requires the explicit v3 production role")
 	}
 	if !c.Enabled {
 		return nil

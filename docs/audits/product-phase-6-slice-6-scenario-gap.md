@@ -29,42 +29,44 @@ spliced into that new run.
 | `role_and_controller_drain` | `bounded_sigterm`; `active_socket_close`; `exact_lease_socket_cleanup` | E7 controller quiesce plus exact component cleanup; sticky local revoke failure remains | Timed Browser/Desktop role drain, active socket closure and complete lease/socket cleanup |
 | `vault_pki_rotation_and_loss` | `fresh_issue_and_overlap`; `live_rotation`; `loss_closes_admission` | E7 root trust cutover and managed leaf issuance | Concurrent old/new leaf overlap, live rotation and Vault-source-loss admission denial |
 
-## Guest-edge observability decision needed before a new issuer run
+## Guest-edge observability and remaining live proof
 
 `guestagent.Agent.Ready` is true only after a signed hello and validated
 welcome, so E7's connected Guest `/readyz` is useful client success evidence.
-But the role readiness also depends on material and CRL health. In
-`guestagent/agent.go`, every welcome-read error becomes `ErrUnauthorized`;
-`guestagent/hub.go` closes on authority loss with `CloseNow` without exposing
-a transport lifecycle receipt; and `product/adapter/postgres/guest.go`
-currently returns the same `ErrForbidden` for revoked state and an invalid
-signature. After revocation, a 503 or exit 1 plus a durable SQL row therefore
-cannot identify a fresh old-key handshake attempt or directly prove that the
-original upgraded WebSocket closed. Product/PG/agent health controls narrow,
-but do not eliminate, transport/CRL/material explanations.
+But the role readiness also depends on material and CRL health. Before the
+optional receipt change, every welcome-read error became `ErrUnauthorized`,
+the Hub's `CloseNow` had no lifecycle receipt, and the PostgreSQL store
+returned the same `ErrForbidden` for revoked state and invalid signature.
+E7's 503/exit 1 and durable SQL row therefore remain insufficient to prove
+the cause or the original upgraded WebSocket's closure. The new hooks address
+those ambiguities only when captured from a newly built and independently
+verified Product/Guest PID1 pair in the same run.
 
-An E-only networkless Docker probe confirmed `docker start -a` can capture a
-bounded stdout line even when `--log-driver=none`; the disposable non-root,
-read-only, no-network Alpine container exited zero and its exact label cleaned
-to zero. This establishes only a possible carrier, not a Product/Guest
-lifecycle signal or a production evidence receipt.
+E-only networkless Docker probes confirm `docker start -a` can capture bounded
+canonical receipts with `--log-driver=none` and classify exact container exit
+0/3 independently; the disposable non-root, read-only, no-network Alpine
+containers clean by exact label. This proves the collector carrier and exit
+classification, not a Product/Guest lifecycle signal or production evidence.
 
-Options for Sandbox review:
+The options considered with Sandbox were:
 
 1. Existing `/readyz`, PostgreSQL row, container/agent fingerprints and
    read-only `/proc/net/tcp` or Docker inspect: no R rebuild, but cannot
    distinguish business denial from transport/CRL loss or tie an original
    upgraded connection to a fresh denied attempt. Reject as final proof.
-2. Recommended **minimal closed lifecycle receipt** from the existing
+2. Sandbox-approved **minimal closed lifecycle receipt** from the existing
    Product Hub/Authenticator and Guest Agent, captured from each exact PID1
    by an E-only bounded `docker start -a` collector while keeping Docker
-   `log-driver=none`. Correlate both sides by a SHA-256 digest of the existing
-   random client nonce, never the nonce itself. Product emits only accepted
-   signed hello/welcome, original authority-stale close/close-complete, and
-   fresh signed old-identity rejection with an explicit DB-observed revoked
-   reason; Guest emits welcome-validated and old transport-closed/attempted
-   reconnect. Every event has closed version, monotonic sequence, event kind,
-   nonce digest, binding generation and bounded monotonic/wall time. The Gate
+   `log-driver=none`. Correlate both sides by a domain-separated SHA-256 of
+   validated canonical `AuthRequest.SigningBytes()`, which includes both
+   challenge and client nonce; neither nonce nor signed bytes are emitted.
+   Product separates signed authentication, welcome write, peer installation,
+   authority-stale observation, actual first `CloseNow` completion and a
+   fresh same-transaction signature-validated revoked-row rejection. Guest
+   separates hello write, welcome validation and read-loop/transport
+   termination. Every event has a closed protocol, sequence, event kind,
+   attempt digest, binding generation and bounded in-process elapsed/wall
+   time. The Gate
    binds the stream to its exact Docker container ID and run ID; it retains
    no raw frames, keys, tokens, signatures, addresses or unredacted IDs.
    `product/adapter/postgres/guest.go` must distinguish a validated signature
@@ -82,7 +84,7 @@ Options for Sandbox review:
    smaller first change. A new public/private HTTP diagnostic endpoint would
    be a larger security boundary and is rejected here.
 
-Option 2 still changes runtime R, even if no wire API changes. It requires a
+Option 2 changes runtime R, even though no wire API changes. It requires a
 new clean R/F checkpoint and rebuilding/rechecking the source-bound twelve
 role candidates and Desktop candidate (and any changed fixture digest), not
 relabeling R884 images. Production stdout exposure depends on deployment
@@ -93,5 +95,25 @@ nonblocking bounded queue must fail closed for evidence and be joined on
 role drain, never hold connection callbacks or retain secret buffers. Rollback
 is to remove the optional receipt emission/collector and keep the existing
 runtime behavior and E7 component boundary, with no schema or Provider
-Contract migration. No runtime change or further issuer run is authorized by
-this proposal alone.
+Contract migration. Sandbox has since authorized this exact bounded runtime
+implementation and no-issuer component verification, but **not** another
+issuer run. The optional v3 config switch, both process hooks, same-transaction
+PostgreSQL classification, closed receipt writer and strict stream verifier
+now exist. The E-only `docker start -a` collector now opens 0600 bounded
+captures before Product/Guest PID1 startup, checks exact stopped/exit/OOM
+state, verifies each closed stream against source-derived config/Profile
+digests, and joins accepted/closed and fresh validated-revoked signed attempt
+digests. This path has passed no-issuer Docker and causal-drift tests but has
+**not** run with the real Product/Guest pair. Pinned arm64 Docker proves normal non-TTY attach and a deliberately
+unread attached-output writer cancellation/join; real isolated PostgreSQL
+proves the signed revoked positive and wrong-signature/capability/generation/
+expiry negatives. A separate no-issuer real PostgreSQL + Hub + Agent component
+test passes ten consecutive race/shuffle iterations: one accepted signed
+attempt is installed, a real `RevokeGuest` closes that connection, and a new
+signed retry is rejected by the original joined-row transaction with the
+same attempt digest observed on both sides. Its isolated PostgreSQL container
+was removed by exact ID with zero matching labels. This is not an actual
+source-bound Product/Guest PID1 run. The new R/F candidate still must be built and audited; the
+E collector must then observe actual source-bound Product/Guest PID1 streams,
+and the full run must pass all 16 scenarios with a strict manifest.
+None of these component results advances Phase 6 beyond **5/15**.

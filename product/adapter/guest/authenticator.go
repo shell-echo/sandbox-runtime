@@ -12,13 +12,35 @@ import (
 	"github.com/shell-echo/sandbox-runtime/product"
 )
 
-type Authenticator struct{ store product.GuestBindingStore }
+type revocationEvidenceStore interface {
+	AuthenticateGuestWithRevocationEvidence(context.Context, product.GuestAuthentication) (product.GuestBinding, bool, error)
+}
+
+type Authenticator struct {
+	store           product.GuestBindingStore
+	revocationStore revocationEvidenceStore
+	onRevoked       func(string, int64)
+}
 
 func NewAuthenticator(store product.GuestBindingStore) (*Authenticator, error) {
 	if store == nil {
 		return nil, product.ErrInvalid
 	}
 	return &Authenticator{store: store}, nil
+}
+
+// NewAuthenticatorWithRevocationObservation enables a private, optional
+// signed-attempt receipt. The callback must only enqueue bounded local data;
+// it must not perform output or database work on the authentication path.
+func NewAuthenticatorWithRevocationObservation(store product.GuestBindingStore, onRevoked func(string, int64)) (*Authenticator, error) {
+	if store == nil || onRevoked == nil {
+		return nil, product.ErrInvalid
+	}
+	observed, ok := store.(revocationEvidenceStore)
+	if !ok {
+		return nil, product.ErrInvalid
+	}
+	return &Authenticator{store: store, revocationStore: observed, onRevoked: onRevoked}, nil
 }
 
 func (a *Authenticator) Authenticate(ctx context.Context, request guestagent.AuthRequest) (guestagent.Identity, error) {
@@ -34,11 +56,23 @@ func (a *Authenticator) Authenticate(ctx context.Context, request guestagent.Aut
 	if err != nil || !expiresAt.After(time.Now().UTC()) || expiresAt.After(time.Now().UTC().Add(30*time.Second)) {
 		return guestagent.Identity{}, guestagent.ErrUnauthorized
 	}
-	binding, err := a.store.AuthenticateGuest(ctx, product.GuestAuthentication{
+	authentication := product.GuestAuthentication{
 		GuestID: request.Hello.GuestID, BindingGeneration: request.Hello.BindingGeneration,
 		ProtocolVersion: request.Hello.ProtocolVersion, OfferedCapabilities: append([]string(nil), request.Hello.Capabilities...),
 		ClientNonce: request.Hello.ClientNonce, SigningBytes: signing, Signature: signature,
-	})
+	}
+	var binding product.GuestBinding
+	if a.revocationStore != nil {
+		var revoked bool
+		binding, revoked, err = a.revocationStore.AuthenticateGuestWithRevocationEvidence(ctx, authentication)
+		if revoked && errors.Is(err, product.ErrForbidden) {
+			if digest, digestErr := request.AttemptDigest(); digestErr == nil {
+				a.onRevoked(digest, request.Hello.BindingGeneration)
+			}
+		}
+	} else {
+		binding, err = a.store.AuthenticateGuest(ctx, authentication)
+	}
 	if err != nil {
 		return guestagent.Identity{}, mapAuthenticationError(err)
 	}

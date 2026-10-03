@@ -1490,6 +1490,54 @@ func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
 	if err := store.RevokeGuest(context.Background(), "tenant-product-guest", rotated.GuestID, "removed"); err != nil {
 		t.Fatal(err)
 	}
+	observedRequest := signedGuestAuth(t, rotated, newPrivateKey, "challenge-revoked-observation")
+	observedAuthentication := productGuestAuthentication(t, observedRequest)
+	var observedDigests []string
+	observedAuthenticator, err := productguest.NewAuthenticatorWithRevocationObservation(store, func(digest string, generation int64) {
+		if generation != rotated.BindingGeneration {
+			t.Errorf("observed generation = %d", generation)
+		}
+		observedDigests = append(observedDigests, digest)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := observedAuthenticator.Authenticate(context.Background(), observedRequest); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("observed revoked authentication err=%v", err)
+	}
+	if digest, err := observedRequest.AttemptDigest(); err != nil || len(observedDigests) != 1 || observedDigests[0] != digest {
+		t.Fatalf("bounded revoked receipt mismatch: count=%d err=%v", len(observedDigests), err)
+	}
+	if _, revoked, err := store.AuthenticateGuestWithRevocationEvidence(context.Background(), observedAuthentication); !errors.Is(err, product.ErrForbidden) || !revoked {
+		t.Fatalf("signed revoked attempt: revoked=%v err=%v", revoked, err)
+	}
+	wrongSignature := observedAuthentication
+	wrongSignature.Signature = append([]byte(nil), wrongSignature.Signature...)
+	wrongSignature.Signature[0] ^= 1
+	if _, revoked, err := store.AuthenticateGuestWithRevocationEvidence(context.Background(), wrongSignature); !errors.Is(err, product.ErrForbidden) || revoked {
+		t.Fatalf("wrong signature: revoked=%v err=%v", revoked, err)
+	}
+	wrongRequestSignature := observedRequest
+	wrongRequestSignature.Hello.Signature = base64.RawURLEncoding.EncodeToString(wrongSignature.Signature)
+	if _, err := observedAuthenticator.Authenticate(context.Background(), wrongRequestSignature); !errors.Is(err, guestagent.ErrUnauthorized) || len(observedDigests) != 1 {
+		t.Fatalf("wrong signature emitted revoked receipt: count=%d err=%v", len(observedDigests), err)
+	}
+	wrongCapability := observedAuthentication
+	wrongCapability.OfferedCapabilities = []string{"unrelated.capability"}
+	if _, revoked, err := store.AuthenticateGuestWithRevocationEvidence(context.Background(), wrongCapability); !errors.Is(err, product.ErrForbidden) || revoked {
+		t.Fatalf("wrong capability: revoked=%v err=%v", revoked, err)
+	}
+	wrongGeneration := observedAuthentication
+	wrongGeneration.BindingGeneration++
+	if _, revoked, err := store.AuthenticateGuestWithRevocationEvidence(context.Background(), wrongGeneration); !errors.Is(err, product.ErrNotFound) || revoked {
+		t.Fatalf("wrong generation: revoked=%v err=%v", revoked, err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE sandbox_runtime_product.guest_bindings SET created_at=clock_timestamp()-interval '2 minutes',expires_at=clock_timestamp()-interval '1 second' WHERE guest_id=$1`, rotated.GuestID); err != nil {
+		t.Fatal(err)
+	}
+	if _, revoked, err := store.AuthenticateGuestWithRevocationEvidence(context.Background(), observedAuthentication); !errors.Is(err, product.ErrForbidden) || revoked {
+		t.Fatalf("expired revoked row: revoked=%v err=%v", revoked, err)
+	}
 	if err := authenticator.CheckAuthority(context.Background(), newIdentity); !errors.Is(err, guestagent.ErrUnauthorized) {
 		t.Fatalf("revoked authority err=%v", err)
 	}
@@ -2104,6 +2152,22 @@ func signedGuestAuth(t *testing.T, binding product.GuestBinding, privateKey ed25
 	}
 	request.Hello.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, signing))
 	return request
+}
+
+func productGuestAuthentication(t *testing.T, request guestagent.AuthRequest) product.GuestAuthentication {
+	t.Helper()
+	signing, err := request.SigningBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := request.SignatureBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return product.GuestAuthentication{GuestID: request.Hello.GuestID,
+		BindingGeneration: request.Hello.BindingGeneration, ProtocolVersion: request.Hello.ProtocolVersion,
+		OfferedCapabilities: append([]string(nil), request.Hello.Capabilities...),
+		ClientNonce:         request.Hello.ClientNonce, SigningBytes: signing, Signature: signature}
 }
 
 func attemptBrowserBindingSelection(pool *pgxpool.Pool, selection BrowserHandoffBindingSelection) error {

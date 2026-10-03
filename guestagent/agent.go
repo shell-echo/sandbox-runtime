@@ -23,6 +23,7 @@ type AgentOptions struct {
 	Handlers          map[string]OperationHandler
 	ReconnectBackoff  time.Duration
 	HTTPClient        *http.Client
+	Observation       ObservationSink
 }
 
 type Agent struct {
@@ -122,10 +123,16 @@ func (a *Agent) connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	attemptDigest, err := auth.AttemptDigest()
+	if err != nil {
+		return err
+	}
 	hello.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(a.options.PrivateKey, signing))
 	if err := writeJSON(ctx, connection, hello); err != nil {
 		return ErrUnavailable
 	}
+	a.emit(Observation{Event: ObservationGuestHelloWritten, AttemptDigest: attemptDigest,
+		BindingGeneration: a.options.BindingGeneration})
 	var welcome Welcome
 	if err := readJSON(ctx, connection, &welcome); err != nil {
 		return ErrUnauthorized
@@ -133,9 +140,22 @@ func (a *Agent) connect(ctx context.Context) error {
 	if welcome.Type != "welcome" || welcome.ProtocolVersion != ProtocolVersion || welcome.BindingGeneration != a.options.BindingGeneration || !subset(welcome.Capabilities, a.capabilities) {
 		return ErrIncompatible
 	}
+	a.emit(Observation{Event: ObservationGuestWelcomeAccepted, AttemptDigest: attemptDigest,
+		BindingGeneration: a.options.BindingGeneration})
 	a.setConnected(true)
 	defer a.setConnected(false)
-	return a.serve(ctx, connection, welcome.Capabilities)
+	serveErr := a.serve(ctx, connection, welcome.Capabilities)
+	if closeErr := connection.CloseNow(); closeErr == nil {
+		a.emit(Observation{Event: ObservationGuestReadTerminated, AttemptDigest: attemptDigest,
+			BindingGeneration: a.options.BindingGeneration})
+	}
+	return serveErr
+}
+
+func (a *Agent) emit(value Observation) {
+	if a.options.Observation != nil {
+		a.options.Observation(value)
+	}
 }
 
 func (a *Agent) setConnected(value bool) {

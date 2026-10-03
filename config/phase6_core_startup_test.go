@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -69,6 +71,13 @@ func TestLoadPhase6CoreBytesClosedRoleAndEnvironment(t *testing.T) {
 	if ProductMigration == nil || !ProductMigration.Enabled || ProductMigration.SchemaVersion != ProductMigrationSchemaV2 {
 		t.Fatal("validated migration startup did not commit")
 	}
+	sum := sha256.Sum256(valid)
+	if digest, ok := Phase6CoreStartupDigest("product-migration-job"); !ok || digest != "sha256:"+hex.EncodeToString(sum[:]) {
+		t.Fatal("exact startup byte digest was not retained")
+	}
+	if _, ok := Phase6CoreStartupDigest("product-runtime"); ok {
+		t.Fatal("startup digest transferred to another deployment")
+	}
 	for name, document := range map[string][]byte{
 		"missing role":     []byte("[application]\nmode='production'\n"),
 		"other role":       append(append([]byte(nil), valid...), []byte("\n[provider_migration]\nenabled=true\n")...),
@@ -85,6 +94,9 @@ func TestLoadPhase6CoreBytesClosedRoleAndEnvironment(t *testing.T) {
 			}
 			if err := LoadPhase6CoreBytes(document, deployment); err == nil {
 				t.Fatal("unsafe Phase 6 startup config admitted")
+			}
+			if _, ok := Phase6CoreStartupDigest(deployment); ok {
+				t.Fatal("failed startup retained a usable private receipt digest")
 			}
 		})
 	}

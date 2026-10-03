@@ -31,6 +31,7 @@ type Authenticator interface {
 
 type HubOptions struct {
 	Authenticator       Authenticator
+	Observation         ObservationSink
 	Clock               func() time.Time
 	HandshakeTimeout    time.Duration
 	AuthorityPollPeriod time.Duration
@@ -38,6 +39,7 @@ type HubOptions struct {
 
 type Hub struct {
 	auth      Authenticator
+	observe   ObservationSink
 	clock     func() time.Time
 	handshake time.Duration
 	poll      time.Duration
@@ -66,7 +68,7 @@ func NewHub(options HubOptions) (*Hub, error) {
 	if handshake < time.Second || handshake > 30*time.Second || poll < 10*time.Millisecond || poll > 30*time.Second {
 		return nil, ErrInvalid
 	}
-	return &Hub{auth: options.Authenticator, clock: clock, handshake: handshake, poll: poll, peers: make(map[peerKey]*peer)}, nil
+	return &Hub{auth: options.Authenticator, observe: options.Observation, clock: clock, handshake: handshake, poll: poll, peers: make(map[peerKey]*peer)}, nil
 }
 
 func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -82,17 +84,21 @@ func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	connection.SetReadLimit(MaxMessageBytes)
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
-	identity, err := h.handshakeGuest(ctx, connection)
+	identity, attemptDigest, err := h.handshakeGuest(ctx, connection)
 	if err != nil {
 		_ = connection.Close(websocket.StatusPolicyViolation, "guest authentication failed")
 		return
 	}
 	p := newPeer(connection, identity)
+	p.attemptDigest = attemptDigest
+	p.observe = h.observe
 	key := peerKey{identity.TenantID, identity.WorkspaceID, identity.SlotKey}
 	if !h.install(key, p) {
 		_ = connection.Close(websocket.StatusPolicyViolation, "guest already connected")
 		return
 	}
+	h.emit(Observation{Event: ObservationProductPeerInstalled, AttemptDigest: attemptDigest,
+		BindingGeneration: identity.BindingGeneration})
 	defer h.remove(key, p)
 	go h.monitorAuthority(ctx, p)
 	p.readLoop(ctx)
@@ -130,42 +136,56 @@ func (h *Hub) Disconnect(tenantID, workspaceID, slotKey string) {
 	p := h.peers[peerKey{tenantID, workspaceID, slotKey}]
 	h.mu.RUnlock()
 	if p != nil {
-		p.close(ErrUnavailable)
+		p.close(ErrUnavailable, "operator_disconnect")
 	}
 }
 
-func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn) (Identity, error) {
+func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn) (Identity, string, error) {
 	ctx, cancel := context.WithTimeout(parent, h.handshake)
 	defer cancel()
 	nonce, err := randomNonce()
 	if err != nil {
-		return Identity{}, ErrUnavailable
+		return Identity{}, "", ErrUnavailable
 	}
 	challenge := Challenge{Type: "challenge", Nonce: nonce, ExpiresAt: h.clock().Add(h.handshake).UTC().Format(time.RFC3339Nano)}
 	if err := writeJSON(ctx, connection, challenge); err != nil {
-		return Identity{}, ErrUnavailable
+		return Identity{}, "", ErrUnavailable
 	}
 	var hello Hello
 	if err := readJSON(ctx, connection, &hello); err != nil {
-		return Identity{}, err
+		return Identity{}, "", err
 	}
 	request := AuthRequest{Hello: hello, Challenge: challenge}
 	if err := request.Validate(); err != nil {
-		return Identity{}, err
+		return Identity{}, "", err
 	}
 	if hello.ProtocolVersion != ProtocolVersion {
-		return Identity{}, ErrIncompatible
+		return Identity{}, "", ErrIncompatible
+	}
+	attemptDigest, err := request.AttemptDigest()
+	if err != nil {
+		return Identity{}, "", err
 	}
 	identity, err := h.auth.Authenticate(ctx, request)
 	if err != nil || identity.ProtocolVersion != ProtocolVersion || identity.GuestID != hello.GuestID ||
 		identity.BindingGeneration != hello.BindingGeneration || !uniqueCapabilities(identity.Capabilities) || !subset(identity.Capabilities, hello.Capabilities) || !identity.ExpiresAt.After(h.clock()) {
-		return Identity{}, ErrUnauthorized
+		return Identity{}, "", ErrUnauthorized
 	}
+	h.emit(Observation{Event: ObservationProductAuthAccepted, AttemptDigest: attemptDigest,
+		BindingGeneration: identity.BindingGeneration})
 	welcome := Welcome{Type: "welcome", ProtocolVersion: ProtocolVersion, Capabilities: append([]string(nil), identity.Capabilities...), BindingGeneration: identity.BindingGeneration}
 	if err := writeJSON(ctx, connection, welcome); err != nil {
-		return Identity{}, ErrUnavailable
+		return Identity{}, "", ErrUnavailable
 	}
-	return identity, nil
+	h.emit(Observation{Event: ObservationProductWelcomeWritten, AttemptDigest: attemptDigest,
+		BindingGeneration: identity.BindingGeneration})
+	return identity, attemptDigest, nil
+}
+
+func (h *Hub) emit(value Observation) {
+	if h.observe != nil {
+		h.observe(value)
+	}
 }
 
 func (h *Hub) install(key peerKey, candidate *peer) bool {
@@ -184,7 +204,7 @@ func (h *Hub) remove(key peerKey, candidate *peer) {
 		delete(h.peers, key)
 	}
 	h.mu.Unlock()
-	candidate.close(ErrUnavailable)
+	candidate.close(ErrUnavailable, "handler_shutdown")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = h.auth.Disconnected(ctx, candidate.identity)
@@ -204,7 +224,9 @@ func (h *Hub) monitorAuthority(ctx context.Context, p *peer) {
 			err := h.auth.CheckAuthority(checkCtx, p.identity)
 			cancel()
 			if err != nil {
-				p.close(ErrUnauthorized)
+				h.emit(Observation{Event: ObservationProductAuthorityStale, AttemptDigest: p.attemptDigest,
+					BindingGeneration: p.identity.BindingGeneration})
+				p.close(ErrUnauthorized, "authority_stale")
 				return
 			}
 		}
@@ -212,15 +234,17 @@ func (h *Hub) monitorAuthority(ctx context.Context, p *peer) {
 }
 
 type peer struct {
-	connection *websocket.Conn
-	identity   Identity
-	writeMu    sync.Mutex
-	mu         sync.Mutex
-	pending    map[string]chan Response
-	sem        chan struct{}
-	done       chan struct{}
-	closeOnce  sync.Once
-	closeErr   error
+	connection    *websocket.Conn
+	identity      Identity
+	attemptDigest string
+	observe       ObservationSink
+	writeMu       sync.Mutex
+	mu            sync.Mutex
+	pending       map[string]chan Response
+	sem           chan struct{}
+	done          chan struct{}
+	closeOnce     sync.Once
+	closeErr      error
 }
 
 func newPeer(connection *websocket.Conn, identity Identity) *peer {
@@ -277,11 +301,11 @@ func (p *peer) readLoop(ctx context.Context) {
 	for {
 		var response Response
 		if err := readJSON(ctx, p.connection, &response); err != nil {
-			p.close(err)
+			p.close(err, "transport_terminated")
 			return
 		}
 		if response.Type != "response" || !validID(response.RequestID) || response.OK == (response.ErrorCode != "") {
-			p.close(ErrInvalid)
+			p.close(ErrInvalid, "invalid_frame")
 			return
 		}
 		p.mu.Lock()
@@ -306,11 +330,14 @@ func (p *peer) write(ctx context.Context, value any) error {
 	return p.connection.Write(ctx, websocket.MessageText, document)
 }
 
-func (p *peer) close(err error) {
+func (p *peer) close(err error, reason string) {
 	p.closeOnce.Do(func() {
 		p.closeErr = err
 		close(p.done)
-		_ = p.connection.CloseNow()
+		if closeErr := p.connection.CloseNow(); closeErr == nil && p.observe != nil {
+			p.observe(Observation{Event: ObservationProductCloseCompleted, AttemptDigest: p.attemptDigest,
+				BindingGeneration: p.identity.BindingGeneration, Reason: reason})
+		}
 	})
 }
 

@@ -5,7 +5,9 @@ package guestagent
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,6 +94,20 @@ func (r AuthRequest) SigningBytes() ([]byte, error) {
 		r.Hello.ClientNonce, r.Hello.GuestID, fmt.Sprintf("%d", r.Hello.BindingGeneration),
 		r.Hello.ProtocolVersion, strings.Join(capabilities, ","),
 	}, "\n")), nil
+}
+
+// AttemptDigest is a private observation correlation, not an authentication
+// token. Both peers derive it from the same validated challenge and hello;
+// neither nonce nor the canonical signed bytes need to appear in a receipt.
+func (r AuthRequest) AttemptDigest() (string, error) {
+	signing, err := r.SigningBytes()
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("sandbox-runtime-phase6-guest-attempt-v1\x00"))
+	_, _ = hash.Write(signing)
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func (r AuthRequest) SignatureBytes() ([]byte, error) {

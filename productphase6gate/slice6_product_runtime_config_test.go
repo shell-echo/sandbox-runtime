@@ -90,6 +90,7 @@ schema_version = %q
 enabled = true
 deployment_level = "production"
 guest_control_max_connections = 16
+private_guest_receipt = %t
 
 [product_process.api]
 host = %q
@@ -150,7 +151,7 @@ document = %q
 id = %q
 provider = "product-runtime-agent"
 document = %q
-`, config.ProductProductionSchemaV3, publicEndpoint.Addr().String(), publicEndpoint.Port(),
+`, config.ProductProductionSchemaV3, composed.PrivateGuestReceipt, publicEndpoint.Addr().String(), publicEndpoint.Port(),
 		guestEndpoint.Addr().String(), guestEndpoint.Port(), profile.ProfileDigest,
 		tlsBinding.SocketPath, tlsBinding.AgentUID, tlsBinding.AgentGID,
 		peerRole.Digest(), composed.PeerSources.Digest(), runtimeID, postgres.SQLRole,

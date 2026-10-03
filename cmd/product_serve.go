@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/config"
 	"github.com/shell-echo/sandbox-runtime/guestagent"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6guestreceipt"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6tls"
 	"github.com/shell-echo/sandbox-runtime/internal/rolematerials"
@@ -129,11 +130,19 @@ func runDevelopmentProduct(ctx context.Context, productConfig *config.ProductPro
 
 func runProductionProduct(ctx context.Context, productConfig *config.ProductProcessConfig) error {
 	var securityProfile phase6security.Profile
+	var guestReceipt *phase6guestreceipt.Recorder
 	var err error
 	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
 		securityProfile, err = preflightProductV3Postgres(productConfig)
 		if err != nil {
 			return err
+		}
+		if productConfig.PrivateGuestReceipt {
+			guestReceipt, err = newLocalGuestReceipt("product-runtime", securityProfile, productGuestReceiptOrigin(securityProfile))
+			if err != nil {
+				return err
+			}
+			defer sealLocalGuestReceipt(guestReceipt)
 		}
 	}
 	startupContext, cancelStartup := context.WithTimeout(ctx, time.Duration(productConfig.Postgres.StartupTimeoutSeconds)*time.Second)
@@ -224,10 +233,18 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		}
 		defer guard.Close()
 		guestAuthenticator, authErr := productguest.NewAuthenticator(store)
+		var observation guestagent.ObservationSink
+		if guestReceipt != nil {
+			guestAuthenticator, authErr = productguest.NewAuthenticatorWithRevocationObservation(store,
+				func(digest string, generation int64) {
+					guestReceipt.Emit("product_validated_revoked", digest, generation, "")
+				})
+			observation = guestReceipt.Sink
+		}
 		if authErr != nil {
 			return fmt.Errorf("construct Product Guest authenticator: %w", authErr)
 		}
-		hub, hubErr := guestagent.NewHub(guestagent.HubOptions{Authenticator: guestAuthenticator})
+		hub, hubErr := guestagent.NewHub(guestagent.HubOptions{Authenticator: guestAuthenticator, Observation: observation})
 		if hubErr != nil {
 			return fmt.Errorf("construct Product Guest Hub: %w", hubErr)
 		}
