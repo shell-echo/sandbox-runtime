@@ -343,7 +343,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		label, time.Since(startupStarted), principal.Resources.CPUMillis, principal.Resources.MemoryBytes, principal.Resources.PIDs)
 	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
 		{"stop-ordinary-tls-agent", func(cleanup context.Context) error {
-			if _, err := run.docker(cleanup, "stop", "--time", "10", id); err != nil {
+			if _, err := run.docker(cleanup, "stop", "--timeout", "10", id); err != nil {
 				return errors.New("ordinary TLS-agent stop unconfirmed")
 			}
 			return nil

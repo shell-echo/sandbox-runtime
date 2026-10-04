@@ -499,7 +499,7 @@ func slice6RuntimeMaterialCleanupSequence(docker func(context.Context, ...string
 			if !*stopRequired {
 				return nil
 			}
-			if err := docker(ctx, "stop", "--time", "10", id); err != nil {
+			if err := docker(ctx, "stop", "--timeout", "10", id); err != nil {
 				return errors.New("runtime material-agent stop unconfirmed")
 			}
 			return nil

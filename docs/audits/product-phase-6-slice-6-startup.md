@@ -4743,3 +4743,51 @@ checks source cleanliness and non-root Docker mounts, and rejects digest or
 cleanup drift. The result of that test and the new E revision must be
 recorded separately after validation; no issuer has been started and Phase 6
 remains **5/15**.
+
+Follow-up 2026-10-04 (one Sandbox-authorized real issuer component attempt,
+**failed**): clean E `49173d30f5cdc9d153a1851833a789411b3e20ea`
+and clean R/F `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` entered the
+unchanged persistent-trust component chain once. The exact run ID was
+`dca5ebb28066e5b675d668050dcf516e`; the selected Profile digest was
+`sha256:7d0cb786ad9f572b22872eb0a467b7e1aae2877661e9210cb8c732a273bcf180`.
+The tagged test exited 1 after 450.26 seconds. Its first trusted failure was
+`Product PID1 graceful receipt shutdown unavailable`; attached-stream stop
+verification, Product/Guest receipt pairing and durable binding were not
+reached. The raw Product and Guest PID1 files contain apparent begin/events/
+seals, and the live Guest reached connected `/readyz` before the same-netns
+Product Store mutation and observed post-mutation 503/exit-1. These unverified
+raw events do not establish the causal or persistent-trust gate. The terminal
+operator separately reported three certificates, two token accessors,
+complete CRL and self-revocation; the certificate controller's sticky local
+credential-revoke failure remains unresolved.
+
+The private 0700 evidence root is
+`/Users/echo/.codex/phase6-slice6-run-evidence-E491.b1jU78`; the run child
+contains only 0600 `product-pid1.stdout`, `guest-pid1.stdout` and
+`incomplete.json`, with no mutation receipt or binding. Their SHA-256 values
+are respectively `69aff3708687a15857822908515a04c151970c5545962e62026797e9f96c93db`,
+`f026366c97982ad021bd7a55917fb44cb679bfd8eee21122f479536e8dbaef90`
+and `8de89d14bec85d8b36d0a8cbff65a25ca28d8bb2521c7010e2af9e15d9298ad9`.
+The 0600 private Gate log is
+`/Users/echo/.codex/phase6-slice6-run-E491.ZkIRcy/gate.log`, SHA-256
+`eacb8a7a03206ec36a24b73feb972a66645044e2c5cf8b82244adae9bff62f83`.
+Exact Gate cleanup and a separate read-only Docker inventory found zero
+containers, networks and volumes under the run label; both observed Vault
+anonymous volumes were absent. E/R/F sources remained clean.
+
+The narrow failure was a Docker CLI response mismatch: the host's Docker
+29.7.2 emitted a deprecation warning on stderr for `docker stop --time 10`
+before the exact ID on stdout. The bounded helper intentionally combines
+both streams and rejects anything other than the exact ID, so the Gate
+rejected an exit-zero stop response. Independent no-issuer probes showed
+`docker stop --timeout 10` returns only the ID for both running and already
+stopped containers. Sandbox approved an E-only equal-duration flag correction,
+not a looser parser or a second issuer run. The same-chain stop calls now use
+`--timeout 10`, preserving exact output, bounded execution and downstream
+PID1 exit/OOM/image/config/logdriver/TTY/attached-stream receipt checks. A
+real no-issuer Docker drill passed the actual stop helper, SIGTERM-sealed PID1
+capture, `verifyStopped` and already-stopped path; the full tagged race suite
+also passed. The full repository race/shuffle suite, ordinary and tagged vet,
+Product Contract lock, and diff checks passed after the repair. Neither this
+repair nor the failed real attempt advances Phase 6
+past **5/15**. A second issuer attempt requires separate Sandbox approval.

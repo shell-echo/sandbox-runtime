@@ -321,7 +321,7 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 		return completed
 	}
 	stopAndDrain := func(containerID string, completed chan startResult) {
-		if _, err := run.docker(ctx, "stop", "--time", "10", containerID); err != nil {
+		if _, err := run.docker(ctx, "stop", "--timeout", "10", containerID); err != nil {
 			t.Fatal("stop real break-glass controller")
 		}
 		select {

@@ -195,3 +195,101 @@ func TestSlice6GuestReceiptAttachedDockerNoIssuer(t *testing.T) {
 		t.Fatal("collector rejected the exact observed nonzero exit code")
 	}
 }
+
+func TestSlice6GuestReceiptGracefulStopDockerNoIssuer(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_STOP_DOCKER") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_STOP_DOCKER=1 for real no-issuer receipt stop drill")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
+	defer cancel()
+	run, err := newSlice6DockerRun()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
+		defer stop()
+		if err := run.cleanup(cleanup); err != nil {
+			t.Errorf("graceful stop drill exact cleanup: %v", err)
+		}
+	})
+	profile := "sha256:" + strings.Repeat("a", 64)
+	config := "sha256:" + strings.Repeat("b", 64)
+	privateRoot := filepath.Join(t.TempDir(), "private-evidence")
+	if err := os.Mkdir(privateRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	privateRoot, err = filepath.EvalSymlinks(privateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceRoot, err := slice6OpenReceiptEvidenceRoot(privateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidenceRoot.close()
+	evidence, err := evidenceRoot.newRun(run.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidence.close()
+	begin, err := json.Marshal(phase6guestreceipt.Record{Protocol: phase6guestreceipt.Protocol,
+		Role: "guest", Event: "begin", Sequence: 1, ElapsedNanos: 1,
+		UnixMillis: 1_700_000_000_000, ProfileDigest: profile, ConfigDigest: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seal, err := json.Marshal(phase6guestreceipt.Record{Protocol: phase6guestreceipt.Protocol,
+		Role: "guest", Event: "seal", Sequence: 2, ElapsedNanos: 2,
+		UnixMillis: 1_700_000_000_001})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := run.docker(ctx, "create", "--pull=never", "--name", "sr-p6-receipt-stop-"+run.id,
+		"--label", run.label(), "--log-driver=none", "--network=none", "--restart=no",
+		"--user=65532:65532", "--read-only", "--cap-drop=ALL",
+		"--security-opt=no-new-privileges:true", "--memory=67108864", "--pids-limit=16",
+		"-e", "BEGIN="+string(begin), "-e", "SEAL="+string(seal),
+		"--entrypoint=/bin/sh", slice6PinnedAlpineImage, "-ec",
+		"trap 'printf \"%s\\n\" \"$SEAL\"; exit 0' TERM; printf '%s\\n' \"$BEGIN\"; while :; do sleep 1; done")
+	id := strings.TrimSpace(string(created))
+	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
+		t.Fatal("create no-issuer graceful-stop Docker probe failed")
+	}
+	capture, err := slice6StartGuestReceiptCapture(t, ctx, evidence, id, "guest", profile, config,
+		"sha256:d858bb5442632a31bd4bca6c5e601dbe6b536fd7942092ea6a08a0a95805693c", slice6PinnedAlpineImage)
+	if err != nil {
+		t.Fatal("start no-issuer graceful-stop Docker capture failed")
+	}
+	defer capture.abort()
+	readyBy := time.NewTimer(10 * time.Second)
+	defer readyBy.Stop()
+	for {
+		capture.output.mu.Lock()
+		written := capture.output.written
+		capture.output.mu.Unlock()
+		state, stateErr, overflow := slice6DockerBounded(ctx, 128, nil, "inspect", "--format", "{{.Id}} {{.State.Running}}", id)
+		ready := stateErr == nil && !overflow && string(state) == id+" true\n" && written > 0
+		clear(state)
+		if ready {
+			break
+		}
+		select {
+		case <-readyBy.C:
+			t.Fatal("graceful-stop PID1 did not become running with attached begin receipt")
+		case <-ctx.Done():
+			t.Fatal("graceful-stop PID1 readiness deadline exceeded")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if err := slice6StopReceiptContainer(ctx, run, id); err != nil {
+		t.Fatal("exact Docker graceful stop rejected")
+	}
+	records, err := capture.verifyStopped(ctx, run, id, 0)
+	if err != nil || len(records) != 2 || records[0].Event != "begin" || records[1].Event != "seal" {
+		t.Fatal("graceful PID1 exit and attached sealed receipt were not verified")
+	}
+	if err := slice6StopReceiptContainer(ctx, run, id); err != nil {
+		t.Fatal("exact already-stopped Docker response rejected")
+	}
+}

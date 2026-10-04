@@ -280,7 +280,7 @@ func slice6StopReceiptContainer(ctx context.Context, run slice6DockerRun, id str
 	if ctx == nil || ctx.Err() != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		return phase6guestreceipt.ErrUnavailable
 	}
-	output, err, overflow := slice6DockerBounded(ctx, 128, nil, "stop", "--time", "10", id)
+	output, err, overflow := slice6DockerBounded(ctx, 128, nil, "stop", "--timeout", "10", id)
 	defer clear(output)
 	if err != nil || overflow || strings.TrimSpace(string(output)) != id {
 		return phase6guestreceipt.ErrUnavailable
