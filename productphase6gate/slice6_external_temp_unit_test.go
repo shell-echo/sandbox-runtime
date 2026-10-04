@@ -135,3 +135,59 @@ func TestSlice6ExternalPrivateTempRejectsReplacementWithoutRemovingIt(t *testing
 		t.Fatal(err)
 	}
 }
+
+func TestSlice6ExternalPrivateTempBudgetIsGlobalAcrossDepth(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(root, "a-child")
+	if err := os.Mkdir(child, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(child, "within-budget")
+	if err := os.WriteFile(file, []byte("remove"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(root, "z-sibling-not-within-budget")
+	if err := os.WriteFile(sibling, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fd, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(fd)
+	budget := 2
+	if slice6RemovePrivateContents(fd, &budget, 0) == nil || budget != 0 {
+		t.Fatal("sibling after nested entries exceeded global cleanup budget")
+	}
+	if _, err := os.Lstat(file); !os.IsNotExist(err) {
+		t.Fatal("within-budget nested file was not removed", err)
+	}
+	if data, err := os.ReadFile(sibling); err != nil || string(data) != "preserve" {
+		t.Fatal("out-of-budget sibling file was removed", err)
+	}
+}
+
+func TestSlice6VaultTemporarySourceSelectionNoIssuer(t *testing.T) {
+	eRoot, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rRoot, _ := slice6ExternalTempGit(t)
+	for _, value := range []struct{ name, configured, want string }{
+		{"diagnostic", "", eRoot}, {"composed", rRoot, rRoot},
+	} {
+		t.Run(value.name, func(t *testing.T) {
+			selected, err := slice6VaultTemporarySourceRoot(value.configured)
+			if err != nil || selected != value.want {
+				t.Fatal("Vault source selection drift", err)
+			}
+			sibling := slice6PrivateSourceSibling(t, selected, ".sr-vault-trust-switch-")
+			if !slice6OutsideAllSources(sibling, selected) {
+				t.Fatal("Vault diagnostic files entered a source root")
+			}
+		})
+	}
+}

@@ -619,8 +619,8 @@ func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root s
 	if versionErr != nil || !bytes.HasPrefix(version, []byte("go version go1.26.8 ")) {
 		return slice6ProductRuntimeObserver{}, errors.New("Product runtime observer requires locked Go 1.26.8 toolchain")
 	}
-	// Docker Desktop shares the workspace checkout, not necessarily Go's
-	// system test-temp directory. Keep the transient build inside this E tree.
+	// Docker Desktop shares the source checkout's parent, not necessarily
+	// Go's system test-temp directory. Keep this build in a private sibling.
 	directory := slice6PrivateSourceSibling(t, root, ".sr-p6-product-runtime-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "product-runtime-observer"))
 	if err != nil {

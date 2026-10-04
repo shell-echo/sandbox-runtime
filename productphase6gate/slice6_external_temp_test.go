@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,7 +142,11 @@ func slice6RemovePrivateContents(fd int, budget *int, depth int) error {
 	if reader.Close() != nil || len(names) > *budget {
 		return errSlice6ExternalTemp
 	}
+	slices.Sort(names)
 	for _, name := range names {
+		if *budget < 1 {
+			return errSlice6ExternalTemp
+		}
 		*budget--
 		if name == "." || name == ".." || strings.ContainsRune(name, '/') {
 			return errSlice6ExternalTemp

@@ -40,6 +40,15 @@ const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_
 const slice6ProductObserverExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_EXPECTED_DIGEST"
 const slice6GuestReceiptEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RECEIPT"
 
+func slice6VaultTemporarySourceRoot(configured string) (string, error) {
+	if configured != "" {
+		return configured, nil
+	}
+	// The standalone non-composed Vault diagnostic still needs a shared,
+	// checkout-external sibling; it has no Profile R source to select.
+	return filepath.Abs("..")
+}
+
 // Nested callbacks may already have recorded the primary failure before an
 // enclosing process returns its cleanup result. Never replace that failure
 // with nil or duplicate it when the returned error already wraps it.
@@ -431,7 +440,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := slice6PrivateSourceSibling(t, static.sourceRoot, ".sr-vault-trust-switch-")
+	// The older diagnostic may run without source-bound Profile composition.
+	// Keep its files outside E too; the full Gate still uses the clean R root.
+	temporarySource, err := slice6VaultTemporarySourceRoot(static.sourceRoot)
+	if err != nil {
+		t.Fatal("diagnostic E source path unavailable")
+	}
+	root := slice6PrivateSourceSibling(t, temporarySource, ".sr-vault-trust-switch-")
 	configDir := filepath.Join(root, "config")
 	dataDir := filepath.Join(root, "data")
 	for _, directory := range []string{root, configDir, dataDir} {
