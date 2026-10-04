@@ -659,6 +659,8 @@ func TestBrowserBoundPostgresDockerIntegration(t *testing.T) {
 	if after, err := first.Reservations(ctx); err != nil || len(after) != 0 || counted.creates.Load() != 2 {
 		t.Fatalf("terminal cleanup left UID held or replayed Docker: %+v, %v, %d", after, err, counted.creates.Load())
 	}
+	runBrowserBoundProcessCrashComponent(t, ctx, api, first, firstRuntime, sessions,
+		plan, driverOptions, networkOptions, restartedDSN, uplink, open, token)
 }
 
 func testIdentityDigest(letter string) string { return "sha256:" + strings.Repeat(letter, 64) }

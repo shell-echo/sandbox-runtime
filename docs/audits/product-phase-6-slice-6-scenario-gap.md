@@ -25,6 +25,15 @@ alter any row's missing *direct same-run final-topology probe* below. The
 certificate controller's `sticky_credential_revoke` remains an explicit
 clean-drain gap; the full 78-deployment/16-scenario run has not occurred.
 
+Update 2026-10-05: a separate test-only Browser application/identity-runtime
+subprocess component passed real PostgreSQL/high-UID Docker crash cuts after
+finished dispatch and after restricted-network side effect. The first fresh
+PID recovered the durable completed proof without redispatch; the second
+retained an unproved Creating slot and denied a competitor. This narrows the
+Browser crash/unknown-result engineering gap but does not supply a final
+`provider serve v3` replacement, cover every Docker create uncertainty, or
+fulfill `provider_and_executor_restart` in the same-run final topology.
+
 | Frozen scenario | Three required assertions | Existing real signal or scaffold | Missing direct same-run probe |
 | --- | --- | --- | --- |
 | `browser_cdp_and_capacity_replay` | `real_cdp_version`; `finite_capacity`; `same_authority_replay_denied` | Browser backend real-CDP component; frozen route | CDP command, capacity denial and authority replay on the final Browser/executor edge |
@@ -38,7 +47,7 @@ clean-drain gap; the full 78-deployment/16-scenario run has not occurred.
 | `least_privilege_active_probes` | `complete_container_inventory`; `effective_uid_gid`; `seccomp_capability_mount_limits` | E7 inspects a subset of actual containers | Complete frozen inventory and active UID/GID/seccomp/capability/mount checks for every deployment |
 | `mtls_identity_and_downgrade_denial` | `wrong_certificate_denied`; `plaintext_denied`; `legacy_downgrade_denied` | Real managed mTLS component paths | Three negative client attempts on the final Gateway/Provider private edge |
 | `policy_authority_loss_and_revocation` | `authority_loss_closes_egress`; `revoked_policy_denied`; `fresh_state_required` | Policy-authority/broker components | Live Product egress authority-loss, revoke and stale-state denial |
-| `provider_and_executor_restart` | `distinct_process_instances`; `retained_authority`; `stale_admission_denied` | Earlier independent role/backend components | Actual Provider and executor replacement, retained authority readback and stale admission denial |
+| `provider_and_executor_restart` | `distinct_process_instances`; `retained_authority`; `stale_admission_denied` | Earlier independent role/backend components; bounded Browser application/identity-runtime subprocess crash component with real PostgreSQL/Docker | Actual production Provider and executor replacement, retained authority readback and stale admission denial in the final topology |
 | `resource_exhaustion_denial` | `bounded_product_requests`; `bounded_gateway_connections`; `bounded_workers` | E7 host/Docker capacity interlock is test safety, not role saturation | Finite Product/Gateway/worker saturation and recovery on final roles |
 | `revoked_leaf_and_crl_rollback_denial` | `vault_revoked_leaf_denied`; `active_socket_drain`; `crl_rollback_denied` | E7 terminal revokes at shutdown, not an active peer test | Live Vault leaf revoke, timed upgraded-socket drain and stale/rollback CRL rejection |
 | `role_and_controller_drain` | `bounded_sigterm`; `active_socket_close`; `exact_lease_socket_cleanup` | E7 controller quiesce plus exact component cleanup; sticky local revoke failure remains | Timed Browser/Desktop role drain, active socket closure and complete lease/socket cleanup |

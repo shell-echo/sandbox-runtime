@@ -173,7 +173,7 @@ artifact.
 
 | Acceptance condition | Existing evidence | Remaining gap | Owner |
 | --- | --- | --- | --- |
-| Provider-bound Browser finite UID, exact create/recovery/cleanup | Real PostgreSQL plus high-UID Browser/gateway Docker integration; atomic Reserved retirement; finished-dispatch proof; live and terminal pre-commit recovery/cleanup; lost terminal-cleanup response finalization; focused in-flight barrier | Unknown Docker/network result with no finished proof remains Creating and consumes capacity. Need a gate-backed quiescence/terminal-result path where required, plus full process-crash coverage. | Provider Browser application, PG ledger and Docker adapter |
+| Provider-bound Browser finite UID, exact create/recovery/cleanup | Real PostgreSQL plus high-UID Browser/gateway Docker integration; atomic Reserved retirement; finished-dispatch proof; live and terminal pre-commit recovery/cleanup; lost terminal-cleanup response finalization; focused in-flight barrier; test-only independent-PID finished-dispatch and network-side-effect crash component | Unknown Docker/network result with no finished proof remains Creating and consumes capacity. The component does not prove every `ContainerCreate` uncertainty, full `provider serve v3` process recovery or the final gate's three Provider commands. | Provider Browser application, PG ledger and Docker adapter |
 | Three isolated Provider production processes and Desktop v3 | v3 config, profile/identity validators, separate Browser/Desktop PostgreSQL client signers, real Browser/Desktop PostgreSQL+Docker finite-slot component gates, and real Desktop candidate broker/media/input gate; both v3 command compositions have static preflight and continuous admission dependencies | Prove the three distinct Provider commands in the same full topology with real Vault PKI, broker, server HBA/role/grants, restart/drain and exact cleanup. Desktop v3 remains local-candidate-only. | Provider commands and runtime adapters |
 | Complete mTLS/CRL and fixed external-service trust graph | Signed PKI/peer-CRL guard, broker profiles, isolated component handshakes and real Vault adapters | Independent live Product/Gateway/Guest/Browser/Desktop/three-Provider flows, action ingress, Redis/PostgreSQL external legs, expiry/revocation/restart observations and cross-role denial. | Role compositions and TLS/egress adapters |
 | Real network, UID/GID and host privilege enforcement | Pinned image descriptors, high-UID Browser/Desktop component gates, static policy validators | Same-host full-topology Docker network bypass/DNS/metadata denial, all role process credentials and container capability/seccomp/filesystem measurements, exact dependency-loss and cleanup observations. | Deployment gate and security evidence |
@@ -5441,3 +5441,40 @@ still reports `sticky_credential_revoke` with `ControllerDrainOpen=true`;
 remote operator cleanup is not clean controller drain. This run cannot be
 spliced into the future 78-deployment/16-scenario same-run gate. No Slice 6
 manifest or push follows, and Phase 6 remains **5/15**.
+
+Browser independent-PID crash component (2026-10-05, **bounded component
+only**): Sandbox ruling `S6-Browser-process-crash-component-boundary-20261005`
+authorized a test-only subprocess extension of the existing real
+PostgreSQL/high-UID Browser/gateway Docker integration. The parent reserves
+the Provider Browser operation in the real repository, and the child builds
+the Browser identity runtime, PostgreSQL repository, restricted-network
+adapter and bound Docker driver in its own OS process. Its fsynced checkpoint
+is observed before the parent sends `SIGKILL` and verifies the signal via
+`Wait`; a fresh child PID then rebuilds from the same private PostgreSQL and
+Docker state. The first cut occurs after the one permitted `AllocateBound`
+dispatch and its completed proof, but before PostgreSQL `CompleteCreate`:
+the replacement recovers the exact receipt without any second
+`AllocateBound`, retains the same Docker IDs, and reaches Active before
+exact terminal cleanup. The second cut occurs after a real network/gateway
+acquire but before a completed dispatch proof: the replacement holds the
+same Creating claim and finite UID, rejects both replay and a competitor,
+performs zero second dispatches, and leaves the observed gateway container
+and network IDs unchanged. Test-owned teardown removes those disposable
+Docker resources; it is **not** application release of an unknown result.
+
+The source-bound local gateway component image used for this test was
+`sha256:4ad516aa5075855897ab937e448561d843eb3fcc5f6b7d2393139b324ccd558f`
+(`arm64`, `browser-egress-gateway-v1` label); it is not a release artifact.
+The exact `TestBrowserBoundPostgresDockerIntegration` run with Go 1.26.8,
+`-tags=integration -race -count=1 -v`, real PostgreSQL and Docker passed on
+the final test candidate in 96.30 seconds. Both logged checkpoints show
+`SIGKILL`; the run-specific PostgreSQL container and Browser containers and
+networks were absent afterward. The ordinary repository race/shuffle test,
+`go vet ./...`, integration-tagged package vet and Product Contract lock
+verifier also passed; the ordinary suite does not itself execute this
+opt-in tagged Docker test. No production Provider API, configuration or
+identity-authority surface changed. This proves only the Browser
+application/identity-runtime subprocess crash component, not a production
+`provider serve v3` replacement, every Docker `ContainerCreate` uncertain
+outcome, the three Provider commands or same-run 78-deployment/16-scenario
+Slice 6 gate. No manifest or push follows; Phase 6 remains **5/15**.

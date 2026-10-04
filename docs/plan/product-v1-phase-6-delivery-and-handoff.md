@@ -266,6 +266,25 @@ independent terminal remote revoke and complete CRL. No sixth issuer is
 authorized. Proceed to fixed step 2, starting with Provider Browser process
 crash and unknown-result safety; Phase 6 remains **5/15**.
 
+Step 2 bounded Browser checkpoint (2026-10-05): Sandbox ruling
+`S6-Browser-process-crash-component-boundary-20261005` selected a test-only
+independent-PID Browser application/identity-runtime crash component, not
+production `provider serve v3` acceptance. The real PostgreSQL/high-UID
+Browser/gateway Docker integration now kills a child after completed Docker
+dispatch but before PostgreSQL `CompleteCreate`; a new PID recovers from the
+finished proof with the same Docker IDs and no second dispatch, then exact
+terminal cleanup. A second child is killed after actual restricted-network
+acquire with no finished proof; the replacement retains Creating and the
+finite UID, denies same-claim replay and a competitor, and does not redispatch.
+Test-owned teardown of this unknown-result fixture is not an application
+release. The opt-in tagged race integration passed (96.30 seconds on the
+final test candidate), as did the ordinary repository race/shuffle suite,
+vet, tagged package vet and Contract lock. This covers only the bounded
+Browser crash component. Full `provider serve v3` replacement, other Docker
+uncertainty cuts, the three Provider commands, remaining TLS/CRL/network/
+privilege rows and one-run 78-deployment/16-scenario gate remain in step 2/3;
+there is no Slice 6 manifest or release claim, and Phase 6 remains **5/15**.
+
 ## Remaining Phase 6 order
 
 These are summaries of the existing plan, not additional slices. Each slice
