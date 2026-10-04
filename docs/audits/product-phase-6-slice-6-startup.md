@@ -4799,3 +4799,49 @@ the exact ID, rejects extra stdout, extra stderr, nonzero exit despite an ID,
 combined-output overflow beyond 128 bytes, and a pre-cancelled context without
 invoking Docker. This test neither contacts the daemon nor allocates an issuer;
 the real no-issuer positive stop/receipt drill above remains separate.
+
+Follow-up 2026-10-04 (second, separately authorized issuer component attempt,
+**failed**): clean E `5a74e021a31e6c9a6de5229cb75c81a6cfbfd7ff` and the unchanged
+clean R/F `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` ran once with the
+same 20-minute parent and 25-minute test budgets, original stop/cleanup
+interlocks, frozen candidates and external archives. New run
+`f329c97ebe232b5a105c59363becc909` bound Profile
+`sha256:82aa6fa29c2073edde0de32d9329e5f5e47012486f76be4b48c87691a9cb81f3`.
+The tagged test exited 1 after 447.10 seconds. Its first final error was
+`private Guest receipt evidence unavailable`, after the previous stop-flag
+failure had been crossed. Product and Guest raw PID1 streams were captured
+and sealed. Read-only projection showed matching original attempt events,
+Product authority-stale close, Guest read termination and a different fresh
+attempt rejected as revoked. No mutation-receipt or durable binding was
+written, so those raw records are **not** a verified persistent causal
+receipt. The certificate controller still retained its local sticky
+credential-revoke failure; the independent terminal operator confirmed three
+certificates, two accessors, complete CRL and self-revocation. Exact Gate
+cleanup and a separate Docker inventory showed zero run-labeled containers,
+networks and volumes; both exact Vault anonymous volumes were absent.
+
+The new 0700 private root is
+`/Users/echo/.codex/phase6-slice6-run-evidence-E5a.nl6mQ4`. Its child contains
+only 0600 `product-pid1.stdout` (SHA-256
+`16fdfbc8f30bab0bdc755365a0ce712051238d53514056f95f773d720417edcf`),
+`guest-pid1.stdout` (`9368d594c28c529439798f8d7e69015078dbf5a1046d354835da642e35c734d4`)
+and `incomplete.json` (`1d1a44f3021c20076eb6c9db9590aa0614b57f9de4b2c496f4c536c8cae8ff94`).
+The 0600 private log is
+`/Users/echo/.codex/phase6-slice6-run-E5a.ufODvf/gate.log`, SHA-256
+`641aa2952b3c7eecbdf356be2ffab7d9c67b9b5187f3acb349023ed4d52bb0da`.
+E/R/F remained clean; a subsequent no-issuer exact static-input reread
+passed. This was a failed single component attempt, not a Slice 6 gate pass.
+
+An E-only source review identified a deterministic pre-publication rejection:
+the receipt artifact mapper compared the candidate's nonempty selected
+manifest descriptor against `ImageBinding.SelectedManifestDigest`, which is
+intentionally empty for `oci_manifest` and only populated for `oci_index`.
+The frozen `core` candidate uses `oci_manifest`; a no-issuer test loaded its
+real source-bound OCI artifact and reproduced failure under the old mapper.
+The proposed repair branches strictly on image kind: a single manifest must
+bind the selected descriptor to the root/runtime-store digest and retain an
+empty index-child field; an index must have a valid distinct child digest
+matching the candidate descriptor. The receipt still records the actual
+nonempty selected manifest. R/F, locked Provider Contract and candidates are
+unchanged. This code-level explanation is not retroactive verified evidence
+for the failed E5a run. Phase 6 remains **5/15**.

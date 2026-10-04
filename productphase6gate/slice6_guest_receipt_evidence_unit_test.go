@@ -3,6 +3,7 @@
 package productphase6gate
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -11,9 +12,278 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6guestreceipt"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6rolecandidate"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"golang.org/x/sys/unix"
 )
+
+func TestSlice6ReceiptFrozenCoreArtifactNoIssuer(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_FROZEN_CORE_NO_ISSUER") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_FROZEN_CORE_NO_ISSUER=1 for source-bound core mapping")
+	}
+	static := slice6VaultStaticInputsFromEnvironment()
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
+	defer cancel()
+	images, err := phase6profilebuilder.LoadImageSupply(ctx, static.sourceRoot, static.sourceRevision,
+		static.roleCandidates, static.desktopCandidate, static.browserArchive)
+	if err != nil {
+		t.Fatal("frozen source-bound image supply unavailable")
+	}
+	core, ok := images.LocalRoleTargets["core"]
+	if !ok || core.Kind != phase6security.ImageIdentityOCIManifest ||
+		core.SelectedManifestDigest != "" {
+		t.Fatal("frozen core is not the reviewed single-manifest candidate")
+	}
+	artifact, err := slice6ReceiptRoleArtifact(images, core.Digest)
+	if err != nil || artifact.ImageID != core.Digest || artifact.SelectedManifestDigest != core.Digest ||
+		artifact.ConfigDigest != core.ConfigDigest {
+		t.Fatal("receipt evidence rejected the frozen single-manifest core mapping")
+	}
+}
+
+func TestSlice6ReceiptRoleArtifactKindAndIdentityMapping(t *testing.T) {
+	digest := func(letter string) string { return "sha256:" + strings.Repeat(letter, 64) }
+	root, child, config := digest("1"), digest("2"), digest("3")
+	revision, tree := strings.Repeat("a", 40), digest("b")
+	base := func(kind string) phase6profilebuilder.ImageSupply {
+		selected := ""
+		manifest := root
+		if kind == phase6security.ImageIdentityOCIIndex {
+			selected, manifest = child, child
+		}
+		return phase6profilebuilder.ImageSupply{RuntimeRevision: revision,
+			RuntimeTreeDigest: tree, Platform: "linux/arm64/v8",
+			LocalRoleTargets: map[string]phase6profilebuilder.ImageBinding{"core": {
+				Reference: root, Digest: root, Location: "local", Kind: kind,
+				Platform: "linux/arm64/v8", SelectedManifestDigest: selected, ConfigDigest: config,
+			}},
+			RoleArtifacts: []phase6rolecandidate.VerifiedArtifact{{Manifest: phase6rolecandidate.Manifest{
+				Source: phase6rolecandidate.SourceInputs{BuildTarget: "core", Platform: "linux/arm64/v8",
+					SourceRevision: revision, SourceTreeDigest: tree},
+				ImageIdentityKind: kind, RuntimeStoreImageID: root,
+				RuntimeStoreDescriptor:     phase6security.ImageDescriptor{Digest: root},
+				SelectedManifestDescriptor: phase6security.ImageDescriptor{Digest: manifest},
+				OCIConfigDigest:            config, ManifestDigest: digest("4"), ArchiveDigest: digest("5"),
+			}}},
+		}
+	}
+	for _, kind := range []string{phase6security.ImageIdentityOCIManifest, phase6security.ImageIdentityOCIIndex} {
+		t.Run(kind, func(t *testing.T) {
+			images := base(kind)
+			artifact, err := slice6ReceiptRoleArtifact(images, root)
+			wantSelected := root
+			if kind == phase6security.ImageIdentityOCIIndex {
+				wantSelected = child
+			}
+			if err != nil || artifact.ImageID != root || artifact.SelectedManifestDigest != wantSelected ||
+				artifact.ConfigDigest != config {
+				t.Fatal("canonical role artifact mapping rejected or selected the wrong manifest")
+			}
+		})
+	}
+	for _, test := range []struct {
+		name  string
+		kind  string
+		image string
+		alter func(*phase6profilebuilder.ImageSupply)
+	}{
+		{"wrong actual image", phase6security.ImageIdentityOCIManifest, child, func(*phase6profilebuilder.ImageSupply) {}},
+		{"manifest with index child", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.SelectedManifestDigest = child
+			s.LocalRoleTargets["core"] = binding
+		}},
+		{"index missing child", phase6security.ImageIdentityOCIIndex, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.SelectedManifestDigest = ""
+			s.LocalRoleTargets["core"] = binding
+		}},
+		{"index child is root", phase6security.ImageIdentityOCIIndex, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.SelectedManifestDigest = root
+			s.LocalRoleTargets["core"] = binding
+		}},
+		{"index child mismatch", phase6security.ImageIdentityOCIIndex, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.SelectedManifestDigest = digest("6")
+			s.LocalRoleTargets["core"] = binding
+		}},
+		{"candidate kind mismatch", phase6security.ImageIdentityOCIIndex, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.ImageIdentityKind = phase6security.ImageIdentityOCIManifest
+		}},
+		{"unknown binding kind", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.Kind = "unknown"
+			s.LocalRoleTargets["core"] = binding
+		}},
+		{"candidate root mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.RuntimeStoreImageID = child
+		}},
+		{"root descriptor mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.RuntimeStoreDescriptor.Digest = child
+		}},
+		{"config mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.OCIConfigDigest = child
+		}},
+		{"source revision mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.Source.SourceRevision = strings.Repeat("c", 40)
+		}},
+		{"source tree mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.Source.SourceTreeDigest = digest("d")
+		}},
+		{"candidate selected mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			s.RoleArtifacts[0].Manifest.SelectedManifestDescriptor.Digest = child
+		}},
+		{"binding reference mismatch", phase6security.ImageIdentityOCIManifest, root, func(s *phase6profilebuilder.ImageSupply) {
+			binding := s.LocalRoleTargets["core"]
+			binding.Reference = child
+			s.LocalRoleTargets["core"] = binding
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			images := base(test.kind)
+			test.alter(&images)
+			if _, err := slice6ReceiptRoleArtifact(images, test.image); !errors.Is(err, errSlice6ReceiptEvidence) {
+				t.Fatal("drifted candidate, descriptor or running-image identity was accepted")
+			}
+		})
+	}
+}
+
+// This uses source-verified image identities but deliberately synthetic PID1
+// streams, container IDs and mutation facts. It exercises the complete E-only
+// evidence publication path without Docker, PostgreSQL or a Vault issuer.
+func TestSlice6GuestReceiptFinishFixtureNoIssuer(t *testing.T) {
+	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_FINISH_FIXTURE_NO_ISSUER") != "1" {
+		t.Skip("set SANDBOX_RUNTIME_PHASE6_SLICE6_RECEIPT_FINISH_FIXTURE_NO_ISSUER=1 for private finish fixture")
+	}
+	static := slice6VaultStaticInputsFromEnvironment()
+	fixtureRoot := os.Getenv(slice6GuestFixtureSourceRootEnv)
+	fixtureRevision := os.Getenv(slice6GuestFixtureSourceRevisionEnv)
+	eRevision := os.Getenv(slice6ProductObserverRevisionEnv)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	if slice6VerifyGuestFixtureSourcePair(ctx, static.sourceRoot, static.sourceRevision,
+		fixtureRoot, fixtureRevision) != nil {
+		t.Fatal("reviewed R/F source pair unavailable for synthetic finish fixture")
+	}
+	images, err := phase6profilebuilder.LoadImageSupply(ctx, static.sourceRoot, static.sourceRevision,
+		static.roleCandidates, static.desktopCandidate, static.browserArchive)
+	if err != nil {
+		t.Fatal("reviewed candidate identity supply unavailable for synthetic finish fixture")
+	}
+	core, ok := images.LocalRoleTargets["core"]
+	if !ok || core.Kind != phase6security.ImageIdentityOCIManifest {
+		t.Fatal("reviewed core candidate kind unavailable")
+	}
+	rootPath := slice6ReceiptTestRoot(t)
+	root, err := slice6OpenReceiptEvidenceRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.close()
+	run, err := root.newRun(strings.Repeat("c", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer run.close()
+	profile := "sha256:" + strings.Repeat("9", 64)
+	verifiedAt := time.Now().UTC()
+	productID, guestID := strings.Repeat("6", 64), strings.Repeat("7", 64)
+	productConfig, guestConfig := "sha256:"+strings.Repeat("8", 64), "sha256:"+strings.Repeat("5", 64)
+	for _, item := range []struct {
+		role, config, container string
+		exitCode                int
+	}{
+		{"product", productConfig, productID, 0},
+		{"guest", guestConfig, guestID, 1},
+	} {
+		document := slice6ReceiptTestStream(t, item.role, profile, item.config)
+		file, err := run.createFile(slice6ReceiptRawName(item.role))
+		if err != nil {
+			t.Fatal(err)
+		}
+		bounded := &slice6ReceiptBoundedFile{file: file}
+		n, writeErr := bounded.Write(document)
+		syncErr := file.Sync()
+		closeErr := file.Close()
+		if writeErr != nil || n != len(document) || bounded.overflow || syncErr != nil || closeErr != nil {
+			t.Fatal("synthetic PID1 fixture did not pass bounded collector storage")
+		}
+		if _, err := phase6guestreceipt.Verify(document, item.role, profile, item.config); err != nil {
+			t.Fatal("synthetic PID1 fixture raw stream rejected")
+		}
+		if err := run.recordRaw(slice6ReceiptRawBinding{Role: item.role,
+			File: slice6ReceiptRawName(item.role), SHA256: slice6ReceiptSHA256(document),
+			Bytes: len(document), ProfileDigest: profile, ConfigDigest: item.config,
+			SelectedImage: core.Digest, ActualImage: core.Digest,
+			ContainerID: item.container, DockerExitCode: item.exitCode,
+			CaptureStartUTC:  verifiedAt.Add(-time.Second).Format(time.RFC3339Nano),
+			CaptureFinishUTC: verifiedAt.Add(time.Second).Format(time.RFC3339Nano)}); err != nil {
+			t.Fatal("synthetic PID1 fixture collector record rejected")
+		}
+	}
+	mutation := slice6GuestRevokeFixtureReceipt{Protocol: slice6GuestRevokeFixtureProtocol,
+		RunID: run.id, ProfileDigest: profile, ProductContainerID: productID,
+		BindingGeneration: 1, MutationOutcome: "confirmed", BeforeConnected: true,
+		AfterRevoked: true, NonceCleared: true}
+	if err := slice6FinishGuestReceiptEvidence(ctx, run, static, images,
+		slice6GuestBindingFixtureArtifact{SourceRevision: fixtureRevision},
+		profile, mutation, verifiedAt, productID, guestID); err != nil {
+		t.Fatalf("synthetic finish fixture rejected source-bound evidence wiring: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(rootPath, run.id, "mutation-receipt.json")); err != nil {
+		t.Fatal("synthetic mutation receipt was not persisted")
+	}
+	if _, err := os.Stat(filepath.Join(rootPath, run.id, "binding.json")); err != nil {
+		t.Fatal("synthetic source/image/stream binding was not published")
+	}
+	if err := run.close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(rootPath, run.id, "incomplete.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("completed synthetic fixture retained an incomplete marker")
+	}
+	eRoot, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	eTree, eErr := desktopcandidate.SourceTreeDigestAtRevision(eRoot, eRevision)
+	fTree, fErr := desktopcandidate.SourceTreeDigestAtRevision(fixtureRoot, fixtureRevision)
+	artifact, artifactErr := slice6ReceiptRoleArtifact(images, core.Digest)
+	if eErr != nil || fErr != nil || artifactErr != nil {
+		t.Fatal("independent synthetic identity expectations unavailable")
+	}
+	expected := slice6ReceiptExpectedIdentity{ERevision: eRevision, ETree: eTree,
+		RRevision: images.RuntimeRevision, RTree: images.RuntimeTreeDigest,
+		FRevision: fixtureRevision, FTree: fTree, ProfileDigest: profile,
+		ProductConfigDigest: productConfig, GuestConfigDigest: guestConfig,
+		ProductArtifact: artifact, GuestArtifact: artifact,
+		ProductContainerID: productID, GuestContainerID: guestID,
+		ProductImageID: core.Digest, GuestImageID: core.Digest}
+	if err := slice6VerifyPersistentGuestEvidence(rootPath, run.id, expected); err != nil {
+		t.Fatal("independent synthetic reader rejected persisted source/image/stream binding")
+	}
+	bad := expected
+	bad.ProductImageID = "sha256:" + strings.Repeat("0", 64)
+	if slice6VerifyPersistentGuestEvidence(rootPath, run.id, bad) == nil {
+		t.Fatal("independent synthetic reader accepted an actual image mismatch")
+	}
+	incomplete, err := root.newRun(strings.Repeat("d", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := incomplete.close(); err != nil {
+		t.Fatal(err)
+	}
+	if slice6VerifyPersistentGuestEvidence(rootPath, incomplete.id, expected) == nil {
+		t.Fatal("independent synthetic reader accepted an incomplete run")
+	}
+	t.Log("synthetic no-issuer fixture only: two bounded streams, source-bound artifact map, mutation publication and independent reread passed; no live Docker/PG claim")
+}
 
 func TestSlice6GuestEvidenceOverflowAndDurabilityFailureRemainIncomplete(t *testing.T) {
 	rootPath := slice6ReceiptTestRoot(t)

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6guestreceipt"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"golang.org/x/sys/unix"
 )
 
@@ -25,6 +27,30 @@ const slice6GuestReceiptEvidenceRootEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_RUN_EVI
 
 var errSlice6ReceiptEvidence = errors.New("private Guest receipt evidence unavailable")
 var errSlice6ReceiptPublishUncertain = errors.New("private Guest receipt binding publication rollback unconfirmed")
+
+type slice6ReceiptFailureStage string
+
+const (
+	slice6ReceiptInputStage           slice6ReceiptFailureStage = "input"
+	slice6ReceiptSourceReopenStage    slice6ReceiptFailureStage = "source_reopen"
+	slice6ReceiptArtifactMapStage     slice6ReceiptFailureStage = "artifact_map"
+	slice6ReceiptRawBindingStage      slice6ReceiptFailureStage = "raw_binding"
+	slice6ReceiptMutationStage        slice6ReceiptFailureStage = "mutation"
+	slice6ReceiptPublishStage         slice6ReceiptFailureStage = "publish"
+	slice6ReceiptIndependentReadStage slice6ReceiptFailureStage = "independent_read"
+)
+
+// Only fixed, non-sensitive stages may leave the private evidence closer.
+func slice6ReceiptStageError(stage slice6ReceiptFailureStage) error {
+	switch stage {
+	case slice6ReceiptInputStage, slice6ReceiptSourceReopenStage, slice6ReceiptArtifactMapStage,
+		slice6ReceiptRawBindingStage, slice6ReceiptMutationStage, slice6ReceiptPublishStage,
+		slice6ReceiptIndependentReadStage:
+		return fmt.Errorf("%w: stage=%s", errSlice6ReceiptEvidence, stage)
+	default:
+		return errSlice6ReceiptEvidence
+	}
+}
 
 // These are partial, E-owned component observations. They are deliberately
 // separate from the closed formal Slice 6 one-run evidence recorder.
@@ -347,34 +373,36 @@ func (run *slice6ReceiptEvidenceRun) rollbackBinding() error {
 
 func (run *slice6ReceiptEvidenceRun) publishBinding(expected slice6ReceiptExpectedIdentity) error {
 	if run.check() != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	pending, ok := run.files["binding.pending"]
 	if !ok {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	var named unix.Stat_t
 	if unix.Fstatat(run.fd, "binding.pending", &named, unix.AT_SYMLINK_NOFOLLOW) != nil ||
 		!slice6SameInode(named, pending) {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	if err := unix.Fstatat(run.fd, "binding.json", &named, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	// Linkat is atomic and refuses an existing name on Darwin/Linux. The
 	// pending file remains until the new directory entry is synced.
 	run.files["binding.json"] = pending
 	if run.linkFile(run.fd, "binding.pending", run.fd, "binding.json", 0) != nil ||
 		run.syncDir(run.fd) != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	if run.unlinkFile(run.fd, "binding.pending", 0) != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	delete(run.files, "binding.pending")
-	if run.syncDir(run.fd) != nil ||
-		slice6VerifyPersistentGuestEvidence(run.root.path, run.id, expected) != nil {
-		return errSlice6ReceiptEvidence
+	if run.syncDir(run.fd) != nil {
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
+	}
+	if slice6VerifyPersistentGuestEvidence(run.root.path, run.id, expected) != nil {
+		return slice6ReceiptStageError(slice6ReceiptIndependentReadStage)
 	}
 	return nil
 }
@@ -409,31 +437,31 @@ func (run *slice6ReceiptEvidenceRun) finish(binding slice6ReceiptEvidenceBinding
 		!slice6ValidReceiptArtifact(binding.ProductArtifact, binding.Product.ActualImage) ||
 		!slice6ValidReceiptArtifact(binding.GuestArtifact, binding.Guest.ActualImage) {
 		run.mu.Unlock()
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptInputStage)
 	}
 	run.mu.Unlock()
 	for _, raw := range []slice6ReceiptRawBinding{binding.Product, binding.Guest} {
 		document, err := run.readFile(raw.File, phase6guestreceipt.MaxTotalBytes)
 		if err != nil || len(document) != raw.Bytes || slice6ReceiptSHA256(document) != raw.SHA256 {
-			return errSlice6ReceiptEvidence
+			return slice6ReceiptStageError(slice6ReceiptRawBindingStage)
 		}
 		if _, err := phase6guestreceipt.Verify(document, raw.Role, raw.ProfileDigest, raw.ConfigDigest); err != nil {
-			return errSlice6ReceiptEvidence
+			return slice6ReceiptStageError(slice6ReceiptRawBindingStage)
 		}
 	}
 	if mutation.RunID != run.id || mutation.ProfileDigest != binding.ProfileDigest ||
 		mutation.ProductContainerID != binding.Product.ContainerID ||
 		mutation.MutationOutcome != "confirmed" || !mutation.BeforeConnected ||
 		!mutation.AfterRevoked || !mutation.NonceCleared {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptMutationStage)
 	}
 	if err := run.writeDocument("mutation-receipt.json", mutation); err != nil {
-		return err
+		return slice6ReceiptStageError(slice6ReceiptMutationStage)
 	}
 	mutationDocument, err := run.readFile("mutation-receipt.json", 4096)
 	if err != nil || len(mutationDocument) < 2 || mutationDocument[len(mutationDocument)-1] != '\n' ||
 		slice6ReceiptSHA256(mutationDocument) != binding.MutationReceiptSHA256 {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptMutationStage)
 	}
 	defer func() {
 		if resultErr != nil {
@@ -443,7 +471,7 @@ func (run *slice6ReceiptEvidenceRun) finish(binding slice6ReceiptEvidenceBinding
 		}
 	}()
 	if err := run.writeDocument("binding.pending", binding); err != nil {
-		return err
+		return slice6ReceiptStageError(slice6ReceiptPublishStage)
 	}
 	if err := run.publishBinding(expected); err != nil {
 		return err
@@ -630,7 +658,23 @@ func slice6VerifyPersistentGuestEvidence(rootPath, id string, expected slice6Rec
 
 func slice6ReceiptRoleArtifact(images phase6profilebuilder.ImageSupply, image string) (slice6ReceiptArtifact, error) {
 	selected, ok := images.LocalRoleTargets["core"]
-	if !ok || selected.Digest != image || selected.Reference != image {
+	if !ok || selected.Digest != image || selected.Reference != image || selected.Location != "local" ||
+		selected.Platform != images.Platform || !guestRevokeFixtureDigestGate(selected.ConfigDigest) {
+		return slice6ReceiptArtifact{}, errSlice6ReceiptEvidence
+	}
+	selectedManifest := image
+	switch selected.Kind {
+	case phase6security.ImageIdentityOCIManifest:
+		if selected.SelectedManifestDigest != "" {
+			return slice6ReceiptArtifact{}, errSlice6ReceiptEvidence
+		}
+	case phase6security.ImageIdentityOCIIndex:
+		if !guestRevokeFixtureDigestGate(selected.SelectedManifestDigest) ||
+			selected.SelectedManifestDigest == image {
+			return slice6ReceiptArtifact{}, errSlice6ReceiptEvidence
+		}
+		selectedManifest = selected.SelectedManifestDigest
+	default:
 		return slice6ReceiptArtifact{}, errSlice6ReceiptEvidence
 	}
 	for _, item := range images.RoleArtifacts {
@@ -638,10 +682,14 @@ func slice6ReceiptRoleArtifact(images phase6profilebuilder.ImageSupply, image st
 			continue
 		}
 		m := item.Manifest
-		if m.RuntimeStoreImageID != image ||
+		if m.ImageIdentityKind != selected.Kind || m.RuntimeStoreImageID != image ||
+			m.RuntimeStoreDescriptor.Digest != image ||
+			m.Source.Platform != images.Platform ||
 			m.Source.SourceRevision != images.RuntimeRevision || m.Source.SourceTreeDigest != images.RuntimeTreeDigest ||
-			m.SelectedManifestDescriptor.Digest != selected.SelectedManifestDigest ||
-			m.OCIConfigDigest != selected.ConfigDigest {
+			m.SelectedManifestDescriptor.Digest != selectedManifest ||
+			m.OCIConfigDigest != selected.ConfigDigest ||
+			!guestRevokeFixtureDigestGate(m.ManifestDigest) ||
+			!guestRevokeFixtureDigestGate(m.ArchiveDigest) {
 			return slice6ReceiptArtifact{}, errSlice6ReceiptEvidence
 		}
 		return slice6ReceiptArtifact{ManifestDigest: m.ManifestDigest, ArchiveDigest: m.ArchiveDigest,
@@ -662,29 +710,31 @@ func slice6FinishGuestReceiptEvidence(ctx context.Context, run *slice6ReceiptEvi
 		mutation.MutationOutcome != "confirmed" || !mutation.BeforeConnected ||
 		!mutation.AfterRevoked || !mutation.NonceCleared || mutation.BindingGeneration < 1 ||
 		len(static.sourceRevision) != 40 || images.RuntimeRevision != static.sourceRevision ||
-		!guestRevokeFixtureDigestGate(images.RuntimeTreeDigest) ||
-		images.VerifySources(ctx) != nil || fixture.SourceRevision == "" {
-		return errSlice6ReceiptEvidence
+		!guestRevokeFixtureDigestGate(images.RuntimeTreeDigest) || fixture.SourceRevision == "" {
+		return slice6ReceiptStageError(slice6ReceiptInputStage)
+	}
+	if images.VerifySources(ctx) != nil {
+		return slice6ReceiptStageError(slice6ReceiptSourceReopenStage)
 	}
 	root, err := filepath.Abs("..")
 	if err != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptSourceReopenStage)
 	}
 	eRevision := os.Getenv(slice6ProductObserverRevisionEnv)
 	if verifyCleanSlice6Source(ctx, root, eRevision) != nil ||
 		verifyCleanSlice6Source(ctx, static.sourceRoot, static.sourceRevision) != nil ||
 		verifyCleanSlice6Source(ctx, os.Getenv(slice6GuestFixtureSourceRootEnv), fixture.SourceRevision) != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptSourceReopenStage)
 	}
 	eTree, eErr := desktopcandidate.SourceTreeDigestAtRevision(root, eRevision)
 	fTree, fErr := desktopcandidate.SourceTreeDigestAtRevision(
 		os.Getenv(slice6GuestFixtureSourceRootEnv), fixture.SourceRevision)
 	if eErr != nil || fErr != nil {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptSourceReopenStage)
 	}
 	canonicalMutation, err := json.Marshal(mutation)
 	if err != nil || len(canonicalMutation) > 2048 {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptMutationStage)
 	}
 	run.mu.Lock()
 	product, productOK := run.bindings["product"]
@@ -694,15 +744,15 @@ func slice6FinishGuestReceiptEvidence(ctx context.Context, run *slice6ReceiptEvi
 		guest.ProfileDigest != profileDigest || product.ContainerID != mutation.ProductContainerID ||
 		product.ContainerID != productContainerID || guest.ContainerID != guestContainerID ||
 		product.ContainerID == guest.ContainerID {
-		return errSlice6ReceiptEvidence
+		return slice6ReceiptStageError(slice6ReceiptRawBindingStage)
 	}
 	productArtifact, err := slice6ReceiptRoleArtifact(images, product.ActualImage)
 	if err != nil {
-		return err
+		return slice6ReceiptStageError(slice6ReceiptArtifactMapStage)
 	}
 	guestArtifact, err := slice6ReceiptRoleArtifact(images, guest.ActualImage)
 	if err != nil {
-		return err
+		return slice6ReceiptStageError(slice6ReceiptArtifactMapStage)
 	}
 	expected := slice6ReceiptExpectedIdentity{
 		ERevision: eRevision, ETree: eTree, RRevision: images.RuntimeRevision,
