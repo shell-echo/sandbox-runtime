@@ -31,6 +31,7 @@ import (
 )
 
 const browserCrashChildConfigEnv = "SANDBOX_RUNTIME_BROWSER_BOUND_CRASH_CHILD_CONFIG"
+const browserCrashOutputChildEnv = "SANDBOX_RUNTIME_BROWSER_CRASH_OUTPUT_CHILD"
 
 type browserCrashChildConfig struct {
 	Mode, RuntimeDSN, Checkpoint string
@@ -219,47 +220,82 @@ func crashBrowserChildAtCheckpoint(t *testing.T, ctx context.Context, executable
 	path := writeBrowserCrashChildConfig(t, directory, config)
 	child := exec.CommandContext(ctx, executable, "-test.run=^TestBrowserBoundCrashChild$")
 	child.Env = append(os.Environ(), browserCrashChildConfigEnv+"="+path)
-	var output bytes.Buffer
-	child.Stdout, child.Stderr = &output, &output
-	if err := child.Start(); err != nil {
+	if err := waitBrowserCrashCheckpoint(ctx, child, config.Checkpoint, stage, 30*time.Second); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("Browser application subprocess reached %s and died by SIGKILL; replacement must read durable state", stage)
+}
+
+// Output is deliberately discarded: a failing child must not race an
+// unbounded bytes.Buffer read or leak private process diagnostics into a gate.
+func waitBrowserCrashCheckpoint(ctx context.Context, child *exec.Cmd, checkpointPath, stage string, budget time.Duration) error {
+	child.Stdout, child.Stderr = io.Discard, io.Discard
+	if err := child.Start(); err != nil {
+		return fmt.Errorf("start Browser crash child: %w", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- child.Wait() }()
+	finished := false
 	defer func() {
-		if child.ProcessState == nil {
+		if !finished {
 			_ = child.Process.Kill()
-			_ = child.Wait()
+			<-done
 		}
 	}()
-	deadline := time.NewTimer(30 * time.Second)
+	deadline := time.NewTimer(budget)
 	defer deadline.Stop()
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatal(ctx.Err())
+			return ctx.Err()
+		case err := <-done:
+			finished = true
+			if err == nil {
+				return fmt.Errorf("Browser child exited before %s checkpoint", stage)
+			}
+			return fmt.Errorf("Browser child exited before %s checkpoint: %w", stage, err)
 		case <-deadline.C:
-			t.Fatalf("Browser child did not reach %s checkpoint: %.512s", stage, output.String())
+			return fmt.Errorf("Browser child did not reach %s checkpoint before bounded deadline", stage)
 		case <-tick.C:
-			raw, err := os.ReadFile(config.Checkpoint)
+			raw, err := os.ReadFile(checkpointPath)
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
 			var checkpoint browserCrashCheckpoint
 			if err != nil || json.Unmarshal(raw, &checkpoint) != nil || checkpoint.Stage != stage || checkpoint.PID != child.Process.Pid {
-				t.Fatalf("Browser child checkpoint mismatch: %v", err)
+				return errors.New("Browser child checkpoint mismatch")
 			}
 			if err := child.Process.Kill(); err != nil {
-				t.Fatal(err)
+				return fmt.Errorf("kill Browser child at checkpoint: %w", err)
 			}
-			waitErr := child.Wait()
+			waitErr := <-done
+			finished = true
+			if child.ProcessState == nil {
+				return errors.New("Browser child process state is unavailable after SIGKILL")
+			}
 			status, ok := child.ProcessState.Sys().(syscall.WaitStatus)
 			if waitErr == nil || !ok || !status.Signaled() || status.Signal() != syscall.SIGKILL {
-				t.Fatalf("Browser child did not die by SIGKILL: %v, %v", waitErr, child.ProcessState)
+				return errors.New("Browser child did not die by SIGKILL")
 			}
-			t.Logf("Browser application subprocess reached %s and died by SIGKILL; replacement must read durable state", stage)
-			return
+			return nil
 		}
+	}
+}
+
+func TestBrowserCrashCheckpointBoundedOutput(t *testing.T) {
+	if os.Getenv(browserCrashOutputChildEnv) == "child" {
+		_, _ = os.Stdout.Write(bytes.Repeat([]byte("private-child-output"), 1<<16))
+		time.Sleep(5 * time.Second)
+		return
+	}
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBrowserCrashCheckpointBoundedOutput$")
+	child.Env = append(os.Environ(), browserCrashOutputChildEnv+"=child")
+	err := waitBrowserCrashCheckpoint(t.Context(), child, filepath.Join(t.TempDir(), "absent.checkpoint"),
+		"bounded-output-regression", time.Second)
+	if err == nil || !strings.Contains(err.Error(), "bounded deadline") || strings.Contains(err.Error(), "private-child-output") {
+		t.Fatalf("unbounded or unredacted child failure: %v", err)
 	}
 }
 

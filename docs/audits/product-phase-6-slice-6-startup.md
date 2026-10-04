@@ -5467,7 +5467,7 @@ The source-bound local gateway component image used for this test was
 (`arm64`, `browser-egress-gateway-v1` label); it is not a release artifact.
 The exact `TestBrowserBoundPostgresDockerIntegration` run with Go 1.26.8,
 `-tags=integration -race -count=1 -v`, real PostgreSQL and Docker passed on
-the final test candidate in 96.30 seconds. Both logged checkpoints show
+the reviewed crash-test candidate in 96.30 seconds. Both logged checkpoints show
 `SIGKILL`; the run-specific PostgreSQL container and Browser containers and
 networks were absent afterward. The ordinary repository race/shuffle test,
 `go vet ./...`, integration-tagged package vet and Product Contract lock
@@ -5478,3 +5478,15 @@ application/identity-runtime subprocess crash component, not a production
 `provider serve v3` replacement, every Docker `ContainerCreate` uncertain
 outcome, the three Provider commands or same-run 78-deployment/16-scenario
 Slice 6 gate. No manifest or push follows; Phase 6 remains **5/15**.
+
+Review-only test harness follow-up: Sandbox accepted the two actual crash
+observations at commit `91fcb312f3a8d23eeb38f2bd3c947f423b14bf20`
+under `S6-Browser-crash-91fcb31-component-reviewed-20261005`, but found
+that the failing checkpoint-timeout branch read a child-output buffer while
+the process writer could still be active. The helper now discards raw child
+stdout/stderr, waits for process exit before classifying the bounded timeout
+or exact signal, and never includes raw output in diagnostics. A separate
+no-Docker child emits over 1 MiB and times out; its targeted tagged race
+test, tagged vet and diff check pass. This helper-only change does not alter
+either real Docker fault boundary, so the 96.30-second real observation stays
+at its recorded commit rather than being relabeled as a fresh run.
