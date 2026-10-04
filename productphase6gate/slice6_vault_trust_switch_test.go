@@ -113,6 +113,9 @@ func slice6GuestRecoveryEPreissuerEnvironment(getenv func(string) string) error 
 	if getenv == nil {
 		return errors.New("Guest recovery E environment unavailable")
 	}
+	if err := slice6GuestReceiptModeGuard(true, getenv); err != nil {
+		return err
+	}
 	required := []string{
 		slice6VaultTrustSwitchEnv,
 		"SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE",
@@ -124,7 +127,6 @@ func slice6GuestRecoveryEPreissuerEnvironment(getenv func(string) string) error 
 		slice6TerminalOperatorEnv,
 		slice6BreakGlassProcessEnv,
 		slice6GuestMaterialEnv,
-		slice6GuestRuntimeProcessEnv,
 		slice6GuestBindingFixtureEnv,
 		slice6ProductTLSSignerEnv,
 		slice6ProductMaterialInputsEnv,
@@ -132,24 +134,49 @@ func slice6GuestRecoveryEPreissuerEnvironment(getenv func(string) string) error 
 		slice6ProductMigrationSignersEnv,
 		slice6ProductMigrationJobEnv,
 		slice6ProductRuntimeInputsEnv,
-		slice6ProductRuntimeProcessEnv,
 		slice6PostgresServerLeafEnv,
 		slice6ProductPostgresDSNEnv,
-		slice6GuestReceiptEnv,
 	}
 	for _, name := range required {
 		if getenv(name) != "1" {
 			return fmt.Errorf("Guest recovery E requires %s=1 before issuer allocation", name)
 		}
 	}
-	for _, name := range []string{slice6GuestLiveRevokeEnv,
-		slice6TerminalOperatorV3DiagnosticEnv, slice6ProductMigrationPreDDLFailureEnv} {
+	for _, name := range []string{slice6TerminalOperatorV3DiagnosticEnv,
+		slice6ProductMigrationPreDDLFailureEnv} {
 		if getenv(name) == "1" {
 			return fmt.Errorf("Guest recovery E rejects component-only %s=1", name)
 		}
 	}
 	if getenv(slice6GuestRecoveryEIssuerArmedEnv) != "1" {
 		return errors.New("Guest recovery E issuer arming flag absent; flag alone is not approval")
+	}
+	return nil
+}
+
+// Formal E owns a recovery revocation chain; the old component receipt owns
+// only its live-revoke callback. This mode check runs before any issuer or
+// private run resource, and receipt-off diagnostics keep their old semantics.
+func slice6GuestReceiptModeGuard(formalE bool, getenv func(string) string) error {
+	if getenv == nil {
+		return errors.New("Guest receipt mode environment unavailable")
+	}
+	receipt := getenv(slice6GuestReceiptEnv) == "1"
+	legacy := getenv(slice6GuestLiveRevokeEnv) == "1"
+	if formalE && !receipt {
+		return errors.New("Guest recovery E requires the private receipt chain")
+	}
+	if formalE && legacy {
+		return errors.New("Guest recovery E rejects component-only live revoke")
+	}
+	if !receipt {
+		return nil
+	}
+	if getenv(slice6GuestRuntimeProcessEnv) != "1" || getenv(slice6ProductRuntimeProcessEnv) != "1" {
+		return errors.New("private Guest receipt requires same-run Product and Guest runtime")
+	}
+	if !formalE && !legacy {
+		return errors.New("component Guest receipt requires live revoke")
 	}
 	return nil
 }
@@ -190,7 +217,120 @@ func TestSlice6GuestRecoveryEPreissuerEnvironmentFailsClosed(t *testing.T) {
 	}
 }
 
+func TestSlice6GuestReceiptModeGuardTruthTableNoIssuer(t *testing.T) {
+	base := map[string]string{slice6GuestReceiptEnv: "1", slice6GuestRuntimeProcessEnv: "1",
+		slice6ProductRuntimeProcessEnv: "1"}
+	for _, test := range []struct {
+		name    string
+		formalE bool
+		change  map[string]string
+		allow   bool
+	}{
+		{"formal E", true, nil, true},
+		{"formal E missing receipt", true, map[string]string{slice6GuestReceiptEnv: ""}, false},
+		{"formal E missing Guest", true, map[string]string{slice6GuestRuntimeProcessEnv: ""}, false},
+		{"formal E missing Product", true, map[string]string{slice6ProductRuntimeProcessEnv: ""}, false},
+		{"formal E legacy callback", true, map[string]string{slice6GuestLiveRevokeEnv: "1"}, false},
+		{"legacy receipt without callback", false, nil, false},
+		{"legacy receipt with callback", false, map[string]string{slice6GuestLiveRevokeEnv: "1"}, true},
+		{"legacy receipt missing Guest", false, map[string]string{slice6GuestLiveRevokeEnv: "1", slice6GuestRuntimeProcessEnv: ""}, false},
+		{"legacy receipt missing Product", false, map[string]string{slice6GuestLiveRevokeEnv: "1", slice6ProductRuntimeProcessEnv: ""}, false},
+		{"receipt-off diagnostic", false, map[string]string{slice6GuestReceiptEnv: "", slice6GuestRuntimeProcessEnv: "", slice6ProductRuntimeProcessEnv: ""}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			getenv := func(name string) string {
+				if value, ok := test.change[name]; ok {
+					return value
+				}
+				return base[name]
+			}
+			if got := slice6GuestReceiptModeGuard(test.formalE, getenv) == nil; got != test.allow {
+				t.Fatalf("mode admission=%t, want=%t", got, test.allow)
+			}
+		})
+	}
+	if slice6GuestReceiptModeGuard(true, nil) == nil {
+		t.Fatal("nil environment reader accepted")
+	}
+}
+
+func TestSlice6FormalEPreissuerAgreesWithSharedModeAndLateDependenciesNoIssuer(t *testing.T) {
+	getenv := func(name string) string {
+		switch name {
+		case slice6GuestLiveRevokeEnv, slice6TerminalOperatorV3DiagnosticEnv,
+			slice6ProductMigrationPreDDLFailureEnv:
+			return ""
+		default:
+			return "1"
+		}
+	}
+	if err := slice6GuestRecoveryEPreissuerEnvironment(getenv); err != nil {
+		t.Fatalf("complete formal E preissuer admission: %v", err)
+	}
+	if err := slice6GuestReceiptModeGuard(true, getenv); err != nil {
+		t.Fatalf("shared entry rejected complete formal E environment: %v", err)
+	}
+	// The remaining shared guards require only subsets of the formal E
+	// required set. Every prerequisite must itself be rejected if removed.
+	edges := [][2]string{
+		{slice6GuestMaterialEnv, slice6BreakGlassProcessEnv},
+		{slice6ProductTLSSignerEnv, slice6GuestMaterialEnv},
+		{slice6ProductMaterialInputsEnv, slice6ProductTLSSignerEnv},
+		{slice6PostgresServerLeafEnv, "SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS"},
+		{slice6PostgresServerLeafEnv, slice6TerminalOperatorEnv},
+		{slice6PostgresServerLeafEnv, slice6ProductMaterialInputsEnv},
+		{slice6PostgresServerLeafEnv, slice6CertificateProcessEnv},
+		{slice6PostgresServerLeafEnv, slice6QuiesceProcessEnv},
+		{slice6ProductPostgresDSNEnv, slice6PostgresServerLeafEnv},
+		{slice6ProductMigrationJobEnv, slice6ProductMigrationSignersEnv},
+		{slice6ProductMigrationJobEnv, slice6ProductMigrationInputsEnv},
+		{slice6ProductMigrationJobEnv, slice6ProductPostgresDSNEnv},
+		{slice6ProductRuntimeInputsEnv, slice6ProductMigrationInputsEnv},
+		{slice6ProductRuntimeInputsEnv, slice6ProductMaterialInputsEnv},
+		{slice6ProductRuntimeProcessEnv, "SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE"},
+		{slice6ProductRuntimeProcessEnv, slice6ControllerPrivateConfigEnv},
+		{slice6ProductRuntimeProcessEnv, slice6CredentialProcessEnv},
+		{slice6ProductRuntimeProcessEnv, slice6CertificateProcessEnv},
+		{slice6ProductRuntimeProcessEnv, slice6ProductRuntimeInputsEnv},
+		{slice6ProductRuntimeProcessEnv, slice6ProductMigrationJobEnv},
+		{slice6ProductRuntimeProcessEnv, slice6ProductPostgresDSNEnv},
+		{slice6GuestBindingFixtureEnv, slice6ProductRuntimeProcessEnv},
+		{slice6GuestBindingFixtureEnv, slice6GuestMaterialEnv},
+		{slice6GuestRuntimeProcessEnv, slice6GuestBindingFixtureEnv},
+		{slice6ControllerPrivateConfigEnv, "SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE"},
+		{slice6CredentialProcessEnv, slice6ControllerPrivateConfigEnv},
+		{slice6CredentialProcessEnv, "SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS"},
+		{slice6CertificateProcessEnv, slice6CredentialProcessEnv},
+		{slice6TerminalOperatorEnv, slice6CertificateProcessEnv},
+		{slice6TerminalOperatorEnv, slice6QuiesceProcessEnv},
+		{slice6BreakGlassProcessEnv, slice6ControllerPrivateConfigEnv},
+		{slice6BreakGlassProcessEnv, slice6CertificateProcessEnv},
+		{slice6GuestMaterialEnv, "SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS"},
+	}
+	prerequisites := make(map[string]bool)
+	for _, edge := range edges {
+		if getenv(edge[0]) == "1" && getenv(edge[1]) != "1" {
+			t.Fatalf("formal E contradicts shared dependency %s -> %s", edge[0], edge[1])
+		}
+		prerequisites[edge[1]] = true
+	}
+	for prerequisite := range prerequisites {
+		missing := func(name string) string {
+			if name == prerequisite {
+				return ""
+			}
+			return getenv(name)
+		}
+		if slice6GuestRecoveryEPreissuerEnvironment(missing) == nil {
+			t.Fatalf("shared dependency %s was not required before issuer", prerequisite)
+		}
+	}
+}
+
 func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
+	if err := slice6GuestReceiptModeGuard(formalE, os.Getenv); err != nil {
+		t.Fatal(err)
+	}
 	if os.Getenv(slice6GuestMaterialEnv) == "1" && os.Getenv(slice6BreakGlassProcessEnv) != "1" {
 		t.Fatal("live Guest material agent requires the same-run break-glass consume listener")
 	}
@@ -869,12 +1009,6 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 	if os.Getenv(slice6GuestMaterialEnv) == "1" &&
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
 		t.Fatal("real Guest material requires same-run scoped Vault access")
-	}
-	if os.Getenv(slice6GuestReceiptEnv) == "1" &&
-		(os.Getenv(slice6GuestLiveRevokeEnv) != "1" ||
-			os.Getenv(slice6GuestRuntimeProcessEnv) != "1" ||
-			os.Getenv(slice6ProductRuntimeProcessEnv) != "1") {
-		t.Fatal("private Guest receipt requires the same-run Product, Guest and live revoke chain")
 	}
 	rootRevoked := false
 	revokeBootstrapRoot := func() {

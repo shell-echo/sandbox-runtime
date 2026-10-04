@@ -5072,3 +5072,32 @@ and tagged vet passed. These are source and component checks, not a real
 Vault issuer observation or full Slice 6 acceptance. A clean E/R/F/terminal
 binary freeze and exact command still need Sandbox approval before one new
 issuer-consuming attempt. No manifest or push; Phase 6 remains **5/15**.
+
+Follow-up 2026-10-05 (formal E receipt-mode contradiction, **no issuer run**):
+the E preissuer environment requires the private Guest receipt and forbids
+the legacy component live-revoke flag, but the shared Vault test previously
+required that flag whenever the receipt was enabled. That old condition was
+after Vault/issuer work, so it could not serve as a safe preissuer rejection.
+Under Sandbox ruling `S6-E-mode-guard-20261005`, one pure mode guard now runs
+both in formal E preissuer admission and at the very start of the shared
+entry, before private root, Docker run, issuer or trust-switch allocation.
+Formal E requires Product/Guest PID1 and the private receipt while rejecting
+the legacy callback; the historical non-E receipt still requires all three,
+and receipt-off diagnostics retain their prior behavior. A no-issuer truth
+table and complete formal-environment/shared-guard combination passed;
+finite dependency edges were checked by removing each prerequisite and
+requiring preissuer rejection.
+
+The clean R/F source pair at `e5816d0d3de0541bd9a677560096b3527f58f7b9`
+remains the selected runtime/fixture/terminal source. Its 12 source-bound
+local role images and manifests, Desktop candidate, R terminal binary and F
+fixture are not relabeled as a new E build and need no rebuild for this tagged
+test-only guard. The E checkout will receive a successor commit and its own
+revision/tree/observer identity must be rechecked before any real attempt.
+The first aggregate static admission failed closed with an old Desktop
+candidate, which was correctly rejected because Desktop must share R's
+revision/tree. After rebuilding only that source-bound Desktop candidate,
+complete static admission and the 21-image Docker-store admission passed
+without creating a business run or issuer. R/F source-pair and non-root
+observer mount probes also passed. The single real issuer command remains
+unapproved; no manifest or push, Phase 6 remains **5/15**.

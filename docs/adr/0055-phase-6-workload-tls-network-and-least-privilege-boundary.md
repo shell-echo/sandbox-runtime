@@ -3228,3 +3228,21 @@ but neither these fixtures nor this code change constitute a new Vault issuer
 observation, full controller-drain pass, 16-scenario gate or release result.
 The E/R/F and issuer command package still requires separate Sandbox review
 before any new issuer-consuming run; Phase 6 remains **5/15**.
+
+Sandbox ruling `S6-E-mode-guard-20261005` corrected a deterministic
+formal-E/legacy-receipt contradiction discovered while preparing that command.
+The formal E path requires the private receipt and Product/Guest runtimes but
+must not enable the old component live-revoke callback; the legacy receipt
+path continues to require all three. One pure guard is invoked in formal E's
+preissuer environment check and as the first shared Vault entry condition,
+before root/network/issuer allocation. Receipt-off non-formal diagnostics
+retain their old behavior. No-issuer mode truth-table and complete formal
+environment/shared-dependency tests guard the split. The former shared
+receipt check ran after Vault work and was not a safe early rejection.
+
+This correction changes only the tagged E acceptance harness, not the
+production binary inputs. The independently clean R/F source pair, its 12
+role candidates, Desktop candidate, one-shot terminal command and F fixture
+may be reused under their original source-bound identities; E needs a new
+clean revision/tree and its own observer identity. Reuse is not a claim that
+any issuer was run or that full Slice 6 has passed. Phase 6 remains **5/15**.
