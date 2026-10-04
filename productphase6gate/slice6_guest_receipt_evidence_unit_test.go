@@ -164,7 +164,9 @@ func TestSlice6GuestReceiptFinishFixtureNoIssuer(t *testing.T) {
 	fixtureRoot := os.Getenv(slice6GuestFixtureSourceRootEnv)
 	fixtureRevision := os.Getenv(slice6GuestFixtureSourceRevisionEnv)
 	eRevision := os.Getenv(slice6ProductObserverRevisionEnv)
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	// The race build independently rebuilds all source-bound image inputs twice.
+	// Keep this fixture finite without borrowing the live gate's parent budget.
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Minute)
 	defer cancel()
 	if slice6VerifyGuestFixtureSourcePair(ctx, static.sourceRoot, static.sourceRevision,
 		fixtureRoot, fixtureRevision) != nil {
@@ -233,7 +235,8 @@ func TestSlice6GuestReceiptFinishFixtureNoIssuer(t *testing.T) {
 	if err := slice6FinishGuestReceiptEvidence(ctx, run, static, images,
 		slice6GuestBindingFixtureArtifact{SourceRevision: fixtureRevision},
 		profile, mutation, verifiedAt, productID, guestID); err != nil {
-		t.Fatalf("synthetic finish fixture rejected source-bound evidence wiring: %v", err)
+		t.Fatalf("synthetic finish fixture rejected source-bound evidence wiring: %v context_expired=%t", err,
+			errors.Is(ctx.Err(), context.DeadlineExceeded))
 	}
 	if _, err := os.Stat(filepath.Join(rootPath, run.id, "mutation-receipt.json")); err != nil {
 		t.Fatal("synthetic mutation receipt was not persisted")
