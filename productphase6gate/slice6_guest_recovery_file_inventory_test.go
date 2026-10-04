@@ -53,7 +53,7 @@ func slice6GuestRecoveryEFileLimits() map[string]int {
 		add(slice6GuestRecoveryRawName(process), 128<<10)
 	}
 	for _, process := range []string{"product-b", "guest-b"} {
-		add(slice6GuestRecoveryStartInspectName(process), 640)
+		add(slice6GuestRecoveryStartInspectName(process), 768)
 	}
 	for _, name := range []string{slice6GuestRecoveryEventJournalFile,
 		slice6GuestRecoveryCreatedProductRaw, slice6GuestRecoveryCreatedRuntimeRaw,

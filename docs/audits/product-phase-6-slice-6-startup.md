@@ -5207,3 +5207,55 @@ prior unaffected ordinary full race/vet and Provider Contract lock
 results are reused under Sandbox's source-impact decision. A clean new
 E source freeze, no-issuer observer/source check and another separate
 Sandbox run review still precede any issuer. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-05 (second one-shot formal E attempt, **failed**):
+Sandbox separately approved the exact E3d19 script
+`fafdbbb601afa5b59fb248d37a8b7ac8f0a20960632a05620433b9bae0cca94e`
+once. Its clean E source was `3d19f3c359159e30e0a36b620effbcd5cf007eca`
+(tree `144c5aaf50661d16115bb3c0de78d45fb0188394`); R/F remained the
+independent clean `e5816d0d3de0541bd9a677560096b3527f58f7b9` pair.
+Run `67a8794ca4959dfb9394ed1d5baa7248` passed the old-client TLS
+probe, Vault/PKI/KVv2 and PostgreSQL/migration setup, but the formal Guest
+recovery E precleanup returned `private Guest receipt unavailable` before
+any source-to-terminal binding. The only Product-A PID1 raw file is zero
+bytes; no Guest-A raw file exists. The private log has SHA-256
+`9b3ad806a9629f2128ef094327130c3ac5d580d330c27fb04d3182cce3ffa6fa`.
+The retained v2 marker says `incomplete`, not accepted. The separate
+terminal operator observed three certificate serials, two token accessors,
+complete CRL and self-revocation in cleanup-only mode, but the sticky
+certificate-controller credential-revoke failure and missing full terminal
+chain remain OPEN. Exact run-labeled Docker container/network/volume lists,
+the two recorded Vault anonymous volumes and E/R/F private siblings were
+absent after cleanup. Physical cleanup does not turn this attempt into
+business, terminal or release evidence.
+
+The first visible E-only failure lies after creation of the Product-A raw
+file and before Guest-A receipt creation. Docker's retained short event
+history still showed the original Product-A container's later exact
+destruction but no start/die record for that container; its prior running
+state and exit cause cannot be reconstructed. Static review found a possible
+startup race: the formal Product/Guest A/B path launched asynchronous
+`docker start -a` and inspected running state only once, while its existing
+no-issuer Docker capture tests retried this observation. This is a plausible
+explanation, **not a proven root cause** of the failed run.
+
+Under Sandbox ruling `S6-E-start-observation-20261005`, the E-only startup
+observer now treats only the exact same-run, same-ID/image/label,
+log-driver-none, non-TTY, non-OOM, error-free `created/pid0` state as pending.
+It polls that same start at a fixed cancellable 50 ms cadence inside the
+original absolute Product 28-second or Guest 45-second startup budget;
+running still requires exact PID/StartedAt and live attached collector.
+Exited, malformed, failed inspect, identity drift, completed collector,
+deadline and cancellation fail closed. B start-call/start-observed events
+remain one-shot and ordered. Closed stage diagnostics do not retain raw
+stderr or broaden private receipt/evidence acceptance. Deterministic
+pending-to-running and negative unit cases, plus a real no-issuer four-PID1
+Docker capture with exact created and running observations, passed. This
+correction also passed the complete ordinary repository race/shuffle test
+(`internal/phase6security` 336.926 seconds) and the complete tagged
+`phase6slice6gate` repository race/shuffle test
+(`productphase6gate` 22.748 seconds,
+`internal/phase6security` 340.114 seconds) using Go 1.26.8. These are
+component/source results, not real issuer observations. This correction has
+not been verified by a new issuer run; no third issuer is authorized, no
+release manifest or push exists, and Phase 6 remains **5/15**.

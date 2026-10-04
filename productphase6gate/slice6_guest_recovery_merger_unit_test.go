@@ -135,9 +135,10 @@ func slice6SyntheticGuestRecoveryPrecleanup(t *testing.T, run *slice6ReceiptEvid
 			ExitCode: 0, CaptureStartUTC: stamp(item.start - 1), CaptureFinishUTC: stamp(item.finish + 1)}
 		if index >= 2 {
 			startRaw := []byte(strings.Join([]string{item.id, coreImage, coreImage, run.id,
-				"none", "false", "true", strconv.Itoa(item.pid), stamp(item.start), "false"}, " ") + "\n")
+				"none", "false", "running", "true", strconv.Itoa(item.pid), stamp(item.start),
+				"false", "0", "false"}, " ") + "\n")
 			if err := run.writeV2BoundedPrivateFile(slice6GuestRecoveryStartInspectName(item.name),
-				startRaw, 640, false); err != nil {
+				startRaw, 768, false); err != nil {
 				t.Fatal(err)
 			}
 			processes[index].StartInspectSHA256 = slice6ReceiptSHA256(startRaw)

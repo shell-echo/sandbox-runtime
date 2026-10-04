@@ -17,7 +17,7 @@ func (run *slice6ReceiptEvidenceRun) verifyGuestRecoveryStartRaw(binding slice6G
 		!guestRevokeFixtureDigestGate(binding.StartInspectSHA256) {
 		return phase6guestreceipt.ErrUnavailable
 	}
-	raw, err := run.readFile(name, 640)
+	raw, err := run.readFile(name, 768)
 	if err != nil {
 		return err
 	}
@@ -27,11 +27,12 @@ func (run *slice6ReceiptEvidenceRun) verifyGuestRecoveryStartRaw(binding slice6G
 		return errors.New("Guest B start Docker observation raw unavailable")
 	}
 	fields := strings.Fields(string(raw))
-	if len(fields) != 10 || fields[0] != binding.ContainerID ||
+	if len(fields) != 13 || fields[0] != binding.ContainerID ||
 		fields[1] != binding.ImageID || fields[2] != binding.ImageRef ||
 		fields[3] != run.id || fields[4] != "none" || fields[5] != "false" ||
-		fields[6] != "true" || fields[7] != strconv.Itoa(binding.PID) ||
-		fields[8] != binding.StartedAt || fields[9] != "false" {
+		fields[6] != "running" || fields[7] != "true" ||
+		fields[8] != strconv.Itoa(binding.PID) || fields[9] != binding.StartedAt ||
+		fields[10] != "false" || fields[11] != "0" || fields[12] != "false" {
 		return errors.New("Guest B start Docker running identity drift")
 	}
 	return nil

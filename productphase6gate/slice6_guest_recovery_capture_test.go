@@ -324,44 +324,135 @@ func (capture *slice6GuestRecoveryCapture) abort() {
 // observeRunning must be called while Docker still reports the exact PID1 as
 // running. A stopped inspect cannot retroactively prove which process ran.
 func (capture *slice6GuestRecoveryCapture) observeRunning(ctx context.Context, run slice6DockerRun) error {
+	pending, err := capture.observeRunningOrPending(ctx, run)
+	if pending {
+		return phase6guestreceipt.ErrUnavailable
+	}
+	return err
+}
+
+func (capture *slice6GuestRecoveryCapture) observeRunningOrPending(ctx context.Context,
+	run slice6DockerRun) (bool, error) {
 	if capture == nil || ctx == nil || ctx.Err() != nil || run.id != capture.run.id || capture.pid != 0 {
-		return phase6guestreceipt.ErrUnavailable
+		return false, phase6guestreceipt.ErrUnavailable
 	}
-	output, err, overflow := slice6DockerBounded(ctx, 640, nil, "inspect", "--format",
-		"{{.Id}} {{.Image}} {{.Config.Image}} {{index .Config.Labels \""+slice6RunLabel+"\"}} {{.HostConfig.LogConfig.Type}} {{.Config.Tty}} {{.State.Running}} {{.State.Pid}} {{.State.StartedAt}} {{.State.OOMKilled}}", capture.id)
+	output, err, overflow := slice6DockerBounded(ctx, 768, nil, "inspect", "--format",
+		"{{.Id}} {{.Image}} {{.Config.Image}} {{index .Config.Labels \""+slice6RunLabel+"\"}} {{.HostConfig.LogConfig.Type}} {{.Config.Tty}} {{.State.Status}} {{.State.Running}} {{.State.Pid}} {{.State.StartedAt}} {{.State.OOMKilled}} {{.State.ExitCode}} {{if .State.Error}}true{{else}}false{{end}}", capture.id)
 	defer clear(output)
-	fields := strings.Fields(string(output))
-	if err != nil || overflow || len(fields) != 10 || fields[0] != capture.id ||
-		fields[1] != capture.image || fields[2] != capture.imageRef || fields[3] != run.id ||
-		fields[4] != "none" || fields[5] != "false" || fields[6] != "true" || fields[9] != "false" {
-		return phase6guestreceipt.ErrUnavailable
+	if err != nil || overflow {
+		return false, phase6guestreceipt.ErrUnavailable
 	}
-	pid, err := strconv.Atoi(fields[7])
-	started, timeErr := time.Parse(time.RFC3339Nano, fields[8])
-	if err != nil || pid < 1 || pid > 1<<22 || timeErr != nil || started.IsZero() {
-		return phase6guestreceipt.ErrUnavailable
+	fields := strings.Fields(string(output))
+	pending, pid, startedAt, err := slice6ClassifyGuestRecoveryStartInspect(fields, capture, run)
+	if err != nil || ctx.Err() != nil {
+		return false, phase6guestreceipt.ErrUnavailable
+	}
+	if pending {
+		select {
+		case <-capture.done:
+			return false, phase6guestreceipt.ErrUnavailable
+		default:
+			return true, nil
+		}
 	}
 	select {
 	case <-capture.done:
-		return phase6guestreceipt.ErrUnavailable
+		return false, phase6guestreceipt.ErrUnavailable
 	default:
 	}
-	capture.pid, capture.startedAt = pid, fields[8]
 	if capture.recorder != nil && slice6GuestRecoveryStartInspectName(capture.process) != "" {
 		name := slice6GuestRecoveryStartInspectName(capture.process)
-		if name == "" || capture.run.writeV2BoundedPrivateFile(name, output, 640, false) != nil {
-			return phase6guestreceipt.ErrUnavailable
+		if name == "" || capture.run.writeV2BoundedPrivateFile(name, output, 768, false) != nil {
+			return false, phase6guestreceipt.ErrUnavailable
 		}
 		capture.startInspectSHA256 = slice6ReceiptSHA256(output)
 		observed := slice6GuestRecoveryRawBinding{Process: capture.process, RunID: run.id,
-			ContainerID: capture.id, PID: capture.pid, StartedAt: capture.startedAt,
+			ContainerID: capture.id, PID: pid, StartedAt: startedAt,
 			StartInspectSHA256: capture.startInspectSHA256}
 		if capture.recorder.record(strings.ReplaceAll(capture.process, "-", "_")+"_start_observed",
 			slice6GuestRecoveryStartObservedRef(observed)) != nil {
-			return phase6guestreceipt.ErrUnavailable
+			return false, phase6guestreceipt.ErrUnavailable
 		}
 	}
-	return nil
+	capture.pid, capture.startedAt = pid, startedAt
+	return false, nil
+}
+
+func slice6ClassifyGuestRecoveryStartInspect(fields []string, capture *slice6GuestRecoveryCapture,
+	run slice6DockerRun) (bool, int, string, error) {
+	if capture == nil || len(fields) != 13 || fields[0] != capture.id ||
+		fields[1] != capture.image || fields[2] != capture.imageRef || fields[3] != run.id ||
+		fields[4] != "none" || fields[5] != "false" || fields[10] != "false" ||
+		fields[11] != "0" || fields[12] != "false" {
+		return false, 0, "", phase6guestreceipt.ErrUnavailable
+	}
+	pid, pidErr := strconv.Atoi(fields[8])
+	started, timeErr := time.Parse(time.RFC3339Nano, fields[9])
+	if pidErr != nil || timeErr != nil {
+		return false, 0, "", phase6guestreceipt.ErrUnavailable
+	}
+	if fields[6] == "created" && fields[7] == "false" && pid == 0 && started.IsZero() {
+		return true, 0, "", nil
+	}
+	if fields[6] != "running" || fields[7] != "true" || pid < 1 || pid > 1<<22 || started.IsZero() {
+		return false, 0, "", phase6guestreceipt.ErrUnavailable
+	}
+	return false, pid, fields[9], nil
+}
+
+// Docker start -a is launched asynchronously. A single immediate inspect can
+// still see "created" even when the exact PID1 is about to start. Retry only
+// within the caller's existing startup deadline; every successful observation
+// still goes through the strict image, label, PID and StartedAt check above.
+func slice6AwaitGuestRecoveryRunning(ctx context.Context, capture *slice6GuestRecoveryCapture,
+	run slice6DockerRun) error {
+	if capture == nil || ctx == nil || capture.done == nil {
+		return errors.New("Guest E PID1 start observation unavailable")
+	}
+	return slice6AwaitGuestRecoveryRunningProbe(ctx, capture.done, func() (bool, error) {
+		return capture.observeRunningOrPending(ctx, run)
+	})
+}
+
+func slice6AwaitGuestRecoveryRunningProbe(ctx context.Context, done <-chan struct{},
+	probe func() (bool, error)) error {
+	if ctx == nil || done == nil || probe == nil {
+		return errors.New("Guest E PID1 start observation unavailable")
+	}
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return errors.New("Guest E PID1 start observation deadline or cancellation")
+		}
+		select {
+		case <-done:
+			return errors.New("Guest E PID1 collector exited before running observation")
+		default:
+		}
+		pending, err := probe()
+		if err != nil {
+			return errors.New("Guest E PID1 start inspect or identity rejected")
+		}
+		if !pending {
+			if ctx.Err() != nil {
+				return errors.New("Guest E PID1 start observation deadline or cancellation")
+			}
+			select {
+			case <-done:
+				return errors.New("Guest E PID1 collector exited before running observation")
+			default:
+			}
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("Guest E PID1 start observation deadline or cancellation")
+		case <-done:
+			return errors.New("Guest E PID1 collector exited before running observation")
+		case <-ticker.C:
+		}
+	}
 }
 
 // readLivePrefix takes an inode-checked snapshot while the bounded stdout

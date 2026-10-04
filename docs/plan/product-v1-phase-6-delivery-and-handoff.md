@@ -204,19 +204,22 @@ receives it promptly; periodic checks only fill genuine reporting gaps.
    reviewed work, verify full local and live remote SHAs, and deliver the
    machine-handoff checkpoint below before advancing to Slice 7 work.
 
-Current Slice 6 step 1 checkpoint (2026-10-05): the single reviewed formal E
-attempt failed at old-client TLS-denial attribution and retained only an
-`incomplete` private receipt. Exact run-owned Docker objects and private
-temporary siblings were absent after cleanup. An isolated, uninitialized
-Vault no-issuer replay reproduced a client `broken pipe` paired with an
-exact server-side x509 unknown-authority record. Under Sandbox ruling
-`S6-E-old-client-TLS-correlation-20261005`, only the formal E old-client
-probe may use strict same-connection, same-process, same-window server-log
-correlation; old-server and legacy probes keep their prior semantics.
-This code/diagnostic work is not a second issuer authorization, not a
-successful E component, and not one of the fixed 16 final scenarios.
+Current Slice 6 step 1 checkpoint (2026-10-05): the first separately
+approved formal E attempt failed at old-client TLS-denial attribution. An
+isolated no-issuer Vault replay supported a strict, E-only server-log
+correlation fallback under Sandbox ruling
+`S6-E-old-client-TLS-correlation-20261005`. A second separately approved
+one-shot E attempt passed that probe but failed before the Product-A/Guest-A
+private receipt chain; Product-A stdout was zero bytes and the original
+container's start/exit state could not be recovered from Docker's short
+event history. The v2 evidence remains `incomplete`. Sandbox ruling
+`S6-E-start-observation-20261005` permits a bounded E-only correction for
+the formal asynchronous Docker start observation, without changing receipt,
+identity, terminal or release acceptance. A startup race is plausible but
+not proven as the cause of the second failure. No third issuer is authorized.
 Aggregate tagged validation, a fresh clean E freeze and separate one-run
-review remain before any further real attempt. Phase 6 stays **5/15**.
+review remain before any further real attempt. Neither failed run counts
+as one of the fixed 16 final scenarios; Phase 6 stays **5/15**.
 
 ## Remaining Phase 6 order
 

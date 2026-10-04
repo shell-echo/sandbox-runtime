@@ -142,11 +142,11 @@ func (process *slice6GuestRecoveryGuestProcess) start(ctx context.Context,
 		return phase6guestreceipt.ErrUnavailable
 	}
 	if err != nil {
-		return err
+		return errors.Join(errors.New("Guest E Guest PID1 attached capture start unavailable"), err)
 	}
 	process.Capture = capture
-	if err := capture.observeRunning(startContext, process.Run); err != nil {
-		return err
+	if err := slice6AwaitGuestRecoveryRunning(startContext, capture, process.Run); err != nil {
+		return errors.Join(errors.New("Guest E Guest PID1 running observation unavailable"), err)
 	}
 	if err := slice6VerifyGuestRuntimeRunningNetworks(startContext, process.Run, process.ID,
 		process.Plan, process.ProductNetID, process.InternalNetID); err != nil {

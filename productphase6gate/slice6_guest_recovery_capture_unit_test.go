@@ -263,6 +263,12 @@ func TestSlice6FourPID1V2CaptureNoIssuerDocker(t *testing.T) {
 			t.Fatal("distinct bounded PID1 create unavailable")
 		}
 		ids[id] = true
+		createdCapture := &slice6GuestRecoveryCapture{id: id, image: imageID,
+			imageRef: slice6PinnedAlpineImage, run: evidence, done: make(chan struct{})}
+		pending, pendingErr := createdCapture.observeRunningOrPending(ctx, run)
+		if pendingErr != nil || !pending || createdCapture.pid != 0 {
+			t.Fatal("same-run created PID1 was not the exact pending startup state")
+		}
 		if _, err := slice6StartGuestRecoveryCapture(ctx, run, evidence, process, id,
 			"sha256:"+strings.Repeat("f", 64), slice6PinnedAlpineImage, profile, config); err == nil {
 			t.Fatal("preflight admitted a stale selected image before creating the private file")
@@ -279,32 +285,19 @@ func TestSlice6FourPID1V2CaptureNoIssuerDocker(t *testing.T) {
 		defer capture.abort()
 		captures = append(captures, capture)
 		if index >= 2 {
-			var observed error
-			for attempt := 0; attempt < 30 && ctx.Err() == nil; attempt++ {
-				observed = capture.observeRunning(ctx, run)
-				if observed == nil {
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
-			if observed != nil {
+			if err := slice6AwaitGuestRecoveryRunning(ctx, capture, run); err != nil {
 				t.Fatal("real replacement PID1 start observation unavailable")
 			}
 		}
 	}
 	pids := make(map[int]bool)
 	for _, capture := range captures {
-		var observed error
 		if capture.pid == 0 {
-			for attempt := 0; attempt < 30 && ctx.Err() == nil; attempt++ {
-				observed = capture.observeRunning(ctx, run)
-				if observed == nil {
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
+			if err := slice6AwaitGuestRecoveryRunning(ctx, capture, run); err != nil {
+				t.Fatal("real original PID1 start observation unavailable")
 			}
 		}
-		if observed != nil || pids[capture.pid] {
+		if pids[capture.pid] {
 			t.Fatal("four distinct live Docker PID1 identities unavailable")
 		}
 		pids[capture.pid] = true
