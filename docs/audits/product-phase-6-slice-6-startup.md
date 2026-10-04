@@ -4862,3 +4862,14 @@ non-sensitive `input`, `source_reopen`, `artifact_map`, `raw_binding`,
 error identity while distinguishing bounded failure classes. These are
 synthetic no-issuer tests, not a new real Docker/PG observation. The failed
 E5a directory is untouched, and the official count remains **5/15**.
+
+The first race-enabled finish-fixture attempt exhausted its own five-minute
+context during the second source/OCI reread and failed with fixed
+`stage=source_reopen`; it was not counted as a pass. Only that synthetic
+fixture's bounded context was extended to eight minutes, leaving the real
+Gate's 20-minute parent, 25-minute test, startup, stop and cleanup budgets
+unchanged. The full tagged race/shuffle suite and tagged vet passed after the
+edit. The same source-bound fixture then passed with `-race -shuffle=on`
+in 304.95 seconds under the eight-minute bound, including publication and
+independent reread. This still does not authorize or substitute for a new
+real issuer component attempt.
