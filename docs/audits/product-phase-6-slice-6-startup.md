@@ -5259,3 +5259,57 @@ correction also passed the complete ordinary repository race/shuffle test
 component/source results, not real issuer observations. This correction has
 not been verified by a new issuer run; no third issuer is authorized, no
 release manifest or push exists, and Phase 6 remains **5/15**.
+
+Follow-up 2026-10-05 (third one-shot formal E attempt, **failed**):
+Sandbox approved exact review-only script
+`b6ab84ca8dc0c93cdb50639c20d99ee112b35931b0d99f46e641bc1dd8cb1bdd`
+once under `S6-E176a-single-run-approved-20261005`. E was clean
+`176a25a29ef30ab5cd731deed247bb757ccb3ddd` / tree
+`1d9c1a0c1aa542a6029be3b9eadfbc8379b8a35b`; R/F stayed at the
+separate clean `e5816d0d3de0541bd9a677560096b3527f58f7b9` source.
+Run `27f3fe5853e6172252a63c41c5665242` failed after 506.65 seconds;
+the private log SHA-256 is
+`939021969b0726f2f8dfbace365199b93c06d5ab361a93a138b712547a1c82db`.
+It passed the old-client TLS probe, actual Vault/PKI/KVv2, PostgreSQL,
+Product migration, controllers and agents. Unlike the preceding run, its
+private Product-A and Guest-A v2 stdout files contain 15 and eight lines,
+respectively, with zero-drop seals; the 107-file private directory also
+contains before-B admission, Product-B begin and both B start inspections.
+Guest-B stdout is zero bytes. These are partial raw observations, not a
+verified full A/B causal binding or accepted E component.
+
+The first failure was `Guest running network witness PID1 unavailable`.
+Source inspection shows a deterministic validator wiring error: formal
+Guest-B calls the shared running-network witness, but that witness required
+the literal Guest-A container name even though Guest-B creation and its
+separate start inspection require the fixed `-b-` name. This explains this
+specific rejection without proving every otherwise-unseen Docker field at
+the failure instant. The prior asynchronous-start correction did allow this
+run to reach the B stage, but the second run's exact root cause remains
+unproved. The third run has only a v2 `incomplete` marker, no final binding,
+119-file result or 14-slot convergence. Its cleanup-only terminal operator
+confirmed three certificate serials, two token accessors, complete CRL and
+self-revocation, while the sticky controller credential-revoke failure and
+external PostgreSQL leaf v2 terminal revoke remained OPEN. After exact
+cleanup, run-labeled Docker container/network/volume inventories, both
+recorded Vault anonymous volumes and E/R/F private siblings were absent.
+That physical zero does not complete the terminal or business evidence.
+
+Under Sandbox ruling `S6-E-Guest-B-network-witness-20261005`, the E-only
+formal witness now derives one exact name from the closed `guest-a` or
+`guest-b` slot and run ID; the historical component wrapper remains
+Guest-A-only. Container ID, run label, live PID1, no OOM/restart, and both
+effective network IDs/IPs remain mandatory. The formal B startup and
+readiness checks use the same slot-bound identity. Static review of the
+remaining replacement shared-attempt, shutdown, seal, precleanup and
+removal path found no further A-only container-name assumption; A-only
+fault-stage helpers remain A-only. Pure wrong-slot/name/run/ID/PID tests
+and a real no-issuer two-network Docker A/B witness passed, including
+A/B cross-slot and wrong-network/IP rejection. This is a source/component
+correction only. The subsequent single aggregate Go 1.26.8 tagged
+`phase6slice6gate` repository race/shuffle test passed
+(`internal/phase6security` 337.884 seconds), as did tagged vet and
+`git diff --check`. The unaffected ordinary repository/Contract gates,
+R/F sources and frozen candidate images were reused under the E-only
+source-impact decision. No fourth issuer has been authorized and Phase 6
+remains **5/15**.

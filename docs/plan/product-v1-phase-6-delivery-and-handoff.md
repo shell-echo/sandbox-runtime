@@ -216,9 +216,18 @@ event history. The v2 evidence remains `incomplete`. Sandbox ruling
 `S6-E-start-observation-20261005` permits a bounded E-only correction for
 the formal asynchronous Docker start observation, without changing receipt,
 identity, terminal or release acceptance. A startup race is plausible but
-not proven as the cause of the second failure. No third issuer is authorized.
-Aggregate tagged validation, a fresh clean E freeze and separate one-run
-review remain before any further real attempt. Neither failed run counts
+not proven as the cause of the second failure. A third, separately approved
+one-shot E attempt reached A's sealed Product/Guest streams and before-B
+admission but failed when the formal B path passed the fixed Guest-B name to
+an A-only network witness. The 107-file private root again retained only an
+`incomplete` result and cleanup-only terminal evidence; exact run-owned
+Docker objects were absent, but sticky controller revoke and formal terminal
+confirmation remain open. Sandbox ruling
+`S6-E-Guest-B-network-witness-20261005` permits an E-only closed-slot
+correction while preserving the historical A-only component witness and
+all identity/network checks. No fourth issuer is authorized. Aggregate
+tagged validation, a fresh clean E freeze and separate one-run review
+remain before any further real attempt. None of these failed E runs counts
 as one of the fixed 16 final scenarios; Phase 6 stays **5/15**.
 
 ## Remaining Phase 6 order

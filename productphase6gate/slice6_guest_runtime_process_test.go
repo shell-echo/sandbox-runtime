@@ -521,11 +521,9 @@ func slice6GuestRuntimeCreateArguments(ctx context.Context, run slice6DockerRun,
 func slice6GuestRuntimeCreateArgumentsForSlot(ctx context.Context, run slice6DockerRun,
 	profile phase6security.Profile, plan slice6GuestRuntimeLaunchPlan, productNetworkID,
 	configVolume string, storage, sockets, anchorFiles map[string]string, seccomp, slot string) ([]string, error) {
-	name := "sr-p6-guest-runtime-" + run.id
-	if slot == "guest-b" {
-		name = "sr-p6-guest-runtime-b-" + run.id
-	} else if slot != "guest-a" {
-		return nil, errors.New("Guest E slot name unavailable")
+	name, nameErr := slice6GuestRuntimeNameForSlot(run.id, slot)
+	if nameErr != nil {
+		return nil, nameErr
 	}
 	if len(productNetworkID) != 64 || !lowerHexSlice6(productNetworkID) ||
 		configVolume != "sr-p6-config-guest-runtime-"+run.id ||
@@ -777,10 +775,30 @@ func slice6ValidateGuestRuntimeRunningNetworks(networks map[string]slice6GuestFi
 	return nil
 }
 
+func slice6GuestRuntimeNameForSlot(runID, slot string) (string, error) {
+	if len(runID) != 32 || !lowerHexSlice6(runID) {
+		return "", errors.New("Guest E run identity unavailable for slot")
+	}
+	switch slot {
+	case "guest-a":
+		return "sr-p6-guest-runtime-" + runID, nil
+	case "guest-b":
+		return "sr-p6-guest-runtime-b-" + runID, nil
+	default:
+		return "", errors.New("Guest E slot name unavailable")
+	}
+}
+
 func slice6VerifyGuestRuntimeRunningNetworks(ctx context.Context, run slice6DockerRun, id string,
 	plan slice6GuestRuntimeLaunchPlan, productNetworkID, internalNetworkID string) error {
+	return slice6VerifyGuestRuntimeRunningNetworksForSlot(ctx, run, id, plan,
+		productNetworkID, internalNetworkID, "guest-a")
+}
+
+func slice6VerifyGuestRuntimeRunningNetworksForSlot(ctx context.Context, run slice6DockerRun, id string,
+	plan slice6GuestRuntimeLaunchPlan, productNetworkID, internalNetworkID, slot string) error {
 	member, err := slice6InspectProductRuntimeMember(ctx, run, id)
-	if err != nil || member.ID != id || member.Name != "/sr-p6-guest-runtime-"+run.id {
+	if err != nil || !slice6GuestRuntimeMemberMatchesSlot(run.id, id, slot, member) {
 		return errors.New("Guest running network witness PID1 unavailable")
 	}
 	raw, err := run.docker(ctx, "inspect", id)
@@ -804,4 +822,14 @@ func slice6VerifyGuestRuntimeRunningNetworks(ctx context.Context, run slice6Dock
 	}
 	return slice6ValidateGuestRuntimeRunningNetworks(observed[0].NetworkSettings.Networks,
 		plan, productNetworkID, internalNetworkID)
+}
+
+func slice6GuestRuntimeMemberMatchesSlot(runID, id, slot string,
+	member slice6ProductRuntimeInspect) bool {
+	name, err := slice6GuestRuntimeNameForSlot(runID, slot)
+	return err == nil && len(id) == 64 && lowerHexSlice6(id) &&
+		member.ID == id && member.Name == "/"+name &&
+		member.Config.Labels[slice6RunLabel] == runID &&
+		member.State.Running && !member.State.OOMKilled && member.State.Pid > 0 &&
+		member.RestartCount == 0
 }

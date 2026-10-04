@@ -100,9 +100,9 @@ func slice6CreateGuestRecoveryGuestProcess(ctx context.Context, run slice6Docker
 		anchorFiles, prepared.Seccomp); err != nil {
 		return nil, err
 	}
-	name := "sr-p6-guest-runtime-" + run.id
-	if slot == "guest-b" {
-		name = "sr-p6-guest-runtime-b-" + run.id
+	name, nameErr := slice6GuestRuntimeNameForSlot(run.id, slot)
+	if nameErr != nil {
+		return nil, nameErr
 	}
 	if err := slice6VerifyGuestRecoveryCreatedName(ctx, run, id, name); err != nil {
 		return nil, err
@@ -148,8 +148,8 @@ func (process *slice6GuestRecoveryGuestProcess) start(ctx context.Context,
 	if err := slice6AwaitGuestRecoveryRunning(startContext, capture, process.Run); err != nil {
 		return errors.Join(errors.New("Guest E Guest PID1 running observation unavailable"), err)
 	}
-	if err := slice6VerifyGuestRuntimeRunningNetworks(startContext, process.Run, process.ID,
-		process.Plan, process.ProductNetID, process.InternalNetID); err != nil {
+	if err := slice6VerifyGuestRuntimeRunningNetworksForSlot(startContext, process.Run, process.ID,
+		process.Plan, process.ProductNetID, process.InternalNetID, process.Slot); err != nil {
 		return err
 	}
 	deadline, _ := startContext.Deadline()
@@ -159,11 +159,8 @@ func (process *slice6GuestRecoveryGuestProcess) start(ctx context.Context,
 			if inspectErr != nil {
 				return false, inspectErr
 			}
-			name := "/sr-p6-guest-runtime-" + process.Run.id
-			if process.Slot == "guest-b" {
-				name = "/sr-p6-guest-runtime-b-" + process.Run.id
-			}
-			if member.ID != process.ID || member.Name != name {
+			if !slice6GuestRuntimeMemberMatchesSlot(process.Run.id, process.ID,
+				process.Slot, member) {
 				return false, errors.New("Guest E Guest running identity drift")
 			}
 			return true, nil
