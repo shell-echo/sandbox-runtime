@@ -168,6 +168,21 @@ diagnostic method, inspect related prerequisites together and aggregate the
 fix. A running build/test is not stagnation. Do not raise timeouts, relax
 security or retry indefinitely to manufacture a pass.
 
+## Slice 6 step reporting
+
+For each substantive, verifiable step in the fixed delivery sequence below,
+report its stable number/name when starting, completing, failing, becoming
+blocked or resuming. Include the observed result and evidence, the specific
+open item closed or still missing, and the next step; report actual elapsed
+time on completion when known, without inventing a percentage or ETA. Keep
+code completion, component tests, real scenarios, formal acceptance and
+commit/push state distinct. During a long build or test, report meaningful
+phase changes and, after five minutes without one, the known running stage.
+Do not rerun work merely to generate an update or turn individual commands
+and documentation edits into new progress steps. The implementation session
+also sends each compact step event to the coordination session so the user
+receives it promptly; periodic checks only fill genuine reporting gaps.
+
 ## Next Slice 6 delivery sequence
 
 1. Close the current bounded Guest recovery work: finish the already reviewed
