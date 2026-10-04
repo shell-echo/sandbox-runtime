@@ -13,7 +13,6 @@ import (
 )
 
 const slice6ExternalTempNoIssuerEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_EXTERNAL_TEMP_NO_ISSUER"
-const slice6TerminalExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_BINARY_EXPECTED_DIGEST"
 
 // Hold every actual Gate-owned temporary directory and all three built tools
 // live through the finish-equivalent source check. Real non-root mounts and
@@ -58,7 +57,8 @@ func TestSlice6ActualExternalTempsAndMountsNoIssuer(t *testing.T) {
 	}
 	operatorDir := slice6PrivateSourceSibling(t, rRoot, ".sr-p6-terminal-operator-")
 	terminalPath, terminalDigest := slice6BuildTerminalOperator(t, ctx, operatorDir, rRoot, rRevision)
-	if terminalDigest == "" || terminalDigest != os.Getenv(slice6TerminalExpectedDigestEnv) {
+	if slice6ApproveTerminalBinaryDigest(terminalDigest,
+		os.Getenv(slice6TerminalExpectedDigestEnv)) != nil {
 		t.Fatal("externally frozen R terminal binary unavailable")
 	}
 	root := slice6PrivateSourceSibling(t, rRoot, ".sr-vault-trust-switch-")

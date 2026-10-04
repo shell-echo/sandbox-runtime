@@ -5101,3 +5101,21 @@ complete static admission and the 21-image Docker-store admission passed
 without creating a business run or issuer. R/F source-pair and non-root
 observer mount probes also passed. The single real issuer command remains
 unapproved; no manifest or push, Phase 6 remains **5/15**.
+
+Follow-up 2026-10-05 (externally approved terminal binary lock, **no issuer
+run**): Sandbox ruling `S6-E-terminal-approved-digest-20261005` identified
+that clean R build, capability probe and mounted-byte replay all bound the
+terminal operator to the digest measured *during this run*, but the live E
+path did not compare that digest to the independently approved prebuilt R
+value. A strict lowercase `sha256:` digest equality check now runs after
+the R build and before `newSlice6DockerRun`, terminal capability Docker
+probe or issuer allocation. The existing no-issuer external-temporary test
+uses the same pure check; missing, wrong, uppercase, short and malformed
+expected values fail in an isolated no-issuer regression. The other two
+externally approved executable inputs—the E observer and F fixture—were
+checked at their already-existing preissuer call sites; no fourth such
+binary approval input exists in this bounded live entry. This tagged-only
+change does not modify R/F production code or their 12 role, Desktop,
+terminal and fixture artifacts. The final clean E successor and aggregate
+tagged validation still precede the one-run Sandbox approval. Phase 6
+remains **5/15**.

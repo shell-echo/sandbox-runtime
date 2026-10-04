@@ -31,6 +31,7 @@ const slice6TerminalOperatorGID = 30090
 const slice6TerminalOperatorV2Capability = "sandbox-runtime.phase6-terminal-cleanup-input.v2\n"
 const slice6TerminalOperatorV3Capability = "sandbox-runtime.phase6-terminal-cleanup-input.v3\n"
 const slice6TerminalOperatorV3DiagnosticEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_V3_DIAGNOSTIC"
+const slice6TerminalExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_BINARY_EXPECTED_DIGEST"
 
 var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: unavailable stage=([a-z][a-z-]{0,63})`)
 
@@ -137,6 +138,30 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot,
 	t.Logf("terminal operator separate source revision=%s tree=%s toolchain=go1.26.8 build=CGO_ENABLED=0,linux/arm64,-mod=readonly,-trimpath,-buildvcs=false,-ldflags=-buildid= binary=%s",
 		strings.TrimSpace(string(revisionDocument)), strings.TrimSpace(string(treeDocument)), digest)
 	return binaryPath, digest
+}
+
+func slice6ApproveTerminalBinaryDigest(actual, expected string) error {
+	if !guestRevokeFixtureDigestGate(expected) || !guestRevokeFixtureDigestGate(actual) || actual != expected {
+		return errors.New("terminal operator differs from externally approved binary digest")
+	}
+	return nil
+}
+
+func TestSlice6TerminalBinaryExternalDigestApprovalNoIssuer(t *testing.T) {
+	actual := "sha256:" + strings.Repeat("a", 64)
+	if err := slice6ApproveTerminalBinaryDigest(actual, actual); err != nil {
+		t.Fatalf("valid external approval rejected: %v", err)
+	}
+	for _, expected := range []string{"", "sha256:" + strings.Repeat("b", 64),
+		"SHA256:" + strings.Repeat("a", 64), "sha256:" + strings.Repeat("A", 64),
+		"sha256:" + strings.Repeat("a", 63), "sha256:" + strings.Repeat("z", 64)} {
+		if slice6ApproveTerminalBinaryDigest(actual, expected) == nil {
+			t.Fatalf("invalid external terminal approval accepted: %q", expected)
+		}
+	}
+	if slice6ApproveTerminalBinaryDigest("", actual) == nil {
+		t.Fatal("missing actual terminal binary accepted")
+	}
 }
 
 func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6DockerRun,

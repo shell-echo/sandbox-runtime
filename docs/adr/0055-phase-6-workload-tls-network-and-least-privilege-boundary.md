@@ -3246,3 +3246,14 @@ role candidates, Desktop candidate, one-shot terminal command and F fixture
 may be reused under their original source-bound identities; E needs a new
 clean revision/tree and its own observer identity. Reuse is not a claim that
 any issuer was run or that full Slice 6 has passed. Phase 6 remains **5/15**.
+
+The same finite E package also requires an external expected digest for the
+one-shot R terminal binary. Clean-source construction, capability probing
+and mounted-byte verification previously compared only to the digest
+calculated within that run, which was insufficient to bind the externally
+reviewed binary. Formal E now requires canonical lower-case `sha256:` equality
+with the preapproved R digest before allocating the Docker run, probing the
+terminal container or starting Vault. The no-issuer external-temporary check
+shares this strict validator. The E observer and F fixture already had their
+own external expected-digest checks before issuer allocation. This is a
+tagged acceptance check, not a new production authority or a real-run result.

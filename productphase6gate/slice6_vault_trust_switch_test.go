@@ -571,6 +571,10 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 			operatorSource, ".sr-p6-terminal-operator-")
 		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory,
 			static.terminalSourceRoot, static.sourceRevision)
+		if formalE && slice6ApproveTerminalBinaryDigest(terminalBinaryDigest,
+			os.Getenv(slice6TerminalExpectedDigestEnv)) != nil {
+			t.Fatal("pre-issuer terminal binary differs from externally approved R digest")
+		}
 	}
 	run, err := newSlice6DockerRun()
 	if err != nil {
