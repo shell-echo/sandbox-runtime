@@ -4845,3 +4845,20 @@ matching the candidate descriptor. The receipt still records the actual
 nonempty selected manifest. R/F, locked Provider Contract and candidates are
 unchanged. This code-level explanation is not retroactive verified evidence
 for the failed E5a run. Phase 6 remains **5/15**.
+
+The E-only repair was checked without another issuer: the same frozen `core`
+candidate failed the pre-fix mapper and passed the kind-aware mapper. Pure
+mapping tests admit both canonical single-manifest and index/child forms and
+reject kind, child/root, config, source revision/tree, reference and actual
+image drift. A separate private test fixture used the reviewed clean R/F
+sources and candidate identity with explicitly synthetic Product/Guest
+streams, container IDs and mutation facts. It passed bounded two-stream
+collection, canonical raw verification, `slice6FinishGuestReceiptEvidence`,
+exact mutation file publication, source/image binding and independent durable
+reread; wrong external image identity and incomplete-run reread were rejected.
+Existing injected rollback/sync and tamper tests remain negative. Fixed,
+non-sensitive `input`, `source_reopen`, `artifact_map`, `raw_binding`,
+`mutation`, `publish` and `independent_read` stages now preserve the original
+error identity while distinguishing bounded failure classes. These are
+synthetic no-issuer tests, not a new real Docker/PG observation. The failed
+E5a directory is untouched, and the official count remains **5/15**.
