@@ -9,6 +9,11 @@ gate.
 Current execution state, landed slices, and the next planned slice are tracked
 in [`docs/STATUS.md`](../STATUS.md).
 
+The [Phase 6 delivery and machine handoff plan](product-v1-phase-6-delivery-and-handoff.md)
+records comparator positioning, work-reuse rules and the required Slice 6
+commit/push/remote-SHA checkpoint for moving to another computer. It does not
+expand the fixed Phase 6 scope or replace its acceptance gates.
+
 | Phase | Plan | Status |
 | --- | --- | --- |
 | Product v1 architecture Phase 1 | [Product governance, Contract, state, identity, Gateway, recording, and deployment decisions](product-v1-phase-1.md) | **Complete as design and Product Contract-definition evidence.** No Product service, migration, public Gateway, Guest Agent, standalone/production deployment, or capability-readiness claim follows. Phase 2 Provider lifecycle closure is tracked separately below |
@@ -16,6 +21,7 @@ in [`docs/STATUS.md`](../STATUS.md).
 | Product v1 Phase 3 | [Product kernel, Terminal, Files, and Web](product-v1-phase-3-product-kernel-terminal-files-web.md) | **Complete: 13/13 for the bounded standalone scope.** Product authority, locked Provider reconciliation, Terminal/Gateway, Guest Files, resumable revisions, secure Web client, artifact catalogs, and encrypted/redacted recording retention pass their component and real-PostgreSQL gates. The final same-repository four-process gate passes its exact nine-scenario restart/fault/security/cleanup matrix with a strict evidence manifest. Deployment, HA, hostile-multitenant, independently implemented caller, and production readiness remain open |
 | Product v1 Phase 4 | [Browser](product-v1-phase-4-browser.md) | **Complete at 13/13 for the bounded same-repository separate-process scope.** The final gate passed 12 exact scenarios through separate Product, Gateway, Provider, and Browser OS processes with fresh pinned PostgreSQL and Valkey plus fresh encrypted recording storage. Deployment, independently implemented caller, HA, hostile-multitenant, and production readiness remain explicit non-claims |
 | Product v1 Phase 5 | [Desktop development and unified Product](product-v1-phase-5-desktop-development-unified-product.md) | **Complete at 15/15 for the bounded same-repository independent-process scope.** The final gate passes 14 exact scenarios through separate Product, Gateway, Provider, Desktop, and Guest OS processes with fresh pinned PostgreSQL, the signed locked Desktop runtime, real display/control and Guest development materialization, restart/fault/security/recording checks, strict evidence validation, and exact cleanup. Deployment, HA, hostile multi-tenant, independently implemented caller, and production readiness remain explicit non-claims |
+| Product v1 Phase 6 | [Production hardening](product-v1-phase-6-production-hardening.md) | **5/15 accepted; Slice 6 open.** Existing component results do not satisfy the full-topology 16-scenario gate. After Slice 6 acceptance, prioritize a documented, committed, pushed and remotely verified machine-handoff checkpoint, then continue the fixed Slices 7–15 |
 | P0 | [Local Provider Contract migration](p0-local-provider-contract.md) | PR #17-#19 merged; post-merge CI passed; P0.4 closed |
 | P1.1 | [Provider API admission](p1.1-provider-api-admission.md) | P1.1d release gate passed; lifecycle remains unclaimed |
 | P1.1b | [mTLS capability discovery](p1.1b-capability-discovery.md) | Passed under local Contract with PR/post-merge evidence |

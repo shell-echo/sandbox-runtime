@@ -7,7 +7,19 @@ device, or implementation session. It summarizes the system, engineering
 constraints, verified maturity, and evidence boundary; it does not override
 the Provider Contract, architecture, accepted ADRs, or reproducible evidence.
 
-Current verified state:
+## Active Phase 6 delivery and machine handoff
+
+The [delivery priorities and handoff plan](plan/product-v1-phase-6-delivery-and-handoff.md)
+records the 2026-10-04 comparator findings, product-positioning hypothesis,
+architecture boundaries, evidence-reuse decisions and next work. Phase 6
+remains **5/15**, with Slice 6 open; component results are not full-topology
+acceptance. After Slice 6 independent acceptance, synchronize the handoff,
+commit, normally push and verify full local/live remote SHAs before advancing
+to Slice 7. Inventory private evidence and local artifacts separately from Git
+so continuation on another computer does not restart completed work. The
+existing authorization and fixed order for Slices 7–15 remain unchanged.
+
+## Current verified state
 
 - the fixed P2.7 independent external-caller qualification plan is **24/24**;
 - the public `sandbox-runtime-external-caller` plan is **13/13**;
