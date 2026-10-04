@@ -5371,3 +5371,34 @@ The final stable E-only candidate passed the complete Go 1.26.8 tagged
 ./...`, and `git diff --check`. Ordinary untagged, Contract, separate R/F
 and pinned-image gates are unchanged and reused under the prior E-only
 source-impact ruling. No fifth issuer was run or authorized.
+
+Follow-up 2026-10-05 (E issued-identity namespace correction, **component
+only**): independent source review found a deterministic mismatch in the
+terminal E exact-issued-set check. Profile deployment labels locate the
+requester and subject, but real `workloadpki` ledger `AgentID` and `Principal`
+hold their `AuthorizationPrincipal.Name` values. The prior E expectation used
+the deployment labels, while R's private `buildVerifiedV2` and the certificate
+controller use the authorization names. A no-issuer test built from the
+reviewed desired authorization identities first failed against the old E
+check, then passed after E resolved each fixed deployment to its exact
+authorization name and digest. The nine certificate/four credential set,
+full identity comparison, and ordinary-signer revoked requirement remain
+unchanged; only the two exact controller policies allow active or revoked
+terminal states. Negative tests reject deployment-name spoofing, wrong
+identity/digest, state drift, and missing/duplicate/extra records. A bounded
+source search found no second E comparison of ledger `AgentID`/`Principal`
+against deployment names; the existing small synthetic projection-shape test
+now uses an independent fixed expectation rather than deriving it from the
+projection being checked. This is not a complete Profile-to-public-R-BuildV2-
+to-E-FromProfile cross-package fixture: existing R tests use its private
+builders, and the E test uses the reviewed identity builder and production E
+conversion helper. The mismatch is a plausible later rejection, not a proven
+root cause of the fourth run's old generic terminal error. The obsolete
+E571681 review-only script was not executed; a fifth issuer still needs a
+new clean E binding and fresh one-shot approval. No manifest was issued and
+Phase 6 remains **5/15**. At the stable E source, the complete Go 1.26.8
+`phase6slice6gate` repository race/shuffle/count suite passed (the longest
+`internal/phase6security` package took 339.243 seconds), as did tagged vet
+and the focused E/R terminal checks. Ordinary untagged, Contract, separate
+R/F and pinned-image results are reused only under the E-only impact ruling;
+this is not a fresh real issuer or final-topology result.

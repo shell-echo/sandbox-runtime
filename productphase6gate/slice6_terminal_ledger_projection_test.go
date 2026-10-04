@@ -240,11 +240,29 @@ func slice6VerifyTerminalLedgerProjection(plan phase6terminalcleanup.Plan, docum
 
 type slice6ExpectedECertificate struct {
 	agent, requesterDigest, principal, subjectDigest string
+	terminal                                         bool
 }
 
 type slice6ExpectedEIssuedSet struct {
 	certificates map[string]slice6ExpectedECertificate
 	credentials  map[string]string
+}
+
+func slice6ExpectedECertificateFromDeployments(principals map[string]phase6security.Principal,
+	agent, subject string, terminal bool) (slice6ExpectedECertificate, bool) {
+	requester, okRequester := principals[agent]
+	principal, okSubject := principals[subject]
+	if !okRequester || !okSubject || requester.AuthorizationPrincipal == nil ||
+		principal.AuthorizationPrincipal == nil {
+		return slice6ExpectedECertificate{}, false
+	}
+	return slice6ExpectedECertificate{
+		agent:           requester.AuthorizationPrincipal.Name,
+		requesterDigest: requester.AuthorizationPrincipal.Digest(),
+		principal:       principal.AuthorizationPrincipal.Name,
+		subjectDigest:   principal.AuthorizationPrincipal.Digest(),
+		terminal:        terminal,
+	}, true
 }
 
 // The E inventory is derived from the seven fixed signer launch slots and
@@ -261,28 +279,25 @@ func slice6ExpectedEIssuedSetFromProfile(profile phase6security.Profile) (slice6
 		certificates: make(map[string]slice6ExpectedECertificate, 9),
 		credentials:  make(map[string]string, 4),
 	}
-	addCertificate := func(policy, agent, subject string) bool {
-		requester, okRequester := principals[agent]
-		principal, okSubject := principals[subject]
-		if policy == "" || !okRequester || !okSubject || requester.AuthorizationPrincipal == nil ||
-			principal.AuthorizationPrincipal == nil || expected.certificates[policy].agent != "" {
+	addCertificate := func(policy, agent, subject string, terminal bool) bool {
+		want, valid := slice6ExpectedECertificateFromDeployments(principals, agent, subject, terminal)
+		_, duplicate := expected.certificates[policy]
+		if policy == "" || !valid || duplicate {
 			return false
 		}
-		expected.certificates[policy] = slice6ExpectedECertificate{agent: agent,
-			requesterDigest: requester.AuthorizationPrincipal.Digest(), principal: subject,
-			subjectDigest: principal.AuthorizationPrincipal.Digest()}
+		expected.certificates[policy] = want
 		return true
 	}
-	if !addCertificate(profile.CertificateController.ManagedPolicyID, "certificate-controller", "certificate-controller") ||
+	if !addCertificate(profile.CertificateController.ManagedPolicyID, "certificate-controller", "certificate-controller", true) ||
 		!addCertificate(profile.CertificateController.CredentialController.PolicyID,
-			"workload-credential-controller", "workload-credential-controller") {
+			"workload-credential-controller", "workload-credential-controller", true) {
 		return slice6ExpectedEIssuedSet{}, phase6terminalcleanup.ErrInvalid
 	}
 	for _, role := range slice6FormalETLSRoles() {
 		found := false
 		for _, binding := range profile.TLSAgentBindings {
 			if binding.AgentDeployment == role {
-				if found || !addCertificate(binding.IssuerPolicyID, role, binding.SubjectDeployment) {
+				if found || !addCertificate(binding.IssuerPolicyID, role, binding.SubjectDeployment, false) {
 					return slice6ExpectedEIssuedSet{}, phase6terminalcleanup.ErrInvalid
 				}
 				found = true
@@ -290,7 +305,7 @@ func slice6ExpectedEIssuedSetFromProfile(profile phase6security.Profile) (slice6
 		}
 		for _, binding := range profile.PostgresClientAgents {
 			if binding.AgentDeployment == role {
-				if found || !addCertificate(binding.IssuerPolicyID, role, binding.SubjectDeployment) {
+				if found || !addCertificate(binding.IssuerPolicyID, role, binding.SubjectDeployment, false) {
 					return slice6ExpectedEIssuedSet{}, phase6terminalcleanup.ErrInvalid
 				}
 				found = true
@@ -356,8 +371,8 @@ func slice6VerifyTerminalEIssuedSetCore(projection slice6TerminalLedgerProjectio
 		if !found || seenCertificates[record.PolicyID] || record.AgentID != want.agent ||
 			record.RequesterDigest != want.requesterDigest || record.Principal != want.principal ||
 			record.SubjectDigest != want.subjectDigest ||
-			(record.AgentID != "certificate-controller" && record.AgentID != "workload-credential-controller" &&
-				record.State != "revoked") {
+			(want.terminal && record.State != "active" && record.State != "revoked") ||
+			(!want.terminal && record.State != "revoked") {
 			return phase6terminalcleanup.ErrInvalid
 		}
 		seenCertificates[record.PolicyID] = true

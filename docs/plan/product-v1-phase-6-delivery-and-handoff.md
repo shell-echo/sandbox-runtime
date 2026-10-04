@@ -237,6 +237,14 @@ Precleanup is an in-memory digest and has no required same-named file.
 Sandbox ruling `S6-E-terminal-first-failure-diagnostics-20261005` permits
 only bounded E-side stage diagnosis and no-issuer regression checks; a
 fifth issuer requires a newly frozen package and separate approval.
+Further review found a deterministic E-side ledger identity mismatch:
+the exact-issued-set expectation compared deployment labels to real PKI
+authorization names. The reviewed desired-identity no-issuer test failed
+before the correction and passes with exact authorization names/digests and
+controller-policy state classification. This is component evidence, not a
+proved cause of the fourth failure or the complete public R/E cross-package
+chain. The old E571681 review-only script was never run and is obsolete;
+a new clean E/review package and separate fifth one-shot approval are required.
 None of these failed E runs counts
 as one of the fixed 16 final scenarios; Phase 6 stays **5/15**.
 
