@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-03
+Updated: 2026-10-04
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -260,9 +260,20 @@ Current verified state:
   certificate-controller terminal failure remained recorded; the accepted
   independent one-shot operator confirmed revocation, complete CRL and
   self-revocation, followed by exact resource cleanup. Earlier failures remain
-  historical. Product runtime SQL, the actual Product/Guest security edge,
-  nine live SQL callers, the 16-scenario Slice 6 release gate, signed evidence
-  and deployment remain unproved. Phase 6 stays 5/15.
+  historical. A later clean E `f49ee748f5e8790cd58c62d04bc5304b1a363b49`
+  with clean R/F `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` passed one
+  independently reviewed Product/PostgreSQL/Guest runtime component: a signed
+  hello/welcome installed an upgraded connection, a same-PostgreSQL durable
+  business-binding revoke drained it, and a fresh signed attempt was rejected
+  as revoked. Run `20efb6c95a0fa39cb0441f580a86888f` retains four private
+  source/image/process/mutation-bound zero-drop receipt files and exact
+  zero-resource cleanup. The two earlier receipt attempts remain failed and
+  incomplete; the certificate controller's sticky local terminal failure
+  remains despite independent operator cleanup. This is not the complete
+  Guest security edge: PostgreSQL loss/recovery, peer TLS revocation, CRL-source
+  loss and replacement restart/reconnect remain unproved. Nine live SQL callers,
+  the full 16-scenario/78-deployment Slice 6 gate, formal signed evidence and
+  deployment also remain unproved. Phase 6 stays 5/15.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

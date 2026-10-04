@@ -218,6 +218,19 @@ passed records are in the
 [Slice 6 startup audit](../audits/product-phase-6-slice-6-startup.md).
 Phase 6 remains **5/15**.
 
+A later separately reviewed clean E/R/F component at E
+`f49ee748f5e8790cd58c62d04bc5304b1a363b49`, R/F
+`c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635`, run
+`20efb6c95a0fa39cb0441f580a86888f`, passed real Product runtime SQL
+and Guest PID1 signed hello/welcome. An original upgraded connection drained
+after same-PostgreSQL durable business-binding revocation; a new signed
+attempt was rejected as revoked. Four private source/image/process/mutation-
+bound receipt files passed independent reread, and exact run-owned Docker
+cleanup passed. This closes only that component observation, not the full
+Guest edge: database loss/recovery, TLS-peer revocation, CRL-source loss and
+replacement restart/reconnect still require live proof. It is not a frozen
+16-scenario/78-deployment gate or a Slice 6 manifest. Phase 6 remains **5/15**.
+
 The initial external PostgreSQL leaf signing diagnostic is non-release:
 its v1 terminal plan did not confirm revocation of that added serial. A
 separate audit retains this exact gap. A later real same-run component gate
@@ -242,9 +255,11 @@ quiesced; the certificate controller's known terminal failure remained
 visible, and the approved independent operator confirmed revocation, complete
 CRL and self-revocation before exact cleanup. See the
 [component audit](../audits/product-phase-6-slice-6-postgres-v2-component.md)
-for the frozen R3/E identities and failed historical runs. This closes a
-Product migration **component**, not runtime SQL, the actual Product/Guest
-security edge, nine live SQL callers or the 16-scenario release gate. Phase 6
+for the frozen R3/E identities and failed historical runs. At that checkpoint
+only the Product migration **component** had closed; the later separately
+reviewed live-revoke component above adds bounded runtime SQL and one
+Product/Guest edge observation. Neither proves nine live SQL callers, the
+complete Guest security edge or the 16-scenario release gate. Phase 6
 remains 5/15.
 
 A subsequent no-issuer offline continuation admits

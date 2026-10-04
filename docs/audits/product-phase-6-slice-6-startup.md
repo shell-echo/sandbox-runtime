@@ -4873,3 +4873,62 @@ edit. The same source-bound fixture then passed with `-race -shuffle=on`
 in 304.95 seconds under the eight-minute bound, including publication and
 independent reread. This still does not authorize or substitute for a new
 real issuer component attempt.
+
+Follow-up 2026-10-04 (third, separately authorized real issuer **component
+pass**, independently reviewed by Sandbox): clean E
+`f49ee748f5e8790cd58c62d04bc5304b1a363b49` (Git tree
+`82dc4876d8be62dcd883082c4d7f4b35f12695d6`) and clean R/F
+`c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` (tree
+`ed5b679ef69bf769ef511ec45a32766322e68df2`) ran the same bounded
+Product/PostgreSQL/Guest live business-binding revoke component once. Run
+`20efb6c95a0fa39cb0441f580a86888f` selected Profile
+`sha256:ba1253f7736ae66c582f56f6ea5c86b0494f1a64d4564667d9be6e3a35adbd3f`.
+The ordinary tagged test exited 0 in 437.83 seconds under the unchanged
+20-minute parent, 25-minute test, 45-second Guest startup, 10-second Docker
+stop, 90-second stop interlock and 45-second final cleanup budgets. The
+0600 log is `/Users/echo/.codex/phase6-slice6-run-Ef49.ZBnxXQ/gate.log`,
+SHA-256 `158f739ba9f46d4cce15c4984ac95735367c0b12597d9e53e116acd0079e8bac`.
+
+The private 0700 evidence root is
+`/Users/echo/.codex/phase6-slice6-run-evidence-Ef49.o7iKwM`; its 0700 run
+child contains exactly four regular owner-only 0600 files, no
+`binding.pending` or `incomplete.json`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `binding.json` | 3,219 | `61092c5f49fb9fb08db452486ccb78570d2ddc15b59a0416ee1172d5755f0c04` |
+| `mutation-receipt.json` | 659 | `f839566e9824d0ff995dad145c27783faf7cb6b50595875274d7b71a60862574` |
+| `product-pid1.stdout` | 2,471 | `82a91bd50b7faf625802106bba3f98a8c571604297a57e66359fbf58ff0eebbf` |
+| `guest-pid1.stdout` | 1,783 | `d5728d26860b0a09f256046b95982ad74ce169c34e66f935dfd0269b446223f2` |
+
+The binding's disposition is `component_verified`; independent reread
+checked canonical bytes, E/R/F source revisions and source digests,
+candidate/runtime image and config identities, exact Docker instances and
+exit codes, mutation file digest, run/Profile/generation and closed receipt
+streams. Product and Guest recorded the same original signed attempt digest
+and generation 1. Product accepted authentication, wrote welcome and
+installed the peer; after same-PostgreSQL durable business-binding revoke it
+observed stale authority and completed the original upgraded connection's
+close. Guest recorded welcome acceptance then read termination. A distinct
+fresh signed attempt was written by Guest and was rejected by Product's
+validated-revoked joined-row path. Both streams sealed with `dropped=0`.
+The mutation receipt confirms prior connected state, revoked binding and
+cleared nonce on PostgreSQL backend PID 638; its exact Product container ID
+matches the bound Product instance and differs from Guest. The prior log line
+at mutation time still correctly said cause was then unproven; the later
+durable receipt pairing and independent reread established this bounded cause.
+
+The certificate controller retained its sticky local credential-revoke
+failure. A separate independent terminal operator confirmed three serials,
+two token accessors, complete CRL and self-revocation; this does not erase
+the controller failure. Exact Gate cleanup and a separate read-only Docker
+inventory found zero containers, networks and volumes under the run label;
+both recorded Vault anonymous-volume IDs were absent. E/R/F remained clean
+at their recorded full revisions and trees. The earlier E491 and E5a runs
+remain failed with their original incomplete evidence; neither is relabeled.
+Sandbox accepted only this one component result after independent source,
+receipt, digest and cleanup review. It does not prove PostgreSQL-loss
+closure/recovery, peer-TLS revocation, CRL-source loss, replacement
+restart/reconnect, nine live SQL callers, the full 16-scenario/78-deployment
+gate, a formal Slice 6 manifest, deployment or production readiness.
+Phase 6 remains **5/15**.

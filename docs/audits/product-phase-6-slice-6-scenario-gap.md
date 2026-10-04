@@ -2,13 +2,16 @@
 
 This is a work queue against `phase6security.RequiredSlice6Scenarios()` and
 `productphase6gate/slice6_plan_test.go`, not a scenario receipt or acceptance
-manifest. E7's same-run Product/Guest component pass used a clean E34d72/R884/F884
-source trio and exact cleanup. Its 0600 log and limitations are in the
-[startup audit](product-phase-6-slice-6-startup.md). No frozen scenario has a
+manifest. Historical E7 used clean E34d72/R884/F884. A later independently
+reviewed component at clean E `f49ee748f5e8790cd58c62d04bc5304b1a363b49`
+and R/F `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` passed the bounded
+real Product/PostgreSQL/Guest business-binding revoke path in run
+`20efb6c95a0fa39cb0441f580a86888f`. Its private receipts and limits are in
+the [startup audit](product-phase-6-slice-6-startup.md). No frozen scenario has a
 same-run raw receipt from a complete deployment inventory; Phase 6 remains
 **5/15**. Every future receipt must bind one new run ID, source/profile,
-actual source and target instances, raw probes and cleanup. E7 cannot be
-spliced into that new run.
+actual source and target instances, raw probes and cleanup. Neither E7 nor
+the accepted bounded component can be spliced into that new run.
 
 | Frozen scenario | Three required assertions | Existing real signal or scaffold | Missing direct same-run probe |
 | --- | --- | --- | --- |
@@ -19,7 +22,7 @@ spliced into that new run.
 | `direct_egress_and_metadata_denial` | `role_direct_ip_denied`; `metadata_denied`; `alias_only_egress` | Egress-broker and policy components | Real Product role direct-IP, metadata and allowed-alias probes under final network policy |
 | `dns_rebinding_and_alternate_path_denial` | `rebinding_denied`; `alternate_path_denied`; `dns_receipt_observed` | Pinned CoreDNS archive and DNS checker components | Actual rebinding and alternate-path attempts with DNS receipt on the final egress edge |
 | `external_dependency_loss` | `witness_loss_closes_admission`; `capacity_loss_closes_admission`; `bounded_recovery` | E7 Product SQL loss/recovery is a different edge | Browser action-history PostgreSQL and capacity-Valkey loss/recovery while Browser ingress lives |
-| `guest_auth_and_reconnect` | `signed_challenge_welcome`; `binding_revoke_denied`; `upgraded_socket_drain` | E7 Guest ready, durable revoked/empty-nonce readback and 503/exit-1; no direct lifecycle receipt | Bind accepted signed hello/welcome, original upgraded socket closure, and a fresh old-identity attempt rejected *because of* revoked binding, with Product/PG/agents healthy |
+| `guest_auth_and_reconnect` | `signed_challenge_welcome`; `binding_revoke_denied`; `upgraded_socket_drain` | Run `20efb6c95a0fa39cb0441f580a86888f` has private zero-drop Product/Guest PID1 receipts for signed hello/welcome, original upgraded-socket close after durable revoke and fresh signed revoked denial, bound to the same Profile/source/images/PG mutation | Repeat all three in the final 78-deployment, 16-scenario run and bind that run's raw receipt; separately prove PostgreSQL loss/recovery, peer TLS revoke, CRL-source loss and replacement restart for the complete Guest edge |
 | `least_privilege_active_probes` | `complete_container_inventory`; `effective_uid_gid`; `seccomp_capability_mount_limits` | E7 inspects a subset of actual containers | Complete frozen inventory and active UID/GID/seccomp/capability/mount checks for every deployment |
 | `mtls_identity_and_downgrade_denial` | `wrong_certificate_denied`; `plaintext_denied`; `legacy_downgrade_denied` | Real managed mTLS component paths | Three negative client attempts on the final Gateway/Provider private edge |
 | `policy_authority_loss_and_revocation` | `authority_loss_closes_egress`; `revoked_policy_denied`; `fresh_state_required` | Policy-authority/broker components | Live Product egress authority-loss, revoke and stale-state denial |
@@ -115,19 +118,22 @@ stopped/exit/OOM/image identity, verifies both closed streams against
 source-derived config/Profile digests, and joins accepted/closed and fresh
 validated-revoked signed attempt digests. It stores E/R/F source, candidate
 image, fixture mutation and raw-byte bindings only after both streams pass.
-This path has passed no-issuer Docker and causal-drift tests but has
-**not** run with the real Product/Guest pair. Pinned arm64 Docker proves normal non-TTY attach and a deliberately
-unread attached-output writer cancellation/join; real isolated PostgreSQL
+Before the third issuer attempt, this path had passed no-issuer Docker and
+causal-drift tests but had **not** run with the real Product/Guest pair. Pinned
+arm64 Docker proves normal non-TTY attach and a deliberately unread
+attached-output writer cancellation/join; real isolated PostgreSQL
 proves the signed revoked positive and wrong-signature/capability/generation/
 expiry negatives. A separate no-issuer real PostgreSQL + Hub + Agent component
 test passes ten consecutive race/shuffle iterations: one accepted signed
 attempt is installed, a real `RevokeGuest` closes that connection, and a new
 signed retry is rejected by the original joined-row transaction with the
 same attempt digest observed on both sides. Its isolated PostgreSQL container
-was removed by exact ID with zero matching labels. This is not an actual
-source-bound Product/Guest PID1 run. The new R/F candidate still must be built and audited; the
-E collector must then observe actual source-bound Product/Guest PID1 streams,
-and the full run must pass all 16 scenarios with a strict manifest.
+was removed by exact ID with zero matching labels. That no-issuer test was not
+an actual source-bound Product/Guest PID1 run. The later clean R/F candidates
+were rebuilt and audited, and the E collector observed actual source-bound
+Product/Guest PID1 streams in accepted component run
+`20efb6c95a0fa39cb0441f580a86888f`. The full deployment run must still
+pass all 16 scenarios with a strict manifest.
 None of these component results advances Phase 6 beyond **5/15**.
 
 Sandbox rejected the first `72ffa6d` R checkpoint for an unjoined-producer
@@ -140,6 +146,12 @@ an accepted disposition. Deterministic handler/monitor/writer tests, a real
 Linux Docker abort probe, directory/file replacement, tamper, identity,
 overflow and sync-failure negatives, and the no-issuer attached Docker probe
 pass locally. The `72ffa6d` role/Desktop images are preserved only as
-**unaccepted diagnostic** artifacts. A clean corrected R/E checkpoint, fresh
-R/F rebuild, independent review and newly authorized same-run gate are still
-required. Phase 6 remains **5/15**.
+**unaccepted diagnostic** artifacts. The subsequent corrected clean R/F and E
+checkpoint and source-bound rebuild passed independent review; first E491 and
+then E5a real receipt attempts failed, each retaining only incomplete files.
+The third, separately authorized E
+`f49ee748f5e8790cd58c62d04bc5304b1a363b49` and R/F
+`c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` attempt passed only the
+bounded live business-binding revoke component with four independently reread
+private files and exact cleanup. Neither failed run is relabeled, and no
+release scenario receipt or manifest was issued. Phase 6 remains **5/15**.
