@@ -35,6 +35,20 @@ const slice6TerminalExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_
 
 var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: unavailable stage=([a-z][a-z-]{0,63})`)
 
+func slice6ClosedTerminalOperatorStage(raw string) string {
+	switch raw {
+	case "input-boundary", "input-timeout", "input-read", "input-decode", "profile-decode",
+		"sources-decode", "plan-rebuild", "vault-client", "evidence-replay", "evidence-encode",
+		"evidence-write", "receipt-encode", "receipt-write", "execute-token-preflight-absent",
+		"execute-token-preflight-bound", "execute-certificate-revoke", "execute-crl-read",
+		"execute-crl-issuer", "execute-crl-signature", "execute-crl-target", "execute-token-revoke",
+		"execute-token-readback", "execute-operator-self-revoke":
+		return raw
+	default:
+		return "unknown"
+	}
+}
+
 // A leaf may not be signed merely because the terminal operator built. The
 // clean-source Linux binary must declare v2 before this run creates Vault.
 func slice6RequireTerminalOperatorV2Capability(t *testing.T, ctx context.Context,
@@ -216,12 +230,19 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	}
 	var ledgerProjection []byte
 	var ledgerProjectionErr error
+	ledgerProjectionStage := ""
 	if evidenceSink != nil && evidenceSink.verifiedPrecleanup {
 		// Reuse the same two bounded reads consumed by BuildV2. Failure of
 		// projection must not prevent the one-shot remote revocation below.
 		ledgerProjection, ledgerProjectionErr = slice6ProjectTerminalLedgers(plan, certificateLedger, credentialLedger)
+		if ledgerProjectionErr != nil {
+			ledgerProjectionStage = "ledger_projection"
+		}
 		if ledgerProjectionErr == nil {
 			ledgerProjectionErr = slice6VerifyTerminalEIssuedSet(ledgerProjection, composed.Profile)
+			if ledgerProjectionErr != nil {
+				ledgerProjectionStage = "issued_set"
+			}
 		}
 		defer clear(ledgerProjection)
 	}
@@ -379,18 +400,35 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	if evidenceSink != nil {
 		stage := "unknown"
 		if matched := slice6TerminalStagePattern.FindSubmatch(stderr); len(matched) == 2 {
-			stage = string(matched[1])
+			stage = slice6ClosedTerminalOperatorStage(string(matched[1]))
 		}
 		if startErr != nil || stdoutOverflow || stderrOverflow || len(stderr) != 0 {
 			return fmt.Errorf("terminal v3 private operator incomplete: stage=%s", stage)
 		}
-		evidence, decodeErr := phase6terminalcleanup.DecodeEvidenceV3(output)
-		if decodeErr != nil || phase6terminalcleanup.VerifyEvidenceV3(plan, evidence) != nil ||
-			evidence.Receipt.RunID != run.id || evidence.Receipt.ProfileDigest != composed.Profile.ProfileDigest ||
-			ledgerProjectionErr != nil ||
-			evidenceSink.persist(plan, output, containerID, binaryDigest,
-				operatorStarted, operatorFinished, ledgerProjection) != nil {
-			return errors.New("terminal v3 original stdout or independent replay unavailable")
+		var evidence phase6terminalcleanup.EvidenceV3
+		if err := slice6TerminalV3FirstFailure(
+			slice6TerminalV3Check{"stdout_decode", func() error {
+				var err error
+				evidence, err = phase6terminalcleanup.DecodeEvidenceV3(output)
+				return err
+			}},
+			slice6TerminalV3Check{"evidence_verify", func() error {
+				return phase6terminalcleanup.VerifyEvidenceV3(plan, evidence)
+			}},
+			slice6TerminalV3Check{"identity", func() error {
+				if evidence.Receipt.RunID != run.id ||
+					evidence.Receipt.ProfileDigest != composed.Profile.ProfileDigest {
+					return phase6terminalcleanup.ErrInvalid
+				}
+				return nil
+			}},
+			slice6TerminalV3Check{ledgerProjectionStage, func() error { return ledgerProjectionErr }},
+			slice6TerminalV3Check{"persist", func() error {
+				return evidenceSink.persist(plan, output, containerID, binaryDigest,
+					operatorStarted, operatorFinished, ledgerProjection)
+			}},
+		); err != nil {
+			return err
 		}
 		receiptConfirmed = true
 		return nil
@@ -402,14 +440,14 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 		phase6terminalcleanup.VerifyReceipt(plan, receipt) != nil {
 		stage := "unknown"
 		if matched := slice6TerminalStagePattern.FindSubmatch(output); len(matched) == 2 {
-			stage = string(matched[1])
+			stage = slice6ClosedTerminalOperatorStage(string(matched[1]))
 		}
 		var partial phase6terminalcleanup.Receipt
 		firstLine := bytes.SplitN(output, []byte{'\n'}, 2)[0]
 		if len(firstLine) < 16<<10 && json.Unmarshal(firstLine, &partial) == nil &&
 			partial.PlanDigest == plan.Digest && partial.RunID == run.id &&
 			regexp.MustCompile(`^[a-z][a-z-]{0,63}$`).MatchString(partial.FailureStage) {
-			stage = "execute-" + partial.FailureStage
+			stage = slice6ClosedTerminalOperatorStage("execute-" + partial.FailureStage)
 		}
 		return fmt.Errorf("terminal operator did not return an exact complete private receipt: stage=%s", stage)
 	}

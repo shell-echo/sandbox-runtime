@@ -29,6 +29,171 @@ type slice6TerminalV3Sink struct {
 	verifiedPrecleanup bool
 }
 
+// Stages are a closed diagnostic vocabulary. Never include issuer responses,
+// ledger contents or the underlying error in a test log.
+type slice6TerminalV3StageError string
+
+func (stage slice6TerminalV3StageError) Error() string {
+	return "terminal v3 original stdout or independent replay unavailable: stage=" + string(stage)
+}
+
+func (slice6TerminalV3StageError) Unwrap() error { return phase6terminalcleanup.ErrInvalid }
+
+type slice6TerminalV3Check struct {
+	stage string
+	check func() error
+}
+
+func slice6TerminalV3FirstFailure(checks ...slice6TerminalV3Check) error {
+	for _, check := range checks {
+		if check.check == nil {
+			return slice6TerminalV3StageError("unknown")
+		}
+		if err := check.check(); err != nil {
+			if typed, ok := err.(slice6TerminalV3StageError); ok && check.stage == "persist" {
+				switch typed {
+				case "persist_input", "persist_replay", "persist_crl_time", "persist_projection",
+					"persist_projection_time", "persist_unexpected_projection", "persist_plan_encode",
+					"persist_plan_write", "persist_evidence_write", "persist_projection_write",
+					"persist_binding_encode", "persist_binding_write":
+					return typed
+				}
+				return slice6TerminalV3StageError("unknown")
+			}
+			switch check.stage {
+			case "stdout_decode", "evidence_verify", "identity", "ledger_projection", "issued_set", "persist":
+				return slice6TerminalV3StageError(check.stage)
+			default:
+				return slice6TerminalV3StageError("unknown")
+			}
+		}
+	}
+	return nil
+}
+
+func TestSlice6TerminalV3FirstFailureNoIssuer(t *testing.T) {
+	stages := []string{"stdout_decode", "evidence_verify", "identity", "ledger_projection", "issued_set", "persist"}
+	for failAt, want := range stages {
+		called := 0
+		checks := make([]slice6TerminalV3Check, 0, len(stages))
+		for index, stage := range stages {
+			index := index
+			checks = append(checks, slice6TerminalV3Check{stage: stage, check: func() error {
+				called++
+				if index == failAt {
+					return errors.New("private-token-must-not-appear")
+				}
+				return nil
+			}})
+		}
+		err := slice6TerminalV3FirstFailure(checks...)
+		if err == nil || err.Error() != (slice6TerminalV3StageError(want)).Error() ||
+			called != failAt+1 || strings.Contains(err.Error(), "private-token") {
+			t.Fatalf("terminal first-failure stage unavailable: %s", want)
+		}
+	}
+	if err := slice6TerminalV3FirstFailure(
+		slice6TerminalV3Check{"stdout_decode", func() error { return nil }},
+		slice6TerminalV3Check{"persist", func() error {
+			return slice6TerminalV3StageError("persist_crl_time")
+		}},
+	); err == nil || err.Error() != (slice6TerminalV3StageError("persist_crl_time")).Error() {
+		t.Fatal("typed persist substage was lost")
+	}
+	for _, check := range []slice6TerminalV3Check{
+		{"untrusted-stage", func() error { return errors.New("private-token") }},
+		{"persist", func() error { return slice6TerminalV3StageError("private-token") }},
+		{"persist", nil},
+	} {
+		if err := slice6TerminalV3FirstFailure(check); err == nil ||
+			err.Error() != (slice6TerminalV3StageError("unknown")).Error() {
+			t.Fatal("untrusted terminal diagnostic escaped closed vocabulary")
+		}
+	}
+}
+
+func TestSlice6ClosedTerminalOperatorStageNoIssuer(t *testing.T) {
+	for _, stage := range []string{"input-decode", "evidence-replay", "execute-crl-target",
+		"execute-operator-self-revoke"} {
+		if slice6ClosedTerminalOperatorStage(stage) != stage {
+			t.Fatal("reviewed operator stage was suppressed")
+		}
+	}
+	for _, stage := range []string{"", "private-token", "execute-private-token", "input-decode-extra"} {
+		if slice6ClosedTerminalOperatorStage(stage) != "unknown" {
+			t.Fatal("unreviewed operator stderr stage escaped")
+		}
+	}
+}
+
+func TestSlice6TerminalV3PersistStagesNoIssuer(t *testing.T) {
+	plan, evidenceRaw, projection := slice6FinalV3Fixture(t)
+	run := slice6NewTerminalV3DiagnosticSink(t, plan.RunID).Run
+	sink := &slice6TerminalV3Sink{Run: run, PrecleanupDigest: "sha256:" + strings.Repeat("a", 64),
+		verifiedPrecleanup: true}
+	started := time.Now().UTC()
+	operatorID, binaryDigest := strings.Repeat("e", 64), "sha256:"+strings.Repeat("b", 64)
+	cases := []struct {
+		name, operator string
+		evidence       []byte
+		projection     []byte
+		started        time.Time
+		want           string
+	}{
+		{"input", "bad", evidenceRaw, projection, started, "persist_input"},
+		{"replay", operatorID, []byte("not-evidence"), projection, started, "persist_replay"},
+		{"crl-time", operatorID, evidenceRaw, projection, started.Add(time.Minute), "persist_crl_time"},
+		{"projection", operatorID, evidenceRaw, []byte("not-projection"), started, "persist_projection"},
+	}
+	for _, test := range cases {
+		err := sink.persist(plan, test.evidence, test.operator, binaryDigest,
+			test.started, test.started, test.projection)
+		if err == nil || err.Error() != (slice6TerminalV3StageError(test.want)).Error() {
+			t.Fatalf("terminal persist stage unavailable: %s", test.name)
+		}
+	}
+	var shifted slice6TerminalLedgerProjection
+	if json.Unmarshal(projection, &shifted) != nil {
+		t.Fatal("decode no-issuer projection fixture")
+	}
+	shifted.ProjectedAt = started.Add(time.Second)
+	shiftedRaw, err := json.Marshal(shifted)
+	if err != nil || slice6VerifyTerminalLedgerProjection(plan, shiftedRaw) != nil {
+		t.Fatal("no-issuer projection timestamp fixture unavailable")
+	}
+	if err := sink.persist(plan, evidenceRaw, operatorID, binaryDigest,
+		started, started, shiftedRaw); err == nil ||
+		err.Error() != (slice6TerminalV3StageError("persist_projection_time")).Error() {
+		t.Fatal("terminal projection time failure stage unavailable")
+	}
+	if len(run.files) != 0 {
+		t.Fatal("failed terminal persist created private evidence files")
+	}
+	for _, test := range []struct {
+		name, file, want string
+		limit            int
+	}{
+		{"plan", slice6TerminalV3PlanFile, "persist_plan_write", 64 << 10},
+		{"evidence", slice6TerminalV3EvidenceFile, "persist_evidence_write", phase6terminalcleanup.MaxEvidenceV3Bytes},
+		{"projection", slice6TerminalLedgerProjectionFile, "persist_projection_write", slice6TerminalLedgerProjectionLimit},
+		{"binding", slice6TerminalV3BindingFile, "persist_binding_write", 2048},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			separate := slice6NewTerminalV3DiagnosticSink(t, plan.RunID).Run
+			if separate.writeV2BoundedPrivateFile(test.file, []byte(`{"occupied":true}`), test.limit, false) != nil {
+				t.Fatal("occupy exact no-issuer private filename")
+			}
+			writer := &slice6TerminalV3Sink{Run: separate, PrecleanupDigest: sink.PrecleanupDigest,
+				verifiedPrecleanup: true}
+			if err := writer.persist(plan, evidenceRaw, operatorID, binaryDigest,
+				started, started, projection); err == nil ||
+				err.Error() != (slice6TerminalV3StageError(test.want)).Error() {
+				t.Fatalf("terminal private write failure stage unavailable: %s", test.name)
+			}
+		})
+	}
+}
+
 type slice6TerminalV3Binding struct {
 	Protocol, RunID, ProfileDigest, PrecleanupDigest string
 	PlanDigest, PlanSHA256, EvidenceSHA256           string
@@ -216,44 +381,46 @@ func (sink *slice6TerminalV3Sink) persist(plan phase6terminalcleanup.Plan,
 		(sink.PrecleanupDigest != "" && (!sink.verifiedPrecleanup ||
 			!guestRevokeFixtureDigestGate(sink.PrecleanupDigest))) ||
 		!slice6TerminalV3TimesBound(started, finished) {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_input")
 	}
 	evidence, err := phase6terminalcleanup.DecodeEvidenceV3(evidenceRaw)
 	if err != nil || phase6terminalcleanup.VerifyEvidenceV3(plan, evidence) != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_replay")
 	}
 	verifiedAt, err := time.Parse(time.RFC3339Nano, evidence.CRLVerifiedUTC)
 	if err != nil || verifiedAt.Before(started.Add(-5*time.Second)) ||
 		verifiedAt.After(finished.Add(5*time.Second)) {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_crl_time")
 	}
 	if sink.PrecleanupDigest != "" {
 		if slice6VerifyTerminalLedgerProjection(plan, ledgerProjection) != nil ||
 			len(ledgerProjection) > slice6TerminalLedgerProjectionLimit {
-			return phase6terminalcleanup.ErrInvalid
+			return slice6TerminalV3StageError("persist_projection")
 		}
 		var projection slice6TerminalLedgerProjection
 		if json.Unmarshal(ledgerProjection, &projection) != nil || projection.ProjectedAt.After(started) ||
 			projection.ProjectedAt.Before(started.Add(-2*time.Minute)) {
-			return phase6terminalcleanup.ErrInvalid
+			return slice6TerminalV3StageError("persist_projection_time")
 		}
 	} else if len(ledgerProjection) != 0 {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_unexpected_projection")
 	}
 	planRaw, err := json.Marshal(plan)
 	if err != nil || len(planRaw) < 2 || len(planRaw) > 64<<10 {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_plan_encode")
 	}
 	defer clear(planRaw)
-	if sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3PlanFile, planRaw, 64<<10, false) != nil ||
-		sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3EvidenceFile,
-			evidenceRaw, phase6terminalcleanup.MaxEvidenceV3Bytes, false) != nil {
-		return phase6terminalcleanup.ErrInvalid
+	if sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3PlanFile, planRaw, 64<<10, false) != nil {
+		return slice6TerminalV3StageError("persist_plan_write")
+	}
+	if sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3EvidenceFile,
+		evidenceRaw, phase6terminalcleanup.MaxEvidenceV3Bytes, false) != nil {
+		return slice6TerminalV3StageError("persist_evidence_write")
 	}
 	if sink.PrecleanupDigest != "" &&
 		sink.Run.writeV2BoundedPrivateFile(slice6TerminalLedgerProjectionFile,
 			ledgerProjection, slice6TerminalLedgerProjectionLimit, false) != nil {
-		return phase6terminalcleanup.ErrInvalid
+		return slice6TerminalV3StageError("persist_projection_write")
 	}
 	binding := slice6TerminalV3Binding{
 		Protocol: "sandbox-runtime.phase6-guest-e-terminal-v3-binding.v1",
@@ -271,9 +438,11 @@ func (sink *slice6TerminalV3Sink) persist(plan phase6terminalcleanup.Plan,
 		binding.LedgerProjectionBytes = len(ledgerProjection)
 	}
 	bindingRaw, err := json.Marshal(binding)
-	if err != nil || len(bindingRaw) > 2048 ||
-		sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3BindingFile, bindingRaw, 2048, false) != nil {
-		return phase6terminalcleanup.ErrInvalid
+	if err != nil || len(bindingRaw) > 2048 {
+		return slice6TerminalV3StageError("persist_binding_encode")
+	}
+	if sink.Run.writeV2BoundedPrivateFile(slice6TerminalV3BindingFile, bindingRaw, 2048, false) != nil {
+		return slice6TerminalV3StageError("persist_binding_write")
 	}
 	sink.EvidenceDigest = slice6ReceiptSHA256(bindingRaw)
 	sink.OperatorID = operatorID

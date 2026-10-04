@@ -225,9 +225,19 @@ Docker objects were absent, but sticky controller revoke and formal terminal
 confirmation remain open. Sandbox ruling
 `S6-E-Guest-B-network-witness-20261005` permits an E-only closed-slot
 correction while preserving the historical A-only component witness and
-all identity/network checks. No fourth issuer is authorized. Aggregate
-tagged validation, a fresh clean E freeze and separate one-run review
-remain before any further real attempt. None of these failed E runs counts
+all identity/network checks. A fourth, separately approved one-shot E
+attempt used clean E `fbd2502fc6e685cd2353d515f44d247e6da99763`
+and failed after 505.56 seconds. Its 105-file private directory is
+`incomplete`; the 29-event journal and zero-drop Product/Guest B streams
+show substantially more of the replacement path, but no final binding,
+119-file inventory or 14-slot convergence exists. Code-path review
+supports, but the retained generic terminal error does not independently
+prove, that formal precleanup replay succeeded before terminal v3 failed.
+Precleanup is an in-memory digest and has no required same-named file.
+Sandbox ruling `S6-E-terminal-first-failure-diagnostics-20261005` permits
+only bounded E-side stage diagnosis and no-issuer regression checks; a
+fifth issuer requires a newly frozen package and separate approval.
+None of these failed E runs counts
 as one of the fixed 16 final scenarios; Phase 6 stays **5/15**.
 
 ## Remaining Phase 6 order

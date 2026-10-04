@@ -5313,3 +5313,61 @@ correction only. The subsequent single aggregate Go 1.26.8 tagged
 R/F sources and frozen candidate images were reused under the E-only
 source-impact decision. No fourth issuer has been authorized and Phase 6
 remains **5/15**.
+
+Follow-up 2026-10-05 (fourth one-shot formal E attempt, **failed**):
+Sandbox approved review-only script SHA-256
+`f6bb37b42e99914c42dc94e63a88ba2e77cd0523da4b402ab5630dfbc91fa0fd`
+exactly once under `S6-Efbd2-single-run-approved-20261005`. Clean E was
+`fbd2502fc6e685cd2353d515f44d247e6da99763` / tree
+`066afd225c4c4a470b03ca7e4ffadefca7bdf739`; R/F stayed at separate
+clean `e5816d0d3de0541bd9a677560096b3527f58f7b9`. Run
+`20e961e6eeccb74d14109c4619193fd8` failed after 505.56 seconds;
+private log SHA-256 is
+`758f5792b2f8cb6ea7318e3c8bf57382cbf7594b3c51ba3cd08aaa50fb5c54a6`.
+The 105-file private root retains `incomplete.json`, not a final binding,
+119-file inventory or 14-slot convergence. Event journal 26-29 records
+Product-B and Guest-B start call/observation. Their v2 streams contain eight
+and five lines with zero-drop seals and the same replacement attempt digest;
+this alone does not establish every downstream replay condition. The
+29-event journal is deliberately fixed at Guest-B start observation, and
+its persisted seal is later in the E29 call path. No same-named precleanup
+file is expected: precleanup returns an in-memory digest. Source-path
+review of the terminal branch, together with the absence of the fixed
+cleanup-only marker in the log, supports the inference that formal
+precleanup replay succeeded and the formal terminal sink was entered.
+The old generic terminal error does not prove which validation stage failed
+or that remote revocation completed.
+
+The reported failure was `terminal v3 original stdout or independent replay
+unavailable`; the certificate controller's sticky terminal credential-revoke
+failure and external PostgreSQL leaf v2 terminal revoke confirmation remain
+OPEN. Exact run-label Docker containers, networks and volumes were absent
+after cleanup, and both recorded Vault anonymous volumes were absent.
+This physical zero is not a clean controller drain or terminal receipt.
+Sandbox ruling `S6-E-terminal-first-failure-diagnostics-20261005` permits an
+E-only diagnostic split of the existing short-circuit terminal checks into
+closed stages, with no raw issuer response, ledger, token, accessor, key,
+endpoint or stderr in diagnostics. It does not authorize a fifth issuer run,
+change the nine-certificate/four-credential expectations, expand the fixed
+scenario or evidence inventory, or advance Phase 6 beyond **5/15**.
+
+The E-only diagnostic candidate preserves the prior short-circuit order:
+strict v3 stdout decode, independent evidence replay, run/Profile identity,
+terminal ledger projection, exact issued-set check, then sink persistence.
+Failure reports only a fixed stage name; persistence further distinguishes
+input/replay, CRL and projection time, projection validation and bounded
+private writes. Terminal operator stderr-derived stages are mapped through
+the reviewed finite CLI vocabulary, with all other strings reduced to
+`unknown`. The formal-vs-cleanup-only branch and independent runtime,
+convergence, terminal, capacity, binding and Docker-cleanup booleans are
+logged without copying raw issuer responses or ledgers. Deterministic
+no-issuer stage-order, multistage-first-failure, redaction, offline v3
+fixture, persist input/CRL/projection-time and four exact private-write
+failure injections, plus existing terminal/issued-set tests pass;
+these diagnostics do not reclassify the failed original run.
+The final stable E-only candidate passed the complete Go 1.26.8 tagged
+`phase6slice6gate` repository race/shuffle test (the longest
+`internal/phase6security` package took 341.413 seconds), tagged `go vet
+./...`, and `git diff --check`. Ordinary untagged, Contract, separate R/F
+and pinned-image gates are unchanged and reused under the prior E-only
+source-impact ruling. No fifth issuer was run or authorized.

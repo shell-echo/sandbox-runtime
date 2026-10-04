@@ -417,6 +417,7 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 	var eProfileDigest string
 	var eConvergence *slice6EConvergenceCollector
 	var eConvergenceFailure error
+	eTerminalBranch := "not_entered"
 	eTLSRoles := slice6FormalETLSRoles()
 	eTLSOutcomes := make(map[string]*slice6OrdinaryTLSOutcome)
 	eMaterialOutcomes := make(map[string]*slice6EMaterialOutcome)
@@ -1473,6 +1474,7 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 												} else if runtimeFailure == nil && eConvergenceFailure == nil &&
 													guestRevokeFixtureDigestGate(ePrecleanupDigest) {
 													eTerminalAttempted = true
+													eTerminalBranch = "formal"
 													eTerminalBindingDigest, eTerminalOperatorID, terminalFailure =
 														slice6RunGuestRecoveryFormalTerminalOperator(t, ctx,
 															slice6GuestRecoveryFormalTerminalRequest{
@@ -1484,6 +1486,7 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 													// Failed business evidence may authorize only this one
 													// bounded v3 cleanup, never a formal E binding.
 													eTerminalAttempted = true
+													eTerminalBranch = "cleanup_only"
 													sink := &slice6TerminalV3Sink{Run: receiptEvidence}
 													cleanupErr := slice6RunTerminalOperator(t, ctx, run, composed, serverID,
 														terminalBinaryPath, terminalBinaryDigest, management.Accessor,
@@ -1603,6 +1606,12 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 			!guestRevokeFixtureDigestGate(ePrecleanupDigest) ||
 			!guestRevokeFixtureDigestGate(eTerminalBindingDigest) ||
 			len(eTerminalOperatorID) != 64 || !lowerHexSlice6(eTerminalOperatorID) {
+			t.Logf("Guest recovery E closed failure stages: terminal_branch=%s migration=%t runtime=%t convergence=%t terminal=%t capacity=%t precleanup_digest=%t terminal_binding=%t postgres_terminal=%t docker_cleanup=%t",
+				eTerminalBranch, migrationFailure != nil, runtimeFailure != nil, eConvergenceFailure != nil,
+				terminalFailure != nil, capacityTerminalFailure != nil,
+				guestRevokeFixtureDigestGate(ePrecleanupDigest),
+				guestRevokeFixtureDigestGate(eTerminalBindingDigest), postgresTerminalConfirmed,
+				cleanupErr == nil)
 			t.Error("Guest recovery E source-to-terminal chain or exact Docker cleanup incomplete")
 			return
 		}
