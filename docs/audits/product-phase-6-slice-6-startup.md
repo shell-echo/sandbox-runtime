@@ -5402,3 +5402,42 @@ Phase 6 remains **5/15**. At the stable E source, the complete Go 1.26.8
 and the focused E/R terminal checks. Ordinary untagged, Contract, separate
 R/F and pinned-image results are reused only under the E-only impact ruling;
 this is not a fresh real issuer or final-topology result.
+
+Accepted bounded Guest recovery E component (2026-10-05): Sandbox one-shot
+`S6-Ea065-single-run-approved-20261005` was consumed exactly once by script
+`/Users/echo/.codex/phase6-slice6-run-Efix.CQdy6i/issuer-run.review.sh`
+(`sha256:b5229789bc6624930e9f1c19c27d01975fb93b50563451869713148e413cba78`).
+Run `550dba360065dce4f46fa14476225ce5` passed the real
+`TestPhase6Slice6GuestRecoveryE` in 533.78 seconds; the script exited zero
+including post-run source checks. Its private log is
+`/Users/echo/.codex/phase6-slice6-run-Efix.CQdy6i/gate.log`
+(`sha256:44d2d3337d5893eba37db2658a0e3c366d92c8aa07e6eb660fc66fe208c2c084`).
+Clean E commit/tree are `a065277e406bf09c4c22d4ce187e1d181e513316` /
+`e6e569dcec2c814526630dcfbb2e4fe12caa49bb`; independent R and F each
+remain `e5816d0d3de0541bd9a677560096b3527f58f7b9` /
+`8fd8b10e48a9e90d920ee0f0d3f1796b19f43a66`. Frozen role/image inputs
+and auxiliary binary digests were checked before the issuer.
+
+Private evidence root:
+`/Users/echo/.codex/phase6-slice6-run-evidence-Efix.GTGjew/550dba360065dce4f46fa14476225ce5`.
+The final binding is
+`sha256:e66dc29a217c82e1ae9071b8046c33461afae8d216e488751c9a68e312549177`;
+its inventory is
+`sha256:ecc4649fa28503c208e523be690290ffe7249ebb2a2f33ad923b43246877053a`,
+convergence is
+`sha256:f3ee68806a016f7a8dc7ca377aff52f265a67b0442b9f26d5ab3a8e1a86516a2`,
+and terminal v3 binding is
+`sha256:3fdb73001712ace32ba65adbedb335b50db10c6b8f2875bca71d4f599a375907`.
+The bounded disposition is `guest_e_component_verified`. Independent review
+matched all 119 inventoried files' exact metadata and hashes, 14 ordered
+convergence slots, chained terminal/zero digests and three serial/two-token
+complete-CRL/self-revoke confirmation, with no `incomplete.json`. Exact
+run-label Docker containers/networks/volumes were zero, both anonymous Vault
+volumes absent, and seven private siblings absent. Ruling
+`S6-E550dba-bounded-recovery-accepted-20261005` closes fixed delivery step 1:
+real PostgreSQL fault/recovery, ordered A→B replacement, recovered close and
+terminal remote cleanup are established within this component. The controller
+still reports `sticky_credential_revoke` with `ControllerDrainOpen=true`;
+remote operator cleanup is not clean controller drain. This run cannot be
+spliced into the future 78-deployment/16-scenario same-run gate. No Slice 6
+manifest or push follows, and Phase 6 remains **5/15**.

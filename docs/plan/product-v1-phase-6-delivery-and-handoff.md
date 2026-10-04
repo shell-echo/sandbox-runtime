@@ -248,6 +248,24 @@ a new clean E/review package and separate fifth one-shot approval are required.
 None of these failed E runs counts
 as one of the fixed 16 final scenarios; Phase 6 stays **5/15**.
 
+Step 1 outcome (2026-10-05): Sandbox then approved one exact fifth run under
+`S6-Ea065-single-run-approved-20261005`, and independently accepted only the
+bounded Guest recovery component under
+`S6-E550dba-bounded-recovery-accepted-20261005`. Run
+`550dba360065dce4f46fa14476225ce5` passed in 533.78 seconds with clean
+E `a065277e406bf09c4c22d4ce187e1d181e513316` and separate R/F
+`e5816d0d3de0541bd9a677560096b3527f58f7b9`. Private root
+`/Users/echo/.codex/phase6-slice6-run-evidence-Efix.GTGjew/550dba360065dce4f46fa14476225ce5`
+retains final binding
+`sha256:e66dc29a217c82e1ae9071b8046c33461afae8d216e488751c9a68e312549177`,
+119-file inventory and 14-slot convergence; exact Docker/Vault/private cleanup
+passed. Step 1 closes for real Guest PostgreSQL fault/recovery, A→B
+replacement and recovered close, not the full topology. The certificate
+controller remains `sticky_credential_revoke`/clean-drain OPEN, despite
+independent terminal remote revoke and complete CRL. No sixth issuer is
+authorized. Proceed to fixed step 2, starting with Provider Browser process
+crash and unknown-result safety; Phase 6 remains **5/15**.
+
 ## Remaining Phase 6 order
 
 These are summaries of the existing plan, not additional slices. Each slice

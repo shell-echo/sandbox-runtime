@@ -11,7 +11,19 @@ the [startup audit](product-phase-6-slice-6-startup.md). No frozen scenario has 
 same-run raw receipt from a complete deployment inventory; Phase 6 remains
 **5/15**. Every future receipt must bind one new run ID, source/profile,
 actual source and target instances, raw probes and cleanup. Neither E7 nor
-the accepted bounded component can be spliced into that new run.
+either accepted bounded component can be spliced into that new run.
+
+Update 2026-10-05: fixed delivery step 1 is now closed by the independently
+accepted bounded Guest recovery E component, run
+`550dba360065dce4f46fa14476225ce5`, clean E
+`a065277e406bf09c4c22d4ce187e1d181e513316`, R/F
+`e5816d0d3de0541bd9a677560096b3527f58f7b9`, private final binding
+`sha256:e66dc29a217c82e1ae9071b8046c33461afae8d216e488751c9a68e312549177`.
+It proves the real Product/PostgreSQL/Guest loss/recovery and ordered A→B
+replacement with a 119-file/14-slot terminal/cleanup binding. It does not
+alter any row's missing *direct same-run final-topology probe* below. The
+certificate controller's `sticky_credential_revoke` remains an explicit
+clean-drain gap; the full 78-deployment/16-scenario run has not occurred.
 
 | Frozen scenario | Three required assertions | Existing real signal or scaffold | Missing direct same-run probe |
 | --- | --- | --- | --- |
@@ -22,7 +34,7 @@ the accepted bounded component can be spliced into that new run.
 | `direct_egress_and_metadata_denial` | `role_direct_ip_denied`; `metadata_denied`; `alias_only_egress` | Egress-broker and policy components | Real Product role direct-IP, metadata and allowed-alias probes under final network policy |
 | `dns_rebinding_and_alternate_path_denial` | `rebinding_denied`; `alternate_path_denied`; `dns_receipt_observed` | Pinned CoreDNS archive and DNS checker components | Actual rebinding and alternate-path attempts with DNS receipt on the final egress edge |
 | `external_dependency_loss` | `witness_loss_closes_admission`; `capacity_loss_closes_admission`; `bounded_recovery` | E7 Product SQL loss/recovery is a different edge | Browser action-history PostgreSQL and capacity-Valkey loss/recovery while Browser ingress lives |
-| `guest_auth_and_reconnect` | `signed_challenge_welcome`; `binding_revoke_denied`; `upgraded_socket_drain` | Run `20efb6c95a0fa39cb0441f580a86888f` has private zero-drop Product/Guest PID1 receipts for signed hello/welcome, original upgraded-socket close after durable revoke and fresh signed revoked denial, bound to the same Profile/source/images/PG mutation | Repeat all three in the final 78-deployment, 16-scenario run and bind that run's raw receipt; separately prove PostgreSQL loss/recovery, peer TLS revoke, CRL-source loss and replacement restart for the complete Guest edge |
+| `guest_auth_and_reconnect` | `signed_challenge_welcome`; `binding_revoke_denied`; `upgraded_socket_drain` | Run `20efb6c95a0fa39cb0441f580a86888f` proves the bounded live business revoke; accepted bounded E run `550dba360065dce4f46fa14476225ce5` also proves real PostgreSQL loss/recovery and ordered A→B replacement/close with terminal binding | Repeat the three fixed assertions in the final 78-deployment/16-scenario run and bind that run's raw receipt; independently prove peer TLS revoke and CRL-source loss in the complete Guest edge |
 | `least_privilege_active_probes` | `complete_container_inventory`; `effective_uid_gid`; `seccomp_capability_mount_limits` | E7 inspects a subset of actual containers | Complete frozen inventory and active UID/GID/seccomp/capability/mount checks for every deployment |
 | `mtls_identity_and_downgrade_denial` | `wrong_certificate_denied`; `plaintext_denied`; `legacy_downgrade_denied` | Real managed mTLS component paths | Three negative client attempts on the final Gateway/Provider private edge |
 | `policy_authority_loss_and_revocation` | `authority_loss_closes_egress`; `revoked_policy_denied`; `fresh_state_required` | Policy-authority/broker components | Live Product egress authority-loss, revoke and stale-state denial |
