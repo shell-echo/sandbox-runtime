@@ -256,15 +256,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		// Docker Desktop shares the workspace host tree, not Go's system
 		// test temp directory. This sibling is still outside the clean source.
-		operatorDirectory, directoryErr := os.MkdirTemp(filepath.Dir(operatorSource), ".sr-p6-terminal-operator-")
-		if directoryErr != nil {
-			t.Fatal("create exact private operator build directory")
-		}
-		t.Cleanup(func() {
-			if removeErr := os.RemoveAll(operatorDirectory); removeErr != nil {
-				t.Errorf("remove exact private operator build directory: %v", removeErr)
-			}
-		})
+		operatorDirectory := slice6PrivateSourceSibling(t, operatorSource, ".sr-p6-terminal-operator-")
 		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory,
 			static.terminalSourceRoot, static.sourceRevision)
 	}
@@ -439,19 +431,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.MkdirTemp(".", ".sr-vault-trust-switch-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	root, err = filepath.Abs(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(root); err != nil {
-			t.Errorf("remove exact Vault trust-switch local files: %v", err)
-		}
-	})
+	root := slice6PrivateSourceSibling(t, static.sourceRoot, ".sr-vault-trust-switch-")
 	configDir := filepath.Join(root, "config")
 	dataDir := filepath.Join(root, "data")
 	for _, directory := range []string{root, configDir, dataDir} {

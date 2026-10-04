@@ -2799,3 +2799,21 @@ manifest, config and actual image/container identities, not merely their
 shapes or values repeated from the binding. These are E-only component-
 evidence corrections, not a change to the formal Slice 6 manifest or an
 issuer-run authorization. Phase 6 remains **5/15**.
+
+### Slice 6 live temporary directory source-clean boundary (2026-10-04)
+
+The receipt's final E/R/F clean-source check must remain strict while live
+observer, fixture and Vault files still exist. Actual Gate-reachable private
+temporary directories therefore reside as owner-only 0700 siblings of the
+Docker-shared source checkouts, not inside any E/R/F source root or the
+four-file receipt run directory. The build working directories and immutable
+source revisions do not change. The selected sibling path must be canonical,
+outside every configured source root and usable for the existing read-only,
+non-root Docker bind. Missing or unshared siblings fail before issuer
+allocation; there is no fallback into a checkout. Cleanup is bounded,
+directory-FD-relative and no-follow, verifies the originally created inode
+and refuses a replacement. An interrupted or uncertain cleanup fails the
+Gate and is not evidence of zero residual bytes. Separate opt-in component
+tests not reachable from this Gate are outside this correction. This is an
+E-only observation-path change, not a change to Provider authority or the
+formal release manifest. Phase 6 remains **5/15**.

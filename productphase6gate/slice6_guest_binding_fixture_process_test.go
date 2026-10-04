@@ -253,15 +253,7 @@ func slice6BuildGuestBindingFixture(t *testing.T, ctx context.Context, sourceRoo
 		verifyCleanSlice6Source(ctx, root, revision) != nil || runtime.Version() != "go1.26.8" {
 		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture immutable source or Go toolchain unavailable")
 	}
-	directory, err := os.MkdirTemp(".", ".sr-p6-guest-binding-fixture-")
-	if err != nil {
-		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture private build directory unavailable")
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(directory); err != nil {
-			t.Errorf("remove exact Guest fixture build directory: %v", err)
-		}
-	})
+	directory := slice6PrivateSourceSibling(t, root, ".sr-p6-guest-binding-fixture-")
 	binary, err := filepath.Abs(filepath.Join(directory, "phase6-guest-binding-fixture"))
 	if err != nil {
 		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture binary path unavailable")

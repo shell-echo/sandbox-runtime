@@ -379,15 +379,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		}
 	}
 	if agentDeployment == "guest-agent" {
-		observerDir, err := os.MkdirTemp(".", ".sr-guest-material-observer-")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := os.RemoveAll(observerDir); err != nil {
-				t.Errorf("remove exact Guest material observer build: %v", err)
-			}
-		})
+		observerDir := slice6PrivateSourceSibling(t, rootForSlice6GuestProbe(t), ".sr-guest-material-observer-")
 		observer, err := filepath.Abs(filepath.Join(observerDir, "observer"))
 		if err != nil {
 			t.Fatal(err)
@@ -758,15 +750,7 @@ func slice6ProbeGuestSignerAsMaterialAgent(t *testing.T, ctx context.Context, ru
 	if volume == "" || agent.TLS == nil || binding.SubjectUID != agent.UID || binding.SubjectGID != agent.GID {
 		t.Fatal("Guest signer diagnostic has no source-bound socket identity")
 	}
-	directory, err := os.MkdirTemp(".", ".sr-guest-signer-observer-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(directory); err != nil {
-			t.Errorf("remove exact Guest signer observer build: %v", err)
-		}
-	})
+	directory := slice6PrivateSourceSibling(t, root, ".sr-guest-signer-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "observer"))
 	if err != nil {
 		t.Fatal(err)

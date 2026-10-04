@@ -4700,7 +4700,7 @@ authorized by this pass; Phase 6 remains **5/15**.
 
 Follow-up 2026-10-04 (preissuer, no new Vault issuer run): clean R/F
 `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635` passed the required full
-race/shuffle suite, vet, Provider Contract lock and tagged attached-Docker
+race/shuffle suite, vet, Product Contract lock and tagged attached-Docker
 producer checks. Twelve role candidates were built from clean R; one Desktop
 arm64 candidate was built from clean F using an existing APK cache, with the
 build's exact lock-byte verification still enabled. An initial no-cache
@@ -4723,3 +4723,23 @@ container/image tuples. Focused race tests inject sync, readback, publish
 and rollback failures. These corrections are partial E-owned evidence only;
 the issuer gate, sixteen scenarios, formal evidence manifest, release and
 production-readiness claims remain unpassed. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (preissuer source-clean path correction): an independent
+read of the live Gate found that Product observer, Guest fixture, several
+diagnostic observers and the Vault trust-switch runtime root were created as
+untracked directories inside E. The E-owned final receipt verifier correctly
+uses strict `git status --porcelain --untracked-files=all`, so those still-live
+directories would deterministically reject an otherwise valid component run.
+Sandbox withdrew any inference of issuer permission and directed an E-only
+path correction. The actual Gate chain now creates these private 0700
+temporary directories as siblings of their source checkout, never inside
+E/R/F; build commands continue to execute from the reviewed source root.
+Cleanup pins the created directory/parent inodes, walks entries with bounded,
+FD-relative no-follow operations, and refuses to remove a replacement. The
+strict E/R/F source-status and revision/tree checks remain in force. A
+single noissuer test holds all live temporary classes and externally frozen
+observer/fixture/terminal binaries across the finish-equivalent boundary,
+checks source cleanliness and non-root Docker mounts, and rejects digest or
+cleanup drift. The result of that test and the new E revision must be
+recorded separately after validation; no issuer has been started and Phase 6
+remains **5/15**.

@@ -621,15 +621,7 @@ func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root s
 	}
 	// Docker Desktop shares the workspace checkout, not necessarily Go's
 	// system test-temp directory. Keep the transient build inside this E tree.
-	directory, err := os.MkdirTemp(".", ".sr-p6-product-runtime-observer-")
-	if err != nil {
-		return slice6ProductRuntimeObserver{}, errors.New("create Product runtime observer build directory")
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(directory); err != nil {
-			t.Errorf("remove exact Product runtime observer build directory: %v", err)
-		}
-	})
+	directory := slice6PrivateSourceSibling(t, root, ".sr-p6-product-runtime-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "product-runtime-observer"))
 	if err != nil {
 		return slice6ProductRuntimeObserver{}, errors.New("Product runtime observer build path unavailable")
