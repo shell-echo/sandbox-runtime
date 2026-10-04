@@ -17,6 +17,7 @@ import (
 
 const (
 	Protocol       = "sandbox-runtime.phase6-guest-receipt.v1"
+	ProtocolV2     = "sandbox-runtime.phase6-guest-receipt.v2"
 	MaxEvents      = 256
 	MaxQueued      = 64
 	MaxRecordBytes = 512
@@ -46,6 +47,7 @@ type Recorder struct {
 	mu       sync.Mutex
 	outputFD int
 	role     string
+	protocol string
 	start    time.Time
 	queue    chan Record
 	done     chan struct{}
@@ -60,8 +62,17 @@ type Recorder struct {
 }
 
 func New(output *os.File, role, profileDigest, configDigest string) (*Recorder, error) {
+	return newRecorder(output, role, profileDigest, configDigest, Protocol)
+}
+
+func NewV2(output *os.File, role, profileDigest, configDigest string) (*Recorder, error) {
+	return newRecorder(output, role, profileDigest, configDigest, ProtocolV2)
+}
+
+func newRecorder(output *os.File, role, profileDigest, configDigest, protocol string) (*Recorder, error) {
 	if output == nil || (role != "product" && role != "guest") ||
-		!validDigest(profileDigest) || !validDigest(configDigest) {
+		!validDigest(profileDigest) || !validDigest(configDigest) ||
+		(protocol != Protocol && protocol != ProtocolV2) {
 		return nil, ErrUnavailable
 	}
 	info, err := output.Stat()
@@ -72,7 +83,7 @@ func New(output *os.File, role, profileDigest, configDigest string) (*Recorder, 
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	r := &Recorder{outputFD: fd, role: role, start: time.Now(), queue: make(chan Record, MaxQueued),
+	r := &Recorder{outputFD: fd, role: role, protocol: protocol, start: time.Now(), queue: make(chan Record, MaxQueued),
 		done: make(chan struct{}), stop: make(chan struct{}), seq: 1}
 	begin := r.record("begin")
 	begin.ProfileDigest = profileDigest
@@ -97,7 +108,11 @@ func (r *Recorder) Emit(event, digest string, generation int64, reason string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.sealed || r.count >= MaxEvents || !validEvent(r.role, event, reason) ||
+	valid := validEvent(r.role, event, reason)
+	if r.protocol == ProtocolV2 {
+		valid = validEventV2(r.role, event, reason)
+	}
+	if r.sealed || r.count >= MaxEvents || !valid ||
 		!validDigest(digest) || generation < 1 {
 		r.dropped++
 		return
@@ -176,7 +191,7 @@ func (r *Recorder) Abort() {
 }
 
 func (r *Recorder) record(event string) Record {
-	return Record{Protocol: Protocol, Role: r.role, Event: event, Sequence: r.seq,
+	return Record{Protocol: r.protocol, Role: r.role, Event: event, Sequence: r.seq,
 		ElapsedNanos: time.Since(r.start).Nanoseconds(), UnixMillis: time.Now().UnixMilli()}
 }
 
@@ -272,5 +287,33 @@ func validEvent(role, event, reason string) bool {
 			reason == "transport_terminated" || reason == "invalid_frame" || reason == "handler_shutdown"
 	default:
 		return false
+	}
+}
+
+func validEventV2(role, event, reason string) bool {
+	if role == "guest" {
+		if event == guestagent.ObservationGuestAuthRetry {
+			return reason == ""
+		}
+		return validEvent(role, event, reason)
+	}
+	if role != "product" {
+		return false
+	}
+	switch event {
+	case guestagent.ObservationProductAuthorityDependencyLost,
+		guestagent.ObservationProductDisconnectPending:
+		return reason == ""
+	case guestagent.ObservationProductAuthRetryable:
+		return reason == "dependency_unavailable" || reason == "connected_busy"
+	case guestagent.ObservationProductDisconnectResolved:
+		return reason == string(guestagent.RetirementReleased) ||
+			reason == string(guestagent.RetirementInactive) ||
+			reason == string(guestagent.RetirementSuperseded)
+	case guestagent.ObservationProductCloseCompleted:
+		return validEvent(role, event, reason) || reason == "dependency_lost" ||
+			reason == "already_connected" || reason == "handshake_failure"
+	default:
+		return validEvent(role, event, reason)
 	}
 }

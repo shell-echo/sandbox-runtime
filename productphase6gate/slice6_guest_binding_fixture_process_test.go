@@ -246,14 +246,22 @@ func (failure slice6GuestFixtureFailure) Unwrap() error { return failure.cause }
 // Build the fixture from a separately clean immutable F source only after the
 // caller has proved the exact R/F pairing. This build
 // tag never enters the normal Product image or production command.
-func slice6BuildGuestBindingFixture(t *testing.T, ctx context.Context, sourceRoot, revision string) (slice6GuestBindingFixtureArtifact, error) {
+func slice6BuildGuestBindingFixture(t *testing.T, ctx context.Context, sourceRoot, revision string,
+	owners ...*slice6PrivateSiblingOwner) (slice6GuestBindingFixtureArtifact, error) {
 	t.Helper()
+	if len(owners) > 1 {
+		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture private owner ambiguous")
+	}
+	var owner *slice6PrivateSiblingOwner
+	if len(owners) == 1 {
+		owner = owners[0]
+	}
 	root, err := filepath.EvalSymlinks(sourceRoot)
 	if err != nil || !filepath.IsAbs(root) || len(revision) != 40 || !lowerHexSlice6(revision) ||
 		verifyCleanSlice6Source(ctx, root, revision) != nil || runtime.Version() != "go1.26.8" {
 		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture immutable source or Go toolchain unavailable")
 	}
-	directory := slice6PrivateSourceSibling(t, root, ".sr-p6-guest-binding-fixture-")
+	directory := slice6PrivateSourceSiblingOwned(t, owner, root, ".sr-p6-guest-binding-fixture-")
 	binary, err := filepath.Abs(filepath.Join(directory, "phase6-guest-binding-fixture"))
 	if err != nil {
 		return slice6GuestBindingFixtureArtifact{}, errors.New("Guest fixture binary path unavailable")

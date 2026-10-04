@@ -558,7 +558,7 @@ func slice6PostgresDesiredEndpoints(t *testing.T, ctx context.Context, run slice
 			!slices.Equal(network.ExternalServices, []string{"postgres"}) {
 			t.Fatal("unreviewed PostgreSQL service bridge")
 		}
-		created, err := createSlice6ProfileNetwork(ctx, run, network)
+		created, err := run.resolveProfileNetwork(ctx, network)
 		if err != nil {
 			t.Fatal("create exact PostgreSQL service bridge")
 		}

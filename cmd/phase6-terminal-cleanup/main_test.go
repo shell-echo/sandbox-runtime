@@ -62,9 +62,19 @@ func TestDecodeInputV2CannotDowngradeOrOmitExternalPostgres(t *testing.T) {
 	if _, err := decodeInput(encoded); err != nil {
 		t.Fatal("canonical v2 envelope rejected")
 	}
+	v3 := value
+	v3.Protocol = inputProtocolV3
+	v3Encoded, err := json.Marshal(v3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodeInput(v3Encoded); err != nil {
+		t.Fatal("canonical v3 envelope rejected")
+	}
 	for name, mutate := range map[string]func(*input){
 		"v1 with external":    func(v *input) { v.Protocol = inputProtocol },
 		"v2 without external": func(v *input) { v.ExternalPostgres = nil },
+		"v3 without external": func(v *input) { v.Protocol = inputProtocolV3; v.ExternalPostgres = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := value

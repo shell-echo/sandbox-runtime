@@ -114,3 +114,57 @@ func TestBuildTerminalPlanBindsRunLedgersAndExactTargets(t *testing.T) {
 		t.Fatalf("noncanonical ledger accepted: %v", err)
 	}
 }
+
+func TestBuildTerminalPlanRejectsPendingPreviousAccessorOverlap(t *testing.T) {
+	for _, terminal := range []bool{true, false} {
+		for _, mutation := range []struct {
+			name       string
+			accessor   bool
+			revokeTime bool
+			wantValid  bool
+		}{
+			{name: "clean", wantValid: true},
+			{name: "previous_accessor_only", accessor: true},
+			{name: "previous_time_only", revokeTime: true},
+			{name: "previous_accessor_and_time", accessor: true, revokeTime: true},
+		} {
+			name := "nonterminal_revoked/"
+			if terminal {
+				name = "terminal_active/"
+			}
+			t.Run(name+mutation.name, func(t *testing.T) {
+				runID, profile, sources, certificates, credentials, now := terminalPlanFixture(t)
+				index := 0
+				if !terminal {
+					record := credentials.Leases[0]
+					record.PolicyID = "other-revoked-credential"
+					record.LeaseID = "lease2_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+					record.BackendLeaseID = "accessor-other-revoked"
+					record.State = "revoked"
+					record.RevokedAt = now.Add(-30 * time.Second)
+					credentials.Leases = append(credentials.Leases, record)
+					index = 1
+				}
+				if mutation.accessor {
+					credentials.Leases[index].PreviousBackendLeaseID = "accessor-previous-unreconciled"
+				}
+				if mutation.revokeTime {
+					credentials.Leases[index].PreviousRevokeAt = now.Add(time.Minute)
+				}
+				certificateRaw, err := json.Marshal(certificates)
+				if err != nil {
+					t.Fatal(err)
+				}
+				credentialRaw, err := json.Marshal(credentials)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = buildVerified(runID, profile, sources, certificateRaw, credentialRaw,
+					"accessor-management", now)
+				if (err == nil) != mutation.wantValid {
+					t.Fatalf("pending previous accessor admission drift: %v", err)
+				}
+			})
+		}
+	}
+}

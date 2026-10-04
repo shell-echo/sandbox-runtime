@@ -17,13 +17,14 @@ import (
 type OperationHandler func(context.Context, json.RawMessage) (any, error)
 
 type AgentOptions struct {
-	URL, GuestID      string
-	BindingGeneration int64
-	PrivateKey        ed25519.PrivateKey
-	Handlers          map[string]OperationHandler
-	ReconnectBackoff  time.Duration
-	HTTPClient        *http.Client
-	Observation       ObservationSink
+	URL, GuestID       string
+	BindingGeneration  int64
+	PrivateKey         ed25519.PrivateKey
+	Handlers           map[string]OperationHandler
+	ReconnectBackoff   time.Duration
+	HTTPClient         *http.Client
+	Observation        ObservationSink
+	RetryTemporaryAuth bool
 }
 
 type Agent struct {
@@ -135,6 +136,11 @@ func (a *Agent) connect(ctx context.Context) error {
 		BindingGeneration: a.options.BindingGeneration})
 	var welcome Welcome
 	if err := readJSON(ctx, connection, &welcome); err != nil {
+		if a.options.RetryTemporaryAuth && websocket.CloseStatus(err) == websocket.StatusTryAgainLater {
+			a.emit(Observation{Event: ObservationGuestAuthRetry, AttemptDigest: attemptDigest,
+				BindingGeneration: a.options.BindingGeneration})
+			return ErrUnavailable
+		}
 		return ErrUnauthorized
 	}
 	if welcome.Type != "welcome" || welcome.ProtocolVersion != ProtocolVersion || welcome.BindingGeneration != a.options.BindingGeneration || !subset(welcome.Capabilities, a.capabilities) {

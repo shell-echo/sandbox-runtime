@@ -2817,3 +2817,414 @@ Gate and is not evidence of zero residual bytes. Separate opt-in component
 tests not reachable from this Gate are outside this correction. This is an
 E-only observation-path change, not a change to Provider authority or the
 formal release manifest. Phase 6 remains **5/15**.
+
+### Slice 6 A′ operator-only PostgreSQL recovery readback (2026-10-04)
+
+Sandbox authorized a narrow E/operator observation of the existing, same-run
+PostgreSQL server for the Guest loss/recovery component. It is not a new
+runtime role, network edge, credential, source of session authority or tenth
+SQL witness. The observer uses PostgreSQL's existing local `postgres` peer
+account through `docker exec` into the exact run-owned container; this is a
+trusted operator-superuser read, **not** proof of a least-privilege SQL role.
+No HBA, grant, database state, socket, mount or network configuration may be
+changed to enable it.
+
+Before and after a read, E must bind the exact run label, PostgreSQL container
+ID, selected image and UID/GID, running PID/start time, approved network and
+mounted config/data volumes. The formal E path must also recheck the
+source-derived nine-network inventory and mounted HBA, not merely a nonempty
+network map. The fixed query targets only one run-owned tenant, workspace,
+slot, fixed slot profile, slot generation, Guest ID and binding generation in
+the Product database. `psql -X -w` executes `BEGIN READ ONLY` with a
+three-second statement limit under a five-second outer limit, one operator
+session at a time. Its bounded output contains only state, whether the nonce
+is null, DB-time expiry
+status and expiry time; duplicate, missing, expired, malformed or unbounded
+rows fail. A second fixed read-only query must confirm the named first backend
+has exited. Each operation uses a distinct bounded run-bound application
+name; a Docker/SQL error with uncertain exit stops later observations for
+that run instead of opening a cleanup query or silently retrying. This
+component now uses individual Docker exec IDs and checks each actual
+`Running=false`/exit-code-zero result before advancing to the next fixed SQL;
+an unconfirmed result poisons that run's E observer. The helper's own
+identity, SQL and output digests belong only in private E evidence.
+Source/target or process drift makes the observation incomplete, never a
+successful fallback.
+The bounded raw stdout from both fixed SQL executions and their individual
+exec IDs/times can now be written once to fixed stage-specific 0600 files
+inside the 0700 v2 E run, then independently reopened and hashed. A duplicate
+stage, byte tamper, cross-stage target/expiry drift or exec/operation replay
+fails. The final same-run merger and real source-bound nine-network positive still
+remain open; a private raw file alone is not an accepted binding.
+
+This readback can corroborate a Product receipt and actual transport closes;
+it cannot alone prove the old-nonce `released` CAS or a Guest reconnect cause.
+The current no-issuer Docker drill proves the local peer query, bounded
+parser, backend exit and missing/duplicate/expired denial against a disposable
+PostgreSQL process. A separate formal-only source constructor now requires
+the selected Profile image and all nine exact isolated Docker networks with
+PostgreSQL endpoint IDs/IPs and run labels. Bounded A′ has a closed
+stage-membership table: Product runtime is started, Product migration has
+successfully exited with its original ID and exact ledger, then its original
+container is removed, and the other
+seven PostgreSQL dialers have not started. The nine networks and HBA rules
+remain fixed; an exited or not-started dialer must be absent from its bridge.
+The full 78-deployment release gate has a separate complete-stage inventory.
+Each present dialer additionally needs its source-derived IP and exact
+run/role/image/lifecycle identity, the source-rendered mounted HBA, final
+PostgreSQL PID1 and effective TLS/HBA settings. Its readback entry point also
+requires a source proof, unchanged process/HBA fingerprint,
+effective-settings/postmaster recheck and explicit initial-connected,
+released, reconnected or final-released state with original expiry. The disposable
+`network=none` component path cannot construct this proof. The formal path
+has not yet been exercised against the complete nine-network Product/Guest
+deployment or bound to the E recovery sequence, so neither constructor nor
+component tests are a Slice 6 scenario receipt. The later
+Slice 11/14 independent environment still requires its own deployment and
+least-privilege review. No real issuer or accepted E/R/F binding follows from
+this component drill; Phase 6 remains **5/15**.
+
+### Slice 6 A′ bounded E reconnect-isolation window (2026-10-04)
+
+The Guest Agent automatically reconnects after PostgreSQL recovery, so E
+cannot assume it will sample a transient `disconnected`/null-nonce row before
+the next accepted signed connection. Sandbox permits one explicit,
+run-recorded E observation window: after the original Product/Guest streams
+have both shown PostgreSQL-loss close and while Product's PostgreSQL edge is
+still down, detach only Guest-A's existing run-owned Guest–Product network
+edge. Keep Product-A, Guest-A, PostgreSQL, their other networks and the
+retirement worker alive. Restore Product's original PostgreSQL edge and
+read back the real released/null state within the inherited budget, then
+reattach Guest-A to its original network ID and IP and observe its own fresh
+signed reconnect and connected/non-null row. All detach/reattach actions,
+identities and completion order must be in E evidence. Failure to detach,
+restore or read within the original budget is incomplete, not a reason to
+poll indefinitely, clear a nonce manually or rebuild a binding.
+
+This is evidence of recovery **with an explicitly intervening E network
+isolation window**, not uninterrupted natural reconnect. A later ordered
+Product/Guest replacement requires a separate final old-nonce release and
+zero-drop process seal; the intermediate null snapshot cannot be reused.
+The isolation state machine and a source-bound real gate have not yet been
+implemented or accepted. Phase 6 remains **5/15**.
+
+The E-only network action now has a no-issuer Docker component drill: it
+verifies two unchanged live PID1 identities, exact run-owned isolated
+Guest–Product and Guest-runtime networks, a sole Guest detach, and an
+original-IP reattach. It rejects wrong/duplicate actions and cleans the
+run-labeled resources. The causal close prerequisite and full recovery
+state machine remain unimplemented, so this does not amend the preceding
+release boundary.
+
+The E action registers the exact target before either Docker network command.
+A lost disconnect response or first post-mutation inspect failure is classified
+within one non-renewable cleanup deadline, capped at five seconds and by the
+caller's remaining absolute deadline. Nested restore and post-restore inspect
+inherit this same deadline. A proved detach is
+restored only to its original IP and never counted as successful fault evidence.
+A lost restore response can count as cleanup only after the exact original
+edge is reread; any unclassifiable graph remains incomplete and requires
+exact run-owned stop/cleanup. Disposable real Docker fault-injection drills
+pass for both Guest–Product and Product–PostgreSQL edges. These drills do not
+prove the real Product/Guest recovery sequence.
+
+The attached E collector also has a bounded live v2-prefix trigger: a
+complete canonical Product dependency-loss close and matching Guest read
+termination for the original attempt are necessary before the edge action.
+Its file snapshot is inode-checked under the bounded writer lock, and a
+partial Docker chunk is pending rather than truncated into proof. A real
+two-PID1 no-issuer drill verifies this mechanism. The trigger is explicitly
+not a seal or release receipt; final acceptance must reread both complete
+streams and join the actual PostgreSQL fault and network action in one run.
+An E-only sealed-prefix checker now binds the live trigger's exact byte counts
+and hashes to the beginning of final independently reread, zero-drop v2 PID1
+files. The precleanup E merger reopens 23 bounded same-run source classes,
+four SQL stages, a private E event journal and four sealed PID1 files. It
+rechecks the frozen migration ledger and common core image with distinct role
+configs, joins Product/PG PID and retained network facts back to source raw,
+and requires the final old-nonce SQL NULL observation after both A seals and
+before either B start. Synthetic journal sequence/monotonic-elapsed/reference
+replay and paired identity-drift negatives pass; eight derived action
+projections plus 32 whitelisted original Docker process/network/identity raws
+are now private, bounded and independently replayed. No-issuer real Docker drills
+exercise call/observed wiring at the network actions, SQL call before exec,
+B start-call/observed with bounded live-start raw, and Guest-A
+stop/exit/seal. A recovered-close observation is now required before the
+normal Product-A stop: its private receipt binds the still-live Product v2
+prefix, sealed Guest raw, recovered attempt/generation and both process
+identities; a missing observation refuses normal stop. The exact prefix
+must replay inside the final sealed Product original. The E journal now has
+29 monotonic events. A pre-B guard and private admission digest require A seal,
+all four SQL stages, original action replay and the first 25 monotonic events
+before either B start, but no formal launcher invokes them yet. The complete
+real E orchestration remains open. A real no-issuer Docker component proves
+original Guest network IDs and Vault/anonymous-volume identities and their
+post-cleanup absence; the private Docker-zero/exact-origin receipts are not terminal
+proof of non-Docker resource classes. No real same-run E run, final cleanup
+binding, E/R/F freeze or authorized issuer run has been accepted; Phase 6
+remains **5/15**.
+
+### Slice 6 terminal-zero private response evidence v3 (2026-10-04)
+
+Sandbox ruled that a terminal summary receipt alone cannot independently
+replay Vault cleanup after the operator has revoked its own token. The explicit
+private terminal input v3 therefore wraps the **unchanged exact v2 plan**:
+three certificate targets (including the external PostgreSQL server leaf),
+two accessor targets, and the v2 receipt. There is no v2-to-v3 inference or
+automatic downgrade. The one-shot operator captures only fixed projections
+of its already-required authenticated Vault HTTP exchanges. It retains the
+issuer DER and complete signed CRL DER, token lookup metadata or the exact
+invalid-accessor error, certificate revocation state and timestamp, CRL
+configuration, and empty-body 204 outcomes. It never copies a bearer token,
+private key, raw accessor or whole Vault JSON response into the output.
+
+The v3 operator emits one canonical, closed, bounded private line on its
+existing restricted stdout. The host separates that output from bounded,
+fixed-stage stderr, then stores it under the existing 0700 run directory as
+0600 create-only files with inode checks. The binding also records the exact
+operator process start/finish bracket and rejects a CRL-check timestamp
+outside that bracket (with only five seconds of clock tolerance). No new
+writable mount, sidecar,
+probe, token or Vault request is introduced. The offline verifier replays the
+exact event sequence against the v2 plan and receipt, checks both issuer
+reads, validates the signed complete CRL and all three revoked serials, and
+requires exact token absence and self-revoke observations. A projection or
+stdout failure leaves the E run incomplete but does not prematurely stop
+remote cleanup. Historical replay validates against the recorded CRL-check
+time rather than incorrectly demanding that a short-lived leaf remain valid
+at a later audit date.
+
+The current implementation and synthetic response/negative tests are
+component evidence only. The optional v3 terminal runner checks the exact
+source-bound binary capability **before** any new issuer/signing step and can
+persist a diagnostic binding, but the prior clean source binary does not yet
+carry v3. No authorized new issuer run, real v3 Vault terminal observation,
+formal E precleanup-to-terminal binding, same-run E/R/F gate or release
+manifest has been accepted. A diagnostic binding with an empty precleanup
+digest is explicitly ineligible for formal E replay. Phase 6 remains
+**5/15**.
+
+The formal sink constructor must first replay the sealed, same-run E
+precleanup chain and cannot accept an operator-supplied digest. A separate
+terminal-zero preflight reopens its v3 plan/stdout/binding and joins the
+operator identity to exact Docker-zero and original network/Vault absence,
+including process-exit ordering. It is intentionally not a release
+disposition: the real E launcher and remaining non-Docker terminal classes
+are still open.
+
+Sandbox also ruled not to create a separate disposable Vault issuer merely
+for v3 collector validation before source freeze. The first real v3 response
+test belongs in the one planned source-bound formal run, after its complete
+preflight and explicit issuer authorization. A response mismatch leaves that
+run incomplete, preserves only bounded private failure evidence and invokes
+the existing cleanup; it does not trigger automatic reissuance.
+
+For formal E, the existing nested Product/Guest component runners remain
+diagnostics, not authority-bearing wrappers. An E-only owner must use the
+shared, reviewed create/config primitives with typed A/B process handles,
+capture the first network allocator's original IDs before any join, and own
+the entire source, 29-event fault/recovery, pre-B admission, replacement,
+normal shutdown and exact cleanup sequence. B shutdown is outside the fixed
+29-event journal; its zero-drop v2 seal and exact ID removal are nevertheless
+required before terminal cleanup. No issuer is permitted merely to exercise
+these orchestration primitives before the formal source freeze.
+
+The shared bootstrap receives a typed run-scoped network source. Legacy
+bootstrap keeps strict create-and-reject-existing semantics. Formal E first
+allocates the closed full network inventory, then resolves only those original
+IDs against frozen specs and live Docker identity; it cannot create an
+alternative or use a same-named replacement. At each stage the existing
+membership readback remains independent of the original empty allocation
+observation. This network injection does not copy the Vault/Controller/PKI
+bootstrap or change its token and root-revocation ownership.
+The post-bootstrap E procedure must own one explicit A→fault/recovery→
+pre-B→B lifecycle. It learns attempt digests only from both canonical live
+v2 PID1 streams, records PG/network mutation calls and observations at their
+actual sites, checks the fixed 29-event kind/count boundary after each
+operation, and requires the 25-event sealed predecessor before creating B.
+Product/Guest B normal shutdown and exact removal are outside that journal
+but inside the same precleanup proof. A component callback or synthetic
+prefix cannot replace the final four-stream replay.
+
+The E-only opt-in top-level entry now uses that shared bootstrap. It checks
+source-bound v3 operator capability and capacity before its one-time complete
+network allocation, reuses original IDs for Vault/Controller/PostgreSQL and
+agent joins, then runs typed Product/Guest A/B under the live signer window.
+It joins a successfully replayed precleanup to a one-shot formal v3 terminal
+call and then to Docker-zero and original-ID absence preflight. If business
+precleanup fails, the same finite authority may be used once for v3
+cleanup-only revocation; its private marker is incomplete and cannot enter
+formal E replay. No silent v2 downgrade is permitted. The E environment
+arming flag is only an operating guard, not issuer approval.
+
+Sandbox's terminal-scope ruling distinguishes run-owned temporary sibling
+directories, actual PID1/attach writer joins, private Unix sockets and
+credential leases from intentionally retained evidence, clean E/R/F source
+checkouts and frozen candidate artifacts. Existing test-end cleanup alone
+cannot prove pre-binding host-file absence. The final E-only owner must
+explicitly finish exact inode-pinned temporary resources and independently
+recheck absence, close/sync retained evidence writers, replay the bounded
+v3/ledger and Docker chain, and bind the external frozen expected identities
+in a versioned private component verifier. Sticky Controller credential-
+revoke faults remain separately open. No new issuer run is authorized until
+that frozen package is reviewed. The connected top-level E entry has not
+run; its current terminal preflight remains fail-closed and Phase 6 stays
+**5/15**.
+
+The current E candidate registers the seven reviewed host-private sibling
+directories with one run owner. After exact Docker cleanup it can explicitly
+finish FD-relative, no-follow, inode-pinned removal, include FD-close/sync
+errors, and retain a bounded private receipt of the original names and
+inode identities for independent absence replay. A replacement name is left
+untouched and fails; test-end cleanup is only a fallback. This is a host-file
+component checkpoint, not yet the all-class terminal binding: actual writer
+joins, lease reconciliation and frozen external E/R/F expectations still
+require a single read-only verifier. The E opt-in has not issued or run.
+The terminal-zero preflight now requires that private sibling receipt digest
+and rereads each original name's absence; a digest string alone is not proof.
+
+The E candidate also has a versioned, pre-binding retained-file inventory.
+It requires the exact 117 successful-path raw/source/SQL/process/action/
+terminal/zero/private-sibling files, pins their owner-only regular-file
+inodes, byte counts and SHA-256 digests, and independently reopens the private
+run directory to reread the closed set. An additional file, missing file,
+replacement inode, wrong externally supplied inventory digest or changed
+content fails. A subsequent canonical v2 `incomplete.json` is recognized
+only as retained failure evidence; inventory integrity is not an E success
+disposition. The formal E entry invokes this replay after terminal-zero
+preflight but still fails closed pending the remaining process/writer, lease
+and E/R/F freeze bindings. No new issuer run was made for this component.
+
+### Slice 6 E helper convergence and early process ownership (2026-10-04)
+
+Sandbox's `S6-A1-helper-convergence-receipt-20261004` ruling permits only an
+E-specific, fixed-stage convergence receipt. A helper returning without a
+testing failure is insufficient. The final receipt must bind the frozen E
+identity, exact run/Profile, named stage and slot, monotonic completion order,
+closed result class and independently checkable proof references. Missing,
+duplicate, wrong-run, causal-drift and unconsumed-attach stages fail closed;
+reused helpers need distinct slots. A separate read-only verifier must reopen
+the retained bytes and check the expected stage set rather than treating a
+digest as historical proof that an OS process was joined.
+
+The first narrow correction arms an exact-container failure owner immediately
+after controller `docker create`, before inspect, FD envelope or readiness
+checks. It cancels the attached `docker start`, stops, joins and removes that
+one ID on early `Fatal`/Goexit. Break-glass tracks its initial and replacement
+instances separately under one shared cleanup deadline; normal retirement
+requires observed attach completion and exact removal. The ordinary TLS signer
+now guards the same pre-readiness gap. A disposable, no-issuer Alpine PID1
+drill exercised the controller owner with real Docker and zero labeled
+residual resources. These checks do not prove the full E process inventory.
+
+Certificate-controller `sticky_credential_revoke` is recorded as a typed
+physical-convergence result, never as `clean_exit`. The finite Guest E
+component may retain only that exact known sticky class if the physical
+cleanup and independent v3 terminal binding both pass; it must carry an
+explicit controller-drain OPEN/non-clean result. Unknown exits, missing joins
+or unproved revocation still fail. A full Slice 6 controller-drain success
+cannot be inferred from this limited E result. The E admission also joins the
+capacity monitor before reading its cause and stop callback result, and checks
+the credential controller's completed stop/drain/remove/socket/ledger sequence,
+seven distinct role-bound TLS signer outcomes and three distinct exact
+break-glass instances against the same run/Profile.
+Fixed-stage receipt emission, all other actual PID1/writer joins, lease
+reconciliation, frozen R/F/E binding, authorized real E and the release gate
+remain open. Phase 6 remains **5/15**; no new issuer run is authorized by this
+component correction.
+
+### Slice 6 terminal ledger projection reuse (2026-10-04)
+
+Under Sandbox ruling `S6-A1-reuse-terminal-ledger-capture-20261004`, the E
+terminal path reuses the two already-required, bounded, read-only ledger
+results passed to `BuildV2`; it does not open another observer or persist the
+full certificate/credential ledgers. After `BuildV2` validates their canonical
+quiesced state and exact target mapping, the same in-memory bytes yield one
+closed, owner-only projection. It records the run/Profile/plan identity, both
+original byte lengths and SHA-256 values, schema/revision/quiesce times and
+the necessary per-record policy, digest, serial, state and time fields. Raw
+replay nonce/JTI, lease IDs and backend/previous accessors are omitted; the
+latter identifiers appear only as domain-separated digests. The projection
+hash is bound into the existing private v3 terminal binding and the successful
+E retained-file inventory now has 118 exact files. The independent verifier
+checks canonical closed bytes, the projection-to-plan hashes and terminal
+targets, nonterminal `revoked` states and the v3 binding. It cannot recompute
+an original ledger hash after the original bytes have been cleared, and must
+not claim otherwise.
+
+Projection construction or persistence failure leaves the E component
+incomplete but does not interrupt an already authorized one-shot remote
+revocation. The exact sticky controller fault may remain local `active` only
+for the frozen terminal targets and only with the separate complete v3 remote
+CRL/accessor/self-revoke proof; it remains local non-clean/OPEN. Extra,
+missing or wrongly bound actual issuance and the final E/R/F source freeze
+still require the final component verifier. No issuer was run for this
+projection component, and Phase 6 remains **5/15**.
+
+The next fail-closed check rejects any credential record with either a
+previous backend accessor or a nonzero previous-revoke timestamp, including
+nonterminal revoked records. `BuildV2` therefore cannot plan only the current
+accessor while an overlap target remains pending. The E projection replay
+also compares its complete issued-record set against exactly the two
+controller certificates, seven fixed E signer launch roles, one controller
+PKI token and three E material-agent roles derived from the frozen Profile;
+optional Profile roles are not silently counted as launched. This comparison
+runs before remote revocation without suppressing that cleanup on component
+failure, and again at terminal-zero replay. It is a component guard, not a
+substitute for the still-missing fixed-stage OS-process/writer receipt or
+formal E/R/F admission.
+
+Sandbox froze the E helper scope in
+`S6-A1-fixed-convergence-stage-set-20261004`: exactly 14 logical slots
+(seven ordinary TLS signers; credential controller, certificate controller
+and three-instance break-glass controller; three material agents; one joined
+capacity monitor). The E-only closed receipt records exact run/Profile and
+source/terminal identities, stage/slot, observed return order, typed result,
+container IDs and outcome digest, then binds the existing precleanup, v3,
+Docker exact-zero and private-sibling evidence by digest. Three material
+outcomes are emitted only after their existing stop/drain/remove/socket guard
+completes; the migration agent records natural exit, not a fabricated TERM.
+The successful E file inventory consequently grows from 118 to 119 files.
+An independent read-only opener checks the retained receipt bytes and fixed
+slot set. This is source-bound control-flow evidence, not historical OS proof
+from a digest alone. Existing Product/Guest writer, SQL/action, migration,
+fixture, PG stop and terminal evidence remain separate referenced inputs;
+there are no new slots for their synchronous probes or file writes. Sticky
+certificate credential-revoke remains typed non-clean and full controller
+drain remains OPEN. No issuer was run for this receipt component.
+
+The candidate final E binding keeps E (executing checkout), R (runtime image
+and terminal binary source) and F (fixture source) revisions and trees
+separate. Its independent verifier requires the exact 119-file inventory,
+the convergence receipt and the existing terminal v3/plan/projection replay;
+an `incomplete.json` next to a final-looking file is never accepted. The
+publisher is implemented as a synced pending file followed by exact-inode
+publication and failure rollback, but the live E test still deliberately
+stops before invoking it. No successful E or issuer result is inferred until
+the frozen E/R/F identities and actual run receive separate review.
+
+The subsequent `S6-A1-final-publisher-review-20261004` ruling required three
+more closed boundaries before selecting a real run. E now freezes the clean
+E/R/F revisions and source trees before issuer allocation and compares the
+same identities after terminal-zero. One pure digest helper is used both by
+the original terminal-zero preflight and by the final read-only verifier; it
+binds precleanup, v3, Docker zero, exact original-resource zero and private
+sibling zero without relabeling R as E. The publisher's success return is
+delayed until its run and root directory descriptors have both closed and a
+fresh independent verifier has reopened the retained run. A late close or
+reopen failure rolls back only the original final-binding inode, writes an
+incomplete marker where possible and returns failure or explicit uncertainty;
+unknown/replacement inodes are never removed. The independent read checks
+the exact publisher-selected final inode as well as canonical bytes and the
+119-file inventory.
+
+A no-issuer fixture exercises the positive path with a locally generated,
+offline-verified v2 plan, complete v3 private response/CRL, sanitized ledger
+projection and fixed 14-slot convergence receipt. Negative cases cover link
+and no-replace race, post-link sync, pending unlink, independent reopen,
+replacement inode, rollback unlink/sync uncertainty, late run/root close and
+post-close reopen. The live E path now calls the bounded final publisher,
+but neither these fixtures nor this code change constitute a new Vault issuer
+observation, full controller-drain pass, 16-scenario gate or release result.
+The E/R/F and issuer command package still requires separate Sandbox review
+before any new issuer-consuming run; Phase 6 remains **5/15**.

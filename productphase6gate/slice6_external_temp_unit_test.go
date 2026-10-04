@@ -4,6 +4,7 @@ package productphase6gate
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,6 +86,119 @@ func TestSlice6ExternalPrivateTempPreservesStrictCleanAndBoundedCleanup(t *testi
 	}
 	if verifyCleanSlice6Source(context.Background(), source, revision) != nil {
 		t.Fatal("source changed during external cleanup")
+	}
+}
+
+func TestSlice6ExternalPrivateOwnerFinishesBeforeTestCleanup(t *testing.T) {
+	source, revision := slice6ExternalTempGit(t)
+	owner := newSlice6PrivateSiblingOwner(t)
+	first := slice6PrivateSourceSiblingOwned(t, owner, source, ".sr-p6-owner-first-")
+	second := slice6PrivateSourceSiblingOwned(t, owner, source, ".sr-p6-owner-second-")
+	if err := os.WriteFile(filepath.Join(first, "private"), []byte("ephemeral"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.finish(); err != nil || owner.finish() != nil {
+		t.Fatalf("explicit run owner finish unavailable: %v", err)
+	}
+	for _, path := range []string{first, second} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("owned sibling remained before test cleanup: %s: %v", path, err)
+		}
+	}
+	if err := verifyCleanSlice6Source(t.Context(), source, revision); err != nil {
+		t.Fatal("explicit finish dirtied frozen source")
+	}
+}
+
+func TestSlice6ExternalPrivateOwnerRetainsReplacedName(t *testing.T) {
+	source, _ := slice6ExternalTempGit(t)
+	owner := &slice6PrivateSiblingOwner{}
+	path := slice6PrivateSourceSiblingOwned(t, owner, source, ".sr-p6-owner-replace-")
+	moved := path + ".moved"
+	if err := os.Rename(path, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(path, "not-ours")
+	if err := os.WriteFile(marker, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if owner.finish() == nil || owner.finish() == nil {
+		t.Fatal("owner accepted a replaced temporary name")
+	}
+	if data, err := os.ReadFile(marker); err != nil || string(data) != "preserve" {
+		t.Fatal("owner removed a replacement directory")
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(moved); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSlice6GuestRecoveryPrivateSiblingZeroReplaysOriginalNames(t *testing.T) {
+	source, _ := slice6ExternalTempGit(t)
+	evidencePath := filepath.Join(t.TempDir(), "evidence")
+	if err := os.Mkdir(evidencePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	evidencePath, err := filepath.EvalSymlinks(evidencePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceRoot, err := slice6OpenReceiptEvidenceRoot(evidencePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidenceRoot.close()
+	run, err := evidenceRoot.newRun(strings.Repeat("a", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer run.closeV2Incomplete()
+	owner := newSlice6PrivateSiblingOwner(t)
+	var original string
+	for index, prefix := range slice6GuestRecoveryPrivateSiblingPrefixes {
+		path := slice6PrivateSourceSiblingOwned(t, owner, source, prefix)
+		if index == 0 {
+			original = path
+		}
+	}
+	if err := owner.finish(); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := run.captureGuestRecoveryPrivateSiblingZero(owner)
+	if err != nil || !guestRevokeFixtureDigestGate(digest) ||
+		run.verifyGuestRecoveryPrivateSiblingZero() != nil {
+		t.Fatalf("original seven private sibling absences unavailable: %v", err)
+	}
+	raw, err := run.readFile(slice6GuestRecoveryPrivateSiblingZeroFile, 8<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tampered slice6GuestRecoveryPrivateSiblingZero
+	if json.Unmarshal(raw, &tampered) != nil {
+		t.Fatal("private sibling receipt decode unavailable")
+	}
+	clear(raw)
+	tampered.Absent[0].ParentIno++
+	if slice6VerifyGuestRecoveryPrivateSiblingZero(tampered) == nil {
+		t.Fatal("private sibling replay accepted a changed parent inode")
+	}
+	if err := os.Mkdir(original, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if run.verifyGuestRecoveryPrivateSiblingZero() == nil {
+		t.Fatal("private sibling replay accepted a recreated original name")
+	}
+	if err := os.Remove(original); err != nil {
+		t.Fatal(err)
 	}
 }
 

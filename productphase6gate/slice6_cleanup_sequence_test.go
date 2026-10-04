@@ -77,9 +77,18 @@ func (guard *slice6BoundedRunCleanup) Close() {
 }
 
 func (sequence *slice6CleanupSequence) Run() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	return sequence.RunContext(ctx)
+}
+
+// Multiple exact owners in one invocation can share one finite cleanup
+// deadline. A later owner must not reset the earlier owner's budget.
+func (sequence *slice6CleanupSequence) RunContext(ctx context.Context) error {
+	if sequence == nil || ctx == nil {
+		return errors.New("cleanup sequence context unavailable")
+	}
 	sequence.once.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-		defer cancel()
 		for _, stage := range sequence.stages {
 			if stage.name == "" || stage.run == nil {
 				sequence.err = errors.Join(sequence.err, errors.New("invalid cleanup stage"))
@@ -91,6 +100,25 @@ func (sequence *slice6CleanupSequence) Run() error {
 		}
 	})
 	return sequence.err
+}
+
+func TestSlice6CleanupSequenceSharedContextDoesNotRefresh(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	first := &slice6CleanupSequence{stages: []slice6CleanupStage{{"first", func(context.Context) error {
+		cancel()
+		return nil
+	}}}}
+	second := &slice6CleanupSequence{stages: []slice6CleanupStage{{"second", func(observed context.Context) error {
+		if observed.Err() == nil {
+			return errors.New("cleanup context silently refreshed")
+		}
+		return nil
+	}}}}
+	if first.RunContext(ctx) != nil || second.RunContext(ctx) != nil ||
+		first.RunContext(ctx) != nil || second.RunContext(ctx) != nil {
+		t.Fatal("shared exact-owner cleanup budget was refreshed or retried")
+	}
 }
 
 func TestSlice6CleanupSequencePreservesFirstFailureAndRunsOnce(t *testing.T) {

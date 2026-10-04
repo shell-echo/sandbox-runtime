@@ -1432,8 +1432,111 @@ func TestIntegrationGuestBindingChallengeRotationAndRevocation(t *testing.T) {
 	if err := authenticator.CheckAuthority(context.Background(), identity); err != nil {
 		t.Fatal(err)
 	}
-	if err := authenticator.Disconnected(context.Background(), identity); err != nil {
+	freshAuth := signedGuestAuth(t, binding, privateKey, "challenge-connected-busy")
+	if _, err := authenticator.Authenticate(context.Background(), freshAuth); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("orphan/ownerless connected row was retryable: %v", err)
+	}
+	if _, err := authenticator.AuthenticateWithLocalOwner(context.Background(), freshAuth, identity); !errors.Is(err, guestagent.ErrAuthConnectedBusy) {
+		t.Fatalf("valid signed local owner was not classified busy: %v", err)
+	}
+	wrongOwner := identity
+	wrongOwner.ClientNonce = base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	if _, err := authenticator.AuthenticateWithLocalOwner(context.Background(), freshAuth, wrongOwner); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("wrong local owner was retryable: %v", err)
+	}
+	wrongCapabilitiesOwner := identity
+	wrongCapabilitiesOwner.Capabilities = []string{"not.owned"}
+	if _, err := authenticator.AuthenticateWithLocalOwner(context.Background(), freshAuth, wrongCapabilitiesOwner); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("wrong local owner capabilities were retryable: %v", err)
+	}
+	badSignature := freshAuth
+	badSignature.Hello.Signature = base64.RawURLEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	if _, err := authenticator.AuthenticateWithLocalOwner(context.Background(), badSignature, identity); !errors.Is(err, guestagent.ErrUnauthorized) {
+		t.Fatalf("invalid signature was retryable: %v", err)
+	}
+	limitedConfig, err := pgxpool.ParseConfig(os.Getenv(productPostgresURLVariable))
+	if err != nil {
 		t.Fatal(err)
+	}
+	limitedConfig.MaxConns, limitedConfig.MinConns = 4, 0
+	limitedPool, err := pgxpool.NewWithConfig(t.Context(), limitedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var held []*pgxpool.Conn
+	defer func() {
+		for _, connection := range held {
+			connection.Release()
+		}
+		limitedPool.Close()
+	}()
+	for range 4 {
+		connection, err := limitedPool.Acquire(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, connection)
+	}
+	limitedStore, err := New(limitedPool, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retirement := product.GuestBinding{TenantID: identity.TenantID, WorkspaceID: identity.WorkspaceID,
+		SlotKey: identity.SlotKey, SlotGeneration: identity.SlotGeneration,
+		GuestID: identity.GuestID, BindingGeneration: identity.BindingGeneration,
+		ClientNonce: identity.ClientNonce}
+	if disposition, err := store.ReadGuestRetirement(context.Background(), retirement); err != nil ||
+		disposition != product.GuestRetireStillOwned {
+		t.Fatalf("pre-close readback disposition=%s err=%v", disposition, err)
+	}
+	started := time.Now()
+	if _, err := limitedStore.RetireGuestConnection(t.Context(), retirement); !errors.Is(err, product.ErrStoreUnavailable) ||
+		time.Since(started) > 2*time.Second || limitedPool.Stat().AcquiredConns() != 4 {
+		t.Fatalf("full four-connection pool did not fail without acquiring: %v", err)
+	}
+	for _, connection := range held {
+		connection.Release()
+	}
+	held = nil
+	if err := authenticator.CheckAuthority(context.Background(), identity); err != nil {
+		t.Fatal("full-pool cleanup attempt damaged the current connection")
+	}
+	wrongNonce := product.GuestBinding{TenantID: identity.TenantID, WorkspaceID: identity.WorkspaceID,
+		SlotKey: identity.SlotKey, SlotGeneration: identity.SlotGeneration,
+		GuestID: identity.GuestID, BindingGeneration: identity.BindingGeneration,
+		ClientNonce: base64.RawURLEncoding.EncodeToString(make([]byte, 32))}
+	if disposition, err := limitedStore.RetireGuestConnection(context.Background(), wrongNonce); err != nil ||
+		disposition != product.GuestRetireSuperseded {
+		t.Fatalf("wrong-nonce cleanup disposition=%s err=%v", disposition, err)
+	}
+	if err := authenticator.CheckAuthority(context.Background(), identity); err != nil {
+		t.Fatal("wrong-nonce cleanup damaged the current connection")
+	}
+	if disposition, err := limitedStore.RetireGuestConnection(context.Background(), retirement); err != nil ||
+		disposition != product.GuestRetireReleased {
+		t.Fatalf("exact-nonce cleanup disposition=%s err=%v", disposition, err)
+	}
+	if disposition, err := limitedStore.ReadGuestRetirement(context.Background(), retirement); err != nil ||
+		disposition != product.GuestRetireInactive {
+		t.Fatalf("post-close readback falsely claimed exact release: %s err=%v", disposition, err)
+	}
+	if disposition, err := limitedStore.RetireGuestConnection(context.Background(), retirement); err != nil ||
+		disposition != product.GuestRetireInactive {
+		t.Fatalf("repeated cleanup disposition=%s err=%v", disposition, err)
+	}
+	freshIdentity, err := authenticator.Authenticate(context.Background(), freshAuth)
+	if err != nil || freshIdentity.ClientNonce == identity.ClientNonce {
+		t.Fatalf("fresh signed reconnect=%#v err=%v", freshIdentity, err)
+	}
+	if err := authenticator.CheckAuthority(context.Background(), freshIdentity); err != nil {
+		t.Fatalf("fresh owner was not authoritative: %v", err)
+	}
+	if disposition, err := limitedStore.RetireGuestConnection(context.Background(), product.GuestBinding{
+		TenantID: freshIdentity.TenantID, WorkspaceID: freshIdentity.WorkspaceID,
+		SlotKey: freshIdentity.SlotKey, SlotGeneration: freshIdentity.SlotGeneration,
+		GuestID: freshIdentity.GuestID, BindingGeneration: freshIdentity.BindingGeneration,
+		ClientNonce: freshIdentity.ClientNonce}); err != nil || disposition != product.GuestRetireReleased {
+		t.Fatalf("fresh owner cleanup disposition=%s err=%v", disposition, err)
 	}
 	workspace, _ = application.GetWorkspace(context.Background(), "tenant-product-guest", actor, workspace.ID)
 	newPublicKey, newPrivateKey, _ := ed25519.GenerateKey(rand.Reader)

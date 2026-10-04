@@ -28,13 +28,51 @@ import (
 const slice6GuestTLSStackEnv = "SANDBOX_RUNTIME_PHASE6_GUEST_TLS_STACK"
 const slice6GuestTLSCPUContrastEnv = "SANDBOX_RUNTIME_PHASE6_GUEST_TLS_CPU_CONTRAST"
 
+type slice6OrdinaryTLSOutcome struct {
+	RunID, ProfileDigest, AgentDeployment, ContainerID, SocketStorageID string
+	PhysicalConverged                                                   bool
+}
+
+func slice6FormalETLSRoles() [7]string {
+	return [7]string{"guest-agent-tls-agent", "guest-tls-agent",
+		"product-runtime-agent-tls-agent", "product-postgres-tls-agent", "product-tls-agent",
+		"product-migration-agent-tls-agent", "product-migration-postgres-tls-agent"}
+}
+
+func (outcome slice6OrdinaryTLSOutcome) validForRun(runID, profileDigest, agentDeployment string) bool {
+	return len(runID) == 32 && lowerHexSlice6(runID) && outcome.RunID == runID &&
+		guestRevokeFixtureDigestGate(profileDigest) && outcome.ProfileDigest == profileDigest &&
+		agentDeployment != "" && outcome.AgentDeployment == agentDeployment &&
+		len(outcome.ContainerID) == 64 && lowerHexSlice6(outcome.ContainerID) &&
+		outcome.SocketStorageID != "" && outcome.PhysicalConverged
+}
+
+// A fixed E slot set is checked independently of the nested callback order.
+// This is still an in-memory component check, not the retained stage receipt.
+func slice6ETLSOutcomeGap(runID, profileDigest string, outcomes map[string]*slice6OrdinaryTLSOutcome) string {
+	roles := slice6FormalETLSRoles()
+	if len(outcomes) != len(roles) {
+		return "slot_set"
+	}
+	seenIDs := make(map[string]bool, len(roles))
+	for _, role := range roles {
+		observed := outcomes[role]
+		if observed == nil || !observed.validForRun(runID, profileDigest, role) || seenIDs[observed.ContainerID] {
+			return role
+		}
+		seenIDs[observed.ContainerID] = true
+	}
+	return ""
+}
+
 // Component evidence only: the managed certificate controller remains alive
 // while the independently isolated Guest TLS agent obtains a leaf and opens
 // its subject-only signer socket. The material agent is not implied here.
 func slice6RunGuestTLSAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
+	composed slice6VaultComposedInputs, socketVolumes, anchorFiles map[string]string, onSignerReady func(),
+	outcome *slice6OrdinaryTLSOutcome) {
 	slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed, "guest-agent", "guest-agent-tls-agent",
-		"guest", socketVolumes, anchorFiles, onSignerReady)
+		"guest", socketVolumes, anchorFiles, onSignerReady, outcome)
 }
 
 func slice6OrdinaryTLSLabelAllowed(subjectDeployment, agentDeployment, label string) bool {
@@ -48,7 +86,7 @@ func slice6OrdinaryTLSLabelAllowed(subjectDeployment, agentDeployment, label str
 
 func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, subjectDeployment, agentDeployment, label string,
-	socketVolumes, anchorFiles map[string]string, onSignerReady func()) {
+	socketVolumes, anchorFiles map[string]string, onSignerReady func(), outcome *slice6OrdinaryTLSOutcome) {
 	t.Helper()
 	profile := composed.Profile
 	var binding phase6security.TLSAgentBinding
@@ -111,7 +149,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	}
 	address := prefix.Addr().As4()
 	address[3] = 2
-	createdNetwork, err := createSlice6ProfileNetwork(ctx, run, network)
+	createdNetwork, err := run.resolveProfileNetwork(ctx, network)
 	if err != nil {
 		t.Fatal("create ordinary TLS-agent dedicated network")
 	}
@@ -204,6 +242,77 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create real ordinary TLS-agent process")
 	}
+	if outcome != nil {
+		*outcome = slice6OrdinaryTLSOutcome{RunID: run.id, ProfileDigest: profile.ProfileDigest,
+			AgentDeployment: agentDeployment, ContainerID: id, SocketStorageID: binding.SocketStorageID}
+	}
+	type result struct {
+		output []byte
+		err    error
+	}
+	completed := make(chan result, 1)
+	attachStarted, completionConsumed, failureCleanup := false, false, true
+	var cancelAttach context.CancelFunc
+	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
+		{"stop-ordinary-tls-agent", func(cleanup context.Context) error {
+			if !attachStarted || completionConsumed {
+				return nil
+			}
+			_, stopErr := run.docker(cleanup, "stop", "--timeout", "10", id)
+			if failureCleanup && cancelAttach != nil {
+				cancelAttach()
+			}
+			if stopErr != nil {
+				return errors.New("ordinary TLS-agent stop unconfirmed")
+			}
+			return nil
+		}},
+		{"drain-ordinary-tls-agent", func(cleanup context.Context) error {
+			if !attachStarted || completionConsumed {
+				return nil
+			}
+			select {
+			case done := <-completed:
+				completionConsumed = true
+				stage := slice6ControllerFailureStage(done.output)
+				clear(done.output)
+				if done.err != nil {
+					return fmt.Errorf("ordinary TLS-agent drain unconfirmed: stage=%s", stage)
+				}
+				return nil
+			case <-time.After(15 * time.Second):
+				return errors.New("ordinary TLS-agent did not drain")
+			case <-cleanup.Done():
+				return errors.New("ordinary TLS-agent cleanup deadline ended")
+			}
+		}},
+		{"remove-ordinary-tls-agent", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "rm", "-f", id); err != nil {
+				return errors.New("ordinary TLS-agent removal unconfirmed")
+			}
+			return nil
+		}},
+		{"verify-ordinary-tls-socket", func(cleanup context.Context) error {
+			if _, err := run.docker(cleanup, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-tls-clean-"+run.id,
+				"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
+				"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
+				"--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory+",readonly",
+				"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
+				return errors.New("ordinary TLS-agent exact signer socket cleanup unproved")
+			}
+			return nil
+		}},
+	}}
+	reported := false
+	// The owner is armed immediately after the exact create identity. Early
+	// inspect, envelope, readiness or ledger Fatal/Goexit still removes it.
+	defer func() {
+		if !reported {
+			if err := sequence.Run(); err != nil {
+				t.Errorf("failure-path ordinary TLS-agent cleanup: %v", err)
+			}
+		}
+	}()
 	inspectDocument, err := run.docker(ctx, "inspect", id)
 	var containers []struct {
 		Image  string `json:"Image"`
@@ -242,14 +351,13 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		t.Fatal("ordinary TLS-agent private FD envelope invalid")
 	}
 	defer clear(input)
-	type result struct {
-		output []byte
-		err    error
-	}
-	completed := make(chan result, 1)
 	startup := bytes.Clone(input)
+	attachContext, stopAttach := context.WithCancel(ctx)
+	defer stopAttach()
+	cancelAttach = stopAttach
+	attachStarted = true
 	go func() {
-		command := exec.CommandContext(ctx, "docker", "start", "-a", "-i", id)
+		command := exec.CommandContext(attachContext, "docker", "start", "-a", "-i", id)
 		command.Stdin = bytes.NewReader(startup)
 		output, startErr := command.CombinedOutput()
 		clear(startup)
@@ -266,6 +374,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		}
 		select {
 		case done := <-completed:
+			completionConsumed = true
 			stage := slice6ControllerFailureStage(done.output)
 			clear(done.output)
 			t.Fatalf("ordinary TLS-agent exited before signer listener: stage=%s exit=%v", stage, done.err)
@@ -292,6 +401,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 			}
 			select {
 			case done := <-completed:
+				completionConsumed = true
 				frames := slice6MainGoStackFunctions(done.output)
 				allSymbols := slice6GoStackSymbols(done.output)
 				outputBytes := len(done.output)
@@ -305,6 +415,7 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 		}
 		select {
 		case done := <-completed:
+			completionConsumed = true
 			stage := slice6ControllerFailureStage(done.output)
 			clear(done.output)
 			t.Fatalf("ordinary TLS-agent signer not ready: state=%q inspect=%v process=%q process_probe=%v managed_leaf=%t process_stage=%s exit=%v",
@@ -341,60 +452,21 @@ func slice6RunOrdinaryTLSAgentStartup(t *testing.T, ctx context.Context, run sli
 	}
 	t.Logf("real %s TLS-agent managed leaf and signer socket ready after %s under Profile CPU=%dm, memory=%d, PIDs=%d",
 		label, time.Since(startupStarted), principal.Resources.CPUMillis, principal.Resources.MemoryBytes, principal.Resources.PIDs)
-	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
-		{"stop-ordinary-tls-agent", func(cleanup context.Context) error {
-			if _, err := run.docker(cleanup, "stop", "--timeout", "10", id); err != nil {
-				return errors.New("ordinary TLS-agent stop unconfirmed")
-			}
-			return nil
-		}},
-		{"drain-ordinary-tls-agent", func(cleanup context.Context) error {
-			select {
-			case done := <-completed:
-				stage := slice6ControllerFailureStage(done.output)
-				clear(done.output)
-				if done.err != nil {
-					return fmt.Errorf("ordinary TLS-agent drain unconfirmed: stage=%s", stage)
-				}
-				return nil
-			case <-time.After(15 * time.Second):
-				return errors.New("ordinary TLS-agent did not drain")
-			case <-cleanup.Done():
-				return errors.New("ordinary TLS-agent cleanup deadline ended")
-			}
-		}},
-		{"remove-ordinary-tls-agent", func(cleanup context.Context) error {
-			if _, err := run.docker(cleanup, "rm", "-f", id); err != nil {
-				return errors.New("ordinary TLS-agent removal unconfirmed")
-			}
-			return nil
-		}},
-		{"verify-ordinary-tls-socket", func(cleanup context.Context) error {
-			if _, err := run.docker(cleanup, "run", "--rm", "--pull=never", "--name", "sr-p6-"+label+"-tls-clean-"+run.id,
-				"--label", run.label(), "--network=none", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID),
-				"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
-				"--mount", "type=volume,src="+socketVolumes[binding.SocketStorageID]+",dst="+binding.SocketDirectory+",readonly",
-				"--entrypoint=/bin/sh", principal.ImageReference, "-ec", "test ! -e "+binding.SocketPath); err != nil {
-				return errors.New("ordinary TLS-agent exact signer socket cleanup unproved")
-			}
-			return nil
-		}},
-	}}
-	reported := false
-	defer func() {
-		if !reported {
-			if err := sequence.Run(); err != nil {
-				t.Errorf("failure-path ordinary TLS-agent cleanup: %v", err)
-			}
-		}
-	}()
 	if onSignerReady != nil {
 		onSignerReady()
 	}
-	if err := sequence.Run(); err != nil {
-		t.Errorf("ordinary TLS-agent cleanup: %v", err)
+	failureCleanup = false
+	cleanupErr := sequence.Run()
+	if cleanupErr != nil {
+		t.Errorf("ordinary TLS-agent cleanup: %v", cleanupErr)
+	}
+	if cancelAttach != nil {
+		cancelAttach()
 	}
 	reported = true
+	if outcome != nil && cleanupErr == nil && ctx.Err() == nil {
+		outcome.PhysicalConverged = true
+	}
 	if onSignerReady != nil {
 		t.Logf("real %s TLS-agent PID1 issued its managed certificate, served the dependent process, and cleaned the exact signer socket; dependent evidence is reported separately", label)
 	} else {

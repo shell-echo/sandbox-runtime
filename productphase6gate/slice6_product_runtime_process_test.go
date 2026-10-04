@@ -116,44 +116,12 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 	if err != nil || plan.Principal.SeccompDigest != "sha256:"+hex.EncodeToString(seccompDigest[:]) {
 		return errors.New("Product runtime seccomp source drift")
 	}
-	privateMount, present := phase6security.Slice6PrivateConfigMount(plan.Principal.Name)
-	if !present {
-		return errors.New("Product runtime private config mount unavailable")
-	}
 	name := "sr-p6-product-runtime-" + run.id
-	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
-	args := []string{"create", "--pull=never", "--name", name, "--label", run.label(),
-		"--log-driver=none", "--network", endpoints[0].ID, "--ip", endpoints[0].IP,
-		"--restart=no", "--user", owner, "--cap-drop=ALL",
-		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccomp,
-		"--read-only", "--memory", strconv.FormatInt(plan.Principal.Resources.MemoryBytes, 10),
-		"--cpus", strconv.FormatFloat(float64(plan.Principal.Resources.CPUMillis)/1000, 'f', 3, 64),
-		"--pids-limit", strconv.FormatInt(plan.Principal.Resources.PIDs, 10),
-		"--mount", "type=volume,src=sr-p6-config-" + plan.Principal.Name + "-" + run.id +
-			",dst=" + privateMount.Target + ",readonly"}
-	anchorArgs, err := slice6AnchorMountArguments(profile, plan.Principal.Name, anchorFiles)
+	args, err := slice6ProductRuntimeCreateArguments(run, plan, endpoints, seccomp,
+		socketVolumes, anchorFiles, profile, name)
 	if err != nil {
-		return errors.New("Product runtime trust anchors unavailable")
+		return err
 	}
-	args = append(args, anchorArgs...)
-	seenSockets := make(map[string]bool, 3)
-	for _, mount := range plan.Principal.Mounts {
-		if mount.Kind != "private_socket" {
-			continue
-		}
-		if !slices.Contains(plan.SocketStorageID, mount.StorageID) || !mount.ReadOnly ||
-			socketVolumes[mount.StorageID] == "" || seenSockets[mount.StorageID] {
-			return errors.New("Product runtime private socket mount drift")
-		}
-		seenSockets[mount.StorageID] = true
-		args = append(args, "--mount", "type=volume,src="+socketVolumes[mount.StorageID]+
-			",dst="+mount.Target+",readonly")
-	}
-	if len(seenSockets) != 3 {
-		return errors.New("Product runtime private socket set incomplete")
-	}
-	args = append(args, plan.Principal.ImageReference, "--config", privateMount.Target+"/"+
-		phase6security.Slice6StartupConfigFile, "product", "serve")
 	created, err := run.docker(parent, args...)
 	id := strings.TrimSpace(string(created))
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
@@ -276,6 +244,55 @@ func slice6RunProductRuntimePID1(t *testing.T, parent context.Context, run slice
 		receipts.Product = records
 	}
 	return nil
+}
+
+func slice6ProductRuntimeCreateArguments(run slice6DockerRun,
+	plan slice6ProductRuntimeLaunchPlan, endpoints []slice6ProductRuntimeEndpoint,
+	seccomp string, socketVolumes, anchorFiles map[string]string,
+	profile phase6security.Profile, name string) ([]string, error) {
+	if len(endpoints) != 7 || len(run.id) != 32 || !lowerHexSlice6(run.id) ||
+		(name != "sr-p6-product-runtime-"+run.id &&
+			name != "sr-p6-product-runtime-b-"+run.id) {
+		return nil, errors.New("Product runtime slot name is not the original A/B identity")
+	}
+	privateMount, present := phase6security.Slice6PrivateConfigMount(plan.Principal.Name)
+	if !present {
+		return nil, errors.New("Product runtime private config mount unavailable")
+	}
+	owner := fmt.Sprintf("%d:%d", plan.Principal.UID, plan.Principal.GID)
+	args := []string{"create", "--pull=never", "--name", name, "--label", run.label(),
+		"--log-driver=none", "--network", endpoints[0].ID, "--ip", endpoints[0].IP,
+		"--restart=no", "--user", owner, "--cap-drop=ALL",
+		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccomp,
+		"--read-only", "--memory", strconv.FormatInt(plan.Principal.Resources.MemoryBytes, 10),
+		"--cpus", strconv.FormatFloat(float64(plan.Principal.Resources.CPUMillis)/1000, 'f', 3, 64),
+		"--pids-limit", strconv.FormatInt(plan.Principal.Resources.PIDs, 10),
+		"--mount", "type=volume,src=sr-p6-config-" + plan.Principal.Name + "-" + run.id +
+			",dst=" + privateMount.Target + ",readonly"}
+	anchorArgs, err := slice6AnchorMountArguments(profile, plan.Principal.Name, anchorFiles)
+	if err != nil {
+		return nil, errors.New("Product runtime trust anchors unavailable")
+	}
+	args = append(args, anchorArgs...)
+	seenSockets := make(map[string]bool, 3)
+	for _, mount := range plan.Principal.Mounts {
+		if mount.Kind != "private_socket" {
+			continue
+		}
+		if !slices.Contains(plan.SocketStorageID, mount.StorageID) || !mount.ReadOnly ||
+			socketVolumes[mount.StorageID] == "" || seenSockets[mount.StorageID] {
+			return nil, errors.New("Product runtime private socket mount drift")
+		}
+		seenSockets[mount.StorageID] = true
+		args = append(args, "--mount", "type=volume,src="+socketVolumes[mount.StorageID]+
+			",dst="+mount.Target+",readonly")
+	}
+	if len(seenSockets) != 3 {
+		return nil, errors.New("Product runtime private socket set incomplete")
+	}
+	args = append(args, plan.Principal.ImageReference, "--config", privateMount.Target+"/"+
+		phase6security.Slice6StartupConfigFile, "product", "serve")
+	return args, nil
 }
 
 func slice6VerifyProductRuntimeContainer(ctx context.Context, run slice6DockerRun, id string,
@@ -610,8 +627,16 @@ func slice6VerifyApprovedProductRuntimeObserver(observer slice6ProductRuntimeObs
 	return slice6VerifyProductRuntimeObserverBinary(observer)
 }
 
-func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root string) (slice6ProductRuntimeObserver, error) {
+func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root string,
+	owners ...*slice6PrivateSiblingOwner) (slice6ProductRuntimeObserver, error) {
 	t.Helper()
+	if len(owners) > 1 {
+		return slice6ProductRuntimeObserver{}, errors.New("Product runtime observer private owner ambiguous")
+	}
+	var owner *slice6PrivateSiblingOwner
+	if len(owners) == 1 {
+		owner = owners[0]
+	}
 	versionCommand := exec.CommandContext(ctx, "go", "version")
 	versionCommand.Dir = root
 	versionCommand.Env = append(os.Environ(), "GOTOOLCHAIN=local")
@@ -621,7 +646,7 @@ func slice6BuildProductRuntimeObserver(t *testing.T, ctx context.Context, root s
 	}
 	// Docker Desktop shares the source checkout's parent, not necessarily
 	// Go's system test-temp directory. Keep this build in a private sibling.
-	directory := slice6PrivateSourceSibling(t, root, ".sr-p6-product-runtime-observer-")
+	directory := slice6PrivateSourceSiblingOwned(t, owner, root, ".sr-p6-product-runtime-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "product-runtime-observer"))
 	if err != nil {
 		return slice6ProductRuntimeObserver{}, errors.New("Product runtime observer build path unavailable")

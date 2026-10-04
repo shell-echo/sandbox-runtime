@@ -417,9 +417,10 @@ func NewGuestApplicationGraphWithObservation(ctx context.Context, cfg *config.Da
 		URL: cfg.OutboundURL, GuestID: authority.Credential.GuestID,
 		BindingGeneration: authority.Credential.BindingGeneration,
 		PrivateKey:        authority.PrivateKey, Handlers: service.Handlers(),
-		ReconnectBackoff: time.Duration(authority.Policy.ReconnectBackoffMillis) * time.Millisecond,
-		HTTPClient:       authority.HTTPClient,
-		Observation:      observe,
+		ReconnectBackoff:   time.Duration(authority.Policy.ReconnectBackoffMillis) * time.Millisecond,
+		HTTPClient:         authority.HTTPClient,
+		Observation:        observe,
+		RetryTemporaryAuth: cfg.SchemaVersion == config.DataPlaneProductionSchemaV3,
 	})
 	clear(authority.PrivateKey)
 	if err != nil {

@@ -4932,3 +4932,143 @@ closure/recovery, peer-TLS revocation, CRL-source loss, replacement
 restart/reconnect, nine live SQL callers, the full 16-scenario/78-deployment
 gate, a formal Slice 6 manifest, deployment or production readiness.
 Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (E retained-file inventory component, no issuer): the
+E-only terminal preflight now captures a canonical private inventory after
+exact Docker/original-ID zero and the seven sibling-directory absence replay.
+The inventory names the exact 117 successful-path evidence files and binds
+their owner-only regular-file inodes, byte counts and SHA-256 digests. A
+separate read-only opener compares the entire run-directory name set, reopens
+every file with no-follow checks and verifies the externally supplied
+inventory digest; a later canonical `incomplete.json` remains a failure marker
+and is never a successful E binding. A no-issuer race-enabled synthetic test
+passed positive replay and negative wrong-digest, extra-file, same-inode
+content-mutation, same-content replacement-inode, widened-mode and malformed
+incomplete-marker cases. The retained-file reader also now treats file close
+errors as failures. The E launcher still unconditionally fails after this
+component preflight: live E, actual process/writer joins, credential-lease
+reconciliation, external R/F/E freeze, final independent binding and the
+16-scenario gate are not proved. No issuer, release manifest or push was
+produced; Phase 6 remains **5/15**.
+
+Validation for this no-issuer component used the locked Go 1.26.8 toolchain:
+the final-code full `go test -race -shuffle=on -count=1 ./...` exited 0,
+the full `phase6slice6gate` tagged race/shuffle package exited 0, ordinary
+and tagged `go vet` exited 0, Product Contract lock verification passed,
+and `git diff --check` was clean. An earlier attempt under the host default
+Go 1.26.5 failed expected toolchain-lock tests and was superseded; it is
+not counted as a passing validation.
+
+Follow-up 2026-10-04 (early process ownership and typed convergence, no
+issuer): after Sandbox's `S6-A1-helper-convergence-receipt-20261004` ruling,
+the ordinary TLS signer and both controller startups register failure cleanup
+at their exact `docker create` boundary, before readiness. Break-glass now
+tracks its initial controller and each replacement separately under one
+shared finite failure-cleanup deadline. No-issuer tests cover Goexit,
+cancel/stop/join/remove ordering, one-shot behavior, historical replacement
+retirement and wrong-run/profile/count/duplicate-instance rejection. A real
+disposable Alpine PID1 Docker drill passed exact attach cancellation and
+zero labeled-resource cleanup; it exercised no Vault issuer or PostgreSQL.
+
+The certificate result now distinguishes physical convergence from
+`clean_exit`: the known sticky `credential-revoke` exit remains typed failure
+and remains controller-drain OPEN even if an independent terminal operator
+subsequently succeeds. A limited Guest E component may retain that exact
+class only with proved physical cleanup and v3 binding; it does not establish
+full Slice 6 controller shutdown. The E admission also checks the joined
+capacity monitor result, credential controller stop/drain/remove outcome,
+seven fixed role-bound TLS signer outcomes and exact three-instance
+break-glass outcome. The
+full tagged race/shuffle package passed after these edits. This is component
+evidence, not a fixed-stage E receipt, a new source freeze, an issuer approval,
+a formal E run, a release manifest or a push. Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (terminal ledger projection reuse, no issuer): the
+one-shot v3 path now projects the same two complete ledger reads already used
+by `BuildV2`, after its canonical/quiesced and exact target validation. It
+does not read either volume twice or retain original nonce/JTI, lease ID or
+backend accessor bytes. The closed projection binds run/Profile/plan, both
+original byte lengths/SHA-256 values, relevant per-record state and times,
+and domain-separated identifier digests. Its own digest is included in the
+private v3 binding and the successful-path file inventory grows from 117 to
+118 exact owner-only files. A no-issuer synthetic fixture passed positive
+replay and negative nonterminal-active, original-hash, plan, terminal-
+accessor and unknown-field cases. The verifier states explicitly that the
+projection cannot independently reconstruct cleared ledger bytes. This does
+not settle the final actual-issuance-set comparison, all helper/writer joins,
+frozen E/R/F binding, real E, 16 scenarios or controller-drain OPEN status.
+No issuer, manifest or push was produced; Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (pending-overlap and exact E issuance guard, no issuer):
+the terminal planner now rejects a credential record if either the previous
+backend accessor or previous-revoke time remains set; table tests cover
+terminal active and nonterminal revoked records with clean, accessor-only,
+time-only and combined cases. The E projection is checked against the fixed
+seven TLS signer and three material-agent launch roles plus the two
+controller certs and one controller PKI token, not the full optional Profile.
+An extra, missing, duplicate, wrong-principal or unrevoked nonterminal record
+fails. The same retained projection is rechecked at terminal-zero preflight.
+This does not establish the fixed-stage process/writer receipt, actual E
+issuer observations, R/F/E freeze or formal Slice 6 gate. No issuer or
+manifest was produced; Phase 6 remains **5/15**.
+The pending-overlap condition changes `internal/phase6terminalcleanup/plan.go`,
+which is linked by the source-bound `cmd/phase6-terminal-cleanup` binary.
+Therefore the prior clean R/F checkout and reviewed terminal binary do not
+stand in for this candidate: freeze and review a new E/R/F source and
+terminal-binary identity before another real issuer run. Tagged E-only
+projection edits alone would not have required that rebuild.
+
+Follow-up 2026-10-04 (fixed E helper convergence receipt, no issuer):
+Sandbox ruling `S6-A1-fixed-convergence-stage-set-20261004` froze exactly
+14 logical slots: seven TLS signers, credential/certificate/break-glass
+controllers, three material agents and one joined capacity monitor. Product/
+Guest PID1 writers, SQL/action chain, migration, fixture, PG stop and v3
+terminal operator retain their existing independently checked evidence rather
+than duplicated slots. The E-only receipt is assembled from actual helper
+return/cleanup points, including material-agent stop/drain/remove/socket
+guards and migration natural exit. It binds run/Profile/source/terminal,
+ordered typed outcomes and exact IDs to the existing precleanup/v3/Docker/
+private-zero digests, then is synced, read back, independently reopened and
+included in the successful-path 119-file inventory. No-issuer race tests
+passed the fixed-stage positive fixture and missing/unknown/duplicate slot,
+wrong run/container, wrong exit, unjoined outcome, causal inversion, sticky
+washing and late file-sync failures. Full tagged validation and final E/R/F
+binding remain open. No issuer, manifest or push; Phase 6 stays **5/15**.
+
+Follow-up 2026-10-04 (final-binding candidate, no issuer): a closed E-only
+binding now has separate E, R and F revision/tree fields; the convergence
+receipt's former ambiguous source field is explicitly `RRevision` because it
+comes from the runtime source, not the executing E checkout. The private
+publisher code uses a synced pending file, exact-inode link/unlink, rollback
+on failure and independent read-only replay; the verifier requires the
+119-file inventory plus only the final binding, the 14-slot receipt and
+terminal v3/plan/projection chain. A final-looking file next to an
+`incomplete.json` marker is rejected. The live E launcher currently builds
+and validates only a candidate after all preflight and clean E/R/F source
+checks, then deliberately fails without calling this publisher pending the
+external freeze/real-run review. The no-issuer unit cases do not substitute
+for that run; Phase 6 remains **5/15**.
+
+Follow-up 2026-10-04 (Sandbox A/B/C final-publisher gaps closed in source,
+**no issuer run**): the live E path now freezes E/R/F revision/tree identity
+before issuer allocation, compares the same identities after cleanup and
+publishes the final E-only component binding only after terminal-zero, exact
+119-file inventory and fixed 14-slot convergence replay. A shared pure
+terminal-zero digest computation is used by preflight and the final verifier.
+The final verifier checks the publisher-selected inode, canonical binding,
+v3/ledger replay and all five zero-chain references. The publisher cannot
+return success until both owned directory descriptors close and an independent
+fresh reopen passes. Late close/reopen failure attempts inode-pinned rollback,
+retains incomplete evidence and reports uncertainty if exact rollback cannot
+be proved; an unknown or replacement inode is never unlinked.
+
+A no-issuer fixture generated a valid synthetic v2 plan, issuer-signed
+complete CRL, v3 event/receipt chain, terminal ledger projection and 14-slot
+convergence receipt. The positive full publisher path passed, as did failures
+for link/no-replace, post-link directory sync, pending unlink, independent
+reopen, replacement inode, rollback unlink/sync uncertainty, late run/root
+close and post-close reopen. Tagged `productphase6gate` race/shuffle tests
+and tagged vet passed. These are source and component checks, not a real
+Vault issuer observation or full Slice 6 acceptance. A clean E/R/F/terminal
+binary freeze and exact command still need Sandbox approval before one new
+issuer-consuming attempt. No manifest or push; Phase 6 remains **5/15**.

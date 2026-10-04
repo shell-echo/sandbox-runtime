@@ -197,6 +197,7 @@ func buildVerified(runID string, profile phase6security.Profile, sources phase6s
 	tokenTargets := make([]TokenTarget, 0, 2)
 	for _, record := range credentialLedger.Leases {
 		if !accessorPattern.MatchString(record.BackendLeaseID) || seenAccessors[record.BackendLeaseID] ||
+			record.PreviousBackendLeaseID != "" || !record.PreviousRevokeAt.IsZero() ||
 			!digestPattern.MatchString(record.PolicyDigest) || !digestPattern.MatchString(record.BindingDigest) ||
 			!digestPattern.MatchString(record.CredentialDigest) || record.Revision < 1 ||
 			record.IssuedAt.IsZero() || !record.ExpiresAt.After(record.IssuedAt) ||

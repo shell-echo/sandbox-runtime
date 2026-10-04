@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -16,10 +17,90 @@ import (
 
 var errSlice6ExternalTemp = errors.New("Slice 6 private external temporary directory unavailable")
 
+type slice6PrivateSiblingLease struct {
+	path                 string
+	parentFD, rootFD     int
+	parentStat, rootStat unix.Stat_t
+	once                 sync.Once
+	err                  error
+}
+
+func (lease *slice6PrivateSiblingLease) finish() error {
+	if lease == nil {
+		return errSlice6ExternalTemp
+	}
+	lease.once.Do(func() {
+		lease.err = slice6RemovePrivateSibling(lease.path, lease.parentFD, lease.rootFD,
+			lease.parentStat, lease.rootStat)
+	})
+	return lease.err
+}
+
+type slice6PrivateSiblingOwner struct {
+	mu       sync.Mutex
+	leases   []*slice6PrivateSiblingLease
+	finished bool
+	err      error
+}
+
+func newSlice6PrivateSiblingOwner(t *testing.T) *slice6PrivateSiblingOwner {
+	t.Helper()
+	owner := &slice6PrivateSiblingOwner{}
+	t.Cleanup(func() {
+		if err := owner.finish(); err != nil {
+			t.Errorf("exact E private temporary cleanup: %v", err)
+		}
+	})
+	return owner
+}
+
+func (owner *slice6PrivateSiblingOwner) finish() error {
+	if owner == nil {
+		return errSlice6ExternalTemp
+	}
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.finished {
+		return owner.err
+	}
+	owner.finished = true
+	for index := len(owner.leases) - 1; index >= 0; index-- {
+		owner.err = errors.Join(owner.err, owner.leases[index].finish())
+	}
+	return owner.err
+}
+
+func slice6PrivateSourceSiblingOwned(t *testing.T, owner *slice6PrivateSiblingOwner,
+	sourceRoot, prefix string) string {
+	t.Helper()
+	if owner == nil {
+		return slice6PrivateSourceSibling(t, sourceRoot, prefix)
+	}
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.finished {
+		t.Fatal(errSlice6ExternalTemp)
+	}
+	lease := slice6OpenPrivateSourceSibling(t, sourceRoot, prefix)
+	owner.leases = append(owner.leases, lease)
+	return lease.path
+}
+
 // Keep live Gate build and runtime files adjacent to a Docker-shared checkout,
 // but never inside E, R or F. A checkout must stay strictly clean throughout
 // the run, including while bind-mounted observer binaries are still live.
 func slice6PrivateSourceSibling(t *testing.T, sourceRoot, prefix string) string {
+	t.Helper()
+	lease := slice6OpenPrivateSourceSibling(t, sourceRoot, prefix)
+	t.Cleanup(func() {
+		if err := lease.finish(); err != nil {
+			t.Errorf("exact private external temporary cleanup: %v", err)
+		}
+	})
+	return lease.path
+}
+
+func slice6OpenPrivateSourceSibling(t *testing.T, sourceRoot, prefix string) *slice6PrivateSiblingLease {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(sourceRoot)
 	if err != nil || !absoluteCleanSlice6Path(root) || !strings.HasPrefix(prefix, ".sr-") ||
@@ -57,12 +138,8 @@ func slice6PrivateSourceSibling(t *testing.T, sourceRoot, prefix string) string 
 		// operator rather than deleting a possibly replaced path.
 		t.Fatal(errSlice6ExternalTemp)
 	}
-	t.Cleanup(func() {
-		if err := slice6RemovePrivateSibling(path, parentFD, rootFD, parentStat, rootStat); err != nil {
-			t.Errorf("exact private external temporary cleanup: %v", err)
-		}
-	})
-	return path
+	return &slice6PrivateSiblingLease{path: path, parentFD: parentFD,
+		rootFD: rootFD, parentStat: parentStat, rootStat: rootStat}
 }
 
 func slice6OutsideAllSources(path, ownSource string) bool {
@@ -94,9 +171,10 @@ func slice6OutsideAllSources(path, ownSource string) bool {
 // Directory-fd-relative, no-follow and bounded removal of only the inode
 // created above. If a name was replaced, leave it in place and fail the Gate.
 func slice6RemovePrivateSibling(path string, parentFD, rootFD int,
-	parentStat, rootStat unix.Stat_t) error {
-	defer unix.Close(rootFD)
-	defer unix.Close(parentFD)
+	parentStat, rootStat unix.Stat_t) (resultErr error) {
+	defer func() {
+		resultErr = errors.Join(resultErr, unix.Close(rootFD), unix.Close(parentFD))
+	}()
 	var heldParent, namedParent, heldRoot, namedRoot unix.Stat_t
 	if unix.Fstat(parentFD, &heldParent) != nil || unix.Lstat(filepath.Dir(path), &namedParent) != nil ||
 		unix.Fstat(rootFD, &heldRoot) != nil ||
@@ -113,6 +191,12 @@ func slice6RemovePrivateSibling(path string, parentFD, rootFD int,
 	if unix.Fstatat(parentFD, filepath.Base(path), &namedRoot, unix.AT_SYMLINK_NOFOLLOW) != nil ||
 		!slice6SameInode(namedRoot, rootStat) ||
 		unix.Unlinkat(parentFD, filepath.Base(path), unix.AT_REMOVEDIR) != nil || unix.Fsync(parentFD) != nil {
+		return errSlice6ExternalTemp
+	}
+	if err := unix.Fstatat(parentFD, filepath.Base(path), &namedRoot, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
+		return errSlice6ExternalTemp
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 		return errSlice6ExternalTemp
 	}
 	return nil

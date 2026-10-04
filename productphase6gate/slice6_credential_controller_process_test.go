@@ -27,12 +27,24 @@ import (
 
 const slice6CredentialProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CREDENTIAL_PROCESS"
 
+type slice6CredentialControllerOutcome struct {
+	RunID, ProfileDigest, ContainerID string
+	PhysicalConverged                 bool
+}
+
+func (outcome slice6CredentialControllerOutcome) validForRun(runID, profileDigest string) bool {
+	return len(runID) == 32 && lowerHexSlice6(runID) && outcome.RunID == runID &&
+		guestRevokeFixtureDigestGate(profileDigest) && outcome.ProfileDigest == profileDigest &&
+		len(outcome.ContainerID) == 64 && lowerHexSlice6(outcome.ContainerID) && outcome.PhysicalConverged
+}
+
 // This diagnostic starts the real R19 credential-controller image, not an
 // Alpine stand-in. It can only prove the bounded bootstrap phase until the
 // separate certificate controller is also running and able to sign its CSR.
 func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, managementToken, bootstrapKey []byte, onBootstrapReady func(stopCredential func() error)) {
+	config, managementToken, bootstrapKey []byte, onBootstrapReady func(stopCredential func() error),
+	outcome *slice6CredentialControllerOutcome) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -112,6 +124,36 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create real credential controller failed")
 	}
+	if outcome != nil {
+		*outcome = slice6CredentialControllerOutcome{RunID: run.id,
+			ProfileDigest: profile.ProfileDigest, ContainerID: id}
+	}
+	type startResult struct {
+		output []byte
+		err    error
+	}
+	completed := make(chan startResult, 1)
+	earlyOwner, err := slice6NewEarlyControllerAttachOwner(id,
+		func(cleanup context.Context, args ...string) error {
+			_, err := run.docker(cleanup, args...)
+			return err
+		}, func(cleanup context.Context) error {
+			select {
+			case result := <-completed:
+				clear(result.output)
+				return nil // CombinedOutput has returned, regardless of its exit status.
+			case <-cleanup.Done():
+				return cleanup.Err()
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := earlyOwner.finish(); err != nil {
+			t.Errorf("failure-path early credential controller cleanup: %v", err)
+		}
+	}()
 	inspectDocument, err := run.docker(ctx, "inspect", id)
 	var containers []struct {
 		Image  string `json:"Image"`
@@ -155,14 +197,14 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 		t.Fatal("real controller private FD envelope invalid")
 	}
 	defer clear(encoded)
-	type startResult struct {
-		output []byte
-		err    error
-	}
-	completed := make(chan startResult, 1)
 	startupInput := bytes.Clone(encoded)
+	attachContext, cancelAttach := context.WithCancel(ctx)
+	defer cancelAttach()
+	if err := earlyOwner.attach(cancelAttach); err != nil {
+		t.Fatal(err)
+	}
 	go func() {
-		command := exec.CommandContext(ctx, "docker", "start", "-a", "-i", id)
+		command := exec.CommandContext(attachContext, "docker", "start", "-a", "-i", id)
 		command.Stdin = bytes.NewReader(startupInput)
 		output, startErr := command.CombinedOutput()
 		clear(startupInput)
@@ -190,6 +232,9 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 		}
 		select {
 		case result := <-completed:
+			if err := earlyOwner.consume(); err != nil {
+				t.Fatal(err)
+			}
 			stage := slice6ControllerFailureStage(result.output)
 			clear(result.output)
 			t.Fatalf("real credential controller exited before bootstrap listener and ledger: stage=%s, exit=%v", stage, result.err)
@@ -201,6 +246,7 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 	}
 	t.Log("real R19 credential controller PID1 reached private certificate-client listener and created its own ledger; managed PKI switch not yet proven")
 	stopped := false
+	var stopFailure error
 	sequence := &slice6CleanupSequence{stages: []slice6CleanupStage{
 		{"stop-credential-controller", func(cleanup context.Context) error {
 			if _, err := run.docker(cleanup, "stop", "-t", "5", id); err != nil {
@@ -253,7 +299,11 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 	}}
 	stopCredential := func() error {
 		stopped = true
-		return sequence.Run()
+		stopFailure = sequence.Run()
+		return stopFailure
+	}
+	if err := earlyOwner.handoff(); err != nil {
+		t.Fatal(err)
 	}
 	defer func() {
 		if !stopped {
@@ -272,6 +322,8 @@ func slice6RunCredentialControllerBootstrap(t *testing.T, ctx context.Context, r
 	}
 	if ctx.Err() != nil {
 		t.Error("credential controller diagnostic context expired")
+	} else if outcome != nil && stopped && stopFailure == nil {
+		outcome.PhysicalConverged = true
 	}
 }
 

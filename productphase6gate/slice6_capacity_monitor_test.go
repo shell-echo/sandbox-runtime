@@ -289,6 +289,17 @@ func (monitor *slice6CapacityMonitor) Close() {
 	<-monitor.done
 }
 
+// A successful E pre-binding check needs the monitor goroutine and its
+// synchronous emergency-stop callback joined before reading the stop result.
+// This reports a failure even when the Docker sweep later removes everything.
+func slice6FinishCapacityMonitor(monitor *slice6CapacityMonitor, stopResult func() error) error {
+	if monitor == nil || stopResult == nil {
+		return &slice6CapacityFailure{stage: "terminal", class: slice6CapacityInvalidInput}
+	}
+	monitor.Close()
+	return errors.Join(monitor.Reason(), stopResult())
+}
+
 // sampleSlice6RunningCapacity reads the physical host filesystem and the
 // Docker backing filesystem from a known run-owned container. A Docker exec
 // failure is a sampling failure, not proof that the observer disappeared;
@@ -699,6 +710,64 @@ func TestSlice6CapacityMonitorStopsOnThresholdAndSampleLoss(t *testing.T) {
 				t.Fatalf("capacity monitor did not stop exactly once: samples=%d stops=%d reason=%v", calls, stops, monitor.Reason())
 			}
 		})
+	}
+}
+
+func TestSlice6FinishCapacityMonitorJoinsStopCallback(t *testing.T) {
+	if slice6FinishCapacityMonitor(nil, func() error { return nil }) == nil {
+		t.Fatal("missing E capacity monitor accepted")
+	}
+	budget := slice6TopologyBudget(0)
+	hostRequired, dockerRequired, err := budget.required()
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	returned := atomic.Bool{}
+	sentinel := errors.New("exact writer stop failed")
+	var calls atomic.Int32
+	monitor, err := startSlice6CapacityMonitor(t.Context(), budget, 100*time.Millisecond, 200*time.Millisecond,
+		func(context.Context) (slice6CapacityObservation, error) {
+			if calls.Add(1) == 1 {
+				return slice6CapacityObservation{hostRequired + 1, dockerRequired + 1}, nil
+			}
+			return slice6CapacityObservation{1, dockerRequired + 1}, nil
+		}, func(error) {
+			close(started)
+			<-release
+			returned.Store(true)
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("capacity stop callback did not start")
+	}
+	finished := make(chan error, 1)
+	go func() {
+		finished <- slice6FinishCapacityMonitor(monitor, func() error {
+			if !returned.Load() {
+				return errors.New("stop callback not joined")
+			}
+			return sentinel
+		})
+	}()
+	select {
+	case <-finished:
+		t.Fatal("E terminal monitor check returned before stop callback")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case result := <-finished:
+		if !errors.Is(result, sentinel) || monitor.Reason() == nil {
+			t.Fatalf("E capacity terminal result lost stop or monitor failure: %v", result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("E terminal monitor did not finish after stop callback")
 	}
 }
 

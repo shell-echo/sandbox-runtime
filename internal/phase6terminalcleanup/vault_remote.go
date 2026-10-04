@@ -34,6 +34,7 @@ type VaultRemoteConfig struct {
 	Token             []byte
 	TokenExpiresAt    time.Time
 	Now               func() time.Time
+	EvidenceV3        bool
 }
 
 type VaultRemote struct {
@@ -42,6 +43,7 @@ type VaultRemote struct {
 	token           *memoryTokenSource
 	pki             *workloadpki.VaultClient
 	issuerID        string
+	evidence        *vaultEvidenceV3Collector
 }
 
 type memoryTokenSource struct {
@@ -111,7 +113,17 @@ func newVaultRemote(config VaultRemoteConfig, dial func(context.Context, string,
 			}
 			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, address)
 		}}
-	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error {
+	var roundTripper http.RoundTripper = transport
+	var evidence *vaultEvidenceV3Collector
+	if config.EvidenceV3 {
+		if config.Plan.Protocol != ProtocolV2ID {
+			transport.CloseIdleConnections()
+			return nil, ErrInvalid
+		}
+		evidence = newVaultEvidenceV3Collector(config.Plan, config.Now)
+		roundTripper = &vaultEvidenceV3Transport{next: transport, collector: evidence}
+	}
+	client := &http.Client{Transport: roundTripper, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
 	token := &memoryTokenSource{token: bytes.Clone(config.Token), expiresAt: config.TokenExpiresAt, now: config.Now}
@@ -126,13 +138,16 @@ func newVaultRemote(config VaultRemoteConfig, dial func(context.Context, string,
 		return nil, ErrInvalid
 	}
 	return &VaultRemote{client: client, clientTransport: transport, token: token, pki: pki,
-		issuerID: config.Plan.GeneralIssuerID}, nil
+		issuerID: config.Plan.GeneralIssuerID, evidence: evidence}, nil
 }
 
 func (v *VaultRemote) Close() {
 	if v != nil {
 		v.token.Close()
 		v.clientTransport.CloseIdleConnections()
+		if v.evidence != nil {
+			v.evidence.clear()
+		}
 	}
 }
 

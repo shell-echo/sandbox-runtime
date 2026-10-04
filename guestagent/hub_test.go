@@ -1,19 +1,81 @@
 package guestagent
 
 import (
+	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 )
+
+type delayedDependencyAuthenticator struct {
+	Authenticator
+	delay time.Duration
+}
+
+func (a delayedDependencyAuthenticator) Authenticate(ctx context.Context, _ AuthRequest) (Identity, error) {
+	timer := time.NewTimer(a.delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return Identity{}, ErrAuthDependencyUnavailable
+	case <-ctx.Done():
+		return Identity{}, ctx.Err()
+	}
+}
+
+type failWelcomeConn struct {
+	net.Conn
+	writes int
+	mu     sync.Mutex
+	failed chan struct{}
+}
+
+func (c *failWelcomeConn) Write(data []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.writes++
+	if c.writes >= 2 {
+		if c.writes == 2 {
+			close(c.failed)
+		}
+		return 0, errors.New("test welcome transport failure")
+	}
+	return c.Conn.Write(data)
+}
+
+type failWelcomeWriter struct {
+	http.ResponseWriter
+	failed chan struct{}
+}
+
+func (w failWelcomeWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffered, err := http.NewResponseController(w.ResponseWriter).Hijack()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := buffered.Flush(); err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	failing := &failWelcomeConn{Conn: conn, failed: w.failed}
+	buffered.Reader.Reset(failing)
+	buffered.Writer.Reset(failing)
+	return failing, buffered, nil
+}
 
 func TestOutboundAgentAuthenticatesCallsCancelsAndReconnects(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -87,6 +149,555 @@ func TestOutboundAgentAuthenticatesCallsCancelsAndReconnects(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Agent.Run() did not stop")
+	}
+}
+
+func TestOptionalRetirementOwnsDisconnectAndFreshReconnect(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := newMemoryAuthenticator(publicKey, 1)
+	var retired atomic.Int64
+	var observedMu sync.Mutex
+	var observed []Observation
+	hub, err := NewHub(HubOptions{Authenticator: auth, AuthorityPollPeriod: 10 * time.Millisecond,
+		Observation: func(value Observation) {
+			observedMu.Lock()
+			observed = append(observed, value)
+			observedMu.Unlock()
+		},
+		Retirement: &RetirementPolicy{Capacity: 2, Readback: retirementTestReadback, Retire: func(ctx context.Context, identity Identity) (RetirementDisposition, error) {
+			if err := auth.Disconnected(ctx, identity); err != nil {
+				return "", err
+			}
+			retired.Add(1)
+			return RetirementReleased, nil
+		}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	agent, err := NewAgent(AgentOptions{URL: "ws" + strings.TrimPrefix(server.URL, "http"),
+		GuestID: "gst-test", BindingGeneration: 1, PrivateKey: privateKey,
+		Handlers: map[string]OperationHandler{"guest.health": func(context.Context, json.RawMessage) (any, error) {
+			return true, nil
+		}}, ReconnectBackoff: 10 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	result := make(chan error, 1)
+	go func() { result <- agent.Run(ctx) }()
+	_ = waitForCall(t, hub, "guest.health", nil)
+	hub.Disconnect("tenant-test", "wrk-test", "primary-code")
+	_ = waitForCall(t, hub, "guest.health", nil)
+	if auth.authentications() < 2 || retired.Load() < 1 {
+		t.Fatalf("fresh reconnect=%d exact retire=%d", auth.authentications(), retired.Load())
+	}
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Agent.Run() = %v", err)
+	}
+	hub.Disconnect("tenant-test", "wrk-test", "primary-code")
+	shutdownCtx, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	if err := hub.ShutdownRetirement(shutdownCtx); err != nil {
+		t.Fatalf("retirement shutdown = %v", err)
+	}
+	observedMu.Lock()
+	defer observedMu.Unlock()
+	var firstAttempt string
+	for _, value := range observed {
+		if value.Event == ObservationProductPeerInstalled {
+			firstAttempt = value.AttemptDigest
+			break
+		}
+	}
+	if firstAttempt == "" {
+		t.Fatal("no authenticated Product attempt observed")
+	}
+	var lifecycle []string
+	for _, value := range observed {
+		if value.AttemptDigest == firstAttempt &&
+			(value.Event == ObservationProductDisconnectPending ||
+				value.Event == ObservationProductCloseCompleted ||
+				value.Event == ObservationProductDisconnectResolved) {
+			lifecycle = append(lifecycle, value.Event)
+		}
+	}
+	if len(lifecycle) != 3 || lifecycle[0] != ObservationProductDisconnectPending ||
+		lifecycle[1] != ObservationProductCloseCompleted || lifecycle[2] != ObservationProductDisconnectResolved {
+		t.Fatalf("old owner cleanup order = %v", lifecycle)
+	}
+}
+
+type busyOwnerAuthenticator struct{ *memoryAuthenticator }
+
+type blockedAfterCommitAuthenticator struct {
+	Authenticator
+	committed chan struct{}
+	release   chan struct{}
+}
+
+func (a *blockedAfterCommitAuthenticator) Authenticate(ctx context.Context, request AuthRequest) (Identity, error) {
+	identity, err := a.Authenticator.Authenticate(ctx, request)
+	close(a.committed)
+	select {
+	case <-a.release:
+		return identity, err
+	case <-ctx.Done():
+		return identity, err
+	}
+}
+
+func (a *busyOwnerAuthenticator) AuthenticateWithLocalOwner(_ context.Context, request AuthRequest, owner Identity) (Identity, error) {
+	signing, err := request.SigningBytes()
+	if err != nil {
+		return Identity{}, ErrUnauthorized
+	}
+	signature, err := request.SignatureBytes()
+	if err != nil || !ed25519.Verify(a.publicKey, signing, signature) {
+		return Identity{}, ErrUnauthorized
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.connected || owner.GuestID != request.Hello.GuestID ||
+		owner.BindingGeneration != request.Hello.BindingGeneration || owner.ClientNonce != a.nonce {
+		return Identity{}, ErrUnauthorized
+	}
+	return Identity{}, ErrAuthConnectedBusy
+}
+
+func signedRawGuestAttempt(t *testing.T, ctx context.Context, address string, privateKey ed25519.PrivateKey) (*websocket.Conn, error) {
+	t.Helper()
+	connection, _, err := websocket.Dial(ctx, address, &websocket.DialOptions{Subprotocols: []string{Subprotocol}})
+	if err != nil {
+		return nil, err
+	}
+	var challenge Challenge
+	if err := readJSON(ctx, connection, &challenge); err != nil {
+		connection.CloseNow()
+		return nil, err
+	}
+	nonce, err := randomNonce()
+	if err != nil {
+		connection.CloseNow()
+		return nil, err
+	}
+	hello := Hello{Type: "hello", GuestID: "gst-test", BindingGeneration: 1,
+		ProtocolVersion: ProtocolVersion, Capabilities: []string{"guest.health"}, ClientNonce: nonce}
+	request := AuthRequest{Hello: hello, Challenge: challenge}
+	signing, err := request.SigningBytes()
+	if err != nil {
+		connection.CloseNow()
+		return nil, err
+	}
+	hello.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, signing))
+	if err := writeJSON(ctx, connection, hello); err != nil {
+		connection.CloseNow()
+		return nil, err
+	}
+	return connection, nil
+}
+
+func TestPinnedLocalOwnerProducesOnlySignedBusy1013(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := &busyOwnerAuthenticator{newMemoryAuthenticator(publicKey, 1)}
+	var retired atomic.Int64
+	var retryable atomic.Int64
+	hub, err := NewHub(HubOptions{Authenticator: auth, RetryTemporaryAuth: true,
+		Observation: func(value Observation) {
+			if value.Event == ObservationProductAuthRetryable && value.Reason == "connected_busy" {
+				retryable.Add(1)
+			}
+		},
+		Retirement: &RetirementPolicy{Capacity: 2, Readback: retirementTestReadback,
+			Retire: func(ctx context.Context, identity Identity) (RetirementDisposition, error) {
+				if err := auth.Disconnected(ctx, identity); err != nil {
+					return "", err
+				}
+				retired.Add(1)
+				return RetirementReleased, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	address := "ws" + strings.TrimPrefix(server.URL, "http")
+	agent, err := NewAgent(AgentOptions{URL: address, GuestID: "gst-test", BindingGeneration: 1,
+		PrivateKey: privateKey, ReconnectBackoff: 10 * time.Millisecond,
+		Handlers: map[string]OperationHandler{"guest.health": func(context.Context, json.RawMessage) (any, error) {
+			return true, nil
+		}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstCtx, stopFirst := context.WithCancel(t.Context())
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- agent.Run(firstCtx) }()
+	_ = waitForCall(t, hub, "guest.health", nil)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	second, err := signedRawGuestAttempt(t, ctx, address, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var welcome Welcome
+	err = readJSON(ctx, second, &welcome)
+	second.CloseNow()
+	if websocket.CloseStatus(err) != websocket.StatusTryAgainLater || retryable.Load() != 1 || auth.authentications() != 1 {
+		t.Fatalf("local connected-busy = %v, retryable=%d authentications=%d", err, retryable.Load(), auth.authentications())
+	}
+	stopFirst()
+	if err := <-firstDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("old Guest exit = %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for (!hub.RetirementReady() || retired.Load() < 1) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !hub.RetirementReady() || retired.Load() < 1 {
+		t.Fatal("old owner did not retire before fresh attempt")
+	}
+	fresh, err := signedRawGuestAttempt(t, ctx, address, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := readJSON(ctx, fresh, &welcome); err != nil || welcome.Type != "welcome" {
+		fresh.CloseNow()
+		t.Fatalf("fresh signed attempt = %+v, %v", welcome, err)
+	}
+	fresh.CloseNow()
+	shutdownCtx, stopShutdown := context.WithTimeout(context.Background(), time.Second)
+	defer stopShutdown()
+	if err := hub.ShutdownRetirement(shutdownCtx); err != nil {
+		t.Fatalf("retirement shutdown = %v", err)
+	}
+}
+
+func TestCommittedAuthenticationOwnsCleanupWhenWelcomeWriteFails(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	underlying := newMemoryAuthenticator(publicKey, 1)
+	auth := &blockedAfterCommitAuthenticator{Authenticator: underlying,
+		committed: make(chan struct{}), release: make(chan struct{})}
+	var retired atomic.Int64
+	hub, err := NewHub(HubOptions{Authenticator: auth,
+		Retirement: &RetirementPolicy{Capacity: 1, Readback: retirementTestReadback,
+			Retire: func(ctx context.Context, identity Identity) (RetirementDisposition, error) {
+				if err := underlying.Disconnected(ctx, identity); err != nil {
+					return "", err
+				}
+				retired.Add(1)
+				return RetirementReleased, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	connection, err := signedRawGuestAttempt(t, ctx, "ws"+strings.TrimPrefix(server.URL, "http"), privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-auth.committed:
+	case <-ctx.Done():
+		t.Fatal("authentication did not commit before transport loss")
+	}
+	connection.CloseNow()
+	close(auth.release)
+	deadline := time.Now().Add(time.Second)
+	for (retired.Load() != 1 || !hub.RetirementReady()) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if retired.Load() != 1 || !hub.RetirementReady() {
+		t.Fatal("post-commit welcome failure lost cleanup ownership")
+	}
+	shutdownCtx, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	if err := hub.ShutdownRetirement(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type firstAuthenticationFailure struct {
+	Authenticator
+	mu       sync.Mutex
+	attempts int
+	failure  error
+}
+
+func (a *firstAuthenticationFailure) Authenticate(ctx context.Context, request AuthRequest) (Identity, error) {
+	a.mu.Lock()
+	a.attempts++
+	first := a.attempts == 1
+	a.mu.Unlock()
+	if first {
+		return Identity{}, a.failure
+	}
+	return a.Authenticator.Authenticate(ctx, request)
+}
+
+func (a *firstAuthenticationFailure) count() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.attempts
+}
+
+func TestTemporaryAuthCloseRequiresBothExplicitEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, failure        string
+		hubRetry, agentRetry bool
+		wantReconnect        bool
+	}{
+		{name: "new endpoints", failure: "definite", hubRetry: true, agentRetry: true, wantReconnect: true},
+		{name: "old Guest", failure: "definite", hubRetry: true, agentRetry: false},
+		{name: "old Product", failure: "definite", hubRetry: false, agentRetry: true},
+		{name: "unknown outcome", failure: "unknown", hubRetry: true, agentRetry: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failure := ErrAuthDependencyUnavailable
+			if tc.failure == "unknown" {
+				failure = ErrUnavailable
+			}
+			auth := &firstAuthenticationFailure{Authenticator: newMemoryAuthenticator(publicKey, 1), failure: failure}
+			hub, err := NewHub(HubOptions{Authenticator: auth, RetryTemporaryAuth: tc.hubRetry})
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(hub)
+			defer server.Close()
+			var actual1013Retries atomic.Int64
+			agent, err := NewAgent(AgentOptions{URL: "ws" + strings.TrimPrefix(server.URL, "http"),
+				GuestID: "gst-test", BindingGeneration: 1, PrivateKey: privateKey,
+				Handlers:         map[string]OperationHandler{"guest.health": func(context.Context, json.RawMessage) (any, error) { return true, nil }},
+				ReconnectBackoff: 10 * time.Millisecond, RetryTemporaryAuth: tc.agentRetry,
+				Observation: func(value Observation) {
+					if value.Event == ObservationGuestAuthRetry {
+						actual1013Retries.Add(1)
+					}
+				}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			result := make(chan error, 1)
+			go func() { result <- agent.Run(ctx) }()
+			if tc.wantReconnect {
+				_ = waitForCall(t, hub, "guest.health", nil)
+				if auth.count() < 2 || actual1013Retries.Load() != 1 {
+					t.Fatalf("temporary dependency retry attempts=%d actual1013=%d", auth.count(), actual1013Retries.Load())
+				}
+				cancel()
+				if err := <-result; !errors.Is(err, context.Canceled) {
+					t.Fatalf("Agent.Run after reconnect = %v", err)
+				}
+				return
+			}
+			select {
+			case err := <-result:
+				if !errors.Is(err, ErrUnauthorized) || auth.count() != 1 || actual1013Retries.Load() != 0 {
+					t.Fatalf("mixed/unknown endpoint admission = %v attempts=%d actual1013=%d", err, auth.count(), actual1013Retries.Load())
+				}
+			case <-ctx.Done():
+				t.Fatal("mixed/unknown endpoint retried or failed to stop")
+			}
+		})
+	}
+}
+
+func TestRetryableCloseAndReceiptOffHandlerJoinHonorCancellation(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := &firstAuthenticationFailure{Authenticator: newMemoryAuthenticator(publicKey, 1),
+		failure: ErrAuthDependencyUnavailable}
+	hub, err := NewHub(HubOptions{Authenticator: auth,
+		RetryTemporaryAuth: true,
+		Retirement: &RetirementPolicy{Capacity: 1, Readback: retirementTestReadback,
+			Retire: func(context.Context, Identity) (RetirementDisposition, error) {
+				return RetirementReleased, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The same producer lifecycle is required with receipts disabled.
+	requestCancel := make(chan context.CancelFunc, 1)
+	handlerDone := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ctx, cancel := context.WithCancel(request.Context())
+		requestCancel <- cancel
+		defer close(handlerDone)
+		hub.ServeHTTP(writer, request.WithContext(ctx))
+	}))
+	defer server.Close()
+	ctx, stop := context.WithTimeout(t.Context(), 3*time.Second)
+	defer stop()
+	connection, err := signedRawGuestAttempt(t, ctx, "ws"+strings.TrimPrefix(server.URL, "http"), privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	for (auth.count() == 0 || !hub.RetirementReady()) && ctx.Err() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("definite pre-commit refusal did not abandon reservation")
+	}
+	joined := make(chan error, 1)
+	go func() { joined <- hub.QuiesceObservation(ctx) }()
+	select {
+	case <-joined:
+		t.Fatal("abandoned reservation was mistaken for handler completion")
+	case <-time.After(25 * time.Millisecond):
+	}
+	(<-requestCancel)()
+	select {
+	case <-handlerDone:
+	case <-time.After(time.Second):
+		t.Fatal("parent cancellation did not interrupt 1013 close handshake")
+	}
+	if err := <-joined; err != nil {
+		t.Fatalf("handler join after transport cancellation = %v", err)
+	}
+	if hub.RetirementReady() {
+		t.Fatal("quiesced Hub reopened admission")
+	}
+	if err := hub.ShutdownRetirement(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRetryableCloseUsesRemainingHandshakeBudget(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub, err := NewHub(HubOptions{Authenticator: delayedDependencyAuthenticator{
+		Authenticator: newMemoryAuthenticator(publicKey, 1), delay: 550 * time.Millisecond},
+		RetryTemporaryAuth: true, HandshakeTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		defer close(finished)
+		hub.ServeHTTP(writer, request)
+	}))
+	defer server.Close()
+	ctx, stop := context.WithTimeout(t.Context(), 3*time.Second)
+	defer stop()
+	started := time.Now()
+	connection, err := signedRawGuestAttempt(t, ctx, "ws"+strings.TrimPrefix(server.URL, "http"), privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	// Do not read the server close frame: there is deliberately no peer close
+	// response. The parent context remains live throughout this assertion.
+	select {
+	case <-finished:
+		if elapsed := time.Since(started); elapsed > 2*time.Second || ctx.Err() != nil {
+			t.Fatalf("1013 close exceeded the original handshake budget: %s", elapsed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("1013 close waited for coder/websocket's fresh background timeout")
+	}
+}
+
+func TestWelcomeWriteFailureConfirmsTransportBeforeExactRetirement(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := newMemoryAuthenticator(publicKey, 1)
+	var mu sync.Mutex
+	var events []string
+	retired := make(chan struct{})
+	resolved := make(chan struct{})
+	hub, err := NewHub(HubOptions{Authenticator: auth,
+		Observation: func(value Observation) {
+			mu.Lock()
+			events = append(events, value.Event)
+			mu.Unlock()
+			if value.Event == ObservationProductDisconnectResolved {
+				close(resolved)
+			}
+		},
+		Retirement: &RetirementPolicy{Capacity: 1, Readback: retirementTestReadback,
+			Retire: func(ctx context.Context, identity Identity) (RetirementDisposition, error) {
+				if err := auth.Disconnected(ctx, identity); err != nil {
+					return "", err
+				}
+				close(retired)
+				return RetirementReleased, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		hub.ServeHTTP(failWelcomeWriter{ResponseWriter: writer, failed: failed}, request)
+	}))
+	defer server.Close()
+	ctx, stop := context.WithTimeout(t.Context(), 3*time.Second)
+	defer stop()
+	connection, err := signedRawGuestAttempt(t, ctx, "ws"+strings.TrimPrefix(server.URL, "http"), privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	select {
+	case <-failed:
+	case <-ctx.Done():
+		t.Fatal("controlled transport did not reject welcome write")
+	}
+	select {
+	case <-retired:
+	case <-ctx.Done():
+		t.Fatal("committed auth with failed welcome did not retire the old nonce")
+	}
+	select {
+	case <-resolved:
+	case <-ctx.Done():
+		t.Fatal("exact retirement did not reach the resolved callback")
+	}
+	if !hub.RetirementReady() {
+		t.Fatal("exact retired nonce did not restore local capacity")
+	}
+	mu.Lock()
+	got := append([]string(nil), events...)
+	mu.Unlock()
+	want := []string{ObservationProductAuthAccepted, ObservationProductDisconnectPending,
+		ObservationProductCloseCompleted, ObservationProductDisconnectResolved}
+	if !slices.Equal(got, want) {
+		t.Fatalf("welcome-failure event order = %v, want %v", got, want)
+	}
+	if _, _, err := hub.CallWithIdentity(ctx, "tenant-test", "wrk-test", "primary-code", "guest.health", nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("failed welcome installed a peer: %v", err)
+	}
+	if err := hub.QuiesceObservation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.ShutdownRetirement(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -380,7 +991,7 @@ func (a *memoryAuthenticator) Authenticate(_ context.Context, request AuthReques
 	a.connected = true
 	a.nonce = request.Hello.ClientNonce
 	a.authCount++
-	return Identity{TenantID: "tenant-test", WorkspaceID: "wrk-test", SlotKey: "primary-code", GuestID: request.Hello.GuestID, BindingGeneration: a.generation, ProtocolVersion: ProtocolVersion, Capabilities: append([]string(nil), request.Hello.Capabilities...), ClientNonce: a.nonce, ExpiresAt: time.Now().Add(time.Minute)}, nil
+	return Identity{TenantID: "tenant-test", WorkspaceID: "wrk-test", SlotKey: "primary-code", GuestID: request.Hello.GuestID, SlotGeneration: 1, BindingGeneration: a.generation, ProtocolVersion: ProtocolVersion, Capabilities: append([]string(nil), request.Hello.Capabilities...), ClientNonce: a.nonce, ExpiresAt: time.Now().Add(time.Minute)}, nil
 }
 func (a *memoryAuthenticator) CheckAuthority(_ context.Context, identity Identity) error {
 	a.mu.Lock()

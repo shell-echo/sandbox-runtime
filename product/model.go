@@ -52,6 +52,7 @@ var (
 	ErrIdempotencyConflict   = errors.New("product idempotency conflict")
 	ErrStoreUnavailable      = errors.New("product store is unavailable")
 	ErrStoreOutcomeUnknown   = errors.New("product store outcome is unknown")
+	ErrGuestConnectedBusy    = errors.New("product Guest connection is still locally owned")
 	ErrNotFound              = errors.New("product resource not found")
 	ErrForbidden             = errors.New("product action is forbidden")
 	ErrVersionConflict       = errors.New("product version conflict")

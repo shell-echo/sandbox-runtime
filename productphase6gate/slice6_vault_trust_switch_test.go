@@ -39,6 +39,8 @@ const slice6ProductPostgresDSNEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_POSTG
 const slice6ProductObserverRevisionEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_SOURCE_REVISION"
 const slice6ProductObserverExpectedDigestEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_PRODUCT_OBSERVER_EXPECTED_DIGEST"
 const slice6GuestReceiptEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RECEIPT"
+const slice6GuestRecoveryEEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RECOVERY_E"
+const slice6GuestRecoveryEIssuerArmedEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_GUEST_RECOVERY_E_ISSUER_ARMED"
 
 func slice6VaultTemporarySourceRoot(configured string) (string, error) {
 	if configured != "" {
@@ -86,9 +88,109 @@ func TestSlice6PreserveFirstFailureAcrossNestedCallbacks(t *testing.T) {
 // cutover. It is not the managed certificate-controller/agent path or a Slice 6
 // release scenario.
 func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
+	if os.Getenv(slice6GuestRecoveryEEnv) == "1" {
+		t.Skip("formal Guest recovery E has its own single-issuer entry")
+	}
 	if os.Getenv(slice6VaultTrustSwitchEnv) != "1" {
 		t.Skip("set " + slice6VaultTrustSwitchEnv + "=1 for the real Vault trust switch")
 	}
+	slice6RunVaultPersistentTrustSwitch(t, false)
+}
+
+func TestPhase6Slice6GuestRecoveryE(t *testing.T) {
+	// This opt-in is an operating interlock, not issuer authorization. The
+	// frozen R/F/E package and one-run approval are reviewed out of band.
+	if os.Getenv(slice6GuestRecoveryEEnv) != "1" {
+		t.Skip("set " + slice6GuestRecoveryEEnv + "=1 for the formal Guest recovery E")
+	}
+	if err := slice6GuestRecoveryEPreissuerEnvironment(os.Getenv); err != nil {
+		t.Fatal(err)
+	}
+	slice6RunVaultPersistentTrustSwitch(t, true)
+}
+
+func slice6GuestRecoveryEPreissuerEnvironment(getenv func(string) string) error {
+	if getenv == nil {
+		return errors.New("Guest recovery E environment unavailable")
+	}
+	required := []string{
+		slice6VaultTrustSwitchEnv,
+		"SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE",
+		"SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS",
+		slice6ControllerPrivateConfigEnv,
+		slice6CredentialProcessEnv,
+		slice6CertificateProcessEnv,
+		slice6QuiesceProcessEnv,
+		slice6TerminalOperatorEnv,
+		slice6BreakGlassProcessEnv,
+		slice6GuestMaterialEnv,
+		slice6GuestRuntimeProcessEnv,
+		slice6GuestBindingFixtureEnv,
+		slice6ProductTLSSignerEnv,
+		slice6ProductMaterialInputsEnv,
+		slice6ProductMigrationInputsEnv,
+		slice6ProductMigrationSignersEnv,
+		slice6ProductMigrationJobEnv,
+		slice6ProductRuntimeInputsEnv,
+		slice6ProductRuntimeProcessEnv,
+		slice6PostgresServerLeafEnv,
+		slice6ProductPostgresDSNEnv,
+		slice6GuestReceiptEnv,
+	}
+	for _, name := range required {
+		if getenv(name) != "1" {
+			return fmt.Errorf("Guest recovery E requires %s=1 before issuer allocation", name)
+		}
+	}
+	for _, name := range []string{slice6GuestLiveRevokeEnv,
+		slice6TerminalOperatorV3DiagnosticEnv, slice6ProductMigrationPreDDLFailureEnv} {
+		if getenv(name) == "1" {
+			return fmt.Errorf("Guest recovery E rejects component-only %s=1", name)
+		}
+	}
+	if getenv(slice6GuestRecoveryEIssuerArmedEnv) != "1" {
+		return errors.New("Guest recovery E issuer arming flag absent; flag alone is not approval")
+	}
+	return nil
+}
+
+func TestSlice6GuestRecoveryEPreissuerEnvironmentFailsClosed(t *testing.T) {
+	admitted := func(overrides map[string]string) func(string) string {
+		return func(name string) string {
+			if value, ok := overrides[name]; ok {
+				return value
+			}
+			switch name {
+			case slice6GuestLiveRevokeEnv, slice6TerminalOperatorV3DiagnosticEnv,
+				slice6ProductMigrationPreDDLFailureEnv:
+				return ""
+			default:
+				return "1"
+			}
+		}
+	}
+	if err := slice6GuestRecoveryEPreissuerEnvironment(admitted(nil)); err != nil {
+		t.Fatalf("complete explicit E admission rejected: %v", err)
+	}
+	for _, name := range []string{slice6GuestReceiptEnv, slice6ProductRuntimeProcessEnv,
+		slice6GuestRuntimeProcessEnv, slice6ProductMigrationJobEnv,
+		slice6TerminalOperatorEnv, slice6GuestRecoveryEIssuerArmedEnv} {
+		if err := slice6GuestRecoveryEPreissuerEnvironment(admitted(map[string]string{name: ""})); err == nil {
+			t.Fatalf("missing %s reached issuer allocation", name)
+		}
+	}
+	for _, name := range []string{slice6GuestLiveRevokeEnv,
+		slice6TerminalOperatorV3DiagnosticEnv, slice6ProductMigrationPreDDLFailureEnv} {
+		if err := slice6GuestRecoveryEPreissuerEnvironment(admitted(map[string]string{name: "1"})); err == nil {
+			t.Fatalf("component-only %s reached issuer allocation", name)
+		}
+	}
+	if slice6GuestRecoveryEPreissuerEnvironment(nil) == nil {
+		t.Fatal("nil E admission reader reached issuer allocation")
+	}
+}
+
+func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 	if os.Getenv(slice6GuestMaterialEnv) == "1" && os.Getenv(slice6BreakGlassProcessEnv) != "1" {
 		t.Fatal("live Guest material agent requires the same-run break-glass consume listener")
 	}
@@ -154,7 +256,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatal("pre-issuer private Guest evidence root unavailable")
 		}
 		t.Cleanup(func() {
-			if err := receiptRoot.close(); err != nil {
+			if receiptRoot.fd >= 0 && receiptRoot.close() != nil {
 				t.Error("private Guest evidence root close unconfirmed")
 			}
 		})
@@ -166,11 +268,58 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Fatal("Vault trust switch must not use a root host UID")
 	}
 	var migrationFailure error
+	var migrationExitProof slice6ProductMigrationExitProof
 	var runtimeFailure error
 	var terminalFailure error
+	var eCredentialOutcome slice6CredentialControllerOutcome
+	var eCertificateOutcome slice6CertificateControllerOutcome
+	var eBreakGlassOutcome slice6BreakGlassRunOutcome
+	var eProfileDigest string
+	var eConvergence *slice6EConvergenceCollector
+	var eConvergenceFailure error
+	eTLSRoles := slice6FormalETLSRoles()
+	eTLSOutcomes := make(map[string]*slice6OrdinaryTLSOutcome)
+	eMaterialOutcomes := make(map[string]*slice6EMaterialOutcome)
+	if formalE {
+		for _, role := range eTLSRoles {
+			eTLSOutcomes[role] = &slice6OrdinaryTLSOutcome{}
+		}
+		for _, role := range [...]string{"guest-agent", "product-runtime-agent", "product-migration-agent"} {
+			eMaterialOutcomes[role] = &slice6EMaterialOutcome{}
+		}
+	}
+	tlsOutcome := func(role string) *slice6OrdinaryTLSOutcome {
+		if !formalE {
+			return nil
+		}
+		return eTLSOutcomes[role]
+	}
+	materialOutcome := func(role string) *slice6EMaterialOutcome {
+		if !formalE {
+			return nil
+		}
+		return eMaterialOutcomes[role]
+	}
+	recordE := func(err error) {
+		if formalE && err != nil {
+			eConvergenceFailure = errors.Join(eConvergenceFailure, err)
+		}
+	}
+	recordTLS := func(role string) {
+		if formalE {
+			recordE(eConvergence.tls(role, tlsOutcome(role)))
+		}
+	}
+	recordMaterial := func(role string) {
+		if formalE {
+			recordE(eConvergence.material(role, materialOutcome(role)))
+		}
+	}
 	var capacityFailure error
 	var capacityStopFailure error
 	var closeCapacityMonitor func()
+	var checkCapacityTerminal func() error
+	var capacityMonitorID string
 	static := slice6VaultStaticInputsFromEnvironment()
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		sourceRoot, err := filepath.EvalSymlinks(static.sourceRoot)
@@ -192,6 +341,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), budget)
 	defer cancel()
+	var externalOwner *slice6PrivateSiblingOwner
+	if formalE {
+		externalOwner = newSlice6PrivateSiblingOwner(t)
+	}
 	var guestCandidateImage string
 	var verifiedImages phase6profilebuilder.ImageSupply
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
@@ -221,7 +374,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			verifyCleanSlice6Source(ctx, observerRoot, observerRevision) != nil {
 			t.Fatal("Product runtime observer requires clean E source and locked Go 1.26.8 before issuer allocation")
 		}
-		productRuntimeObserver, err = slice6BuildProductRuntimeObserver(t, ctx, observerRoot)
+		productRuntimeObserver, err = slice6BuildProductRuntimeObserver(t, ctx, observerRoot, externalOwner)
 		if err != nil || slice6ApproveProductRuntimeObserver(
 			os.Getenv(slice6ProductObserverExpectedDigestEnv), &productRuntimeObserver) != nil {
 			t.Fatal("Product runtime observer binary differs from externally approved digest before issuer allocation")
@@ -241,7 +394,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatal("pre-issuer runtime to fixture source pair rejected")
 		}
 		fixture, fixtureErr := slice6BuildGuestBindingFixture(t, ctx,
-			fixtureRoot, fixtureRevision)
+			fixtureRoot, fixtureRevision, externalOwner)
 		guestBindingFixture = fixture
 		if fixtureErr != nil || slice6ApproveGuestBindingFixture(&guestBindingFixture,
 			os.Getenv(slice6GuestBindingFixtureExpectedDigestEnv)) != nil {
@@ -255,6 +408,15 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		t.Logf("pre-issuer Guest binding fixture source=%s binary=%s go=%s",
 			guestBindingFixture.SourceRevision, guestBindingFixture.Digest, runtime.Version())
 	}
+	var eFrozenSources slice6GuestESourceIdentity
+	if formalE {
+		frozen, freezeErr := slice6FreezeGuestESources(ctx, static,
+			verifiedImages, guestBindingFixture)
+		if freezeErr != nil {
+			t.Fatal("Guest recovery E/R/F source identities unavailable before issuer allocation")
+		}
+		eFrozenSources = frozen
+	}
 	// Build the finite operator from its own clean source checkpoint before
 	// this test creates any run-private files or short-lived Vault authority.
 	var terminalBinaryPath, terminalBinaryDigest string
@@ -265,7 +427,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		// Docker Desktop shares the workspace host tree, not Go's system
 		// test temp directory. This sibling is still outside the clean source.
-		operatorDirectory := slice6PrivateSourceSibling(t, operatorSource, ".sr-p6-terminal-operator-")
+		operatorDirectory := slice6PrivateSourceSiblingOwned(t, externalOwner,
+			operatorSource, ".sr-p6-terminal-operator-")
 		terminalBinaryPath, terminalBinaryDigest = slice6BuildTerminalOperator(t, ctx, operatorDirectory,
 			static.terminalSourceRoot, static.sourceRevision)
 	}
@@ -273,6 +436,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	run.privateSiblingOwner = externalOwner
 	var receiptEvidence *slice6ReceiptEvidenceRun
 	if receiptRoot != nil {
 		receiptEvidence, err = receiptRoot.newRun(run.id)
@@ -280,13 +444,29 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatal("pre-issuer exclusive private Guest evidence run unavailable")
 		}
 		t.Cleanup(func() {
-			if err := receiptEvidence.close(); err != nil {
+			if receiptEvidence.closed {
+				return
+			}
+			var closeErr error
+			if formalE && !receiptEvidence.complete {
+				closeErr = receiptEvidence.closeV2Incomplete()
+			} else {
+				closeErr = receiptEvidence.close()
+			}
+			if err := closeErr; err != nil {
 				t.Error("private Guest evidence run durability or incomplete marker unconfirmed")
 			}
 		})
 	}
+	var originalNetworks slice6GuestRecoveryNetworkManifest
 	t.Logf("exact Vault trust-switch Docker run label=%s", run.label())
-	cleanupGuard := &slice6BoundedRunCleanup{budget: 45 * time.Second}
+	cleanupBudget := 45 * time.Second
+	if formalE {
+		// The E source owns the entire original 78-bridge inventory; the
+		// no-issuer allocator drill uses the same 90-second removal bound.
+		cleanupBudget = 90 * time.Second
+	}
+	cleanupGuard := &slice6BoundedRunCleanup{budget: cleanupBudget}
 	var serverID string
 	var vaultCreateAttempted bool
 	var implicitVaultVolumes []string
@@ -345,6 +525,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		if monitorErr != nil {
 			t.Fatal("pre-issuer capacity observer unavailable")
 		}
+		capacityMonitorID = monitorID
 		rootPath, pathErr := filepath.Abs("..")
 		if pathErr != nil {
 			t.Fatal("capacity monitor host source unavailable")
@@ -372,6 +553,13 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 			t.Fatalf("pre-issuer continuous capacity admission unavailable: %v", monitorErr)
 		}
 		closeCapacityMonitor = monitor.Close
+		checkCapacityTerminal = func() error {
+			return slice6FinishCapacityMonitor(monitor, func() error {
+				stopMu.Lock()
+				defer stopMu.Unlock()
+				return stopErr
+			})
+		}
 		defer monitor.Close()
 		t.Cleanup(func() {
 			// All nested process runners have returned and their deferred Docker
@@ -398,7 +586,12 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		})
 		t.Log("pre-issuer selected Guest shell/utilities and continuous host/Docker capacity interlock admitted")
 	}
-	if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
+	if formalE || os.Getenv(slice6TerminalOperatorV3DiagnosticEnv) == "1" {
+		if os.Getenv(slice6PostgresServerLeafEnv) != "1" {
+			t.Fatal("terminal v3 requires the exact external PostgreSQL v2 plan")
+		}
+		slice6RequireTerminalOperatorV3Capability(t, ctx, run, terminalBinaryPath, terminalBinaryDigest)
+	} else if os.Getenv(slice6PostgresServerLeafEnv) == "1" {
 		slice6RequireTerminalOperatorV2Capability(t, ctx, run, terminalBinaryPath, terminalBinaryDigest)
 	}
 	var network phase6security.Network
@@ -446,7 +639,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatal("diagnostic E source path unavailable")
 	}
-	root := slice6PrivateSourceSibling(t, temporarySource, ".sr-vault-trust-switch-")
+	root := run.privateSibling(t, temporarySource, ".sr-vault-trust-switch-")
 	configDir := filepath.Join(root, "config")
 	dataDir := filepath.Join(root, "data")
 	for _, directory := range []string{root, configDir, dataDir} {
@@ -470,11 +663,30 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 	if _, err := observerBuild.CombinedOutput(); err != nil {
 		t.Fatal("build fixed independent Vault issuer observer")
 	}
-	created, err := createSlice6ProfileNetwork(ctx, run, network)
+	if formalE {
+		if receiptEvidence == nil {
+			t.Fatal("Guest recovery E requires one private evidence run before network allocation")
+		}
+		inventory, createdDigest, createErr := receiptEvidence.createGuestRecoveryFinalNetworks(ctx, run)
+		if createErr != nil {
+			t.Fatalf("Guest recovery E original network allocation: %v", createErr)
+		}
+		originalNetworks, err = slice6GuestRecoveryOriginalNetworkManifest(run, inventory,
+			createdDigest, receiptEvidence)
+		if err != nil {
+			t.Fatalf("Guest recovery E original network inventory: %v", err)
+		}
+		run, err = run.withGuestRecoveryOriginalNetworks(originalNetworks)
+		if err != nil {
+			t.Fatalf("Guest recovery E original network source: %v", err)
+		}
+		t.Logf("Guest recovery E original closed network inventory allocated once: count=%d", len(inventory))
+	}
+	created, err := run.resolveProfileNetwork(ctx, network)
 	if err != nil {
 		t.Fatal(err)
 	}
-	credentialCreated, err := createSlice6ProfileNetwork(ctx, run, credentialNetwork)
+	credentialCreated, err := run.resolveProfileNetwork(ctx, credentialNetwork)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -680,8 +892,21 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		rootRevoked = true
 	}
+	var ePrecleanup slice6GuestRecoveryPrecleanupInput
+	var ePrecleanupDigest string
+	var eTerminalBindingDigest, eTerminalOperatorID string
+	var eTerminalAttempted bool
+	var postgresTerminalConfirmed bool
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_COMPOSE_PROFILE") == "1" {
 		composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
+		if formalE {
+			eProfileDigest = composed.Profile.ProfileDigest
+			eConvergence, err = slice6NewEConvergenceCollector(run.id, eProfileDigest,
+				static.sourceRevision, terminalBinaryDigest)
+			if err != nil {
+				t.Fatal("Guest recovery E fixed convergence identity unavailable")
+			}
+		}
 		composed.PrivateGuestReceipt = os.Getenv(slice6GuestReceiptEnv) == "1"
 		composed.GuestReceiptEvidence = receiptEvidence
 		if err := slice6VerifyComposedTaskCarrier(composed.Profile); err != nil {
@@ -704,7 +929,7 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		var postgresRecord *phase6terminalcleanup.ExternalPostgresRecord
 		var postgresServerID string
 		var postgresStop func() error
-		postgresTerminalConfirmed := false
+		postgresTerminalConfirmed = false
 		var anchorFiles map[string]string
 		if os.Getenv(slice6ControllerPrivateConfigEnv) == "1" {
 			slice6PrepareControllerPrivateConfigs(t, ctx, run, composed)
@@ -870,6 +1095,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 								if os.Getenv(slice6GuestMaterialEnv) == "1" {
 									onManagedReady = func() {
 										runWork := func() {
+											var breakGlassOutcome *slice6BreakGlassRunOutcome
+											if formalE {
+												breakGlassOutcome = &eBreakGlassOutcome
+											}
 											slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, func(restartController func()) {
 												var guestBindingReceipt slice6GuestBindingFixtureReceipt
 												var guestReceiptPair slice6GuestReceiptPair
@@ -906,14 +1135,33 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																	slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 																		"guest-runtime", "guest-tls-agent", "guest-runtime",
 																		guestRuntimeSocketVolumes, anchorFiles, func() {
-																			guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
-																				guestBindingReceipt, guestRuntimeSocketVolumes, anchorFiles,
-																				productRuntimeID, preIssuerGuestShellDigest, &guestReceiptPair, onConnected)
-																		})
+																			if formalE {
+																				ePrecleanup, ePrecleanupDigest, guestRuntimeFailure =
+																					slice6RunGuestRecoveryEAfterBootstrap(t, ctx, slice6GuestRecoveryEBootstrap{
+																						Run: run, Evidence: receiptEvidence, Composed: composed,
+																						Manifest: originalNetworks, PostgresID: postgresServerID,
+																						VaultID: serverID, Migration: migrationExitProof,
+																						Binding:              guestBindingReceipt,
+																						PreIssuerShellDigest: preIssuerGuestShellDigest,
+																						ProductSockets:       productRuntimeSocketVolumes,
+																						GuestSockets:         guestRuntimeSocketVolumes,
+																						Anchors:              anchorFiles, ProductObserver: productRuntimeObserver})
+																				if guestRuntimeFailure == nil && !guestRevokeFixtureDigestGate(ePrecleanupDigest) {
+																					guestRuntimeFailure = errors.New("Guest recovery E precleanup digest unavailable")
+																				}
+																			} else {
+																				guestRuntimeFailure = slice6RunGuestRuntimePID1(t, ctx, run, composed,
+																					guestBindingReceipt, guestRuntimeSocketVolumes, anchorFiles,
+																					productRuntimeID, preIssuerGuestShellDigest, &guestReceiptPair, onConnected)
+																			}
+																		}, tlsOutcome("guest-tls-agent"))
+																	recordTLS("guest-tls-agent")
 																}
-															})
+															}, materialOutcome("guest-agent"))
+														recordMaterial("guest-agent")
 														guestRuntimeFailure = slice6PreserveFirstFailure(guestRuntimeFailure, materialFailure)
-													})
+													}, tlsOutcome("guest-agent-tls-agent"))
+													recordTLS("guest-agent-tls-agent")
 													runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, guestRuntimeFailure)
 												}
 												if os.Getenv(slice6ProductTLSSignerEnv) == "1" {
@@ -946,6 +1194,10 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																							t.Logf("same-run finite Guest binding fixture exited and released Product SQL endpoint before Product PID1: binding_generation=%d event_count=%d audit_count=%d; identities remain private and no live Guest claimed",
 																								guestBindingReceipt.BindingGeneration, guestBindingReceipt.EventCount, guestBindingReceipt.AuditCount)
 																						}
+																						if formalE {
+																							runGuestChain()
+																							return
+																						}
 																						productFailure := slice6RunProductRuntimePID1(t, ctx, run, composed,
 																							postgresServerID, productRuntimeSocketVolumes, anchorFiles, productRuntimeObserver,
 																							&guestReceiptPair,
@@ -963,7 +1215,8 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																								}
 																							}
 																						}
-																					})
+																					}, tlsOutcome("product-postgres-tls-agent"))
+																				recordTLS("product-postgres-tls-agent")
 																				if runtimeFailure != nil {
 																					return runtimeFailure
 																				}
@@ -973,18 +1226,24 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																				return guestRuntimeFailure
 																			}
 																			return nil
-																		})
+																		}, materialOutcome("product-runtime-agent"))
+																	recordMaterial("product-runtime-agent")
 																	runtimeFailure = slice6PreserveFirstFailure(runtimeFailure, materialFailure)
-																})
+																}, tlsOutcome("product-runtime-agent-tls-agent"))
+															recordTLS("product-runtime-agent-tls-agent")
 														}
 													}
 													slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 														"product-runtime", "product-tls-agent", "product",
-														productSocketVolumes, anchorFiles, runProductChain)
+														productSocketVolumes, anchorFiles, runProductChain, tlsOutcome("product-tls-agent"))
+													recordTLS("product-tls-agent")
 												} else {
 													runGuestChain()
 												}
-											})
+											}, breakGlassOutcome)
+											if formalE {
+												recordE(eConvergence.breakglass(breakGlassOutcome))
+											}
 										}
 										if os.Getenv(slice6ProductMigrationSignersEnv) == "1" {
 											if len(productMigrationSocketVolumes) != 73 {
@@ -1006,17 +1265,27 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 																	"product-migration-material", 73, productMigrationSocketVolumes, anchorFiles,
 																	func(phase6security.Slice6BreakGlassSocketBinding) error {
 																		return slice6RunProductMigrationJob(t, ctx, run, composed,
-																			postgresServerID, productMigrationSocketVolumes, anchorFiles)
-																	})
+																			postgresServerID, productMigrationSocketVolumes, anchorFiles, &migrationExitProof)
+																	}, materialOutcome("product-migration-agent"))
+																recordMaterial("product-migration-agent")
 																if migrationFailure != nil {
+																	return
+																}
+																if migrationExitProof.RunID != run.id ||
+																	migrationExitProof.PostgresID != postgresServerID ||
+																	len(migrationExitProof.RemovalRaw) == 0 {
+																	migrationFailure = errors.New("Product migration original ID exit/removal proof unavailable")
 																	return
 																}
 															}
 														}
 														slice6RunOrdinaryTLSAgentStartup(t, ctx, run, composed,
 															"product-migration-job", "product-migration-postgres-tls-agent", "product-migration-postgres",
-															productMigrationSocketVolumes, anchorFiles, migrationWork)
-													})
+															productMigrationSocketVolumes, anchorFiles, migrationWork,
+															tlsOutcome("product-migration-postgres-tls-agent"))
+														recordTLS("product-migration-postgres-tls-agent")
+													}, tlsOutcome("product-migration-agent-tls-agent"))
+												recordTLS("product-migration-agent-tls-agent")
 												if migrationFailure != nil {
 													return
 												}
@@ -1060,9 +1329,52 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 												errors.New("PostgreSQL leaf was not observed on stopped server before v2 cleanup"))
 										}
 										if terminalFailure == nil {
-											terminalFailure = slice6RunTerminalOperator(t, ctx, run, composed, serverID,
-												terminalBinaryPath, terminalBinaryDigest,
-												management.Accessor, general, terminalOperator, postgresRecord)
+											if formalE {
+												if eTerminalAttempted {
+													terminalFailure = errors.New("Guest recovery E operator already attempted")
+												} else if runtimeFailure == nil && eConvergenceFailure == nil &&
+													guestRevokeFixtureDigestGate(ePrecleanupDigest) {
+													eTerminalAttempted = true
+													eTerminalBindingDigest, eTerminalOperatorID, terminalFailure =
+														slice6RunGuestRecoveryFormalTerminalOperator(t, ctx,
+															slice6GuestRecoveryFormalTerminalRequest{
+																Run: run, Evidence: receiptEvidence, Precleanup: ePrecleanup,
+																Composed: composed, VaultID: serverID, BinaryPath: terminalBinaryPath,
+																BinaryDigest: terminalBinaryDigest, ManagementAccessor: management.Accessor,
+																General: general, Credential: terminalOperator, ExternalPostgres: postgresRecord})
+												} else {
+													// Failed business evidence may authorize only this one
+													// bounded v3 cleanup, never a formal E binding.
+													eTerminalAttempted = true
+													sink := &slice6TerminalV3Sink{Run: receiptEvidence}
+													cleanupErr := slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+														terminalBinaryPath, terminalBinaryDigest, management.Accessor,
+														general, terminalOperator, postgresRecord, sink)
+													disposition := "unknown_incomplete"
+													evidenceDigest, operatorID := "", ""
+													if cleanupErr == nil {
+														disposition, evidenceDigest, operatorID =
+															"observed_v3_cleanup_only", sink.EvidenceDigest, sink.OperatorID
+													}
+													recordErr := receiptEvidence.recordTerminalV3CleanupOnly(
+														disposition, evidenceDigest, terminalBinaryDigest, operatorID)
+													terminalFailure = errors.Join(errors.New("Guest recovery E precleanup incomplete"),
+														cleanupErr, recordErr)
+												}
+											} else if os.Getenv(slice6TerminalOperatorV3DiagnosticEnv) == "1" {
+												sink := slice6NewTerminalV3DiagnosticSink(t, run.id)
+												terminalFailure = slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+													terminalBinaryPath, terminalBinaryDigest, management.Accessor,
+													general, terminalOperator, postgresRecord, sink)
+												if terminalFailure == nil {
+													terminalFailure = sink.Run.verifyTerminalV3DiagnosticBinding(
+														sink.EvidenceDigest, terminalBinaryDigest, sink.OperatorID)
+												}
+											} else {
+												terminalFailure = slice6RunTerminalOperator(t, ctx, run, composed, serverID,
+													terminalBinaryPath, terminalBinaryDigest,
+													management.Accessor, general, terminalOperator, postgresRecord)
+											}
 										}
 										if postgresRecord != nil && terminalFailure == nil {
 											postgresTerminalConfirmed = true
@@ -1070,14 +1382,28 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 										return terminalFailure
 									}
 								}
+								var certificateOutcome *slice6CertificateControllerOutcome
+								if formalE {
+									certificateOutcome = &eCertificateOutcome
+								}
 								slice6RunCertificateControllerStartup(t, ctx, run, composed, created.NetworkID,
 									controllerIP, certificateSocketVolumes, anchorFiles, certificateConfig, certificateKey,
-									onManagedReady, stopCredential, onTerminated)
+									onManagedReady, stopCredential, onTerminated, certificateOutcome)
+								if formalE {
+									recordE(eConvergence.certificate(certificateOutcome))
+								}
 							}
+						}
+						var credentialOutcome *slice6CredentialControllerOutcome
+						if formalE {
+							credentialOutcome = &eCredentialOutcome
 						}
 						slice6RunCredentialControllerBootstrap(t, ctx, run, composed, credentialCreated.NetworkID,
 							credentialControllerIP, socketVolumes, anchorFiles, controllerConfig, management.Token,
-							credentialKey, onCredentialReady)
+							credentialKey, onCredentialReady, credentialOutcome)
+						if formalE {
+							recordE(eConvergence.credential(credentialOutcome))
+						}
 					}
 					if os.Getenv(slice6ProductPostgresDSNEnv) == "1" {
 						slice6RunPostgresServer(t, ctx, run, composed, postgresLeaf, postgresClientCRL,
@@ -1103,14 +1429,130 @@ func TestPhase6Slice6VaultPersistentTrustSwitch(t *testing.T) {
 		}
 		if os.Getenv(slice6BreakGlassProcessEnv) == "1" && os.Getenv(slice6GuestMaterialEnv) != "1" {
 			revokeBootstrapRoot()
-			slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, nil)
+			slice6RunBreakGlassControllerStartup(t, ctx, run, composed, breakGlassSocketVolumes, nil, nil)
 		}
 	}
 	revokeBootstrapRoot()
-	if closeCapacityMonitor != nil {
+	var capacityTerminalFailure error
+	if formalE {
+		if checkCapacityTerminal == nil {
+			capacityTerminalFailure = errors.New("Guest recovery E capacity monitor join unavailable")
+		} else {
+			capacityTerminalFailure = checkCapacityTerminal()
+			if capacityTerminalFailure == nil {
+				recordE(eConvergence.capacity(capacityMonitorID, true))
+			}
+		}
+	} else if closeCapacityMonitor != nil {
 		closeCapacityMonitor()
 	}
-	_ = cleanupGuard.Run(run.cleanup)
+	cleanupErr := cleanupGuard.Run(run.cleanup)
+	if formalE {
+		var privateZeroDigest string
+		if cleanupErr == nil {
+			cleanupErr = externalOwner.finish()
+			if cleanupErr == nil {
+				privateZeroDigest, cleanupErr = receiptEvidence.captureGuestRecoveryPrivateSiblingZero(externalOwner)
+			}
+		}
+		if cleanupErr != nil || migrationFailure != nil || runtimeFailure != nil || terminalFailure != nil ||
+			eConvergenceFailure != nil || !postgresTerminalConfirmed ||
+			capacityTerminalFailure != nil || t.Failed() ||
+			!eCredentialOutcome.validForRun(run.id, eProfileDigest) ||
+			!eCertificateOutcome.validForRun(run.id, eProfileDigest) ||
+			!eBreakGlassOutcome.validForRun(run.id, eProfileDigest) ||
+			!guestRevokeFixtureDigestGate(privateZeroDigest) ||
+			!guestRevokeFixtureDigestGate(ePrecleanupDigest) ||
+			!guestRevokeFixtureDigestGate(eTerminalBindingDigest) ||
+			len(eTerminalOperatorID) != 64 || !lowerHexSlice6(eTerminalOperatorID) {
+			t.Error("Guest recovery E source-to-terminal chain or exact Docker cleanup incomplete")
+			return
+		}
+		if gap := slice6ETLSOutcomeGap(run.id, eProfileDigest, eTLSOutcomes); gap != "" {
+			t.Errorf("Guest recovery E TLS helper did not converge: slot=%s", gap)
+			return
+		}
+		for _, role := range [...]string{"guest-agent", "product-runtime-agent", "product-migration-agent"} {
+			if outcome := eMaterialOutcomes[role]; outcome == nil ||
+				!outcome.validForRun(run.id, eProfileDigest, role) {
+				t.Errorf("Guest recovery E material helper did not converge: slot=%s", role)
+				return
+			}
+		}
+		zero, err := receiptEvidence.proveGuestRecoveryDockerZero(cleanupGuard.Context(),
+			ePrecleanupDigest, ePrecleanup.VaultOrigin)
+		if err != nil {
+			t.Errorf("Guest recovery E Docker-zero proof unavailable: %v", err)
+			return
+		}
+		exact, err := receiptEvidence.proveGuestRecoveryExactOriginZero(cleanupGuard.Context(),
+			ePrecleanup, zero, slice6DockerBounded)
+		if err != nil {
+			t.Errorf("Guest recovery E exact original-resource absence unavailable: %v", err)
+			return
+		}
+		terminalZeroDigest, err := receiptEvidence.verifyGuestRecoveryTerminalZeroPreflight(cleanupGuard.Context(),
+			slice6GuestRecoveryTerminalZeroPreflight{Precleanup: ePrecleanup,
+				TerminalBindingDigest: eTerminalBindingDigest,
+				OperatorBinaryDigest:  terminalBinaryDigest, OperatorContainerID: eTerminalOperatorID,
+				DockerZero: zero, ExactOriginZero: exact,
+				PrivateSiblingZeroDigest: privateZeroDigest})
+		if err != nil || !guestRevokeFixtureDigestGate(terminalZeroDigest) {
+			t.Errorf("Guest recovery E terminal-zero preflight unavailable: %v", err)
+			return
+		}
+		if eCertificateOutcome.DrainClass == slice6CertificateStickyCredentialRevoke {
+			t.Log("Guest recovery E certificate controller physically converged after the known credential-revoke fault; controller clean shutdown remains OPEN for the full Slice 6 gate")
+		}
+		convergence, convergenceDigest, err := receiptEvidence.captureEConvergence(eConvergence,
+			ePrecleanupDigest, eTerminalBindingDigest, privateZeroDigest, zero, exact,
+			string(eCertificateOutcome.DrainClass))
+		if err != nil {
+			t.Errorf("Guest recovery E fixed helper convergence receipt unavailable: %v", err)
+			return
+		}
+		inventoryDigest, err := receiptEvidence.captureGuestRecoveryEFileInventory()
+		if err != nil || slice6VerifyGuestRecoveryEFileInventory(receiptRoot.path, run.id, inventoryDigest) != nil {
+			t.Error("Guest recovery E retained file inventory or independent read-only replay unavailable")
+			return
+		}
+		if slice6VerifyEConvergenceFile(receiptRoot.path, run.id, convergenceDigest, convergence) != nil {
+			t.Error("Guest recovery E fixed helper convergence independent replay unavailable")
+			return
+		}
+		sources, err := slice6FreezeGuestESources(ctx, static,
+			verifiedImages, guestBindingFixture)
+		if err != nil || sources != eFrozenSources ||
+			sources.RRevision != convergence.RRevision ||
+			sources.RTree != verifiedImages.RuntimeTreeDigest {
+			t.Error("Guest recovery E/R/F clean source identity or runtime tree unavailable")
+			return
+		}
+		candidate := slice6GuestEFinalBinding{Protocol: slice6GuestEFinalBindingProtocol,
+			Disposition: "guest_e_component_verified", RunID: run.id,
+			ProfileDigest: eProfileDigest, Sources: sources,
+			PrecleanupDigest: ePrecleanupDigest, TerminalZeroDigest: terminalZeroDigest,
+			TerminalV3BindingDigest: eTerminalBindingDigest,
+			ConvergenceDigest:       convergenceDigest, FileInventoryDigest: inventoryDigest,
+			TerminalBinaryDigest: terminalBinaryDigest, TerminalOperatorID: eTerminalOperatorID,
+			ControllerDrainClass: string(eCertificateOutcome.DrainClass),
+			ControllerDrainOpen:  eCertificateOutcome.DrainClass == slice6CertificateStickyCredentialRevoke,
+			RecordedUTC:          time.Now().UTC().Format(time.RFC3339Nano)}
+		candidateRaw, err := json.Marshal(candidate)
+		if err != nil || slice6VerifyGuestEFinalBindingDocument(candidateRaw, candidate) != nil {
+			t.Error("Guest recovery E final candidate binding is not closed")
+			return
+		}
+		clear(candidateRaw)
+		finalDigest, err := receiptEvidence.finishGuestEFinalBinding(candidate, convergence)
+		if err != nil || !guestRevokeFixtureDigestGate(finalDigest) {
+			t.Errorf("Guest recovery E final component binding did not publish and independently reopen: %v", err)
+			return
+		}
+		t.Logf("Guest recovery E component verified: final_binding=%s inventory=%s controller_drain=%s; full Slice 6 release gate remains OPEN",
+			finalDigest, inventoryDigest, candidate.ControllerDrainClass)
+		return
+	}
 	if os.Getenv(slice6CertificateProcessEnv) == "1" {
 		t.Log("real file-backed non-dev Vault and two controller PID1 processes reached managed issuance; exact Docker cleanup is checked at test exit and final release scenarios remain unproved")
 	} else if os.Getenv(slice6CredentialProcessEnv) == "1" {

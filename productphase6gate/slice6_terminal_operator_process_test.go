@@ -29,6 +29,8 @@ const slice6TerminalOperatorEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_OPERAT
 const slice6TerminalOperatorUID = 20090
 const slice6TerminalOperatorGID = 30090
 const slice6TerminalOperatorV2Capability = "sandbox-runtime.phase6-terminal-cleanup-input.v2\n"
+const slice6TerminalOperatorV3Capability = "sandbox-runtime.phase6-terminal-cleanup-input.v3\n"
+const slice6TerminalOperatorV3DiagnosticEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_TERMINAL_V3_DIAGNOSTIC"
 
 var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: unavailable stage=([a-z][a-z-]{0,63})`)
 
@@ -36,6 +38,24 @@ var slice6TerminalStagePattern = regexp.MustCompile(`phase6-terminal-cleanup: un
 // clean-source Linux binary must declare v2 before this run creates Vault.
 func slice6RequireTerminalOperatorV2Capability(t *testing.T, ctx context.Context,
 	run slice6DockerRun, binaryPath, binaryDigest string) {
+	t.Helper()
+	output := slice6ReadTerminalOperatorCapabilities(t, ctx, run, binaryPath, binaryDigest)
+	if output != slice6TerminalOperatorV2Capability &&
+		output != slice6TerminalOperatorV2Capability+slice6TerminalOperatorV3Capability {
+		t.Fatal("source-bound terminal operator lacks exact v2 capability; refusing PostgreSQL leaf signing")
+	}
+}
+
+func slice6RequireTerminalOperatorV3Capability(t *testing.T, ctx context.Context,
+	run slice6DockerRun, binaryPath, binaryDigest string) {
+	t.Helper()
+	if output := slice6ReadTerminalOperatorCapabilities(t, ctx, run, binaryPath, binaryDigest); output != slice6TerminalOperatorV2Capability+slice6TerminalOperatorV3Capability {
+		t.Fatal("source-bound terminal operator lacks exact v3 capability; refusing new signing")
+	}
+}
+
+func slice6ReadTerminalOperatorCapabilities(t *testing.T, ctx context.Context,
+	run slice6DockerRun, binaryPath, binaryDigest string) string {
 	t.Helper()
 	if binaryPath == "" || slice6HashTerminalBinary(t, binaryPath) != binaryDigest {
 		t.Fatal("external PostgreSQL leaf requires a fixed terminal operator binary")
@@ -48,9 +68,10 @@ func slice6RequireTerminalOperatorV2Capability(t *testing.T, ctx context.Context
 		"--read-only", "--memory=32m", "--cpus=0.25", "--pids-limit=16",
 		"--mount", "type=bind,src="+binaryPath+",dst=/phase6-terminal-cleanup,readonly",
 		"--entrypoint=/phase6-terminal-cleanup", slice6PinnedAlpineImage, "--capabilities")
-	if err != nil || string(output) != slice6TerminalOperatorV2Capability {
-		t.Fatal("source-bound terminal operator lacks exact v2 capability; refusing PostgreSQL leaf signing")
+	if err != nil || len(output) > 256 {
+		t.Fatal("source-bound terminal operator capability output unavailable")
 	}
+	return string(output)
 }
 
 type slice6TerminalOperatorInput struct {
@@ -121,8 +142,20 @@ func slice6BuildTerminalOperator(t *testing.T, ctx context.Context, privateRoot,
 func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, vaultID, binaryPath, binaryDigest, managementAccessor string,
 	general slice6VaultRoot, credential *slice6TerminalOperatorCredential,
-	externalPostgres *phase6terminalcleanup.ExternalPostgresRecord) (resultErr error) {
+	externalPostgres *phase6terminalcleanup.ExternalPostgresRecord,
+	v3 ...*slice6TerminalV3Sink) (resultErr error) {
 	t.Helper()
+	if len(v3) > 1 {
+		return errors.New("terminal operator private evidence sink is ambiguous")
+	}
+	var evidenceSink *slice6TerminalV3Sink
+	if len(v3) == 1 {
+		evidenceSink = v3[0]
+		if evidenceSink == nil || evidenceSink.Run == nil || evidenceSink.Run.id != run.id ||
+			externalPostgres == nil {
+			return errors.New("terminal v3 requires exact run-owned external PostgreSQL evidence")
+		}
+	}
 	if os.Getenv(slice6TerminalOperatorEnv) != "1" || credential == nil ||
 		!credential.ExpiresAt.After(time.Now().Add(90*time.Second)) ||
 		phase6security.VerifySlice6DesiredFinalExternalProfile(composed.Profile) != nil ||
@@ -156,6 +189,17 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	if err != nil || plan.Validate() != nil {
 		return errors.New("independently read quiesced ledgers cannot bind the exact terminal cleanup plan")
 	}
+	var ledgerProjection []byte
+	var ledgerProjectionErr error
+	if evidenceSink != nil && evidenceSink.verifiedPrecleanup {
+		// Reuse the same two bounded reads consumed by BuildV2. Failure of
+		// projection must not prevent the one-shot remote revocation below.
+		ledgerProjection, ledgerProjectionErr = slice6ProjectTerminalLedgers(plan, certificateLedger, credentialLedger)
+		if ledgerProjectionErr == nil {
+			ledgerProjectionErr = slice6VerifyTerminalEIssuedSet(ledgerProjection, composed.Profile)
+		}
+		defer clear(ledgerProjection)
+	}
 	profileJSON, err := json.Marshal(composed.Profile)
 	if err != nil {
 		return errors.New("encode exact operator Profile input")
@@ -167,6 +211,9 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	inputProtocol := "sandbox-runtime.phase6-terminal-cleanup-input.v1"
 	if externalPostgres != nil {
 		inputProtocol = slice6TerminalOperatorV2Capability[:len(slice6TerminalOperatorV2Capability)-1]
+	}
+	if evidenceSink != nil {
+		inputProtocol = slice6TerminalOperatorV3Capability[:len(slice6TerminalOperatorV3Capability)-1]
 	}
 	input := slice6TerminalOperatorInput{Protocol: inputProtocol,
 		RunID: run.id, ProfileJSON: profileJSON, PeerSourcesJSON: peerJSON,
@@ -282,13 +329,48 @@ func slice6RunTerminalOperator(t *testing.T, parent context.Context, run slice6D
 	}
 	attached := exec.CommandContext(ctx, "docker", "start", "-a", "-i", containerID)
 	attached.Stdin = bytes.NewReader(encoded)
-	output, startErr := attached.CombinedOutput()
+	var output []byte
+	var stderr []byte
+	var startErr error
+	var stdoutOverflow, stderrOverflow bool
+	operatorStarted := time.Now().UTC()
+	if evidenceSink == nil {
+		output, startErr = attached.CombinedOutput()
+	} else {
+		stdoutCapture := &slice6BoundedPrivateOutput{maximum: phase6terminalcleanup.MaxEvidenceV3Bytes}
+		stderrCapture := &slice6BoundedPrivateOutput{maximum: 1024}
+		attached.Stdout, attached.Stderr = stdoutCapture, stderrCapture
+		startErr = attached.Run()
+		output, stderr = stdoutCapture.buffer.Bytes(), stderrCapture.buffer.Bytes()
+		stdoutOverflow, stderrOverflow = stdoutCapture.overflow, stderrCapture.overflow
+	}
+	operatorFinished := time.Now().UTC()
 	defer clear(output)
+	defer clear(stderr)
 	networkErr := slice6VerifyTerminalNetworkResult(ctx, run, networkID, vaultID, containerID)
-	receipt, decodeErr := phase6terminalcleanup.DecodeReceipt(output)
 	if networkErr != nil {
 		return networkErr
 	}
+	if evidenceSink != nil {
+		stage := "unknown"
+		if matched := slice6TerminalStagePattern.FindSubmatch(stderr); len(matched) == 2 {
+			stage = string(matched[1])
+		}
+		if startErr != nil || stdoutOverflow || stderrOverflow || len(stderr) != 0 {
+			return fmt.Errorf("terminal v3 private operator incomplete: stage=%s", stage)
+		}
+		evidence, decodeErr := phase6terminalcleanup.DecodeEvidenceV3(output)
+		if decodeErr != nil || phase6terminalcleanup.VerifyEvidenceV3(plan, evidence) != nil ||
+			evidence.Receipt.RunID != run.id || evidence.Receipt.ProfileDigest != composed.Profile.ProfileDigest ||
+			ledgerProjectionErr != nil ||
+			evidenceSink.persist(plan, output, containerID, binaryDigest,
+				operatorStarted, operatorFinished, ledgerProjection) != nil {
+			return errors.New("terminal v3 original stdout or independent replay unavailable")
+		}
+		receiptConfirmed = true
+		return nil
+	}
+	receipt, decodeErr := phase6terminalcleanup.DecodeReceipt(output)
 	if startErr != nil || decodeErr != nil ||
 		!receipt.Complete || !receipt.SelfRevoked || receipt.PlanDigest != plan.Digest ||
 		receipt.RunID != run.id || receipt.ProfileDigest != composed.Profile.ProfileDigest ||

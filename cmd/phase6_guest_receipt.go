@@ -28,7 +28,7 @@ func newLocalGuestReceipt(deployment string, profile phase6security.Profile, ori
 	default:
 		return nil, errors.New("private Guest receipt role is unavailable")
 	}
-	return phase6guestreceipt.New(os.Stdout, role, profile.ProfileDigest, configDigest)
+	return phase6guestreceipt.NewV2(os.Stdout, role, profile.ProfileDigest, configDigest)
 }
 
 type guestReceiptFinalizer interface {
@@ -51,18 +51,29 @@ func sealLocalGuestReceipt(ctx context.Context, recorder guestReceiptFinalizer) 
 
 type productGuestReceiptServer struct {
 	server.Server
-	hub      *guestagent.Hub
-	recorder guestReceiptFinalizer
+	hub        *guestagent.Hub
+	recorder   guestReceiptFinalizer
+	retirement bool
 }
 
 func (s productGuestReceiptServer) Shutdown(ctx context.Context) error {
-	if err := s.Server.Shutdown(ctx); err != nil {
-		s.recorder.Abort()
+	// The underlying server drains hijacked transports. Join every Hub handler
+	// even when that drain reports an error, then stop the retirement worker.
+	// This business cleanup is independent of the optional private receipt.
+	transportErr := s.Server.Shutdown(ctx)
+	handlerErr := s.hub.QuiesceObservation(ctx)
+	var retirementErr error
+	if s.retirement {
+		retirementErr = s.hub.ShutdownRetirement(ctx)
+	}
+	if err := errors.Join(transportErr, handlerErr, retirementErr); err != nil {
+		if s.recorder != nil {
+			s.recorder.Abort()
+		}
 		return err
 	}
-	if err := s.hub.QuiesceObservation(ctx); err != nil {
-		s.recorder.Abort()
-		return err
+	if s.recorder == nil {
+		return nil
 	}
 	return sealLocalGuestReceipt(ctx, s.recorder)
 }

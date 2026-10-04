@@ -77,7 +77,11 @@ func DecodeReceipt(document []byte) (Receipt, error) {
 // A count-only check cannot distinguish a missing PostgreSQL revocation from
 // a duplicate controller result.
 func VerifyReceipt(plan Plan, receipt Receipt) error {
-	if plan.Validate() != nil || !receipt.Complete || !receipt.SelfRevoked ||
+	return verifyReceiptAt(plan, receipt, time.Now().UTC())
+}
+
+func verifyReceiptAt(plan Plan, receipt Receipt, observedAt time.Time) error {
+	if plan.ValidateAt(observedAt) != nil || !receipt.Complete || !receipt.SelfRevoked ||
 		receipt.FailureStage != "" || !digestPattern.MatchString(receipt.IssuerCRLSHA) ||
 		receipt.RunID != plan.RunID || receipt.ProfileDigest != plan.ProfileDigest ||
 		receipt.PlanDigest != plan.Digest || len(receipt.Certificates) != len(plan.Certificates) ||
@@ -116,6 +120,15 @@ func VerifyReceipt(plan Plan, receipt Receipt) error {
 }
 
 func (p Plan) Validate() error {
+	return p.ValidateAt(time.Now().UTC())
+}
+
+// ValidateAt is for immutable historical evidence replay only. Admission and
+// execution continue to use Validate's current-time check.
+func (p Plan) ValidateAt(observedAt time.Time) error {
+	if observedAt.IsZero() {
+		return ErrInvalid
+	}
 	certificateCount := 2
 	digestDomain := "sandbox-runtime/phase6-terminal-cleanup-plan/v1\x00"
 	if p.Protocol == ProtocolV2ID {
@@ -142,7 +155,7 @@ func (p Plan) Validate() error {
 				DNSNames: []string{externalPostgresDNS}}}}
 		minimalSources := phase6security.PeerCRLSources{Sources: []phase6security.PeerCRLSource{{
 			ID: "general", Mount: "pki", IssuerID: p.GeneralIssuerID, IssuerDigest: p.GeneralIssuerDigest}}}
-		if p.ExternalPostgres.Validate(minimalProfile, minimalSources, time.Now().UTC()) != nil {
+		if p.ExternalPostgres.Validate(minimalProfile, minimalSources, observedAt.UTC()) != nil {
 			return ErrInvalid
 		}
 	}

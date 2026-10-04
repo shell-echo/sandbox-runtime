@@ -1,14 +1,17 @@
 package guestagent
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -29,12 +32,18 @@ type Authenticator interface {
 	Disconnected(context.Context, Identity) error
 }
 
+type LocalOwnerAuthenticator interface {
+	AuthenticateWithLocalOwner(context.Context, AuthRequest, Identity) (Identity, error)
+}
+
 type HubOptions struct {
 	Authenticator       Authenticator
 	Observation         ObservationSink
 	Clock               func() time.Time
 	HandshakeTimeout    time.Duration
 	AuthorityPollPeriod time.Duration
+	RetryTemporaryAuth  bool
+	Retirement          *RetirementPolicy
 }
 
 type Hub struct {
@@ -44,6 +53,8 @@ type Hub struct {
 	clock     func() time.Time
 	handshake time.Duration
 	poll      time.Duration
+	retryAuth bool
+	retire    *retirementManager
 	mu        sync.RWMutex
 	peers     map[peerKey]*peer
 }
@@ -70,11 +81,20 @@ func NewHub(options HubOptions) (*Hub, error) {
 		return nil, ErrInvalid
 	}
 	var observers *observationLifecycle
-	if options.Observation != nil {
+	if options.Observation != nil || options.Retirement != nil {
 		observers = newObservationLifecycle()
 	}
+	var retirement *retirementManager
+	if options.Retirement != nil {
+		var err error
+		retirement, err = newRetirementManager(*options.Retirement, options.Observation)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &Hub{auth: options.Authenticator, observe: options.Observation, observers: observers,
-		clock: clock, handshake: handshake, poll: poll, peers: make(map[peerKey]*peer)}, nil
+		clock: clock, handshake: handshake, poll: poll, retryAuth: options.RetryTemporaryAuth, retire: retirement,
+		peers: make(map[peerKey]*peer)}, nil
 }
 
 func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -90,24 +110,82 @@ func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		http.Error(writer, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{Subprotocols: []string{Subprotocol}, CompressionMode: websocket.CompressionDisabled})
+	var reservation *retirementReservation
+	if h.retire != nil {
+		var err error
+		reservation, err = h.retire.reserve()
+		if err != nil {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+	}
+	transport := &guestHijackTransport{ResponseWriter: writer}
+	connection, err := websocket.Accept(transport, request, &websocket.AcceptOptions{Subprotocols: []string{Subprotocol}, CompressionMode: websocket.CompressionDisabled})
 	if err != nil {
+		reservation.abandon()
 		return
 	}
 	connection.SetReadLimit(MaxMessageBytes)
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
-	identity, attemptDigest, err := h.handshakeGuest(ctx, connection)
+	// The existing handshake budget includes a failed close. coder/websocket's
+	// Close has two independent background five-second phases; the captured
+	// transport interrupts them when the parent or handshake budget expires.
+	handshakeCtx, finishHandshake := context.WithTimeout(ctx, h.handshake)
+	stopHandshakeTransport := context.AfterFunc(handshakeCtx, func() { _ = transport.conn.Close() })
+	identity, attemptDigest, err := h.handshakeGuest(handshakeCtx, connection, reservation)
 	if err != nil {
+		defer finishHandshake()
+		defer stopHandshakeTransport()
+		if errors.Is(err, ErrAuthOutcomeUnknown) {
+			reservation.holdUnknown()
+		}
+		if reservation.state() == retirementActive {
+			if reserveErr := reservation.pending(); reserveErr != nil {
+				reservation.failClosed()
+			} else {
+				h.emit(Observation{Event: ObservationProductDisconnectPending,
+					AttemptDigest: attemptDigest, BindingGeneration: reservation.item.identity.BindingGeneration})
+			}
+		}
+		if h.retryAuth && (errors.Is(err, ErrAuthDependencyUnavailable) || errors.Is(err, ErrAuthConnectedBusy)) {
+			reservation.abandon()
+			reason := "dependency_unavailable"
+			if errors.Is(err, ErrAuthConnectedBusy) {
+				reason = "connected_busy"
+			}
+			h.emit(Observation{Event: ObservationProductAuthRetryable, AttemptDigest: attemptDigest,
+				BindingGeneration: reservation.attemptGeneration(), Reason: reason})
+			_ = connection.Close(websocket.StatusTryAgainLater, "")
+			return
+		}
 		_ = connection.Close(websocket.StatusPolicyViolation, "guest authentication failed")
+		if reservation.state() == retirementPending {
+			// Close already ran the transport close. A second CloseNow returns
+			// net.ErrClosed even when that first close succeeded; confirm the
+			// actual hijacked connection instead of treating that as failure.
+			closed := transport.conn.closed.Load()
+			if closed {
+				h.emit(Observation{Event: ObservationProductCloseCompleted, AttemptDigest: attemptDigest,
+					BindingGeneration: reservation.item.identity.BindingGeneration, Reason: "handshake_failure"})
+			}
+			reservation.closeCompleted(closed)
+		} else {
+			reservation.abandon()
+		}
 		return
 	}
+	stopHandshakeTransport()
+	finishHandshake()
+	stopTransport := context.AfterFunc(ctx, func() { _ = transport.conn.Close() })
+	defer stopTransport()
 	p := newPeer(connection, identity)
+	p.retirement = reservation
 	p.attemptDigest = attemptDigest
 	p.observe = h.observe
 	key := peerKey{identity.TenantID, identity.WorkspaceID, identity.SlotKey}
 	if !h.install(key, p) {
-		_ = connection.Close(websocket.StatusPolicyViolation, "guest already connected")
+		p.close(ErrUnavailable, "already_connected")
 		return
 	}
 	h.emit(Observation{Event: ObservationProductPeerInstalled, AttemptDigest: attemptDigest,
@@ -120,6 +198,33 @@ func (h *Hub) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		}()
 	}
 	p.readLoop(ctx)
+}
+
+type guestHijackTransport struct {
+	http.ResponseWriter
+	conn *guestTrackedConn
+}
+
+type guestTrackedConn struct {
+	net.Conn
+	closed atomic.Bool
+}
+
+func (c *guestTrackedConn) Close() error {
+	err := c.Conn.Close()
+	if err == nil {
+		c.closed.Store(true)
+	}
+	return err
+}
+
+func (w *guestHijackTransport) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffered, err := http.NewResponseController(w.ResponseWriter).Hijack()
+	if err == nil {
+		w.conn = &guestTrackedConn{Conn: conn}
+		conn = w.conn
+	}
+	return conn, buffered, err
 }
 
 func (h *Hub) Call(ctx context.Context, tenantID, workspaceID, slotKey, operation string, payload any) (json.RawMessage, error) {
@@ -162,9 +267,9 @@ func (h *Hub) Disconnect(tenantID, workspaceID, slotKey string) {
 	}
 }
 
-// QuiesceObservation is a private opt-in producer join, not a Guest wire or
-// authorization operation. It must run after the listener and transports are
-// drained and within their existing shutdown deadline.
+// QuiesceObservation closes admission and joins handlers, authority monitors
+// and disconnects for the production retirement graph even with receipts off.
+// It must run after transport drain within the existing shutdown deadline.
 func (h *Hub) QuiesceObservation(ctx context.Context) error {
 	if h == nil {
 		return ErrUnavailable
@@ -172,9 +277,21 @@ func (h *Hub) QuiesceObservation(ctx context.Context) error {
 	return h.observers.quiesce(ctx)
 }
 
-func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn) (Identity, string, error) {
-	ctx, cancel := context.WithTimeout(parent, h.handshake)
-	defer cancel()
+// RetirementReady is a local readiness/admission input, not Guest authority.
+func (h *Hub) RetirementReady() bool {
+	return h != nil && h.retire != nil && h.observers.admitting() && h.retire.ready()
+}
+
+// ShutdownRetirement joins the single cleanup worker after transports drain.
+func (h *Hub) ShutdownRetirement(ctx context.Context) error {
+	if h == nil || h.retire == nil {
+		return ErrUnavailable
+	}
+	return h.retire.shutdown(ctx)
+}
+
+func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn, reservation *retirementReservation) (Identity, string, error) {
+	ctx := parent
 	nonce, err := randomNonce()
 	if err != nil {
 		return Identity{}, "", ErrUnavailable
@@ -198,19 +315,51 @@ func (h *Hub) handshakeGuest(parent context.Context, connection *websocket.Conn)
 	if err != nil {
 		return Identity{}, "", err
 	}
-	identity, err := h.auth.Authenticate(ctx, request)
-	if err != nil || identity.ProtocolVersion != ProtocolVersion || identity.GuestID != hello.GuestID ||
-		identity.BindingGeneration != hello.BindingGeneration || !uniqueCapabilities(identity.Capabilities) || !subset(identity.Capabilities, hello.Capabilities) || !identity.ExpiresAt.After(h.clock()) {
-		return Identity{}, "", ErrUnauthorized
+	reservation.bindAttempt(attemptDigest, hello.BindingGeneration)
+	var identity Identity
+	var owner *localOwnerPin
+	if h.retire != nil {
+		owner = h.retire.pinLocalOwner(hello.GuestID, hello.BindingGeneration)
+	}
+	if owner != nil {
+		defer owner.release()
+		if auth, ok := h.auth.(LocalOwnerAuthenticator); ok {
+			identity, err = auth.AuthenticateWithLocalOwner(ctx, request, owner.identity)
+		} else {
+			identity, err = h.auth.Authenticate(ctx, request)
+		}
+	} else {
+		identity, err = h.auth.Authenticate(ctx, request)
+	}
+	if err != nil {
+		if errors.Is(err, ErrAuthDependencyUnavailable) || errors.Is(err, ErrAuthOutcomeUnknown) || errors.Is(err, ErrAuthConnectedBusy) {
+			return Identity{}, attemptDigest, err
+		}
+		return Identity{}, attemptDigest, ErrUnauthorized
+	}
+	if reservation != nil {
+		if err := reservation.activate(identity); err != nil {
+			reservation.failClosed()
+			return Identity{}, attemptDigest, ErrAuthOutcomeUnknown
+		}
+	}
+	if identity.ProtocolVersion != ProtocolVersion || identity.GuestID != hello.GuestID ||
+		identity.BindingGeneration != hello.BindingGeneration || identity.ClientNonce != hello.ClientNonce ||
+		len(identity.Capabilities) == 0 || !uniqueCapabilities(identity.Capabilities) ||
+		!subset(identity.Capabilities, hello.Capabilities) || !identity.ExpiresAt.After(h.clock()) {
+		return Identity{}, attemptDigest, ErrUnauthorized
 	}
 	h.emit(Observation{Event: ObservationProductAuthAccepted, AttemptDigest: attemptDigest,
 		BindingGeneration: identity.BindingGeneration})
 	welcome := Welcome{Type: "welcome", ProtocolVersion: ProtocolVersion, Capabilities: append([]string(nil), identity.Capabilities...), BindingGeneration: identity.BindingGeneration}
 	if err := writeJSON(ctx, connection, welcome); err != nil {
-		return Identity{}, "", ErrUnavailable
+		return Identity{}, attemptDigest, ErrUnavailable
 	}
 	h.emit(Observation{Event: ObservationProductWelcomeWritten, AttemptDigest: attemptDigest,
 		BindingGeneration: identity.BindingGeneration})
+	if ctx.Err() != nil {
+		return Identity{}, attemptDigest, ErrUnavailable
+	}
 	return identity, attemptDigest, nil
 }
 
@@ -237,6 +386,9 @@ func (h *Hub) remove(key peerKey, candidate *peer) {
 	}
 	h.mu.Unlock()
 	candidate.close(ErrUnavailable, "handler_shutdown")
+	if candidate.retirement != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = h.auth.Disconnected(ctx, candidate.identity)
@@ -256,9 +408,18 @@ func (h *Hub) monitorAuthority(ctx context.Context, p *peer) {
 			err := h.auth.CheckAuthority(checkCtx, p.identity)
 			cancel()
 			if err != nil {
-				h.emit(Observation{Event: ObservationProductAuthorityStale, AttemptDigest: p.attemptDigest,
-					BindingGeneration: p.identity.BindingGeneration})
-				p.close(ErrUnauthorized, "authority_stale")
+				reason := "authority_stale"
+				if errors.Is(err, ErrAuthDependencyUnavailable) {
+					reason = "dependency_lost"
+				}
+				if reason == "dependency_lost" {
+					h.emit(Observation{Event: ObservationProductAuthorityDependencyLost,
+						AttemptDigest: p.attemptDigest, BindingGeneration: p.identity.BindingGeneration})
+				} else {
+					h.emit(Observation{Event: ObservationProductAuthorityStale,
+						AttemptDigest: p.attemptDigest, BindingGeneration: p.identity.BindingGeneration})
+				}
+				p.close(ErrUnauthorized, reason)
 				return
 			}
 		}
@@ -277,6 +438,7 @@ type peer struct {
 	done          chan struct{}
 	closeOnce     sync.Once
 	closeErr      error
+	retirement    *retirementReservation
 }
 
 func newPeer(connection *websocket.Conn, identity Identity) *peer {
@@ -364,11 +526,23 @@ func (p *peer) write(ctx context.Context, value any) error {
 
 func (p *peer) close(err error, reason string) {
 	p.closeOnce.Do(func() {
+		if p.retirement != nil {
+			if reserveErr := p.retirement.pending(); reserveErr != nil {
+				p.retirement.failClosed()
+			} else if p.observe != nil {
+				p.observe(Observation{Event: ObservationProductDisconnectPending,
+					AttemptDigest: p.attemptDigest, BindingGeneration: p.identity.BindingGeneration})
+			}
+		}
 		p.closeErr = err
 		close(p.done)
-		if closeErr := p.connection.CloseNow(); closeErr == nil && p.observe != nil {
+		closeErr := p.connection.CloseNow()
+		if closeErr == nil && p.observe != nil {
 			p.observe(Observation{Event: ObservationProductCloseCompleted, AttemptDigest: p.attemptDigest,
 				BindingGeneration: p.identity.BindingGeneration, Reason: reason})
+		}
+		if p.retirement != nil {
+			p.retirement.closeCompleted(closeErr == nil)
 		}
 	})
 }

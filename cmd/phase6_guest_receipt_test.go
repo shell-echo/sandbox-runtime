@@ -35,10 +35,11 @@ func (*blockedReceiptAuth) Disconnected(context.Context, guestagent.Identity) er
 
 type receiptShutdownServer struct {
 	shutdown func()
+	err      error
 }
 
 func (s receiptShutdownServer) Startup(context.Context) error  { return nil }
-func (s receiptShutdownServer) Shutdown(context.Context) error { s.shutdown(); return nil }
+func (s receiptShutdownServer) Shutdown(context.Context) error { s.shutdown(); return s.err }
 
 type observedFinalizer struct {
 	sealed  chan struct{}
@@ -167,6 +168,98 @@ func TestProductGuestReceiptShutdownJoinsRealBlockedAuthHandler(t *testing.T) {
 				t.Fatal("Guest agent remained after handler release")
 			}
 		})
+	}
+}
+
+func TestProductGuestRetirementJoinsWithoutReceiptAfterTransportShutdownError(t *testing.T) {
+	auth := &blockedReceiptAuth{entered: make(chan struct{}), release: make(chan struct{}), observed: make(chan struct{})}
+	hub, err := guestagent.NewHub(guestagent.HubOptions{Authenticator: auth,
+		Retirement: &guestagent.RetirementPolicy{Capacity: 1,
+			Retire: func(context.Context, guestagent.Identity) (guestagent.RetirementDisposition, error) {
+				return guestagent.RetirementReleased, nil
+			},
+			Readback: func(context.Context, guestagent.Identity) (guestagent.RetirementDisposition, error) {
+				return guestagent.RetirementStillOwned, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := httptest.NewServer(hub)
+	defer web.Close()
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := guestagent.NewAgent(guestagent.AgentOptions{
+		URL: "ws" + strings.TrimPrefix(web.URL, "http"), GuestID: "gst-receipt-test",
+		BindingGeneration: 1, PrivateKey: key,
+		Handlers: map[string]guestagent.OperationHandler{
+			"guest.health": func(context.Context, json.RawMessage) (any, error) { return true, nil },
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runCtx, stopAgent := context.WithTimeout(t.Context(), 3*time.Second)
+	defer stopAgent()
+	agentDone := make(chan error, 1)
+	go func() { agentDone <- agent.Run(runCtx) }()
+	select {
+	case <-auth.entered:
+	case <-runCtx.Done():
+		t.Fatal("actual Hub handler did not enter authentication")
+	}
+	transportError := errors.New("test transport drain failure")
+	wrapped := productGuestReceiptServer{Server: receiptShutdownServer{
+		shutdown: func() { web.CloseClientConnections() }, err: transportError},
+		hub: hub, retirement: true}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	finished := make(chan error, 1)
+	go func() { finished <- wrapped.Shutdown(ctx) }()
+	select {
+	case <-finished:
+		t.Fatal("transport error skipped the active handler join")
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(auth.release)
+	select {
+	case <-auth.observed:
+	case <-ctx.Done():
+		t.Fatal("auth handler did not resume")
+	}
+	select {
+	case err := <-finished:
+		if !errors.Is(err, transportError) || hub.RetirementReady() {
+			t.Fatalf("shutdown error/join/admission = %v ready=%t", err, hub.RetirementReady())
+		}
+	case <-ctx.Done():
+		t.Fatal("shutdown did not join active handler within inherited budget")
+	}
+	select {
+	case <-agentDone:
+	case <-runCtx.Done():
+		t.Fatal("agent remained after transport drain")
+	}
+}
+
+func TestProductGuestRetirementCanceledShutdownClosesAdmissionWithoutReceipt(t *testing.T) {
+	hub, err := guestagent.NewHub(guestagent.HubOptions{Authenticator: &blockedReceiptAuth{},
+		Retirement: &guestagent.RetirementPolicy{Capacity: 1,
+			Retire: func(context.Context, guestagent.Identity) (guestagent.RetirementDisposition, error) {
+				return guestagent.RetirementReleased, nil
+			},
+			Readback: func(context.Context, guestagent.Identity) (guestagent.RetirementDisposition, error) {
+				return guestagent.RetirementStillOwned, nil
+			}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	wrapped := productGuestReceiptServer{Server: receiptShutdownServer{shutdown: func() {}}, hub: hub, retirement: true}
+	if err := wrapped.Shutdown(ctx); err == nil || hub.RetirementReady() {
+		t.Fatalf("canceled shutdown reopened admission: err=%v ready=%t", err, hub.RetirementReady())
 	}
 }
 

@@ -275,7 +275,10 @@ func TestAuthorityCurrentLinearizesWithRevocationAndRejectsOtherPolicy(t *testin
 			if requestErr != nil {
 				return
 			}
-			response, currentErr := authority.Current(request, time.Now().UTC())
+			// The live path samples time under the same ledger lock as Commit.
+			// A timestamp sampled before Commit but used after acquiring its
+			// lock is correctly rejected as rollback, not a concurrency failure.
+			response, currentErr := authority.currentLive(request)
 			if currentErr == nil {
 				responses <- response
 			}

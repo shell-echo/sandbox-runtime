@@ -28,12 +28,49 @@ import (
 const slice6CertificateProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_CERTIFICATE_PROCESS"
 const slice6QuiesceProcessEnv = "SANDBOX_RUNTIME_PHASE6_SLICE6_QUIESCE_PROCESS"
 
+type slice6CertificateDrainClass string
+
+const (
+	slice6CertificateCleanExit              slice6CertificateDrainClass = "clean_exit"
+	slice6CertificateStickyCredentialRevoke slice6CertificateDrainClass = "sticky_credential_revoke"
+)
+
+type slice6CertificateControllerOutcome struct {
+	RunID, ProfileDigest, ContainerID string
+	DrainClass                        slice6CertificateDrainClass
+	PhysicalConverged                 bool
+}
+
+func slice6CertificateControllerDrainClass(exitErr error, stage string, terminalOperator bool) slice6CertificateDrainClass {
+	if exitErr == nil {
+		return slice6CertificateCleanExit
+	}
+	if terminalOperator && stage == "credential-revoke" {
+		return slice6CertificateStickyCredentialRevoke
+	}
+	return ""
+}
+
+func (outcome slice6CertificateControllerOutcome) validForRun(runID, profileDigest string) bool {
+	return len(runID) == 32 && lowerHexSlice6(runID) && outcome.RunID == runID &&
+		guestRevokeFixtureDigestGate(profileDigest) && outcome.ProfileDigest == profileDigest &&
+		len(outcome.ContainerID) == 64 && lowerHexSlice6(outcome.ContainerID) &&
+		outcome.PhysicalConverged &&
+		(outcome.DrainClass == slice6CertificateCleanExit ||
+			outcome.DrainClass == slice6CertificateStickyCredentialRevoke)
+}
+
+func (outcome slice6CertificateControllerOutcome) cleanForRun(runID, profileDigest string) bool {
+	return outcome.validForRun(runID, profileDigest) && outcome.DrainClass == slice6CertificateCleanExit
+}
+
 // This opt-in diagnostic starts the second real controller while the first is
 // live. Even two issued managed leaves do not constitute the 16-scenario gate
 // or a proof that final shutdown's cyclic revocations are ordered safely.
 func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, networkID, ip string, socketVolumes, anchorFiles map[string]string,
-	config, bootstrapKey []byte, onManagedReady func(), stopCredential func() error, onTerminated func() error) {
+	config, bootstrapKey []byte, onManagedReady func(), stopCredential func() error, onTerminated func() error,
+	outcome *slice6CertificateControllerOutcome) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -123,6 +160,36 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create real certificate controller failed")
 	}
+	if outcome != nil {
+		*outcome = slice6CertificateControllerOutcome{RunID: run.id,
+			ProfileDigest: profile.ProfileDigest, ContainerID: id}
+	}
+	type startResult struct {
+		output []byte
+		err    error
+	}
+	completed := make(chan startResult, 1)
+	earlyOwner, err := slice6NewEarlyControllerAttachOwner(id,
+		func(cleanup context.Context, args ...string) error {
+			_, err := run.docker(cleanup, args...)
+			return err
+		}, func(cleanup context.Context) error {
+			select {
+			case result := <-completed:
+				clear(result.output)
+				return nil // The attached command has been reaped, even on failure.
+			case <-cleanup.Done():
+				return cleanup.Err()
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := earlyOwner.finish(); err != nil {
+			t.Errorf("failure-path early certificate controller cleanup: %v", err)
+		}
+	}()
 	inspectDocument, err := run.docker(ctx, "inspect", id)
 	var containers []struct {
 		Image  string `json:"Image"`
@@ -179,14 +246,14 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		t.Fatal("real certificate controller private FD envelope invalid")
 	}
 	defer clear(encoded)
-	type startResult struct {
-		output []byte
-		err    error
-	}
-	completed := make(chan startResult, 1)
 	startupInput := bytes.Clone(encoded)
+	attachContext, cancelAttach := context.WithCancel(ctx)
+	defer cancelAttach()
+	if err := earlyOwner.attach(cancelAttach); err != nil {
+		t.Fatal(err)
+	}
 	go func() {
-		command := exec.CommandContext(ctx, "docker", "start", "-a", "-i", id)
+		command := exec.CommandContext(attachContext, "docker", "start", "-a", "-i", id)
 		command.Stdin = bytes.NewReader(startupInput)
 		output, startErr := command.CombinedOutput()
 		clear(startupInput)
@@ -232,6 +299,9 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		}
 		select {
 		case result := <-completed:
+			if err := earlyOwner.consume(); err != nil {
+				t.Fatal(err)
+			}
 			stage := slice6ControllerFailureStage(result.output)
 			clear(result.output)
 			t.Fatalf("real certificate controller exited before managed ledger and credential listener: stage=%s exit=%v", stage, result.err)
@@ -299,11 +369,15 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 			select {
 			case result := <-completed:
 				stage := slice6ControllerFailureStage(result.output)
+				class := slice6CertificateControllerDrainClass(result.err, stage, onTerminated != nil)
 				clear(result.output)
-				if result.err != nil {
-					if onTerminated == nil || stage != "credential-revoke" {
-						return fmt.Errorf("certificate controller drain unconfirmed: stage=%s", stage)
-					}
+				if class == "" {
+					return fmt.Errorf("certificate controller drain unconfirmed: stage=%s", stage)
+				}
+				if outcome != nil {
+					outcome.DrainClass = class
+				}
+				if class == slice6CertificateStickyCredentialRevoke {
 					t.Log("quiesced certificate controller retained a sticky terminal credential-revoke failure; independent operator cleanup required")
 				}
 				return nil
@@ -327,6 +401,9 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 		}},
 	}}
 	reported := false
+	if err := earlyOwner.handoff(); err != nil {
+		t.Fatal(err)
+	}
 	defer func() {
 		if !reported {
 			if err := sequence.Run(); err != nil {
@@ -337,8 +414,12 @@ func slice6RunCertificateControllerStartup(t *testing.T, ctx context.Context, ru
 	if onManagedReady != nil {
 		onManagedReady()
 	}
-	if err := sequence.Run(); err != nil {
-		t.Errorf("certificate/controller/terminal cleanup: %v", err)
+	cleanupErr := sequence.Run()
+	if cleanupErr != nil {
+		t.Errorf("certificate/controller/terminal cleanup: %v", cleanupErr)
 	}
 	reported = true
+	if outcome != nil && cleanupErr == nil && outcome.DrainClass != "" {
+		outcome.PhysicalConverged = true
+	}
 }

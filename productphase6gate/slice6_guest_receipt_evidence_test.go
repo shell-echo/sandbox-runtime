@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,6 +21,7 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/phase6guestreceipt"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6profilebuilder"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6terminalcleanup"
 	"golang.org/x/sys/unix"
 )
 
@@ -244,6 +246,22 @@ func (run *slice6ReceiptEvidenceRun) createFile(name string) (*os.File, error) {
 		name != "binding.pending" && name != "incomplete.json" && name != "mutation-receipt.json") {
 		return nil, errSlice6ReceiptEvidence
 	}
+	return run.createPrivateFileLocked(name)
+}
+
+// The v2 four-process collector has a separate, closed filename set. The
+// historical v1 createFile and independent verifier keep their exact names.
+func (run *slice6ReceiptEvidenceRun) createV2RawFile(name string) (*os.File, error) {
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	if run.check() != nil || (name != "product-a-pid1.stdout" && name != "guest-a-pid1.stdout" &&
+		name != "product-b-pid1.stdout" && name != "guest-b-pid1.stdout") {
+		return nil, errSlice6ReceiptEvidence
+	}
+	return run.createPrivateFileLocked(name)
+}
+
+func (run *slice6ReceiptEvidenceRun) createPrivateFileLocked(name string) (*os.File, error) {
 	fd, err := unix.Openat(run.fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		return nil, errSlice6ReceiptEvidence
@@ -261,7 +279,11 @@ func (run *slice6ReceiptEvidenceRun) createFile(name string) (*os.File, error) {
 func (run *slice6ReceiptEvidenceRun) readFile(name string, limit int) ([]byte, error) {
 	run.mu.Lock()
 	defer run.mu.Unlock()
-	if run.check() != nil || limit < 1 || limit > 128<<10 {
+	maximum := 128 << 10
+	if name == slice6TerminalV3EvidenceFile {
+		maximum = phase6terminalcleanup.MaxEvidenceV3Bytes
+	}
+	if run.check() != nil || limit < 1 || limit > maximum {
 		return nil, errSlice6ReceiptEvidence
 	}
 	wanted, ok := run.files[name]
@@ -278,19 +300,22 @@ func (run *slice6ReceiptEvidenceRun) readFile(name string, limit int) ([]byte, e
 		return nil, errSlice6ReceiptEvidence
 	}
 	file := os.NewFile(uintptr(fd), name)
-	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > int64(limit) {
+		_ = file.Close()
 		return nil, errSlice6ReceiptEvidence
 	}
 	var opened unix.Stat_t
 	if unix.Fstat(fd, &opened) != nil || !slice6SameInode(opened, wanted) ||
 		opened.Mode&unix.S_IFMT != unix.S_IFREG || opened.Mode&0o7777 != 0o600 ||
 		opened.Uid != uint32(os.Getuid()) {
+		_ = file.Close()
 		return nil, errSlice6ReceiptEvidence
 	}
 	data := make([]byte, info.Size())
-	if n, err := file.ReadAt(data, 0); err != nil && n != len(data) {
+	n, readErr := file.ReadAt(data, 0)
+	closeErr := file.Close()
+	if n != len(data) || (readErr != nil && !errors.Is(readErr, io.EOF)) || closeErr != nil {
 		return nil, errSlice6ReceiptEvidence
 	}
 	return data, nil

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shell-echo/sandbox-runtime/product"
 )
 
@@ -85,18 +86,27 @@ func (s *Store) ProvisionGuest(ctx context.Context, command product.GuestBinding
 }
 
 func (s *Store) AuthenticateGuest(ctx context.Context, authentication product.GuestAuthentication) (product.GuestBinding, error) {
-	binding, _, err := s.authenticateGuest(ctx, authentication, false)
+	binding, _, err := s.authenticateGuest(ctx, authentication, false, nil)
 	return binding, err
+}
+
+func (s *Store) AuthenticateGuestWithLocalOwner(ctx context.Context, authentication product.GuestAuthentication, owner product.GuestBinding) (product.GuestBinding, error) {
+	binding, _, err := s.authenticateGuest(ctx, authentication, false, &owner)
+	return binding, err
+}
+
+func (s *Store) AuthenticateGuestWithLocalOwnerAndRevocationEvidence(ctx context.Context, authentication product.GuestAuthentication, owner product.GuestBinding) (product.GuestBinding, bool, error) {
+	return s.authenticateGuest(ctx, authentication, true, &owner)
 }
 
 // AuthenticateGuestWithRevocationEvidence is an opt-in private observation
 // path. A true result means this very signed attempt matched a revoked row in
 // the original locked transaction; it does not grant any additional authority.
 func (s *Store) AuthenticateGuestWithRevocationEvidence(ctx context.Context, authentication product.GuestAuthentication) (product.GuestBinding, bool, error) {
-	return s.authenticateGuest(ctx, authentication, true)
+	return s.authenticateGuest(ctx, authentication, true, nil)
 }
 
-func (s *Store) authenticateGuest(ctx context.Context, authentication product.GuestAuthentication, observeRevoked bool) (product.GuestBinding, bool, error) {
+func (s *Store) authenticateGuest(ctx context.Context, authentication product.GuestAuthentication, observeRevoked bool, owner *product.GuestBinding) (product.GuestBinding, bool, error) {
 	opCtx, cancel := context.WithTimeout(ctx, s.operationTimeout)
 	defer cancel()
 	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{})
@@ -106,8 +116,9 @@ func (s *Store) authenticateGuest(ctx context.Context, authentication product.Gu
 	defer rollbackBounded(tx, s.operationTimeout)
 	var binding product.GuestBinding
 	var configuredJSON, publicKey, credentialDigest []byte
+	var connectionNonce pgtype.Text
 	var now time.Time
-	err = tx.QueryRow(opCtx, `SELECT g.tenant_id,g.workspace_id,g.slot_key,g.slot_profile_id,g.slot_generation,g.binding_generation,g.guest_id,g.credential_digest,g.public_key,g.protocol_version,g.capabilities,g.state,g.expires_at,clock_timestamp() FROM sandbox_runtime_product.guest_bindings g JOIN sandbox_runtime_product.workspace_slots s ON s.tenant_id=g.tenant_id AND s.workspace_id=g.workspace_id AND s.slot_key=g.slot_key AND s.generation=g.slot_generation AND s.profile_id=g.slot_profile_id WHERE g.guest_id=$1 AND g.binding_generation=$2 AND s.observed_state='ready' FOR UPDATE OF g`, authentication.GuestID, authentication.BindingGeneration).Scan(&binding.TenantID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotProfileID, &binding.SlotGeneration, &binding.BindingGeneration, &binding.GuestID, &credentialDigest, &publicKey, &binding.ProtocolVersion, &configuredJSON, &binding.State, &binding.ExpiresAt, &now)
+	err = tx.QueryRow(opCtx, `SELECT g.tenant_id,g.workspace_id,g.slot_key,g.slot_profile_id,g.slot_generation,g.binding_generation,g.guest_id,g.credential_digest,g.public_key,g.protocol_version,g.capabilities,g.state,g.expires_at,g.connection_nonce,clock_timestamp() FROM sandbox_runtime_product.guest_bindings g JOIN sandbox_runtime_product.workspace_slots s ON s.tenant_id=g.tenant_id AND s.workspace_id=g.workspace_id AND s.slot_key=g.slot_key AND s.generation=g.slot_generation AND s.profile_id=g.slot_profile_id WHERE g.guest_id=$1 AND g.binding_generation=$2 AND s.observed_state='ready' FOR UPDATE OF g`, authentication.GuestID, authentication.BindingGeneration).Scan(&binding.TenantID, &binding.WorkspaceID, &binding.SlotKey, &binding.SlotProfileID, &binding.SlotGeneration, &binding.BindingGeneration, &binding.GuestID, &credentialDigest, &publicKey, &binding.ProtocolVersion, &configuredJSON, &binding.State, &binding.ExpiresAt, &connectionNonce, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return product.GuestBinding{}, false, product.ErrNotFound
 	}
@@ -115,6 +126,23 @@ func (s *Store) authenticateGuest(ctx context.Context, authentication product.Gu
 		return product.GuestBinding{}, false, product.ErrStoreUnavailable
 	}
 	publicKeyDigest := sha256.Sum256(publicKey)
+	if owner != nil && binding.State == "connected" && connectionNonce.Valid &&
+		owner.TenantID == binding.TenantID && owner.WorkspaceID == binding.WorkspaceID &&
+		owner.SlotKey == binding.SlotKey && owner.SlotGeneration == binding.SlotGeneration &&
+		owner.GuestID == binding.GuestID && owner.BindingGeneration == binding.BindingGeneration &&
+		owner.ProtocolVersion == binding.ProtocolVersion && owner.ExpiresAt.Equal(binding.ExpiresAt) &&
+		owner.ClientNonce == connectionNonce.String && validObservedGuestNonce(owner.ClientNonce) &&
+		binding.ProtocolVersion == authentication.ProtocolVersion && binding.ExpiresAt.After(now) &&
+		len(publicKey) == ed25519.PublicKeySize && len(credentialDigest) == sha256.Size &&
+		subtle.ConstantTimeCompare(credentialDigest, publicKeyDigest[:]) == 1 &&
+		validObservedGuestSigningBinding(authentication, now) &&
+		ed25519.Verify(publicKey, authentication.SigningBytes, authentication.Signature) &&
+		json.Unmarshal(configuredJSON, &binding.Capabilities) == nil &&
+		len(owner.Capabilities) > 0 &&
+		len(capabilityIntersection(binding.Capabilities, owner.Capabilities)) == len(owner.Capabilities) &&
+		len(capabilityIntersection(binding.Capabilities, authentication.OfferedCapabilities)) > 0 {
+		return product.GuestBinding{}, false, product.ErrGuestConnectedBusy
+	}
 	if binding.ProtocolVersion != authentication.ProtocolVersion || (binding.State != "issued" && binding.State != "disconnected") || !binding.ExpiresAt.After(now) || len(publicKey) != ed25519.PublicKeySize || len(credentialDigest) != sha256.Size || subtle.ConstantTimeCompare(credentialDigest, publicKeyDigest[:]) != 1 || !ed25519.Verify(publicKey, authentication.SigningBytes, authentication.Signature) {
 		if observeRevoked && binding.State == "revoked" && opCtx.Err() == nil &&
 			validObservedGuestSigningBinding(authentication, now) &&
@@ -206,6 +234,95 @@ func (s *Store) DisconnectGuest(ctx context.Context, binding product.GuestBindin
 		return product.ErrStoreUnavailable
 	}
 	return nil
+}
+
+// RetireGuestConnection is the opt-in, one-second bounded cleanup primitive
+// for an already authenticated Product-owned transport. It uses no detached
+// rollback context: each autocommit statement and the required readback share
+// the caller's deadline. A lost UPDATE response remains outcome-unknown.
+func (s *Store) RetireGuestConnection(ctx context.Context, binding product.GuestBinding) (product.GuestRetirementDisposition, error) {
+	if !validGuestRetirementBinding(s, ctx, binding) {
+		return "", product.ErrInvalid
+	}
+	opCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	connection, err := s.pool.Acquire(opCtx)
+	if err != nil {
+		return "", product.ErrStoreUnavailable
+	}
+	defer connection.Release()
+	const update = `UPDATE sandbox_runtime_product.guest_bindings SET state='disconnected',connection_nonce=NULL,last_seen_at=clock_timestamp(),updated_at=clock_timestamp() WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 AND slot_generation=$4 AND guest_id=$5 AND binding_generation=$6 AND state='connected' AND connection_nonce=$7 RETURNING 1`
+	args := []any{binding.TenantID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration,
+		binding.GuestID, binding.BindingGeneration, binding.ClientNonce}
+	var marker int
+	err = connection.QueryRow(opCtx, update, args...).Scan(&marker)
+	updated := err == nil && marker == 1
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", product.ErrStoreOutcomeUnknown
+	}
+	var state string
+	var nonce pgtype.Text
+	err = connection.QueryRow(opCtx, `SELECT state,connection_nonce FROM sandbox_runtime_product.guest_bindings WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 AND slot_generation=$4 AND guest_id=$5 AND binding_generation=$6`, args[:6]...).Scan(&state, &nonce)
+	if err != nil {
+		if updated {
+			return "", product.ErrStoreOutcomeUnknown
+		}
+		return "", product.ErrStoreUnavailable
+	}
+	return classifyGuestRetirementState(state, nonce, binding.ClientNonce, updated)
+}
+
+// ReadGuestRetirement is the readback-first path after an unknown UPDATE
+// outcome. It never claims an exact release merely from a disconnected row.
+func (s *Store) ReadGuestRetirement(ctx context.Context, binding product.GuestBinding) (product.GuestRetirementDisposition, error) {
+	if !validGuestRetirementBinding(s, ctx, binding) {
+		return "", product.ErrInvalid
+	}
+	opCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	connection, err := s.pool.Acquire(opCtx)
+	if err != nil {
+		return "", product.ErrStoreUnavailable
+	}
+	defer connection.Release()
+	var state string
+	var nonce pgtype.Text
+	err = connection.QueryRow(opCtx, `SELECT state,connection_nonce FROM sandbox_runtime_product.guest_bindings WHERE tenant_id=$1 AND workspace_id=$2 AND slot_key=$3 AND slot_generation=$4 AND guest_id=$5 AND binding_generation=$6`,
+		binding.TenantID, binding.WorkspaceID, binding.SlotKey, binding.SlotGeneration,
+		binding.GuestID, binding.BindingGeneration).Scan(&state, &nonce)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return product.GuestRetireInactive, nil
+	}
+	if err != nil {
+		return "", product.ErrStoreUnavailable
+	}
+	return classifyGuestRetirementState(state, nonce, binding.ClientNonce, false)
+}
+
+func validGuestRetirementBinding(s *Store, ctx context.Context, binding product.GuestBinding) bool {
+	return s != nil && s.pool != nil && ctx != nil && ctx.Err() == nil && binding.TenantID != "" &&
+		binding.WorkspaceID != "" && binding.SlotKey != "" && binding.GuestID != "" &&
+		binding.SlotGeneration > 0 && binding.BindingGeneration > 0 &&
+		validObservedGuestNonce(binding.ClientNonce)
+}
+
+func classifyGuestRetirementState(state string, nonce pgtype.Text, oldNonce string, updated bool) (product.GuestRetirementDisposition, error) {
+	if state == "disconnected" && !nonce.Valid {
+		if updated {
+			return product.GuestRetireReleased, nil
+		}
+		return product.GuestRetireInactive, nil
+	}
+	if (state == "revoked" || state == "expired") && !nonce.Valid {
+		return product.GuestRetireInactive, nil
+	}
+	if state == "connected" && nonce.Valid {
+		if nonce.String == oldNonce {
+			return product.GuestRetireStillOwned, nil
+		}
+		return product.GuestRetireSuperseded, nil
+	}
+	return "", product.ErrStoreOutcomeUnknown
 }
 
 func (s *Store) RevokeGuest(ctx context.Context, tenantID, guestID, reason string) error {

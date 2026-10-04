@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -135,43 +134,17 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		map[string]string{"product-runtime": productID}); err != nil {
 		return errors.New("Guest Product bridge has unreviewed member before Guest admission")
 	}
-	if err := slice6PreflightGuestStorageCapacity(ctx, run); err != nil {
-		return err
-	}
-	shellDigest, err := slice6MeasureGuestShell(ctx, run, plan.Principal)
-	if err != nil || shellDigest != preIssuerShellDigest || preIssuerShellDigest == "" {
-		return errors.New("selected Guest shell changed after pre-issuer measurement")
-	}
-	files, err := slice6BuildGuestRuntimeInputs(composed, run.id, binding.GuestID,
-		binding.BindingGeneration, shellDigest)
+	prepared, err := slice6PrepareGuestRuntimeResources(t, ctx, run, composed, plan,
+		binding, preIssuerShellDigest)
 	if err != nil {
-		return err
-	}
-	startupDigest := slice6ReceiptConfigDigest(files[phase6security.Slice6StartupConfigFile])
-	archive, err := phase6security.BuildSlice6PrivateConfigArchive(profile, "guest-runtime", files)
-	for _, value := range files {
-		clear(value)
-	}
-	if err != nil {
-		return err
-	}
-	slice6PrepareOneControllerPrivateConfig(t, ctx, run, profile, "guest-runtime", archive)
-	storage := slice6PrepareGuestStorageVolumes(t, ctx, run, plan.Principal.UID, plan.Principal.GID)
-	if err := slice6ValidateGuestStorageVolumes(ctx, run, storage); err != nil {
 		return err
 	}
 	internal, err := createSlice6ProfileNetwork(ctx, run, plan.InternalNetwork)
 	if err != nil {
 		return err
 	}
-	root, err := filepath.Abs("..")
-	if err != nil {
-		return err
-	}
-	seccomp := filepath.Join(root, "profiles", "phase6", "security", "originals", "moby-default-seccomp-836ae4d3.json")
-	configVolume := "sr-p6-config-guest-runtime-" + run.id
 	args, err := slice6GuestRuntimeCreateArguments(ctx, run, profile, plan, productEdge.NetworkID,
-		configVolume, storage, socketVolumes, anchorFiles, seccomp)
+		prepared.ConfigVolume, prepared.Storage, socketVolumes, anchorFiles, prepared.Seccomp)
 	if err != nil {
 		return err
 	}
@@ -191,7 +164,7 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 		return errors.New("Guest internal isolated network connect failed")
 	}
 	if err := slice6VerifyGuestRuntimeContainer(ctx, run, id, plan, productEdge.NetworkID,
-		internal.NetworkID, configVolume, storage, socketVolumes, anchorFiles, seccomp); err != nil {
+		internal.NetworkID, prepared.ConfigVolume, prepared.Storage, socketVolumes, anchorFiles, prepared.Seccomp); err != nil {
 		return err
 	}
 	var receiptCapture *slice6GuestReceiptCapture
@@ -199,7 +172,7 @@ func slice6RunGuestRuntimePID1(t *testing.T, parent context.Context, run slice6D
 	if composed.PrivateGuestReceipt {
 		receiptReadyDeadline = time.Now().Add(45 * time.Second)
 		receiptCapture, err = slice6StartGuestReceiptCapture(t, ctx, composed.GuestReceiptEvidence,
-			id, "guest", profile.ProfileDigest, startupDigest,
+			id, "guest", profile.ProfileDigest, prepared.StartupDigest,
 			plan.Principal.ImageDigest, plan.Principal.ImageReference)
 		if err != nil {
 			return errors.New("start attached Guest PID1 receipt capture")
@@ -541,6 +514,19 @@ func TestSlice6GuestConnectedReadinessRequires204WithinTotalBudget(t *testing.T)
 func slice6GuestRuntimeCreateArguments(ctx context.Context, run slice6DockerRun,
 	profile phase6security.Profile, plan slice6GuestRuntimeLaunchPlan, productNetworkID,
 	configVolume string, storage, sockets, anchorFiles map[string]string, seccomp string) ([]string, error) {
+	return slice6GuestRuntimeCreateArgumentsForSlot(ctx, run, profile, plan,
+		productNetworkID, configVolume, storage, sockets, anchorFiles, seccomp, "guest-a")
+}
+
+func slice6GuestRuntimeCreateArgumentsForSlot(ctx context.Context, run slice6DockerRun,
+	profile phase6security.Profile, plan slice6GuestRuntimeLaunchPlan, productNetworkID,
+	configVolume string, storage, sockets, anchorFiles map[string]string, seccomp, slot string) ([]string, error) {
+	name := "sr-p6-guest-runtime-" + run.id
+	if slot == "guest-b" {
+		name = "sr-p6-guest-runtime-b-" + run.id
+	} else if slot != "guest-a" {
+		return nil, errors.New("Guest E slot name unavailable")
+	}
 	if len(productNetworkID) != 64 || !lowerHexSlice6(productNetworkID) ||
 		configVolume != "sr-p6-config-guest-runtime-"+run.id ||
 		slice6VerifyGuestFixtureVolume(ctx, run, configVolume) != nil {
@@ -566,7 +552,7 @@ func slice6GuestRuntimeCreateArguments(ctx context.Context, run slice6DockerRun,
 			strconv.FormatUint(uint64(plan.Principal.UID), 10) + ",gid=" +
 			strconv.FormatUint(uint64(plan.Principal.GID), 10)
 	}
-	args := []string{"create", "--pull=never", "--name", "sr-p6-guest-runtime-" + run.id,
+	args := []string{"create", "--pull=never", "--name", name,
 		"--label", run.label(), "--log-driver=none", "--network", productNetworkID,
 		"--ip", plan.ProductIP, "--restart=no", "--user", owner, "--cap-drop=ALL",
 		"--security-opt", "no-new-privileges:true", "--security-opt", "seccomp=" + seccomp,

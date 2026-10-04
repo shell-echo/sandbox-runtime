@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -218,6 +219,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	var privateGuest *productprocess.PrivateGuestServer
 	var privateGuestProbe func(context.Context) error
 	var guestHub *guestagent.Hub
+	var monitor *productprocess.DependencyMonitor
 	if productConfig.SchemaVersion == config.ProductProductionSchemaV3 {
 		roleDocument, roleErr := phase6security.VerifyPeerCRLRoleFile(productConfig.TLS.PeerCRLRoleFile,
 			securityProfile, productConfig.TLS.PeerCRLSourceMappingDigest, productConfig.TLS.PeerCRLRoleDigest)
@@ -245,12 +247,23 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if authErr != nil {
 			return fmt.Errorf("construct Product Guest authenticator: %w", authErr)
 		}
-		hub, hubErr := guestagent.NewHub(guestagent.HubOptions{Authenticator: guestAuthenticator, Observation: observation})
+		retirement, policyErr := productguest.NewRetirementPolicy(store, productConfig.GuestControlMaxConnections)
+		if policyErr != nil {
+			return fmt.Errorf("construct Product Guest retirement policy: %w", policyErr)
+		}
+		hub, hubErr := guestagent.NewHub(guestagent.HubOptions{Authenticator: guestAuthenticator,
+			Observation: observation, RetryTemporaryAuth: true, Retirement: &retirement})
 		if hubErr != nil {
 			return fmt.Errorf("construct Product Guest Hub: %w", hubErr)
 		}
 		guestHub = hub
-		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, hub, guestTLS, guard,
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_ = hub.ShutdownRetirement(ctx)
+		}()
+		admission := productGuestAdmission(hub, func() productprocess.Readiness { return monitor }, hub.RetirementReady)
+		privateGuest, err = productprocess.NewPrivateGuestServer(productConfig.GuestControl, admission, guestTLS, guard,
 			maxAge, productConfig.GuestControlMaxConnections)
 		if err != nil {
 			return err
@@ -262,7 +275,7 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 	if monitorTimeout > time.Second {
 		monitorTimeout = time.Second
 	}
-	monitor, err := productprocess.NewDependencyMonitor(func(checkContext context.Context) error {
+	monitor, err = productprocess.NewDependencyMonitor(func(checkContext context.Context) error {
 		if tlsProbe != nil {
 			if err := tlsProbe(checkContext); err != nil {
 				return errors.New("Product live TLS signer is unavailable")
@@ -279,25 +292,56 @@ func runProductionProduct(ctx context.Context, productConfig *config.ProductProc
 		if err := productpostgres.VerifySchemaCompatibility(checkContext, runtimePool); err != nil {
 			return err
 		}
-		return verifyProductMaterialDependencies(checkContext, materialRegistry, productConfig)
+		if err := verifyProductMaterialDependencies(checkContext, materialRegistry, productConfig); err != nil {
+			return err
+		}
+		if guestHub != nil && !guestHub.RetirementReady() {
+			return errors.New("Product Guest cleanup or capacity is unavailable")
+		}
+		return nil
 	}, time.Second, monitorTimeout)
 	if err != nil {
 		return err
 	}
-	productServer, err := productprocess.NewTLSServer(productConfig.API, apiHandler, monitor, tlsConfig)
+	readiness := productprocess.ReadinessFunc(func(checkContext context.Context) error {
+		return productGuestReadiness(checkContext, monitor, guestHub)
+	})
+	productServer, err := productprocess.NewTLSServer(productConfig.API, apiHandler, readiness, tlsConfig)
 	if err != nil {
 		return err
 	}
 	components := map[string]server.Server{"product": productServer, "product-dependencies": monitor}
 	if privateGuest != nil {
-		if guestReceipt != nil {
-			components["product-guest"] = productGuestReceiptServer{Server: privateGuest,
-				hub: guestHub, recorder: guestReceipt}
-		} else {
-			components["product-guest"] = privateGuest
-		}
+		components["product-guest"] = productGuestReceiptServer{Server: privateGuest,
+			hub: guestHub, recorder: guestReceipt, retirement: true}
 	}
 	return server.RunE(components)
+}
+
+func productGuestReadiness(ctx context.Context, dependencies productprocess.Readiness, hub *guestagent.Hub) error {
+	if dependencies == nil || ctx == nil {
+		return errors.New("Product dependencies are unavailable")
+	}
+	if err := dependencies.Ready(ctx); err != nil {
+		return err
+	}
+	if hub != nil && !hub.RetirementReady() {
+		return errors.New("Product Guest cleanup or capacity is unavailable")
+	}
+	return nil
+}
+
+func productGuestAdmission(hub http.Handler, dependencies func() productprocess.Readiness,
+	cleanupReady func() bool) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if hub == nil || dependencies == nil || cleanupReady == nil ||
+			request == nil || request.Context() == nil ||
+			productGuestReadiness(request.Context(), dependencies(), nil) != nil || !cleanupReady() {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
+		hub.ServeHTTP(writer, request)
+	})
 }
 
 type productionKernelCapabilities struct{}

@@ -5,10 +5,10 @@ import (
 	"sync"
 )
 
-// observationLifecycle exists only for the opt-in private receipt. It owns
-// every Hub path that may invoke the synchronous observation callback. Once
-// quiescence begins, no new path may enter and the caller joins all existing
-// handlers, authority monitors and explicit disconnects before sealing.
+// observationLifecycle owns every Hub handler, authority monitor and explicit
+// disconnect in the production retirement graph, with or without receipts.
+// Once quiescence begins no new path enters; a caller with a live shutdown
+// context joins all existing producers before optionally sealing a receipt.
 type observationLifecycle struct {
 	mu       sync.Mutex
 	active   int
@@ -45,12 +45,18 @@ func (l *observationLifecycle) leave() {
 	l.mu.Unlock()
 }
 
+func (l *observationLifecycle) admitting() bool {
+	if l == nil {
+		return true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return !l.closing
+}
+
 func (l *observationLifecycle) quiesce(ctx context.Context) error {
 	if l == nil {
 		return nil
-	}
-	if ctx == nil || ctx.Err() != nil {
-		return ErrUnavailable
 	}
 	l.mu.Lock()
 	if !l.closing {
@@ -61,6 +67,9 @@ func (l *observationLifecycle) quiesce(ctx context.Context) error {
 	}
 	finished := l.finished
 	l.mu.Unlock()
+	if ctx == nil || ctx.Err() != nil {
+		return ErrUnavailable
+	}
 	select {
 	case <-finished:
 		return nil

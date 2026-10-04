@@ -49,7 +49,7 @@ func slice6ObserveProductIdentityMaterial(t *testing.T, ctx context.Context, run
 		runtimeBinding.Purpose != secretref.PurposePostgresRuntimeDSN {
 		t.Fatal("Product observer and live material-agent authorization inputs disagree")
 	}
-	directory := slice6PrivateSourceSibling(t, root, ".sr-product-identity-observer-")
+	directory := run.privateSibling(t, root, ".sr-product-identity-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "observer"))
 	if err != nil {
 		t.Fatal(err)

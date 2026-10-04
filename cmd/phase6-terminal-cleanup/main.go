@@ -20,6 +20,7 @@ import (
 const (
 	inputProtocol   = "sandbox-runtime.phase6-terminal-cleanup-input.v1"
 	inputProtocolV2 = "sandbox-runtime.phase6-terminal-cleanup-input.v2"
+	inputProtocolV3 = "sandbox-runtime.phase6-terminal-cleanup-input.v3"
 	// Both canonical controller ledgers are independently bounded at 8 MiB.
 	// Leave a fixed allowance for the full Profile, peer sources and PEMs.
 	maxInputBytes = 18 << 20
@@ -50,6 +51,7 @@ func (s cleanupStage) Error() string { return "terminal cleanup unavailable" }
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--capabilities" {
 		fmt.Println(inputProtocolV2)
+		fmt.Println(inputProtocolV3)
 		return
 	}
 	if len(os.Args) != 2 || os.Args[1] != "--one-shot" {
@@ -116,7 +118,7 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 		return cleanupStage("sources-decode")
 	}
 	var plan phase6terminalcleanup.Plan
-	if value.Protocol == inputProtocolV2 {
+	if value.Protocol == inputProtocolV2 || value.Protocol == inputProtocolV3 {
 		plan, err = phase6terminalcleanup.BuildV2(value.RunID, profile, sources,
 			value.CertificateLedgerJSON, value.CredentialLedgerJSON,
 			value.ManagementAccessor, *value.ExternalPostgres, time.Now().UTC())
@@ -131,12 +133,36 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	remote, err := phase6terminalcleanup.NewVaultRemote(phase6terminalcleanup.VaultRemoteConfig{
 		Plan: plan, Endpoint: value.VaultEndpoint, ServerCAPEM: value.VaultServerCAPEM,
 		ClientCertificate: value.ClientCertificatePEM, ClientPrivateKey: value.ClientPrivateKeyPEM,
-		Token: value.OperatorToken, TokenExpiresAt: value.TokenExpiresAt, Now: time.Now})
+		Token: value.OperatorToken, TokenExpiresAt: value.TokenExpiresAt, Now: time.Now,
+		EvidenceV3: value.Protocol == inputProtocolV3})
 	if err != nil {
 		return cleanupStage("vault-client")
 	}
 	defer remote.Close()
 	receipt, err := phase6terminalcleanup.Execute(ctx, plan, remote, time.Now)
+	if value.Protocol == inputProtocolV3 {
+		if err != nil {
+			return cleanupStage("execute-" + receipt.FailureStage)
+		}
+		evidence, evidenceErr := remote.PrivateEvidenceV3(receipt)
+		if evidenceErr != nil {
+			return cleanupStage("evidence-replay")
+		}
+		defer clear(evidence.IssuerDER)
+		defer clear(evidence.CRLDER)
+		encoded, encodeErr := json.Marshal(evidence)
+		if encodeErr != nil || len(encoded)+1 > phase6terminalcleanup.MaxEvidenceV3Bytes {
+			clear(encoded)
+			return cleanupStage("evidence-encode")
+		}
+		defer clear(encoded)
+		line := append(encoded, '\n')
+		written, writeErr := writer.Write(line)
+		if writeErr != nil || written != len(line) {
+			return cleanupStage("evidence-write")
+		}
+		return nil
+	}
 	encoded, encodeErr := json.Marshal(receipt)
 	if encodeErr != nil || len(encoded) > 16<<10 {
 		clear(encoded)
@@ -168,9 +194,9 @@ func decodeInput(document []byte) (input, error) {
 	}
 	canonical, err := json.Marshal(value)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		(value.Protocol != inputProtocol && value.Protocol != inputProtocolV2) ||
+		(value.Protocol != inputProtocol && value.Protocol != inputProtocolV2 && value.Protocol != inputProtocolV3) ||
 		(value.Protocol == inputProtocol && value.ExternalPostgres != nil) ||
-		(value.Protocol == inputProtocolV2 && value.ExternalPostgres == nil) ||
+		((value.Protocol == inputProtocolV2 || value.Protocol == inputProtocolV3) && value.ExternalPostgres == nil) ||
 		value.RunID == "" || value.PlanDigest == "" || len(value.OperatorToken) == 0 ||
 		len(value.ClientPrivateKeyPEM) == 0 || value.TokenExpiresAt.IsZero() {
 		clear(canonical)

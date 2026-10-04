@@ -33,7 +33,8 @@ type slice6MigrationNetworkEndpoint struct {
 // A separate, non-restarting core PID1 owns the first business DDL. The
 // operator supplies no SQL password or migration SQL to this container.
 func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, postgresID string, socketVolumes, anchorFiles map[string]string) (resultErr error) {
+	composed slice6VaultComposedInputs, postgresID string, socketVolumes, anchorFiles map[string]string,
+	proofOut *slice6ProductMigrationExitProof) (resultErr error) {
 	t.Helper()
 	profile := composed.Profile
 	if phase6security.VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
@@ -96,7 +97,7 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	if os.Getenv(slice6ProductMigrationPreDDLFailureEnv) == "1" {
 		return errors.New("controlled pre-DDL Product migration failure")
 	}
-	createdDedicated, err := createSlice6ProfileNetwork(parent, run, dedicated)
+	createdDedicated, err := run.resolveProfileNetwork(parent, dedicated)
 	if err != nil {
 		return errors.New("create Product migration dedicated network")
 	}
@@ -159,16 +160,41 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		return errors.New("create independent Product migration PID1")
 	}
+	var captured slice6ProductMigrationExitProof
+	var expectedLedger []string
 	defer func() {
 		cleanup := &slice6CleanupSequence{stages: []slice6CleanupStage{
 			{"remove-product-migration-job", func(ctx context.Context) error {
-				if _, err := run.docker(ctx, "rm", "-f", id); err != nil {
+				removed, err := run.docker(ctx, "rm", "-f", id)
+				if err != nil || !bytes.Equal(removed, []byte(id+"\n")) {
+					clear(removed)
 					return errors.New("Product migration PID1 removal unconfirmed")
+				}
+				captured.RemovalRaw = bytes.Clone(removed)
+				clear(removed)
+				absent, absentErr, overflow := slice6DockerBounded(ctx, 128, nil,
+					"ps", "-aq", "--no-trunc", "--filter", "id="+id)
+				defer clear(absent)
+				if absentErr != nil || overflow || len(absent) != 0 {
+					return errors.New("Product migration original ID remains after removal")
 				}
 				return nil
 			}},
 		}}
 		resultErr = errors.Join(resultErr, cleanup.Run())
+		if resultErr == nil && captured.ContainerID == id && len(captured.RemovalRaw) != 0 {
+			_, err := slice6CheckProductMigrationExitProof(captured, job, expectedLedger)
+			if err != nil {
+				resultErr = errors.Join(resultErr, errors.New("Product migration removed proof invalid"))
+			} else if proofOut != nil {
+				*proofOut = captured
+				return
+			}
+		}
+		clear(captured.ExitRaw)
+		clear(captured.LedgerRaw)
+		clear(captured.RemovalRaw)
+		clear(captured.LedgerExecExitRaw)
 	}()
 	if _, err := run.docker(parent, "network", "connect", "--ip", dedicatedIP,
 		createdDedicated.NetworkID, id); err != nil {
@@ -254,6 +280,14 @@ func slice6RunProductMigrationJob(t *testing.T, parent context.Context, run slic
 	if observeErr != nil || observedState != "exited|0|false|0|started-set|finished-set|state-error-none" ||
 		ledgerStatus != "ledger-and-catalog-exact" {
 		return fmt.Errorf("Product migration PID1 successful exit lacks exact read-only ledger: state=%s ledger=%s", observedState, ledgerStatus)
+	}
+	captured, err = slice6CaptureProductMigrationExitProof(parent, run, id, postgresID)
+	if err != nil {
+		return errors.New("Product migration pre-removal raw exit/ledger unavailable")
+	}
+	expectedLedger, err = slice6FrozenProductMigrationLedger(parent)
+	if err != nil {
+		return errors.New("Product migration frozen ledger source unavailable before removal")
 	}
 	t.Log("real independent Product migrate v2 PID1 exited once after Profile-bound material, PostgreSQL signer and guarded DDL; exact removal and operator ledger/ownership readback remain separate")
 	return nil

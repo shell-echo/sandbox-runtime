@@ -32,13 +32,30 @@ type slice6MaterialRunResult struct {
 	err    error
 }
 
+// E-only convergence is emitted after the existing stop/drain/remove/socket
+// guard has completed; a deferred failure cleanup never marks this success.
+type slice6EMaterialOutcome struct {
+	RunID, ProfileDigest, AgentDeployment, ContainerID, ExitClass string
+	PhysicalConverged                                             bool
+}
+
+func (outcome slice6EMaterialOutcome) validForRun(runID, profileDigest, agent string) bool {
+	wantExit := "stopped"
+	if agent == "product-migration-agent" {
+		wantExit = "natural_exit"
+	}
+	return outcome.RunID == runID && outcome.ProfileDigest == profileDigest &&
+		outcome.AgentDeployment == agent && len(outcome.ContainerID) == 64 &&
+		lowerHexSlice6(outcome.ContainerID) && outcome.ExitClass == wantExit && outcome.PhysicalConverged
+}
+
 // Component evidence only. A distinct material-agent PID1 obtains its own
 // credential, reads Vault KVv2 through the live Guest TLS signer and serves
 // one exact owner-side resolve before draining and removing both sockets.
 func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, serverID, publicKeyDigest string,
 	socketVolumes, anchorFiles map[string]string,
-	onReady func(phase6security.Slice6BreakGlassSocketBinding)) error {
+	onReady func(phase6security.Slice6BreakGlassSocketBinding), outcome ...*slice6EMaterialOutcome) error {
 	return slice6RunRuntimeMaterialAgentStartup(t, ctx, run, composed, serverID, publicKeyDigest,
 		"", "guest-agent", "guest-runtime", "guest", 67, socketVolumes, anchorFiles,
 		func(binding phase6security.Slice6BreakGlassSocketBinding) error {
@@ -46,15 +63,19 @@ func slice6RunGuestMaterialAgentStartup(t *testing.T, ctx context.Context, run s
 				onReady(binding)
 			}
 			return nil
-		})
+		}, outcome...)
 }
 
 func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
 	composed slice6VaultComposedInputs, serverID, expectedDigest, expectedDSNDigest,
 	agentDeployment, ownerDeployment, label string, expectedSockets int,
 	socketVolumes, anchorFiles map[string]string,
-	onReady func(phase6security.Slice6BreakGlassSocketBinding) error) (resultErr error) {
+	onReady func(phase6security.Slice6BreakGlassSocketBinding) error,
+	outcome ...*slice6EMaterialOutcome) (resultErr error) {
 	t.Helper()
+	if len(outcome) > 1 {
+		return errors.New("ambiguous E material outcome")
+	}
 	profile := composed.Profile
 	migration := agentDeployment == "product-migration-agent"
 	if phase6security.VerifySlice6FinalGateProfile(profile) != nil ||
@@ -124,11 +145,11 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		!slices.Equal(service.ExternalServices, []string{"vault"}) {
 		t.Fatal("Guest material-agent isolated topology drift")
 	}
-	createdDedicated, err := createSlice6ProfileNetwork(ctx, run, dedicated)
+	createdDedicated, err := run.resolveProfileNetwork(ctx, dedicated)
 	if err != nil {
 		t.Fatal("create Guest material-agent dedicated network")
 	}
-	createdService, err := createSlice6ProfileNetwork(ctx, run, service)
+	createdService, err := run.resolveProfileNetwork(ctx, service)
 	if err != nil {
 		t.Fatal("create Guest material-agent Vault service bridge")
 	}
@@ -379,7 +400,7 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 		}
 	}
 	if agentDeployment == "guest-agent" {
-		observerDir := slice6PrivateSourceSibling(t, rootForSlice6GuestProbe(t), ".sr-guest-material-observer-")
+		observerDir := run.privateSibling(t, rootForSlice6GuestProbe(t), ".sr-guest-material-observer-")
 		observer, err := filepath.Abs(filepath.Join(observerDir, "observer"))
 		if err != nil {
 			t.Fatal(err)
@@ -453,6 +474,15 @@ func slice6RunRuntimeMaterialAgentStartup(t *testing.T, ctx context.Context, run
 	resultErr = guard.Complete()
 	if resultErr != nil {
 		return resultErr
+	}
+	if len(outcome) == 1 && outcome[0] != nil {
+		exitClass := "stopped"
+		if migration {
+			exitClass = "natural_exit"
+		}
+		*outcome[0] = slice6EMaterialOutcome{RunID: run.id,
+			ProfileDigest: profile.ProfileDigest, AgentDeployment: agent.Name,
+			ContainerID: id, ExitClass: exitClass, PhysicalConverged: true}
 	}
 	t.Logf("real %s material-agent clean drain removed its exact listeners", label)
 	return nil
@@ -750,7 +780,7 @@ func slice6ProbeGuestSignerAsMaterialAgent(t *testing.T, ctx context.Context, ru
 	if volume == "" || agent.TLS == nil || binding.SubjectUID != agent.UID || binding.SubjectGID != agent.GID {
 		t.Fatal("Guest signer diagnostic has no source-bound socket identity")
 	}
-	directory := slice6PrivateSourceSibling(t, root, ".sr-guest-signer-observer-")
+	directory := run.privateSibling(t, root, ".sr-guest-signer-observer-")
 	binary, err := filepath.Abs(filepath.Join(directory, "observer"))
 	if err != nil {
 		t.Fatal(err)

@@ -26,10 +26,20 @@ const (
 )
 
 var (
-	ErrInvalid           = errors.New("invalid Guest Agent protocol message")
-	ErrUnauthorized      = errors.New("Guest Agent identity is unauthorized")
-	ErrIncompatible      = errors.New("Guest Agent protocol version is incompatible")
-	ErrUnavailable       = errors.New("Guest Agent channel is unavailable")
+	ErrInvalid      = errors.New("invalid Guest Agent protocol message")
+	ErrUnauthorized = errors.New("Guest Agent identity is unauthorized")
+	ErrIncompatible = errors.New("Guest Agent protocol version is incompatible")
+	ErrUnavailable  = errors.New("Guest Agent channel is unavailable")
+	// ErrAuthDependencyUnavailable is an internal, pre-commit authentication
+	// classification. It may request a retryable transport close only when both
+	// endpoints explicitly enable that behavior; unknown commit is excluded.
+	ErrAuthDependencyUnavailable = errors.New("Guest authentication dependency is temporarily unavailable")
+	// ErrAuthOutcomeUnknown means the authentication commit cannot be classified.
+	// It is never eligible for an automatic signed retry.
+	ErrAuthOutcomeUnknown = errors.New("Guest authentication outcome is unknown")
+	// ErrAuthConnectedBusy is only valid for a fully signed attempt whose
+	// connected row is owned by this Product process's pinned old transport.
+	ErrAuthConnectedBusy = errors.New("Guest connection is still locally owned")
 	ErrCapabilityMissing = errors.New("Guest Agent capability is unavailable")
 	ErrRemote            = errors.New("Guest Agent operation failed")
 )

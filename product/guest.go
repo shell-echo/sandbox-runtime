@@ -52,6 +52,31 @@ type GuestBindingStore interface {
 	RevokeGuest(context.Context, string, string, string) error
 }
 
+// GuestRetirementStore is an optional, Product-owned connection-cleanup
+// capability. It never grants a new Guest connection. Released requires the
+// exact old nonce CAS and subsequent readback; the other dispositions cannot
+// be promoted to a successful same-binding reconnect receipt.
+type GuestRetirementStore interface {
+	RetireGuestConnection(context.Context, GuestBinding) (GuestRetirementDisposition, error)
+	ReadGuestRetirement(context.Context, GuestBinding) (GuestRetirementDisposition, error)
+}
+
+// GuestLocalOwnerAuthentication is an optional, private authentication
+// variant. The expected owner is pinned before the database query; it does
+// not authorize a new connection or permit takeover of an orphan row.
+type GuestLocalOwnerAuthentication interface {
+	AuthenticateGuestWithLocalOwner(context.Context, GuestAuthentication, GuestBinding) (GuestBinding, error)
+}
+
+type GuestRetirementDisposition string
+
+const (
+	GuestRetireReleased   GuestRetirementDisposition = "released"
+	GuestRetireInactive   GuestRetirementDisposition = "already_inactive"
+	GuestRetireSuperseded GuestRetirementDisposition = "superseded"
+	GuestRetireStillOwned GuestRetirementDisposition = "still_owned"
+)
+
 type GuestService struct {
 	store GuestBindingStore
 	ids   IDGenerator

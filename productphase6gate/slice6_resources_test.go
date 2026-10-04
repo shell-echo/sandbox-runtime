@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,9 @@ const (
 // cleanup re-discovers the exact label instead of trusting an in-memory list.
 // The final gate still needs durable raw receipts and all non-Docker classes.
 type slice6DockerRun struct {
-	id string
+	id                  string
+	networkSource       slice6ProfileNetworkSource
+	privateSiblingOwner *slice6PrivateSiblingOwner
 }
 
 func newSlice6DockerRun() (slice6DockerRun, error) {
@@ -37,10 +40,14 @@ func newSlice6DockerRun() (slice6DockerRun, error) {
 	if err != nil {
 		return slice6DockerRun{}, err
 	}
-	return slice6DockerRun{id: id}, nil
+	return slice6DockerRun{id: id, networkSource: slice6LegacyProfileNetworkSource{}}, nil
 }
 
 func (run slice6DockerRun) label() string { return slice6RunLabel + "=" + run.id }
+
+func (run slice6DockerRun) privateSibling(t *testing.T, sourceRoot, prefix string) string {
+	return slice6PrivateSourceSiblingOwned(t, run.privateSiblingOwner, sourceRoot, prefix)
+}
 
 func (run slice6DockerRun) docker(ctx context.Context, arguments ...string) ([]byte, error) {
 	if run.id == "" || len(run.id) != 32 || !lowerHexSlice6(run.id) {
@@ -322,11 +329,42 @@ func TestPhase6Slice6AnonymousVolumeCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A disposable no-issuer component drill checks the bounded origin/zero
+	// projections against Docker itself. The digest below is deliberately not
+	// a formal E precleanup receipt and cannot advance the release gate.
+	evidencePath := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(evidencePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	evidencePath, err = filepath.EvalSymlinks(evidencePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceRoot, err := slice6OpenReceiptEvidenceRoot(evidencePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidenceRoot.close()
+	evidenceRun, err := evidenceRoot.newRun(run.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evidenceRun.close()
+	origin, err := evidenceRun.captureGuestRecoveryImplicitOrigin(ctx, id)
+	if err != nil || len(volumes) != 2 ||
+		!slices.Contains(volumes, origin.FileVolumeID) || !slices.Contains(volumes, origin.LogsVolumeID) {
+		t.Fatalf("bounded original Vault volume ownership unavailable: %v", err)
+	}
 	if err := run.cleanup(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := slice6CheckImplicitVolumesRemoved(ctx, run, volumes); err != nil {
 		t.Fatal(err)
+	}
+	componentDigest := slice6ReceiptSHA256([]byte("no-issuer-zero-drill|" + run.id))
+	zero, err := evidenceRun.proveGuestRecoveryDockerZero(ctx, componentDigest, origin)
+	if err != nil || evidenceRun.verifyGuestRecoveryDockerZeroRaw(zero) != nil {
+		t.Fatalf("bounded original-volume Docker-zero component unavailable: %v", err)
 	}
 }
 

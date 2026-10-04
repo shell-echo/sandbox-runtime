@@ -111,8 +111,32 @@ func slice6BuildBreakGlassControllerInput(composed slice6VaultComposedInputs) ([
 	return document, private, nil
 }
 
+type slice6BreakGlassRunOutcome struct {
+	RunID, ProfileDigest string
+	InstanceIDs          []string
+	PhysicalConverged    bool
+}
+
+func (outcome slice6BreakGlassRunOutcome) validForRun(runID, profileDigest string) bool {
+	if len(runID) != 32 || !lowerHexSlice6(runID) || outcome.RunID != runID ||
+		!guestRevokeFixtureDigestGate(profileDigest) ||
+		outcome.ProfileDigest != profileDigest || !outcome.PhysicalConverged ||
+		len(outcome.InstanceIDs) != 3 {
+		return false
+	}
+	seen := make(map[string]bool, len(outcome.InstanceIDs))
+	for _, id := range outcome.InstanceIDs {
+		if len(id) != 64 || !lowerHexSlice6(id) || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
 func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run slice6DockerRun,
-	composed slice6VaultComposedInputs, socketVolumes map[string]string, onReady func(restart func())) {
+	composed slice6VaultComposedInputs, socketVolumes map[string]string, onReady func(restart func()),
+	outcome *slice6BreakGlassRunOutcome) {
 	t.Helper()
 	profile := composed.Profile
 	if len(socketVolumes) != 65 || phase6security.VerifySlice6BreakGlassBoundaries(profile) != nil {
@@ -141,7 +165,7 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 		!slices.Equal(network.Principals, []string{"break-glass-controller"}) || len(network.ExternalServices) != 0 {
 		t.Fatal("break-glass controller isolated network drift")
 	}
-	createdNetwork, err := createSlice6ProfileNetwork(ctx, run, network)
+	createdNetwork, err := run.resolveProfileNetwork(ctx, network)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +233,49 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 	if err != nil || len(id) != 64 || !lowerHexSlice6(id) {
 		t.Fatal("create real break-glass controller failed")
 	}
+	type startResult struct {
+		output []byte
+		err    error
+	}
+	type instance struct {
+		id        string
+		completed chan startResult
+		owner     *slice6EarlyControllerAttachOwner
+		cancel    context.CancelFunc
+	}
+	var instances []*instance
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+		defer cancel()
+		for index := len(instances) - 1; index >= 0; index-- {
+			if err := instances[index].owner.finishWithContext(cleanup); err != nil {
+				t.Errorf("failure-path exact break-glass instance cleanup: %v", err)
+			}
+		}
+	}()
+	newInstance := func(containerID string) *instance {
+		entry := &instance{id: containerID, completed: make(chan startResult, 1)}
+		owner, ownerErr := slice6NewEarlyControllerAttachOwner(containerID,
+			func(cleanup context.Context, args ...string) error {
+				_, err := run.docker(cleanup, args...)
+				return err
+			}, func(cleanup context.Context) error {
+				select {
+				case result := <-entry.completed:
+					clear(result.output)
+					return nil
+				case <-cleanup.Done():
+					return cleanup.Err()
+				}
+			})
+		if ownerErr != nil {
+			t.Fatal(ownerErr)
+		}
+		entry.owner = owner
+		instances = append(instances, entry)
+		return entry
+	}
+	first := newInstance(id)
 	verifyCreated := func(containerID string) {
 		inspect, err := run.docker(ctx, "inspect", containerID)
 		var containers []struct {
@@ -277,19 +344,19 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 		t.Fatal("break-glass controller sealed FD envelope invalid")
 	}
 	defer clear(encoded)
-	type startResult struct {
-		output []byte
-		err    error
-	}
-	startAndAwait := func(containerID string, document []byte) chan startResult {
-		completed := make(chan startResult, 1)
+	startAndAwait := func(entry *instance, document []byte) {
+		attachContext, cancelAttach := context.WithCancel(ctx)
+		entry.cancel = cancelAttach
+		if err := entry.owner.attach(cancelAttach); err != nil {
+			t.Fatal(err)
+		}
 		startupInput := bytes.Clone(document)
 		go func() {
-			command := exec.CommandContext(ctx, "docker", "start", "-a", "-i", containerID)
+			command := exec.CommandContext(attachContext, "docker", "start", "-a", "-i", entry.id)
 			command.Stdin = bytes.NewReader(startupInput)
 			output, startErr := command.CombinedOutput()
 			clear(startupInput)
-			completed <- startResult{output: output, err: startErr}
+			entry.completed <- startResult{output: output, err: startErr}
 		}()
 		deadline := time.Now().Add(30 * time.Second)
 		ready := false
@@ -300,13 +367,16 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 					probe += "; test -S " + binding.SocketPath
 				}
 			}
-			if _, probeErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), containerID,
+			if _, probeErr := run.docker(ctx, "exec", "--user", fmt.Sprintf("%d:%d", principal.UID, principal.GID), entry.id,
 				"/bin/sh", "-ec", probe); probeErr == nil {
 				ready = true
 				break
 			}
 			select {
-			case result := <-completed:
+			case result := <-entry.completed:
+				if err := entry.owner.consume(); err != nil {
+					t.Fatal(err)
+				}
 				t.Fatalf("real break-glass controller exited before eight listeners: %v: %.256s", result.err, result.output)
 			case <-time.After(250 * time.Millisecond):
 			}
@@ -315,17 +385,19 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 			t.Fatal("real break-glass controller eight listeners and ledger not ready")
 		}
 		if _, err := observeSlice6ProfileNetwork(ctx, run, createdNetwork.NetworkID, network,
-			map[string]string{principal.Name: containerID}); err != nil {
+			map[string]string{principal.Name: entry.id}); err != nil {
 			t.Fatal("real break-glass controller network membership drift")
 		}
-		return completed
 	}
-	stopAndDrain := func(containerID string, completed chan startResult) {
-		if _, err := run.docker(ctx, "stop", "--timeout", "10", containerID); err != nil {
+	stopAndDrain := func(entry *instance) {
+		if _, err := run.docker(ctx, "stop", "--timeout", "10", entry.id); err != nil {
 			t.Fatal("stop real break-glass controller")
 		}
 		select {
-		case result := <-completed:
+		case result := <-entry.completed:
+			if err := entry.owner.consume(); err != nil {
+				t.Fatal(err)
+			}
 			if result.err != nil {
 				t.Fatalf("break-glass controller did not exit cleanly: %v: %.256s", result.err, result.output)
 			}
@@ -333,15 +405,22 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 			t.Fatal("break-glass controller did not drain after stop")
 		}
 	}
-	completed := startAndAwait(id, encoded)
+	startAndAwait(first, encoded)
 	seed := slice6ExerciseBreakGlassControlChain(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID])
-	stopAndDrain(id, completed)
+	stopAndDrain(first)
 	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
 	if _, err := run.docker(ctx, "rm", id); err != nil {
 		t.Fatal("remove first break-glass controller before replacement")
 	}
+	if err := first.owner.retire(); err != nil {
+		t.Fatal(err)
+	}
+	first.cancel()
 	previousNonce, previousID := nonce, id
-	startReplacement := func() (string, chan startResult) {
+	startReplacement := func() *instance {
+		if len(instances) >= 3 {
+			t.Fatal("break-glass replacement instance budget exhausted")
+		}
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
 			t.Fatal(err)
@@ -362,6 +441,7 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 		if createErr != nil || len(containerID) != 64 || !lowerHexSlice6(containerID) || containerID == previousID {
 			t.Fatal("create independent replacement break-glass controller")
 		}
+		entry := newInstance(containerID)
 		verifyCreated(containerID)
 		envelope := phase6fdloader.Envelope{Protocol: phase6fdloader.ProtocolID, RunID: run.id,
 			Target: "break-glass-controller", ContainerID: containerID, Nonce: newNonce,
@@ -373,31 +453,50 @@ func slice6RunBreakGlassControllerStartup(t *testing.T, ctx context.Context, run
 			t.Fatal("replacement controller FD envelope invalid")
 		}
 		defer clear(input)
-		ready := startAndAwait(containerID, input)
+		startAndAwait(entry, input)
 		previousNonce, previousID = newNonce, containerID
-		return containerID, ready
+		return entry
 	}
-	replacementID, replacementCompleted := startReplacement()
+	replacement := startReplacement()
 	slice6ExerciseBreakGlassRestart(t, ctx, run, composed, control, socketVolumes[control.SocketStorageID], seed)
 	// The replay record has a one-minute lifetime. Check it immediately
 	// across the restart, then run the slower Guest dependency chain while
 	// the replacement controller remains live for delivery/consume.
-	currentID, currentCompleted := replacementID, replacementCompleted
+	current := replacement
 	restart := func() {
-		stopAndDrain(currentID, currentCompleted)
+		stopAndDrain(current)
 		slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
-		if _, err := run.docker(ctx, "rm", currentID); err != nil {
+		if _, err := run.docker(ctx, "rm", current.id); err != nil {
 			t.Fatal("remove consumed-capability controller before replacement")
 		}
-		currentID, currentCompleted = startReplacement()
+		if err := current.owner.retire(); err != nil {
+			t.Fatal(err)
+		}
+		current.cancel()
+		current = startReplacement()
 	}
 	if onReady != nil {
 		onReady(restart)
 	}
-	stopAndDrain(currentID, currentCompleted)
+	stopAndDrain(current)
 	slice6InspectStoppedBreakGlassController(t, ctx, run, profile, principal, ledgerPath, socketVolumes)
-	if _, err := run.docker(ctx, "rm", currentID); err != nil {
+	if _, err := run.docker(ctx, "rm", current.id); err != nil {
 		t.Fatal("remove replacement break-glass controller")
+	}
+	if err := current.owner.retire(); err != nil {
+		t.Fatal(err)
+	}
+	current.cancel()
+	if outcome != nil {
+		ids := make([]string, 0, len(instances))
+		for _, entry := range instances {
+			if !entry.owner.handedOff || !entry.owner.consumed {
+				t.Fatal("break-glass historical attach or exact removal unconfirmed")
+			}
+			ids = append(ids, entry.id)
+		}
+		*outcome = slice6BreakGlassRunOutcome{RunID: run.id, ProfileDigest: profile.ProfileDigest,
+			InstanceIDs: ids, PhysicalConverged: true}
 	}
 	t.Log("real source-bound break-glass controller accepted signed submit/two approvals/issue, rejected same-JTI distinct-request replay, then a fresh replacement PID1 recovered persistent ledger/replay state and accepted a new request; Guest delivery/consume evidence is reported separately")
 }
