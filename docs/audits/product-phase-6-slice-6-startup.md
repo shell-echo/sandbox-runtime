@@ -4791,3 +4791,11 @@ also passed. The full repository race/shuffle suite, ordinary and tagged vet,
 Product Contract lock, and diff checks passed after the repair. Neither this
 repair nor the failed real attempt advances Phase 6
 past **5/15**. A second issuer attempt requires separate Sandbox approval.
+
+Follow-up 2026-10-04 (preissuer strict-stop negative regression): a serial,
+test-private fake `docker` executable now exercises the actual bounded stop
+helper with the exact `stop --timeout 10 <ID>` argument tuple. It admits only
+the exact ID, rejects extra stdout, extra stderr, nonzero exit despite an ID,
+combined-output overflow beyond 128 bytes, and a pre-cancelled context without
+invoking Docker. This test neither contacts the daemon nor allocates an issuer;
+the real no-issuer positive stop/receipt drill above remains separate.

@@ -5,6 +5,7 @@ package productphase6gate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,76 @@ func TestSlice6GuestReceiptPairRejectsCausalDrift(t *testing.T) {
 			change.apply(&mutated)
 			if mutated.verifyRevoke(1) == nil {
 				t.Fatal("causal drift was accepted")
+			}
+		})
+	}
+}
+
+func TestSlice6StopReceiptContainerRejectsDockerDrift(t *testing.T) {
+	// This serial test owns PATH and a private fake docker executable. It tests
+	// the actual bounded stop helper without contacting the Docker daemon.
+	directory := t.TempDir()
+	command := filepath.Join(directory, "docker")
+	const script = `#!/bin/sh
+if [ "$#" -ne 4 ] || [ "$1" != stop ] || [ "$2" != --timeout ] ||
+   [ "$3" != 10 ] || [ "$4" != "$SLICE6_STOP_TEST_ID" ]; then
+  printf '%s\n' 'wrong stop arguments' >&2
+  exit 6
+fi
+if [ -n "$SLICE6_STOP_TEST_MARKER" ]; then
+  printf x > "$SLICE6_STOP_TEST_MARKER"
+fi
+case "$SLICE6_STOP_TEST_CASE" in
+  exact) printf '%s\n' "$SLICE6_STOP_TEST_ID" ;;
+  extra_stdout) printf '%s\nextra\n' "$SLICE6_STOP_TEST_ID" ;;
+  extra_stderr) printf '%s\n' "$SLICE6_STOP_TEST_ID"; printf '%s\n' 'warning' >&2 ;;
+  nonzero) printf '%s\n' "$SLICE6_STOP_TEST_ID"; exit 7 ;;
+  overflow) printf '%s\n%0130d\n' "$SLICE6_STOP_TEST_ID" 0 ;;
+  *) exit 8 ;;
+esac
+`
+	if err := os.WriteFile(command, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory)
+	id := strings.Repeat("a", 64)
+	t.Setenv("SLICE6_STOP_TEST_ID", id)
+	run := slice6DockerRun{id: strings.Repeat("b", 32)}
+	for _, test := range []struct {
+		name    string
+		allowed bool
+	}{
+		{"exact", true},
+		{"extra_stdout", false},
+		{"extra_stderr", false},
+		{"nonzero", false},
+		{"overflow", false},
+		{"cancelled", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("SLICE6_STOP_TEST_CASE", test.name)
+			marker := filepath.Join(t.TempDir(), "invoked")
+			t.Setenv("SLICE6_STOP_TEST_MARKER", marker)
+			ctx := t.Context()
+			if test.name == "cancelled" {
+				cancelled, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = cancelled
+			}
+			err := slice6StopReceiptContainer(ctx, run, id)
+			if test.allowed && err != nil {
+				t.Fatal("exact stop ID was rejected")
+			}
+			if !test.allowed && !errors.Is(err, phase6guestreceipt.ErrUnavailable) {
+				t.Fatal("noncanonical stop response was accepted")
+			}
+			_, markerErr := os.Stat(marker)
+			if test.name == "cancelled" {
+				if !errors.Is(markerErr, os.ErrNotExist) {
+					t.Fatal("cancelled stop invoked docker")
+				}
+			} else if markerErr != nil {
+				t.Fatal("fake Docker stop was not invoked with the exact arguments")
 			}
 		})
 	}
