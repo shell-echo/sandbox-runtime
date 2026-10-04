@@ -5119,3 +5119,91 @@ change does not modify R/F production code or their 12 role, Desktop,
 terminal and fixture artifacts. The final clean E successor and aggregate
 tagged validation still precede the one-run Sandbox approval. Phase 6
 remains **5/15**.
+
+Follow-up 2026-10-05 (one Sandbox-approved formal E attempt, **failed**):
+under ruling `S6-E7f83-single-run-approved-20261005`, the only executed
+command was the reviewed private script with SHA-256
+`3f27c67c292c19993a1afa57373f6d97e8112ebcdcfa5769d6dfe1883e32eb42`.
+Its clean source freeze was E
+`7f83c70f4d80638d4db122ffe3c9feaf483184a9` / tree
+`3bf8b31f7de13c48c8ed0b21089dab4d78329efe` and physically separate
+R/F checkouts at `e5816d0d3de0541bd9a677560096b3527f58f7b9` / tree
+`8fd8b10e48a9e90d920ee0f0d3f1796b19f43a66`. Complete static/image
+admission, E Product observer, F Guest fixture and R terminal operator
+external digest equality all passed. The run ID was
+`d3bd3cdef8c3547e5d1d6864362a9a7c`. The original closed network
+inventory was allocated once, the non-dev Vault process initialized and
+unsealed, and the final positive mTLS probe returned successfully. The next
+`old-client-denied` probe (final server CA with bootstrap client
+certificate) did not yield attributable TLS-denial evidence after its
+existing three attempts; the only retained last-attempt CLI error was a
+TCP write `broken pipe`. This cannot be promoted to certificate rejection.
+The test failed after 113.85 seconds; the private `gate.log` SHA-256 is
+`f0e633f4538bd509b0d72a6f5b21fe1d8c08ca63baa2d74e6e8993df5b05ec3f`.
+
+The exact run-label container/network/volume queries were empty after exit,
+the two known Vault anonymous-volume IDs returned `no such volume` on
+exact inspect, and no `.sr-*` private siblings remained in the E/R/F
+checkout parents. All three Git source identities remained clean and
+unchanged. The retained private evidence contains only four files:
+created-network binding, two original-network inspect receipts, and v2
+`incomplete.json` (SHA-256
+`7fcee8685a4038cb2d1c61995d844b2aa5b62771ff75b42c732c0ccece8cf997`).
+It contains no final component binding. No second issuer attempt, release
+manifest or push followed; Phase 6 remains **5/15**.
+
+Two isolated **no-issuer** TLS diagnostics used the pinned Vault image, an
+ephemeral local test CA pair and private scratch outside E/R/F. Both a Go
+TLS 1.3 mTLS server and an uninitialized pinned Vault server accepted the
+new client; the old client failed with an explicit unknown-CA TLS alert and
+the server recorded the corresponding certificate-verification error.
+The Vault diagnostic was not initialized and no PKI issuer was mounted.
+Both diagnostic container/network labels were empty after exact removal.
+Neither of these initial models reproduced the formal run's `broken pipe`;
+the later isolated Docker-network replay below did. The original
+Vault server log was not retained, so its reason remains unknown. Sandbox
+reviewed whether an exact client-source-port/server-handshake-log
+correlation could provide fail-closed evidence on a future, separately
+approved run. A generic `broken pipe`, EOF or reset is not TLS-denial
+evidence.
+
+Follow-up 2026-10-05 (Sandbox ruling
+`S6-E-old-client-TLS-correlation-20261005`, **no second issuer**):
+the approved change is limited to formal E's old-client negative probe;
+old-server denial and the legacy non-E diagnostic continue to require
+their former explicit client-side evidence. The actual no-issuer replay
+used the pinned Vault v2.1.1 server/CLI image on an isolated internal
+Docker network with static local test CAs, and did **not** initialize
+Vault or mount PKI. Its old-client CLI exited 1 with
+`write tcp 172.20.0.3:37088->172.20.0.2:8200: write: broken pipe`.
+The same server container's timestamped log recorded one x509
+unknown-authority handshake failure from `172.20.0.3:37088`
+between the exact probe container's Docker StartedAt and FinishedAt.
+This is a new diagnostic run, not missing evidence retroactively supplied
+to the failed formal E attempt.
+
+The E-only collector now requires the exact run/server/probe/network/image,
+fixed probe command, read-only certificate mount and public certificate
+digest, unchanged live Vault PID/StartedAt, failed non-OOM probe exit,
+unique client TCP source and target, stopped probe's reserved IPAM address,
+and one matching server TLS refusal in a closed daemon/application clock
+window. The stopped probe's Docker `IPAddress` is empty; its
+`IPAMConfig.IPv4Address` is only a configuration constraint, not live
+endpoint evidence. Actual source attribution additionally requires the
+CLI socket and exact Vault server log socket. One bounded 64 KiB
+`docker logs --timestamps --since/--until` read is used; raw logs are
+cleared, and only a closed diagnostic record and its digest may be logged.
+The actual no-issuer EPIPE/server pair passed the collector read-only
+replay; mismatch, ambiguity, truncation and time/identity drift cases are
+covered by no-issuer pure tests. Both diagnostic containers, their
+network and all four anonymous volumes were absent after exact removal.
+Disposable test certificates and keys were deleted; only non-sensitive
+reproduction source/config remains in a private external scratch root.
+The formal E run remains `incomplete`, and the new E-only implementation
+passed one aggregate tagged race/shuffle suite (including
+`productphase6gate` at 22.040 seconds and
+`internal/phase6security` at 336.999 seconds) and tagged vet. The
+prior unaffected ordinary full race/vet and Provider Contract lock
+results are reused under Sandbox's source-impact decision. A clean new
+E source freeze, no-issuer observer/source check and another separate
+Sandbox run review still precede any issuer. Phase 6 remains **5/15**.

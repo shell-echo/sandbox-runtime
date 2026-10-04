@@ -974,14 +974,14 @@ func slice6RunVaultPersistentTrustSwitch(t *testing.T, formalE bool) {
 			t.Fatal("network-observed fixed issuer or complete CRL regressed at trust cutover")
 		}
 	}
-	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
-		"final-positive", "server-ca.pem", "client.pem", "client-key.pem", true)
-	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
-		"old-client-denied", "server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem", false)
-	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
-		"old-server-denied", "bootstrap-server-ca.pem", "client.pem", "client-key.pem", false)
-	slice6VaultProbe(t, ctx, run, created.NetworkID, controllerIP, vaultIP, user, configDir,
-		"after-denials", "server-ca.pem", "client.pem", "client-key.pem", true)
+	slice6VaultProbe(t, ctx, run, serverID, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"final-positive", "server-ca.pem", "client.pem", "client-key.pem", true, formalE)
+	slice6VaultProbe(t, ctx, run, serverID, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"old-client-denied", "server-ca.pem", "bootstrap-client.pem", "bootstrap-client-key.pem", false, formalE)
+	slice6VaultProbe(t, ctx, run, serverID, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"old-server-denied", "bootstrap-server-ca.pem", "client.pem", "client-key.pem", false, formalE)
+	slice6VaultProbe(t, ctx, run, serverID, created.NetworkID, controllerIP, vaultIP, user, configDir,
+		"after-denials", "server-ca.pem", "client.pem", "client-key.pem", true, formalE)
 	if os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_VAULT_POLICY_PROBE") == "1" &&
 		os.Getenv("SANDBOX_RUNTIME_PHASE6_SLICE6_INSTALL_VAULT_ACCESS") != "1" {
 		slice6VaultScopedPolicyCommandDiagnostic(t, ctx, run, serverID, configDir)
@@ -2052,14 +2052,24 @@ func waitSlice6VaultInitializedSealed(ctx context.Context, run slice6DockerRun, 
 	return errors.New("persistent Vault did not restart sealed and initialized under final trust")
 }
 
-func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, networkID, controllerIP, vaultIP,
-	user, directory, suffix, serverCA, clientCert, clientKey string, wantSuccess bool) {
+func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, serverID, networkID, controllerIP, vaultIP,
+	user, directory, suffix, serverCA, clientCert, clientKey string, wantSuccess, allowServerCorrelation bool) {
 	t.Helper()
 	maxAttempts := 1
 	if !wantSuccess {
 		maxAttempts = 3 // A reset/broken pipe alone is ambiguous; require an explicit TLS error.
 	}
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		var beforeServer slice6TLSContainerSnapshot
+		var beforeErr error
+		var certificateDigest string
+		if allowServerCorrelation && suffix == "old-client-denied" {
+			beforeServer, beforeErr = slice6InspectTLSContainer(ctx, serverID)
+			if beforeErr == nil {
+				certificateDigest, beforeErr = slice6ReadTLSPublicCertificateDigest(
+					filepath.Join(directory, clientCert))
+			}
+		}
 		arguments := []string{"create", "--pull=never", "--name", fmt.Sprintf("sr-p6-vault-%s-%d-%s", suffix, attempt, run.id),
 			"--label", run.label(), "--network", networkID, "--ip", controllerIP, "--user", user,
 			"--cap-drop=ALL", "--security-opt", "no-new-privileges:true", "--read-only",
@@ -2074,6 +2084,34 @@ func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, ne
 			t.Fatal("final-trust controller-address probe creation failed")
 		}
 		response, probeErr := run.docker(ctx, "start", "-a", id)
+		explicitTLSDenial := strings.Contains(string(response), "certificate required") ||
+			strings.Contains(string(response), "unknown authority") ||
+			strings.Contains(string(response), "unknown certificate authority") ||
+			strings.Contains(string(response), "bad certificate")
+		var correlated bool
+		if allowServerCorrelation && suffix == "old-client-denied" && beforeErr == nil && probeErr != nil &&
+			!explicitTLSDenial && !strings.Contains(string(response), "Sealed          false") {
+			var exit *exec.ExitError
+			if errors.As(probeErr, &exit) && exit.ExitCode() == 1 && ctx.Err() == nil {
+				record, correlationErr := slice6CaptureOldClientTLS(ctx, slice6OldClientTLSInput{
+					RunID: run.id, ServerID: serverID, ProbeID: id, NetworkID: networkID,
+					ControllerIP: controllerIP, VaultIP: vaultIP, Attempt: attempt,
+					CertificateDigest: certificateDigest, BeforeServer: beforeServer,
+					CertificateDirectory: directory,
+					ExpectedProbeCommand: slice6OldClientTLSExpectedCommand(vaultIP, serverCA, clientCert, clientKey),
+					ClientOutput:         response}, filepath.Join(directory, clientCert))
+				if correlationErr == nil {
+					raw, digest, recordErr := slice6OldClientTLSRecordDigest(record)
+					if recordErr == nil {
+						t.Logf("old-client TLS exact server rejection record=%s digest=%s", raw, digest)
+						correlated = true
+					}
+				} else {
+					t.Logf("old-client TLS server correlation=%s reason=%q attempt=%d",
+						slice6OldClientTLSReason(correlationErr), correlationErr.Error(), attempt)
+				}
+			}
+		}
 		if _, removeErr := run.docker(ctx, "rm", id); removeErr != nil {
 			t.Fatal(fmt.Errorf("remove exact Vault probe: %w", removeErr))
 		}
@@ -2083,13 +2121,13 @@ func slice6VaultProbe(t *testing.T, ctx context.Context, run slice6DockerRun, ne
 			}
 			return
 		}
+		if correlated {
+			return
+		}
 		if probeErr == nil || strings.Contains(string(response), "Sealed          false") {
 			t.Fatalf("temporary-trust probe unexpectedly succeeded: %v: %.512s", probeErr, response)
 		}
-		if strings.Contains(string(response), "certificate required") ||
-			strings.Contains(string(response), "unknown authority") ||
-			strings.Contains(string(response), "unknown certificate authority") ||
-			strings.Contains(string(response), "bad certificate") {
+		if explicitTLSDenial {
 			return
 		}
 		if attempt+1 == maxAttempts {

@@ -3257,3 +3257,35 @@ terminal container or starting Vault. The no-issuer external-temporary check
 shares this strict validator. The E observer and F fixture already had their
 own external expected-digest checks before issuer allocation. This is a
 tagged acceptance check, not a new production authority or a real-run result.
+
+The single formal E attempt at the frozen E/R/F package failed at the
+`old-client-denied` probe: the pinned Vault CLI reported a TCP write
+`broken pipe`, which alone is not a TLS trust decision. The exact original
+Vault process was removed during successful run-owned cleanup, so the old
+attempt has no server-side handshake record and remains failed/incomplete.
+Sandbox ruling `S6-E-old-client-TLS-correlation-20261005` allows a narrow
+E-only fallback for a *future*, separately approved run. It applies only
+to the old **client** certificate after the final positive probe. A
+non-explicit client error may be attributed to TLS refusal only when the
+same exact run's pinned Vault process, exited probe container, network,
+read-only mounted public certificate digest, unique client TCP source/target
+socket, Docker start/finish times and one bounded Vault log line agree on
+`tls: failed to verify certificate: x509: certificate signed by unknown
+authority`. The server must retain its process identity before and after
+the probe and log collection. The opposite `old-server-denied` direction
+still requires an explicit *client-side* server-certificate verification
+failure; a Vault server log cannot establish that direction. A bare
+`broken pipe`, reset, EOF, missing/truncated log, ambiguous time or
+identity still fails. This does not alter Vault trust configuration, the
+three-attempt bound, any Provider Contract or the fixed 119-file business
+evidence inventory.
+
+An isolated internal-network diagnostic with the same pinned Vault
+server/CLI image, static test certificates and an *uninitialized* Vault
+instance reproduced a client `broken pipe` paired with the matching
+server-side x509 unknown-authority handshake log. No Vault PKI issuer was
+mounted. This demonstrates that the fallback is observable, not that the
+earlier formal E failure was a certificate rejection. The diagnostic
+container, network and anonymous volumes were removed by exact identity;
+one-time test keys were deleted. The original E evidence remains
+`incomplete` and Phase 6 remains **5/15**.

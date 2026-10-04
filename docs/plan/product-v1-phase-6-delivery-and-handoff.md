@@ -204,6 +204,20 @@ receives it promptly; periodic checks only fill genuine reporting gaps.
    reviewed work, verify full local and live remote SHAs, and deliver the
    machine-handoff checkpoint below before advancing to Slice 7 work.
 
+Current Slice 6 step 1 checkpoint (2026-10-05): the single reviewed formal E
+attempt failed at old-client TLS-denial attribution and retained only an
+`incomplete` private receipt. Exact run-owned Docker objects and private
+temporary siblings were absent after cleanup. An isolated, uninitialized
+Vault no-issuer replay reproduced a client `broken pipe` paired with an
+exact server-side x509 unknown-authority record. Under Sandbox ruling
+`S6-E-old-client-TLS-correlation-20261005`, only the formal E old-client
+probe may use strict same-connection, same-process, same-window server-log
+correlation; old-server and legacy probes keep their prior semantics.
+This code/diagnostic work is not a second issuer authorization, not a
+successful E component, and not one of the fixed 16 final scenarios.
+Aggregate tagged validation, a fresh clean E freeze and separate one-run
+review remain before any further real attempt. Phase 6 stays **5/15**.
+
 ## Remaining Phase 6 order
 
 These are summaries of the existing plan, not additional slices. Each slice
