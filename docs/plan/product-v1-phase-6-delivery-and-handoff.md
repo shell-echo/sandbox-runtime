@@ -636,7 +636,7 @@ Docker daemon state. For an empty destination checkout, after verifying the
 normal push's exact full SHA from the handoff report:
 
 ```bash
-git clone git@github.com:shell-echo/sandbox-runtime.git
+git clone https://github.com/shell-echo/sandbox-runtime.git
 cd sandbox-runtime
 git fetch origin codex/product-v1-phase-6-hardening
 git switch --track origin/codex/product-v1-phase-6-hardening
