@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shell-echo/sandbox-runtime/internal/codingidentity"
+	"github.com/shell-echo/sandbox-runtime/internal/dockercontrol"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 )
@@ -21,6 +23,7 @@ var (
 )
 
 const persistenceTimeout = 5 * time.Second
+const codingConflictReadbackTimeout = time.Second
 
 // RuntimeState is the bounded observation a provider driver may return. The
 // coordinator does not expose backend-specific states or diagnostics.
@@ -48,6 +51,35 @@ type RuntimeObservation struct {
 type Driver interface {
 	Create(context.Context, lifecycle.Sandbox) error
 	Inspect(context.Context, string) (RuntimeObservation, error)
+}
+
+// CodingFirstCreateRepository is a focused, same-Store lifecycle capability.
+// Its first permit must atomically move the accepted Provider operation and
+// finite allocation reservation to Running/Creating. It is not a second
+// business-history ledger or a generic Driver expansion.
+type CodingFirstCreateRepository interface {
+	repository.Repository
+	BeginCodingFirstCreate(context.Context, string) (codingidentity.Reservation, lifecycle.Operation, lifecycle.Sandbox, error)
+}
+
+// CodingCreateDispatcher cannot be satisfied by the legacy daemon-facing
+// Driver.Create method. A nil result means only that the ticket-bound command
+// was accepted for dispatch, never that physical readiness was proven.
+type CodingCreateDispatcher interface {
+	DispatchCodingCreate(context.Context, lifecycle.Operation, lifecycle.Sandbox, codingidentity.Reservation) error
+}
+
+// CodingOriginalCreateRepository is the v3-only first-permit capability. It
+// returns the exact original authority persisted by the same PG transaction,
+// never a ticket from which a later caller may re-sign an effect.
+type CodingOriginalCreateRepository interface {
+	repository.Repository
+	BeginCodingFirstCreateWithAuthority(context.Context, string) (codingidentity.Reservation,
+		lifecycle.Operation, lifecycle.Sandbox, dockercontrol.CodingCreateAuthority, error)
+}
+
+type CodingAuthorityCreateDispatcher interface {
+	DispatchCodingCreateAuthority(context.Context, dockercontrol.CodingCreateAuthority) error
 }
 
 // OrphanCleaner is a focused optional lifecycle capability. Composition must
@@ -83,10 +115,22 @@ type Result struct {
 // provider runtime observations. It is safe for concurrent callers when the
 // supplied repository is safe for concurrent callers.
 type Coordinator struct {
-	mu         sync.Mutex
-	repository repository.Repository
-	driver     Driver
-	clock      Clock
+	mu           sync.Mutex
+	repository   repository.Repository
+	driver       Driver
+	clock        Clock
+	coding       *codingFirstCreateBoundary
+	codingAtomic *codingOriginalCreateBoundary
+}
+
+type codingFirstCreateBoundary struct {
+	repository CodingFirstCreateRepository
+	dispatcher CodingCreateDispatcher
+}
+
+type codingOriginalCreateBoundary struct {
+	repository CodingOriginalCreateRepository
+	dispatcher CodingAuthorityCreateDispatcher
 }
 
 func New(repo repository.Repository, driver Driver, clock Clock) (*Coordinator, error) {
@@ -96,11 +140,47 @@ func New(repo repository.Repository, driver Driver, clock Clock) (*Coordinator, 
 	return &Coordinator{repository: repo, driver: driver, clock: clock}, nil
 }
 
+// NewWithCodingFirstCreate is the explicit opt-in for the Profile-v2 coding
+// path. It never falls back to Driver.Create and does not claim that the
+// not-yet-composed control receipt/recovery path is production ready.
+func NewWithCodingFirstCreate(repo CodingFirstCreateRepository, driver Driver, clock Clock) (*Coordinator, error) {
+	service, err := New(repo, driver, clock)
+	if err != nil {
+		return nil, err
+	}
+	dispatcher, ok := driver.(CodingCreateDispatcher)
+	if !ok {
+		return nil, ErrInvalidCoordinator
+	}
+	service.coding = &codingFirstCreateBoundary{repository: repo, dispatcher: dispatcher}
+	return service, nil
+}
+
+// NewWithCodingOriginalAuthority is the only v3 candidate composition. A
+// legacy-only dispatcher cannot satisfy it and no fallback is attempted.
+func NewWithCodingOriginalAuthority(repo CodingOriginalCreateRepository,
+	driver Driver, clock Clock) (*Coordinator, error) {
+	service, err := New(repo, driver, clock)
+	if err != nil {
+		return nil, err
+	}
+	dispatcher, ok := driver.(CodingAuthorityCreateDispatcher)
+	if !ok {
+		return nil, ErrInvalidCoordinator
+	}
+	service.codingAtomic = &codingOriginalCreateBoundary{repository: repo, dispatcher: dispatcher}
+	return service, nil
+}
+
 // AcceptCreate validates and durably accepts a create request. No runtime
 // dispatch occurs before this method returns successfully.
 func (c *Coordinator) AcceptCreate(ctx context.Context, request lifecycle.CreateRequest) (repository.CreateResult, error) {
 	if err := contextError(ctx); err != nil {
 		return repository.CreateResult{}, err
+	}
+	if (c.coding != nil || c.codingAtomic != nil) && (request.Spec.RuntimeProfile != "sandbox-runtime-coding-shell-v1" ||
+		request.Spec.Network != (lifecycle.NetworkPolicy{Mode: lifecycle.NetworkNone})) {
+		return repository.CreateResult{}, ErrInvalidCoordinator
 	}
 	now := c.clock.Now()
 	sandbox, operation, err := lifecycle.StartCreate(request, now)
@@ -205,6 +285,14 @@ func (c *Coordinator) reconcileOperation(ctx context.Context, operationID string
 	if terminalOperation(operation.State) {
 		return Result{Operation: operation, Sandbox: sandbox}, nil
 	}
+	if c.codingAtomic != nil && operation.Type != lifecycle.OperationCreate {
+		// The v3 Control/typed-PG lifecycle path is distinct from the old
+		// Driver Inspect/Remove/Suspend/Resume shortcuts. Until that path is
+		// composed, retain the accepted operation without physical work or a
+		// fabricated terminal result, even if the supplied driver happens to
+		// implement every legacy optional capability.
+		return Result{Operation: operation, Sandbox: sandbox}, ErrUnknownRuntime
+	}
 
 	switch operation.Type {
 	case lifecycle.OperationCreate:
@@ -228,6 +316,12 @@ func (c *Coordinator) reconcileOperation(ctx context.Context, operationID string
 }
 
 func (c *Coordinator) dispatchCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+	if c.codingAtomic != nil {
+		return c.dispatchCodingOriginal(ctx, operation, sandbox)
+	}
+	if c.coding != nil {
+		return c.dispatchCodingCreate(ctx, operation, sandbox)
+	}
 	now := c.clock.Now()
 	if err := lifecycle.CheckDeadline(now, operation.Deadline); err != nil {
 		return c.failBeforeDispatch(ctx, operation, sandbox, "deadline_expired", err)
@@ -271,7 +365,70 @@ func (c *Coordinator) dispatchCreate(ctx context.Context, operation lifecycle.Op
 	return c.markReady(ctx, updatedOperation, provisioning, true)
 }
 
+func (c *Coordinator) dispatchCodingCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+	if err := contextError(ctx); err != nil {
+		return Result{Operation: operation, Sandbox: sandbox}, err
+	}
+	ticket, running, provisioning, err := c.coding.repository.BeginCodingFirstCreate(ctx, operation.ID)
+	if err != nil {
+		return c.readCurrentCodingCreate(ctx, operation.ID, err)
+	}
+	if ticket.Status != codingidentity.Creating || ticket.Claim.Validate() != nil ||
+		ticket.Claim.OperationID != operation.ID || ticket.Claim.AttemptID != operation.AttemptID ||
+		ticket.Claim.SandboxID != sandbox.ID || ticket.Claim.Generation != sandbox.Generation ||
+		ticket.Claim.Fence != operation.FencingToken || running.Validate() != nil ||
+		running.Type != lifecycle.OperationCreate || running.State != lifecycle.OperationRunning ||
+		running.CancelRequested || running.ID != operation.ID ||
+		running.AttemptID != ticket.Claim.AttemptID || running.SandboxID != ticket.Claim.SandboxID ||
+		running.FencingToken != ticket.Claim.Fence ||
+		(running.RequestDigest != "" && running.RequestDigest != ticket.Claim.RequestDigest) ||
+		provisioning.ObservedState != lifecycle.ObservedProvisioning ||
+		provisioning.ID != sandbox.ID {
+		return Result{Operation: running, Sandbox: provisioning}, ErrInvalidCoordinator
+	}
+	operationContext, cancel := c.operationContext(ctx, running.Deadline)
+	defer cancel()
+	if err := contextError(operationContext); err != nil {
+		return c.markUnknownWithDispatch(ctx, running, provisioning, "dispatch_deadline", err, false)
+	}
+	if err := c.coding.dispatcher.DispatchCodingCreate(operationContext, running, provisioning, ticket); err != nil {
+		return c.markUnknownWithDispatch(ctx, running, provisioning, "coding_dispatch_unknown", err, true)
+	}
+	// Dispatch accepted is not a verified control receipt. Keep both Provider
+	// and finite-slot state nonterminal until exact receipt reconciliation.
+	return Result{Operation: running, Sandbox: provisioning, Dispatched: true}, nil
+}
+
+// A competing Provider may have committed the first permit since the caller
+// read Accepted. Report the durable observation, never the stale pre-permit
+// snapshot, and never retry or dispatch from this readback path.
+func (c *Coordinator) readCurrentCodingCreate(ctx context.Context, operationID string, cause error) (Result, error) {
+	if err := contextError(ctx); err != nil {
+		return Result{}, errors.Join(cause, err)
+	}
+	readCtx, cancel := context.WithTimeout(ctx, codingConflictReadbackTimeout)
+	defer cancel()
+	current, err := c.repository.GetOperation(readCtx, operationID)
+	if err != nil {
+		return Result{}, errors.Join(cause, err)
+	}
+	sandbox, err := c.repository.GetSandbox(readCtx, current.SandboxID)
+	if err != nil || sandbox.ID != current.SandboxID {
+		if err == nil {
+			err = ErrInvalidCoordinator
+		}
+		return Result{}, errors.Join(cause, err)
+	}
+	return Result{Operation: current, Sandbox: sandbox}, cause
+}
+
 func (c *Coordinator) reconcileCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+	if c.coding != nil || c.codingAtomic != nil {
+		// An existing Creating/Running or Unknown operation cannot get a second
+		// create permit. Control receipt inspection is a later, explicit gate;
+		// the legacy Inspect/Ready shortcut is not valid for this path.
+		return Result{Operation: operation, Sandbox: sandbox}, ErrUnknownRuntime
+	}
 	operationContext, cancel := c.operationContext(ctx, operation.Deadline)
 	defer cancel()
 	if err := contextError(operationContext); err != nil {

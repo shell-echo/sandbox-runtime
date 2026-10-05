@@ -169,6 +169,25 @@ func TestDispatchCancellationBeforeAndAfterRunningNeverClaimsCancelled(t *testin
 	})
 }
 
+func TestDispatchUnavailableCheckRetainsUnknownWithoutRejectionEvidence(t *testing.T) {
+	authority := newFakeAuthority()
+	app, err := New(authority, &fakeStager{stage: func(context.Context, artifact.Request) (artifact.Evidence, error) {
+		return artifact.Evidence{}, artifact.ErrUnsupportedChecks
+	}}, ClockFunc(func() time.Time { return applicationTestTime }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := applicationRequest("operation-unavailable", "key-unavailable")
+	if _, err := app.Accept(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	operation, err := app.Dispatch(context.Background(), request.OperationID)
+	if !errors.Is(err, artifact.ErrOutcomeUnknown) || !errors.Is(err, artifact.ErrUnsupportedChecks) ||
+		operation.Status != artifact.OperationOutcomeUnknown || operation.Failure != artifact.FailureDispatchUnknown || operation.Evidence != nil {
+		t.Fatalf("unavailable check Dispatch = %#v, %v", operation, err)
+	}
+}
+
 func TestRecoverDispatchesAcceptedAndDoesNotRedispatchRunning(t *testing.T) {
 	authority := newFakeAuthority()
 	stager := &fakeStager{stage: func(_ context.Context, request artifact.Request) (artifact.Evidence, error) {

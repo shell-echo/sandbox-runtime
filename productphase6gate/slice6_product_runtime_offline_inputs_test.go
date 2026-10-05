@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -78,6 +79,72 @@ func TestSlice6ProductRuntimeOfflineInputs(t *testing.T) {
 		PEM:         brokerPEM,
 		Certificate: brokerCertificate}
 	composed := slice6VaultComposeCandidateProfile(t, ctx, root, run.id, general, broker, static)
+	providerMigrationInputs := make(map[string]map[string][]byte, 3)
+	for _, job := range []string{"provider-migration-job", "provider-browser-migration-job", "provider-desktop-migration-job"} {
+		files, buildErr := slice6BuildProviderMigrationInputs(composed, job)
+		if buildErr != nil || len(files) != 3 {
+			t.Fatalf("offline %s source-bound inputs unavailable: %v", job, buildErr)
+		}
+		archive, archiveErr := phase6security.BuildSlice6PrivateConfigArchive(composed.Profile, job, files)
+		if archiveErr != nil || len(archive.Digests) != 3 {
+			t.Fatalf("offline %s exact private config archive unavailable: %v", job, archiveErr)
+		}
+		clear(archive.Archive)
+		providerMigrationInputs[job] = files
+	}
+	if _, err := slice6BuildProviderMigrationInputs(composed, "provider-runtime"); err == nil {
+		t.Fatal("runtime owner admitted as a Provider migration job")
+	}
+	for job, files := range providerMigrationInputs {
+		for otherJob, otherFiles := range providerMigrationInputs {
+			if otherJob == job {
+				continue
+			}
+			if bytes.Equal(files[phase6security.Slice6StartupConfigFile],
+				otherFiles[phase6security.Slice6StartupConfigFile]) {
+				t.Fatal("distinct Provider migration jobs share startup authority")
+			}
+			for _, file := range []string{phase6security.Slice6StartupConfigFile,
+				phase6security.Slice6PostgresPeerCRLRoleFile} {
+				crossed := make(map[string][]byte, len(files))
+				for name, content := range files {
+					crossed[name] = content
+				}
+				crossed[file] = otherFiles[file]
+				if slice6VerifyProviderMigrationInputs(composed, job, crossed) == nil {
+					t.Fatalf("%s admitted %s from %s", job, file, otherJob)
+				}
+			}
+			authority, authorityErr := composed.Profile.ResolveSlice6FinalPostgresAuthority(job)
+			otherAuthority, otherAuthorityErr := composed.Profile.ResolveSlice6FinalPostgresAuthority(otherJob)
+			material, materialErr := composed.Profile.Slice6MaterialSocketForOwner(job)
+			otherMaterial, otherMaterialErr := composed.Profile.Slice6MaterialSocketForOwner(otherJob)
+			if authorityErr != nil || otherAuthorityErr != nil || materialErr != nil || otherMaterialErr != nil {
+				t.Fatal("Provider migration cross-use authority unavailable")
+			}
+			for _, swapped := range []struct{ name, before, after string }{
+				{"SQL role", "role = " + strconv.Quote(authority.SQLRole), "role = " + strconv.Quote(otherAuthority.SQLRole)},
+				{"PG signer", "client_agent_socket = " + strconv.Quote(authority.Signer.SocketPath),
+					"client_agent_socket = " + strconv.Quote(otherAuthority.Signer.SocketPath)},
+				{"material socket", "socket_path = " + strconv.Quote(material.SocketPath),
+					"socket_path = " + strconv.Quote(otherMaterial.SocketPath)},
+			} {
+				original := files[phase6security.Slice6StartupConfigFile]
+				changed := bytes.Replace(original, []byte(swapped.before), []byte(swapped.after), 1)
+				if bytes.Equal(changed, original) {
+					t.Fatalf("%s cross-use mutation did not change startup bytes", swapped.name)
+				}
+				crossed := make(map[string][]byte, len(files))
+				for name, content := range files {
+					crossed[name] = content
+				}
+				crossed[phase6security.Slice6StartupConfigFile] = changed
+				if slice6VerifyProviderMigrationInputs(composed, job, crossed) == nil {
+					t.Fatalf("%s admitted %s from %s", job, swapped.name, otherJob)
+				}
+			}
+		}
+	}
 	// This is a construction-only Guest authority fixture. The ID is not a
 	// durable Product binding; the actual selected image supplies its shell
 	// digest for this run rather than reusing a historical R3 observation.

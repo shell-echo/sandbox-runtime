@@ -117,10 +117,14 @@ func (s *Stager) Stage(ctx context.Context, request artifact.Request, acceptedAt
 	if !evidenceExpiresAt.After(observedAt) {
 		return artifact.Evidence{}, artifact.ErrDeadlineExpired
 	}
+	mediaType, err := detectMediaType(ctx, content)
+	if err != nil {
+		return artifact.Evidence{}, err
+	}
 	evidence := artifact.Evidence{
 		OperationID: request.OperationID, AttemptID: request.AttemptID, FencingToken: request.FencingToken,
 		SandboxID: request.SandboxID, ArtifactReference: request.ArtifactReference,
-		ContentDigest: digest(content), MediaType: detectMediaType(request.SourcePath, content), SizeBytes: output.SizeBytes,
+		ContentDigest: digest(content), MediaType: mediaType, SizeBytes: output.SizeBytes,
 		TenantBindingCheck: tenantCheck,
 		ActiveContentCheck: artifact.Check{Status: artifact.CheckNotRun, CheckedAt: observedAt},
 		MalwareCheck:       artifact.Check{Status: artifact.CheckNotRun, CheckedAt: observedAt},
@@ -140,6 +144,9 @@ func (s *Stager) Stage(ctx context.Context, request artifact.Request, acceptedAt
 	if !evidenceExpiresAt.After(evidence.ObservedAt) {
 		return artifact.Evidence{}, artifact.ErrDeadlineExpired
 	}
+	if evidence.ActiveContentCheck.Status == artifact.CheckNotRun {
+		return artifact.Evidence{}, artifact.ErrUnsupportedChecks
+	}
 	if evidence.ActiveContentCheck.Status != artifact.CheckPassed {
 		return finishEvidence(evidence, artifact.StatusRejected)
 	}
@@ -151,6 +158,9 @@ func (s *Stager) Stage(ctx context.Context, request artifact.Request, acceptedAt
 	evidence.ObservedAt = s.clock.Now().UTC()
 	if !evidenceExpiresAt.After(evidence.ObservedAt) {
 		return artifact.Evidence{}, artifact.ErrDeadlineExpired
+	}
+	if evidence.MalwareCheck.Status == artifact.CheckNotRun {
+		return artifact.Evidence{}, artifact.ErrUnsupportedChecks
 	}
 	if evidence.MalwareCheck.Status != artifact.CheckPassed {
 		return finishEvidence(evidence, artifact.StatusRejected)
@@ -245,16 +255,19 @@ func evidenceDigest(evidence artifact.Evidence) string {
 	return digest(encoded)
 }
 
-func detectMediaType(sourcePath string, content []byte) string {
-	detected := mime.TypeByExtension(filepath.Ext(sourcePath))
-	if detected == "" {
-		detected = http.DetectContentType(content)
+func detectMediaType(ctx context.Context, content []byte) (string, error) {
+	if err := parsePassiveJSON(ctx, content); err == nil {
+		return "application/json", nil
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	detected := http.DetectContentType(content)
 	mediaType, _, err := mime.ParseMediaType(detected)
 	if err != nil || mediaType == "" {
-		return "application/octet-stream"
+		return "application/octet-stream", ctx.Err()
 	}
-	return strings.ToLower(mediaType)
+	return strings.ToLower(mediaType), ctx.Err()
 }
 
 func writeAll(ctx context.Context, writer io.Writer, content []byte) error {

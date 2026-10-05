@@ -519,6 +519,8 @@ func mapLifecycleError(err error) (int, string, bool) {
 		return http.StatusNotFound, "SANDBOX_NOT_FOUND", false
 	case errors.Is(err, repository.ErrIdempotencyConflict):
 		return http.StatusConflict, "SANDBOX_IDEMPOTENCY_CONFLICT", false
+	case errors.Is(err, repository.ErrRetirementBlocked):
+		return http.StatusServiceUnavailable, "SANDBOX_PROVIDER_UNAVAILABLE", true
 	case errors.Is(err, lifecycle.ErrGenerationConflict):
 		return http.StatusConflict, "SANDBOX_GENERATION_CONFLICT", false
 	case errors.Is(err, lifecycle.ErrStaleFencingToken):

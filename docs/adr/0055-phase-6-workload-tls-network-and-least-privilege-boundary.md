@@ -823,16 +823,358 @@ profile but is not the cross-platform Slice 6 requirement.
 
 ### Least privilege and evidence semantics
 
-Every repository-owned container in the Slice 6 gate uses a unique numeric
+#### Provider Docker-control and artifact dependency correction (2026-10-05)
+
+The old frozen Slice 6 Profile is an input candidate, not authority to claim
+that three containerized Provider commands can run. Their current constructors
+open Docker directly and need writable runtime roots, while the Profile bans
+daemon sockets and arbitrary host mounts and declares neither a Docker-control
+channel nor all required roots. The correction is an explicit Profile/source/
+evidence revision, not an undocumented `DOCKER_HOST` setting or an exception
+hidden inside the old 78-deployment count.
+
+The approved implementation direction adds one operator-owned, daemon-facing
+Docker-control principal with three separately authenticated, closed Provider
+operation scopes. Provider remains the sole business, allocation, fencing,
+recovery and PostgreSQL authority; the control principal performs only typed
+physical operations against frozen image/network/resource templates and
+retains a bounded execution/unknown-outcome receipt. It cannot expose generic
+Docker HTTP, arbitrary daemon identifiers, host paths, mounts, privileges or
+exec targets. Browser/Desktop media executors and the Desktop in-container
+broker never receive Docker control. Only this explicitly inventoried control
+principal may have an exact daemon endpoint; that endpoint is host-equivalent
+TCB, not made safe by a non-root UID or read-only mount. Its usable socket
+ownership, cross-container authentication, denial matrix, quotas and cleanup
+must be proved on the selected daemon before activation. No daemon mount or
+new privileged service is authorized by this paragraph alone.
+For the observed local daemon socket (`root:root`, mode 0660 inside a
+container), the preferred candidate keeps one unique high UID and primary
+GID and gives **only** this control principal the socket's fixed supplementary
+GID 0. This is an explicit Profile exception, not automatic group discovery
+or a global relaxation of role IDs; actual ACL/access and wrong-principal
+denial still require a controlled component gate. It does not reduce the
+host-equivalent power of Docker control.
+
+Each Provider requires separately inventoried writable state, and coding also
+requires a bounded staging root. Coding sandbox workspaces move to isolated
+daemon-managed allocation volumes with confined input/output transfer, not
+host bind paths or a shared workspace root. Browser's existing mux remains
+owner-only; Desktop's broker mux gains an explicit owner-only socket volume.
+Persistent state and staging cannot be represented by tmpfs merely to make a
+read-only root start. Unknown Docker execution retains its slot and run-owned
+resources until externally proved quiescent; restart never blindly repeats it.
+
+The coding Provider's mandatory active-content and malware checks must be
+real before it advertises artifact acceptance. `/bin/true` is a component
+fixture only. The selected candidate engine is ClamAV 1.4.6 LTS, fixed to
+its verified platform digest before use; its whole rule set/config/engine
+binding requires a real operator-side successful check no older than 72 hours.
+Runtime updater/network access and an unauthenticated raw TCP listener are
+forbidden. Skip, unsupported/encrypted content, oversize, stale/missing rules,
+error and cancellation fail closed; an unchanged old rule set cannot become
+fresh by copying or modifying timestamps. The candidate scanner has hard
+limits of 4 GiB RAM, 2 CPU, 64 PIDs and one concurrent scan. A private
+scanner cannot gain Docker, Provider PostgreSQL or Vault credentials.
+
+The first active-content policy is `passive-json-v1`: only genuine UTF-8
+`application/json` documents, fully parsed to EOF under explicit depth,
+token, string and total-size bounds, with duplicate keys and malformed
+Unicode rejected. Filename extension does not establish MIME. Text/plain,
+HTML, SVG, PDF, Office, scripts, executables and archives are unsupported
+initially. JSON content is data, not a guarantee of safe downstream rendering
+or resistance to prompt injection. Raw EICAR needs a separate actual malware
+observation; early JSON rejection is not malware evidence. The locked Provider
+Contract and 16 scenario meanings remain unchanged. A revised exact inventory,
+negative gates, source-bound R/F/E inputs and independent live evidence are
+required before Slice 6 can advance from **5/15**.
+The initial source component implements depth 64, 250,000 tokens, 1 MiB
+decoded string/number and 6 MiB encoded string limits while retaining the
+Contract's 64 MiB total-file maximum. MIME parsing inherits the staging
+context and checks cancellation during long tokens/whitespace. An individual
+bounded key decode is atomic with cancellation checked immediately before
+and after; an injected policy checker currently repeats parsing after MIME
+classification, so production CPU/memory admission must account for or
+remove duplicate work without trusting an unverified external scanner. This source
+component is not yet a production scanner wiring or a full artifact gate.
+The [official ClamAV scanning guide](https://docs.clamav.net/manual/Usage/Scanning.html)
+warns that its raw TCP listener has no authentication and that files above
+`max-filesize` may be skipped as clean; the
+[official Docker guide](https://docs.clamav.net/manual/Installing/Docker.html)
+recommends at least 3 GiB RAM. The
+[official EOL matrix](https://docs.clamav.net/faq/faq-eol.html) gives the
+candidate LTS support window, and the
+[official rules FAQ](https://docs.clamav.net/faq/faq-cvd.html) explains why
+individual `main`/`bytecode` database timestamps are not themselves a
+freshness clock. These are reasons for explicit admission,
+complete-result and resource checks, not implicit scanner qualifications.
+
+Scanner composition refinement (`S6-Scanner-v3-composition-review-20261005`):
+only an explicit coding Provider v3 Profile may select the local
+`passive-json-v1` checker and private scanner client. Missing or mixed legacy
+scanner configuration must refuse v3 startup, without quietly falling back
+to command checkers or changing the retained v2/root-serve compatibility
+boundary. The new client must receive the existing Profile-bound guarded
+transport and CRL peer monitor, not construct a second TLS dialer from a
+copied `tls.Config`; the scanner server must likewise track established
+connections and close them on peer revocation or authenticated-source loss.
+The scanner's fixed numeric endpoint, principal, TLS agent, rule asset,
+resource envelope, and one-concurrent-operation budget remain Profile work.
+
+The first rule-manifest candidate briefly introduced a new Ed25519 operator
+signer. That would have created an unreviewed additional private-key authority.
+The selected boundary instead pins the canonical whole-set manifest digest in
+the already reviewed frozen Profile, with exact engine-image/config digests,
+three rule-file versions/size/digests, an operator-check time and receipt
+digest. Runtime rehashes the actual read-only file inventory, enforces the
+72-hour window, and latches an observed in-process wall-clock rollback. This
+does not itself prove an official successful freshness check, official rule
+signature validation, or that the running `clamd` loaded those exact bytes.
+Those remain operator and real cold-start gates; copying, re-signing or
+retimestamping old rules cannot satisfy them. A separate rule-signing
+authority would need its own ownership, purpose/key-ID, rotation, revocation,
+anti-rollback and private-key-isolation review before adoption. On loss or
+drift, v3 admission closes; it never falls back to `/bin/true` or stale rules.
+
+Private scan authority is bound to the original accepted request and the
+earliest of its original deadline, current Stage context deadline, and the
+operation timeout. Retention is not restarted at scan time. A late response,
+partial-body timeout, rule loss, active-policy skip or malware-engine error
+cannot become clean. Ready probes and scans share the one-operation permit
+because rule rehashing is expensive. These are source component invariants,
+not a completed Provider v3 composition or release claim.
+
+The local ClamD adapter diagnostic must use one Linux container with a
+source-built Go probe invoking the actual Unix adapter in that same kernel.
+Docker Desktop host path sharing is not a guarantee that macOS can connect
+to a socket created in its Linux VM. The image's rule database directory is
+owned by numeric `1000:1000` and mode 0700, so using the host user's UID or
+dropping to root without capabilities is not a valid read-access proof.
+The opt-in probe keeps one fixed non-root identity, only private tmpfs for
+its Unix socket/configuration, one read-only non-secret binary mount, and
+strict image/resource/process/output/cleanup bounds. Two preceding local
+attempts failed before verified benign/EICAR results. The separately
+reviewed revised probe passed once in the same Linux container: the real
+repository Unix adapter returned clean for benign bytes and infected for the
+68-byte EICAR test string; exact test-owned container cleanup was verified.
+This is a bounded adapter component, not a deployment. The image-embedded old
+rules cannot satisfy the 72-hour current-rule gate or substitute for v3
+Profile/CRL composition.
+
+#### Security Profile v2 boundary for the revised Slice 6 topology (2026-10-05)
+
+Sandbox ruling `S6-Security-Profile-v2-boundary-reviewed-20261005` keeps
+`sandbox-runtime.phase6-security-profile.v1` and its canonical JSON bytes,
+`sandbox-runtime/phase6-security-profile/v1` digest domain, forbidden Docker
+socket and mount/identity/allowlist semantics intact for historical and
+restricted component replay. The new authority is explicit
+`sandbox-runtime.phase6-security-profile.v2`, version 2, with digest domain
+`sandbox-runtime/phase6-security-profile/v2`. This is distinct from Provider
+Process schema v3 and does not change the locked Provider Contract or
+unchanged receipt protocols. Decoder/validator chooses the stated version
+exactly; it never tries v1 after v2 failure, strips v2 fields to downgrade,
+or accepts an unknown version. Shared pure validators may be reused, but new
+permission types are gated behind v2-only closed fields and roster.
+
+The version change is required by *new trust semantics*, not by changing the
+number 78 to a provisional 82. V2 must bind the one fixed daemon endpoint and
+single control owner (high UID/primary GID with the one explicitly fixed
+socket supplementary GID), its typed operation/receipt ledger, three
+mutually isolated Provider-control networks, one coding-scanner mTLS/CRL edge,
+fixed scanner endpoint and agent, immutable whole-rule/config/image asset,
+per-allocation whole coding volumes, dedicated Provider state/staging/mux
+volumes, and complete static plus dynamic peak resource envelope. It may not
+leave those as an optional scanner URL or a second external allowlist. The
+existing identity wire model is retained, with exactly four new deployment
+identities and dedicated TLS ownership to be frozen in the v2 roster; neither
+scanner nor control reuses Provider's identity or a TLS/egress/break-glass
+private key. The two existing issuers remain the only roots.
+
+The new complete Slice 6 gate selects only v2 and derives its one-run
+inventory from that same source. Provider v3 coding must reject v1, missing
+v2 control/scanner/storage/rule/resource bindings, mismatched digest, or
+mixed legacy checker commands **before** material/PG/Docker/scanner network
+side effects. Browser/Desktop may use their own v2 control scope but cannot
+obtain scanner authority. Old Provider v2/root-serve restricted compatibility
+is neither deleted nor relabelled as v2 evidence. The four additional
+long-lived deployments are a provisional delta only: coding's dynamic
+allocation UID/volumes and load peaks must be explicitly accounted for, not
+hidden to make 82 look complete. A partial v2 draft is never runnable.
+Rollback closes new v3 admission and withdraws only the new candidate;
+it neither converts v2 to v1 nor deletes old state, volumes or historical
+evidence. Real daemon service activation, new issuer use and the full gate
+remain separate review boundaries.
+
+The first implementation step keeps the four approved control/scanner and
+dedicated TLS-agent principal tuples in a v2-only registry. Its provisional
+78+4 static identity/TLS-delegation check is deliberately not a complete
+Profile v2 validator: coding allocation identities, whole volumes and peak
+resources can enlarge the final inventory. Until the complete v2 authority
+and guarded private scanner/Docker-control composition exist, coding Provider
+v3 serve refuses startup before material, PostgreSQL or Docker side effects.
+That fail-closed hold does not retire historical Provider v2 compatibility or
+make the incomplete v2 fragment executable evidence.
+
+The subsequent bounded-coding-allocation decision
+`S6-Coding-allocation-v2-bounded-plan-reviewed-20261005` selects **two**
+fixed allocation slots for the current local qualification candidate only.
+This is a positive finite capacity/closed-set assertion, not a production
+default derived from terminal session limits. A third concurrent allocation
+must be rejected. Each slot has a distinct high UID/GID reserved against all
+static and Browser/Desktop slot identities, one `network=none` workload,
+and exactly three whole named volumes: inputs read-only, workspace and outputs
+read-write. Two slots thus require six separate allocation data volumes;
+control receipts, Provider state/staging/mux and other persistent stores are
+distinct. No fake Browser/Desktop `sandboxidentity.Plan` SessionID/gateway
+fields, extra coding network/agent, shared subdirectory, host bind or root
+ownership helper may be introduced. Source-bound image ownership and
+confined volume preparation need exact implementation evidence before use.
+
+Provider's existing PostgreSQL atomic operation boundary reserves the slot
+and retains tenant/allocation/generation/fence/request-digest truth. The
+control service holds only exact peer/Profile/request-bound physical receipts.
+Unknown create/cleanup outcome, cancellation or restart leaves the slot held;
+timeout alone never frees it or redispatches the same physical operation.
+Reuse requires verified exact container and all three volumes cleaned under
+the existing lifecycle state machine; a new generation cannot consume old
+receipts or volume data. The complete v2 resource envelope must account for
+the actual concurrent migration, Browser/Desktop, two coding workloads,
+scanner's 4 GiB limit, control and agents, staging/double-parse peak and
+held-during-recovery states, without double-counting templates or tmpfs.
+Docker local volumes do not provide an implicit hard disk quota. The current
+VM shortage remains, and no full topology/daemon activation is authorized
+by this offline design decision.
+The initial `codingidentity` package is only the typed offline reservation
+projection/model: it binds the owner, Profile/template/image/config digests,
+finite capacity, per-slot high UID/GID, `network=none`, and three whole volume
+prefixes; physical volume names are scoped by Profile, allocation and
+generation. Its in-memory state preserves unknown `creating` and `cleaning`
+occupancy. Actual Provider PostgreSQL atomic reservation, source-bound image
+ownership preparation, physical absence proof and v2 Profile admission are
+still separate required implementations. No test callback stands in for
+Docker cleanup evidence. Cleanup deletes the active reservation, so the
+Provider PG operation ledger must also refuse a released old Claim from
+re-reserving; `Reserve` requires that exact, same-transaction authorization
+callback. The offline callback test covers this shape but cannot attest PG
+atomicity or prevent a caller from supplying a false result. No second
+business-history ledger is introduced here.
+
+The accepted origin mapping `S6-Coding-allocation-origin-approved-20261005`
+derives the private allocation ID from canonical JSON of
+`{provider_revision_id,tenant_id,sandbox_id,create_operation_id}` under the
+fixed `sandbox-runtime/coding-allocation-id/v1` SHA-256 domain. All four
+values must come from the same accepted Provider lifecycle state transaction;
+the ID is not a bearer credential and never enters the Provider Contract.
+Attempt, current fence/generation and rotating Profile digest are separate
+authorization/receipt bindings, not identity inputs. The create request digest
+comes from the unique existing idempotency record, not from an assumed
+`Operation.RequestDigest`: `StartCreate` leaves that field empty. The creation
+generation is frozen from the actual first create (currently one); later
+Suspend/Resume generation changes do not rename the original three volumes
+or reserve another slot. Running/Unknown with no reservation cannot be
+promoted to a fresh allocation on restart. Terminal create replay remains
+readable through the Contract but cannot reopen reservation or redispatch.
+The pure state-to-Claim projection enforces these early rejection conditions.
+A private PostgreSQL adapter now composes the accepted-create ledger,
+two-slot reservation and first Reserved→Creating permit with the lifecycle
+Running/Provisioning transition under the existing single-row lock. The
+real PostgreSQL component integration observes one winner among concurrent
+clients and no second first permit after database restart. It performs no
+Docker I/O, and its synthetic empty-namespace initialization is only a
+test fixture. The subsequent optional Coding coordinator path requires the
+same-Store lifecycle/first-permit repository and a ticket-only dispatcher;
+legacy `Driver.Create`/`Inspect` cannot satisfy it. The PG first-permit
+transaction also commits the existing provisioning event, so event failure
+yields no ticket. A nil dispatch acknowledgment leaves Running/Provisioning/
+Creating, not Ready; Running/Unknown recovery holds the slot and does not
+redispatch before exact control receipts exist. Tagged real-PG component
+tests cover two allocations, third-slot denial, lock-wait expiry/cancel,
+corrupt or absent reservation documents and event rollback. A contested
+first-permit error gets one bounded read-only current-state observation,
+never an old Accepted snapshot or an overwrite of the concurrent winner.
+The dispatch probe is not a Docker/control receipt. Production composition,
+complete v2 Profile-bound slot specs, real control receipts and exact physical cleanup
+remain open; the coding v3 startup guard stays fail-closed.
+
+The reviewed control boundary uses three separate internal isolated IPv4
+networks: each Provider shares exactly one with the common Docker-control
+service, and coding has one additional private scanner edge. Direct mTLS,
+exact peer URI, CRL/expiry and ingress-interface binding authenticate requests;
+no second application-message signing key is introduced. A strict typed
+envelope includes owner/tenant digest, opaque allocation, sandbox/session,
+generation/fence/revision, operation/request digest, request ID and expiry.
+The private physical receipt binds peer, Profile/policy digest and physical
+mapping. Same-ID/same-digest status or completed-result replay does not
+redispatch; conflict, expired scope or ambiguous physical outcome fails closed.
+Per-allocation coding inputs/workspace/outputs are three separate whole named
+volumes, not subdirectories in a shared volume. Image UID/GID ownership,
+confined transfer, persistence/restart and exact cleanup remain live gates.
+The old 78 roles would become provisionally 82 by adding control, scanner and
+one dedicated TLS agent each; only the final exact Profile may establish that
+inventory. No new daemon-facing service is activated by this design decision.
+
+The first Coding create-control subprotocol is now an **offline component**, not
+an activated broker. Its typed authority separates a request replay key,
+derived from the accepted attempt/fence/policy/peer, from a stable physical
+create-effect key derived only from the original allocation and creation
+generation. A changed request key cannot recreate the same effect. The
+authority binds the accepted Provider revision, tenant digest, exact
+allocation/sandbox/operation, plan/spec and three-volume mapping digests,
+Profile/control policy, authenticated peer principal, generation/fence and
+bounded original operation deadline. Strict canonical decoding rejects
+unknown, duplicate, oversized, drifted and expired requests. It carries no
+daemon ID, host path, socket, image override or credential. Before any
+physical callback, the private receipt ledger durably records `Unknown` using
+one-writer locking, a private bounded canonical file, atomic fsynced replace
+and directory sync. `Unknown`, including after callback error or restart,
+never restores the permit; read-only status lookup remains possible. An
+explicit empty-namespace proof is required to initialize a new ledger, and
+an initialized but missing ledger refuses reopening/reinitialization. The
+local candidate holds at most two unreleased effects and at most 4096 retained
+records, including release tombstones. No `Completed` or `Released` transition
+is exposed yet: those require exact trusted physical observations and, for
+absence, quiescence/fence proof. Unit race tests are component evidence only;
+the daemon-facing process, Profile v2, mTLS/UID/socket containment, real
+container/volume mapping and reconciliation gates remain open. The Coding v3
+startup guard stays fail-closed.
+
+The subsequent control review tightened this component before integration:
+the Provider-side constructor now takes the Running `lifecycle.Operation`
+returned by the *same* PostgreSQL first-permit transaction and verifies its
+ID, attempt, sandbox, fence, create/running state, cancellation and original
+deadline against the ticket. A historical empty `Operation.RequestDigest` is
+permitted because the ticket's digest comes from the accepted idempotency
+record; a nonempty operation digest must match. The Provider independently
+re-derives allocation ID from revision/tenant/sandbox/create operation and
+requires the plan owner to match the authenticated peer. The Control side
+does **not** read PostgreSQL: it validates the received closed authority
+against an independently configured frozen plan, exact per-slot spec digest,
+three-volume mapping, policy and authenticated peer. The ledger refuses two
+unreleased allocations for one physical slot. Its persisted spec-map digest
+also prevents an unoccupied slot's frozen spec from drifting across reopen.
+Its trusted local clock is
+re-read after lock acquisition and after durable commit, while the physical
+callback uses a context capped by authority expiry and the original operation
+deadline. External work runs outside the state mutex; Close waits boundedly
+for in-flight work and retains the writer lock if it cannot prove quiescence.
+Deterministic pre-write and post-rename fault tests prove that no callback is
+granted after ambiguous persistence. These checks do not turn the offline
+component into a production Docker-control broker.
+
+Every ordinary repository-owned container in the Slice 6 gate uses a unique numeric
 UID/GID, non-root execution, a read-only root filesystem, only declared tmpfs
 and role-private sockets, plus one narrowly scoped managed persistent ledger
 volume per policy-state authority. Its ledger volume is writable only by that
 authority, never by its broker or another role; arbitrary volumes, host-path
-bind mounts and shared business storage remain forbidden, except for the
-subsequently approved Guest-only storage addendum below. All Linux
+bind mounts and shared business storage remain forbidden. The separately
+reviewed Provider state/staging/allocation and broker-mux volumes above and
+the Guest-only storage addendum below are closed, purpose-specific revisions,
+not a general volume exception. All Linux
 capabilities are dropped,
 `no-new-privileges`, a role-specific seccomp policy, bounded PIDs/memory/CPU,
-no host devices, host mounts, daemon sockets or extra listeners. The gate
+no host devices, host mounts, daemon sockets or extra listeners. The sole
+operator-owned Docker-control TCB above is an explicit, separately inventoried
+exception to daemon-endpoint access, not a general exception to this policy;
+its exact containment is pending implementation and observation. The gate
 rejects drift and exercises privilege escalation and resource exhaustion.
 Each principal binds its reviewed policy by exact digest and the gate checks
 that binding against the running container. Equivalent least-privilege
@@ -3289,3 +3631,526 @@ earlier formal E failure was a certificate rejection. The diagnostic
 container, network and anonymous volumes were removed by exact identity;
 one-time test keys were deleted. The original E evidence remains
 `incomplete` and Phase 6 remains **5/15**.
+
+Sandbox ruling `S6-Coding-template-and-volume-prep-probe-reviewed-20261005`
+requires a v2-only, closed Coding runtime-template projection before any
+Docker-control create/inspect path. Both operations must derive from one
+template that binds the published image descriptor and selected platform/
+config, embedded manifest argv, fixed environment/workdir, per-slot UID:GID,
+network `none`, three named volumes, read-only root, cap-drop ALL,
+no-new-privileges, pinned seccomp, resource limits and the owner-only bounded
+`/tmp` tmpfs. The template does not contain the final Profile digest; the
+Profile freezes the template and the finite Coding Plan references its
+digest. Neither the legacy bind-mount fixture nor the image's default UID
+may be a v3 fallback.
+
+For the known high-UID/named-volume ownership mismatch, the ruling permits
+only a bounded daemon archive-put experiment against a unique, never-started
+disposable container and exactly three owned volumes. The Control-generated
+archive is a single zero-size directory metadata header for the mounted
+workspace or outputs root, with slot-numeric owner and mode `0770`; inputs
+and root stay read-only. `CopyUIDGID=false` and
+`AllowOverwriteDirWithFile=false` preserve the tar owner and disallow a
+directory-to-file overwrite. The experiment must observe actual inode
+ownership before/after, then test high-UID workspace/outputs/tmp writes and
+inputs/root denial, and prove exact resource cleanup. Ambiguous or partial
+results never become a completion receipt or automatic retry/release.
+The first physical invocation reached only stopped-container creation and
+failed inspect/template equality before archive-put; its exact owned
+container and volumes were removed. A new physical attempt requires review.
+This is not a complete Profile v2 or production Control activation, and
+Phase 6 remains **5/15**.
+
+The corrected one-shot mechanism probe later disproved the proposed `.`
+root-metadata archive path on the current daemon. After the existing OCI
+descriptor-chain and Docker runtime-image observation checks passed,
+`CopyToContainer` accepted the one-directory archive for the stopped
+container's `/workspace`, but actual inode observation remained
+`65532:65532 0770`, not the slot's `57000:58000`. The test stopped before
+container start; exact owned container and three-volume cleanup passed.
+An accepted copy call is not proof of ownership change. This archive shape
+must not be used for production volume preparation or counted as a Slice 6
+gate. No fallback to root helper, host bind or public mode is authorized;
+the high-UID volume-preparation mechanism remains undecided and Phase 6
+stays **5/15**.
+
+Sandbox ruling `S6-Coding-stopped-preparation-carrier-probe-approved-20261005`
+chooses a different bounded mechanism experiment after the `.` archive
+failure. A uniquely owned, never-started/never-execed short-lived
+preparation carrier may have a writable rootfs solely so the daemon archive
+API can validate destination `/`; its argv is the inert `/bin/false`, its
+user remains the slot's high UID:GID, and its network, seccomp, cap-drop,
+no-new-privileges, resource limits and exactly three named mounts remain
+closed. The archive contains only zero-data `workspace` and `outputs`
+directory metadata entries with the slot's owner and mode `0770`. This
+stopped-carrier writable-root exception is **not** a runtime permission or
+new generic template option. After both actual volume roots are verified,
+the carrier must be deleted and proved absent before a separate runtime
+container is created. That runtime retains its original read-only root,
+fixed command/environment, high-UID `/tmp` tmpfs and three mounts with
+`NoCopy=true`; it alone may start. All two-container/three-volume resources
+must be exactly cleaned. Partial, unknown or cleanup-uncertain outcomes hold
+the allocation and never authorize retry/release. This ruling authorizes one
+opt-in mechanism probe, not production Docker-control wiring or a Slice 6
+gate; Phase 6 remains **5/15**.
+
+The separately approved mechanism probe passed on Docker 29.7.2/API 1.55:
+the stopped carrier's exact two-entry archive changed both mounted volume
+roots from image-default `65532:65532 0770` to slot `57000:58000 0770`
+without changing root or read-only inputs metadata. The carrier was removed
+before the distinct read-only runtime was created with all three volumes
+`NoCopy=true`. The runtime kept the owners; its high UID could write
+workspace, outputs and the bounded `/tmp`, while actual inputs/root writes
+were denied. Both containers and all three unique volumes were absent after
+exact cleanup. This is positive evidence for a local mechanism, **not**
+authority to turn the stopped-carrier exception into a generic runtime
+option, a production Control service, or a completed Slice 6. The future
+durable receipt must account for preparation carrier creation/deletion,
+non-atomic dual-volume metadata changes, runtime creation/start and exact
+cleanup under the same allocation effect. Until that and full Profile v2
+admission pass, the Coding v3 guard remains active and Phase 6 is **5/15**.
+
+Sandbox rulings `S6-Coding-stopped-preparation-component-accepted-20261005`
+and `S6-Coding-single-effect-receipts-and-cleanup-reviewed-20261005`
+accept the above run only as a current-daemon mechanism component and permit
+production *source/model* work under one create effect. A deterministic,
+closed inventory derives two container names and three generation-scoped
+volume names from the same frozen authority, plan and template; labels bind
+the authority, effect, Profile, plan, template, slot and object role. The
+existing ledger commits `Unknown` before the first physical call. Per-command
+durable phase flags are not required and cannot resolve a lost daemon reply.
+Only a bounded, independently checkable observation of the original daemon,
+all objects, stopped-carrier removal, exact runtime policy and actual volume
+ownership/permissions may justify a private `Completed` receipt. It does not
+change Provider business truth or resolve an `outcome_unknown` operation.
+
+Cleanup needs a separately durable, Provider-PG-authorized fenced intent
+before its first side effect. A `Creating` reservation cannot simply be
+transitioned to `Cleaning`; an independent external quiescence/fence proof is
+needed for uncertain effects. A local callback ending, client cancellation,
+process exit, flock acquisition, a timeout or even two complete absent reads
+do **not** prove that a previously timed-out Docker daemon call cannot create
+later. Without that proof, retain `Unknown` and the UID/capacity claim. When
+quiescence is established, deletion checks known IDs plus exact names,
+labels and frozen configuration, then observes complete two-container/
+three-volume absence twice including effect-label inventory. A persistent
+released tombstone must bind the cleanup fence, receipt revision, original
+daemon and resource set before Provider can CAS-release its PG reservation.
+No old cleanup request may operate on a later occupant. These are required
+source and gate conditions, **not** claims that production Control or Slice 6
+has passed.
+
+Sandbox ruling `S6-Control-daemon-identity-observation-reviewed-20261005`
+separates daemon identity from compatibility environment. The private
+identity digest binds bounded opaque Docker `Info.ID` to the operator-frozen
+endpoint/deployment scope; Linux OS type, the explicit supported native
+architecture mapping (`aarch64`→`linux/arm64/v8`, `x86_64`→`linux/amd64`),
+root-directory digest and daemon version form a distinct environment digest.
+Neither raw daemon ID nor root path is retained in receipt state. Both
+digests must match before and after any read-only inventory; a changed
+version/root/platform is a fail-closed environment drift, not automatically
+a replacement daemon or permission to reset the ledger. A cloned daemon ID
+and self-reported `Info` are not authentication or a late-call quiescence
+fence. Production still requires the same operator-frozen client/transport
+scope; an env-selected test client and fixture scope prove component behavior
+only. Changed identity, drift, error or cancellation never becomes absence.
+
+Sandbox rulings `S6-Control-daemon-projection-component-accepted-20261005`,
+`S6-Control-readonly-inventory-source-component-accepted-20261005` and
+`S6-Control-unix-only-bounded-observer-reviewed-20261005` keep this first
+Control observation source strictly read-only and Unix-only. The exact socket
+must come from the admitted Profile v2/operator deployment scope, not
+`DOCKER_HOST`, a Docker context, a default or a caller-supplied path. It is a
+canonical absolute Linux path with no symlink or untrusted-writable ancestor;
+the socket itself is root:root mode `0660`. The sole Control principal may
+hold the explicitly frozen supplementary GID 0. This is substantial Docker
+authority despite a read-only mount and does not relax Provider/Control mTLS
+and CRL boundaries on their separate network edge.
+
+The private client freezes API v1.55 and one Unix dialer. Before any Docker
+request, its transport admits only `GET /info`, the two exact container
+inspects, three exact volume inspects and effect-filtered container/volume
+lists; method, API version, query, endpoint and Host drift fail before dial.
+All response bodies, including 404, are bounded to 1 MiB **before** SDK JSON
+decoding. Truncation, mismatch, read/close error, cancellation and malformed
+successful JSON fail as errors, never as observed absence. A Moby response
+hook must not consume or close Body, so bounding is in the client's actual
+`RoundTripper`. Each request has a five-second cap and an entire serialized
+inventory a ten-second cap, both shortening rather than extending a caller's
+deadline. An inspect `404` is usable as absence only after checking a
+bounded, complete JSON error envelope with a nonempty string `message` and
+the expected JSON media type; malformed/error-page 404 is an error. A
+successful container list must be an array, and a successful volume list
+must contain an array-valued `Volumes` field; a syntactically valid but
+missing/null field is not an empty inventory. Concurrent inventory and
+close admission is context-cancellable; a timed-out close is not reported
+as drained. This source-only component does not authenticate the
+Profile/operator endpoint, prove the complete runtime config or daemon
+late-call quiescence, or issue a `Completed`/`Released` receipt. No new
+physical mechanism run, formal gate or Phase 6 count follows from it.
+
+Sandbox ruling `S6-Control-observer-response-and-budget-closeout-reviewed-20261005`
+also requires JSON-field alias protection: `encoding/json` may match
+`Volumes`/`Warnings` case-insensitively even though a preparser map uses
+case-sensitive keys. Noncanonical aliases of those known fields are rejected,
+while unrelated future top-level fields remain opaque. The same one absolute
+ten-second deadline starts **before** serial client admission, covering queue
+wait and every Info/inspect/list call; a caller's shorter deadline wins.
+One specifically authorized no-retry read-only component batch may query a
+new empty effect namespace on the already-used local Unix daemon through
+the same bounded SDK transport. It cannot grant production endpoint scope,
+daemon late-call quiescence, Completed, cleanup or release authority.
+
+Sandbox ruling `S6-Control-complete-runtime-observation-scoped-reads-reviewed-20261005`
+permits only two additional *typed* read classes toward a future private
+physical-completion proof: inspect the exact template-pinned OCI index with
+either no query or the fixed native platform query, and read a complete
+bounded initial archive of `/inputs`, `/workspace` or `/outputs` from the
+already verified runtime container ID. No arbitrary image, tag, object ID,
+path, subpath, `CopyTo`, exec, list, pull or export is authorized. The
+existing descriptor-chain verifier and the original stopped-carrier probe's
+container-policy and ownership checks are the source of truth; this is not
+a second runtime standard. The archive path requires a separate pre-SDK
+32 KiB response cap, a constrained path-stat header and a complete single
+directory tar with exact owner/mode and no user data or extra entry. It
+applies only before tenant access while create remains Unknown. Nonempty,
+oversized or ambiguous volumes retain Unknown and the UID claim, never
+trigger automatic deletion. Docker's archive GET holds a container lock
+until the stream closes, so client cancellation is not daemon quiescence.
+This source-only extension neither activates Control nor authorizes a new
+physical create probe. Its rollback is to disable the new observation
+entry while retaining the existing Unknown receipt and owned resources.
+
+The first unexported `observeCompleted` source skeleton spends one absolute
+ten-second budget through serialized admission, the original daemon's Info
+before/after, exact whole-effect inventory, runtime ID/state/policy,
+descriptor-verified image index/selected platform/config, three initial
+empty roots and final runtime/whole-effect remapping. It emits only a
+Control-private proof bound to the create authority, effect, Profile, Plan,
+template, receipt revision, original daemon and observed resource digests.
+It does not accept a caller's completion digest or boolean. The durable
+ledger has no production Completed transition or callback from this proof;
+the source skeleton must pass a real approved full-chain observation and
+independent review before any activation. A snapshot cannot by itself rule
+out a daemon request that may still complete late.
+
+Sandbox ruling `S6-Control-list-only-metadata-compatibility-and-retained-effect-review-20261005`
+permits one Docker Desktop 29.7.2 container-list-only metadata key,
+`desktop.docker.io/ports.scheme`, with an untrusted value bounded to 4,096
+bytes. It is not an ownership label and is excluded from the proof.
+Container inspect must still match the full exact inherited and binding
+label set. The list must still match the inspected single container ID,
+name and every expected label value; duplicate, missing, conflicting or
+other extra effect metadata fails closed. This is a narrow compatibility
+rule, not a generic allowance for unknown labels or partial inspect.
+
+Under `S6-Control-retained-effect-proof-persistence-and-cleanup-approved-20261005`,
+the retained single Unknown effect passed a same-process 23-GET full-chain
+observation. A minimal private proof and trace were exclusively persisted,
+fsynced, read back and rechecked before exact known-ID runtime/volume
+cleanup. Two full post-delete inventories observed zero effect resources.
+Sandbox accepted this as a component result under
+`S6-Control-complete-observation-and-retained-cleanup-component-accepted-20261005`.
+The original durable Unknown receipt and its failure history remain
+unchanged. This is real component evidence for observation and cleanup,
+not a durable Completed/Released transition, a Provider-PG CAS/fence or a
+general late-effect quiescence proof. Production Control and the Slice 6
+release gate remain closed.
+
+Sandbox ruling `S6-Control-live-completion-CAS-and-historical-Unknown-boundary-20261005`
+keeps the already-cleaned test effect permanently Unknown at revision 2;
+its retained physical proof is component evidence, not a historical state
+import. A generic Completed transition may only follow a current live
+same-effect observation after an unambiguous, synchronous create callback
+return, while the Control owner excludes its own concurrent physical
+dispatch. It must recheck the same authority and ledger revision at commit,
+persist the private full proof before the Completed state, and fail closed
+on cancellation, close, stale revision, missing evidence or ambiguous
+fsync/rename/response. The ledger mutex is not held across Docker I/O.
+Reopen loses the ephemeral successful-callback qualification; an old
+Unknown therefore cannot complete from a saved snapshot. Completed means
+the create observation was durably confirmed at that time, not permanent
+runtime readiness or authority to rewrite a Provider terminal outcome.
+Docker and the file ledger do not form a cross-system atomic transaction.
+An independent late-effect quiescence producer and a distinct Unknown
+retirement design are still missing; neither local callback drain nor two
+empty reads supplies them. The existing Completed-only cleanup-intent rule
+is not relaxed for the historical test receipt. All production guards and
+Slice 6 gates remain closed.
+
+Review `S6-Control-live-Completed-aggregate-boundary-corrections-20261005`
+requires three additional fail-closed details in that candidate path. The
+normal live observation inherits the original create authority expiry and
+operation deadline; a new caller context cannot refresh them. Time validity
+is checked at admission, after observation, after private evidence write
+and after receipt commit. Evidence fsync/readback can race cancellation:
+before receipt commit it leaves Unknown and an unusable orphan file; after
+commit it returns an uncertain response but does not roll back Completed.
+The receipt retains separate digests for the physical proof and the entire
+canonical private evidence envelope, including capture time and source
+state digest. Active Completed reopen/Lookup rechecks both. Unknown/Reserved
+omit the new private seal field, preserving their v2 canonical bytes;
+old unsealed Completed prototypes reject rather than silently migrate.
+The seal detects drift relative to the saved receipt, not a same-UID
+attacker who can rewrite both files. These are source-only corrections;
+they do not produce a late-effect fence or activate production Control.
+
+Sandbox ruling `S6-Coding-current-terminate-and-historical-create-outcome-reviewed-20261005`
+keeps termination independent of the old create operation's terminal result.
+A historical create `outcome_unknown` is never rewritten to Succeeded, but a
+new accepted terminate may proceed if the same allocation has a current,
+durable Control Completed receipt with its full evidence seal and exact
+authority/effect/slot/Profile binding. Control Unknown or an unresolved late
+daemon effect remains occupied. Provider first persists the existing
+termination intent, then a single current-state PG transaction binds the
+accepted terminate and unique idempotency record to the current sandbox,
+fence highwater, original claim, trusted Control Completed revision/digest,
+Running operation, ObservedTerminating state and Cleaning reservation.
+No Docker read occurs under the PG row lock, and no cleanup permit is
+returned on partial failure. For a PG Creating reservation with trustworthy
+Control Completed, the private transaction may advance the reservation
+through Active to Cleaning without publishing an intermediate Ready state.
+The old create outcome stays unchanged.
+
+Current cleanup fence equality with birth is valid for certain legal
+termination and lease-expiry paths; the cleanup fence must equal PG's
+current highwater and be no lower than birth. Current generation is the
+actual terminated-desired sandbox generation and is greater than birth,
+but a repeat terminate need not increment it again. The PG retirement
+binding must also identify exactly one current operation/attempt/request;
+same-fence different operations are not interchangeable. Control must
+persist its separate cleanup intent before deletion, then exact resource
+absence and a Released tombstone before PG's precise slot-release CAS.
+Unknown termination outcomes may gain cleanup evidence without being
+rewritten Succeeded. Two empty reads, local callback drain and model-only
+`ConfirmAbsence` never substitute for production late-effect quiescence.
+This ruling authorizes source work only; no new Docker batch, v3 startup or
+Phase 6 count change follows.
+
+Review `S6-Coding-PG-current-cleanup-projection-reviewed-20261005` accepted
+the source-only same-row PG projection but required preserving the caller's
+shorter context deadline when constructing the cleanup envelope, checking
+lease and operation value IDs against their map lookup keys, and treating a
+post-commit cancellation or expired envelope as an uncertain response, not
+a dispatch permit. The private retirement binding retains the exact
+canonical cleanup envelope, including originally clamped issuance/expiry,
+for read-only response-loss recovery; readback never refreshes its time or
+substitutes for current Control/PG checks. A Control CompletedSnapshot
+produced by the local ledger is only an in-process component input, not a
+cross-process mTLS attestation or quiescence claim. Concurrent real PG row
+locking, crash/restart response recovery, and final Control/PG release
+remain separately gated.
+
+The subsequent bounded PG-only final-release CAS component was accepted
+under `S6-Coding-PG-final-release-bounded-component-accepted-20261005` after
+one race/shuffle real-PG batch. Its synthetic Released input verifies PG
+transaction behavior only: exactly one of two same-row contenders wins; an
+old proof cannot release a genuine new occupant after the slot is freed.
+Transaction-local higher-fence drift, rollback, row-lock deadline/cancel,
+simulated lost-return readback and PG restart do not establish Control
+cross-process attestation, actual COMMIT packet loss, a persisted competing
+higher-fence operation or physical Docker absence. The current terminate
+operation deadline must match the cleanup envelope; the Released timestamp
+must have been committed inside that envelope even if Provider repairs its
+PG state after the envelope expires. This is not permission to activate the
+still-guarded Coding v3 profile.
+
+The same review keeps the normal Control cleanup source fail-closed before
+any real Coding DELETE: pre-delete inspection must recheck the completed
+effect's full frozen runtime configuration, accepting an exited runtime only
+when the configuration still matches. The three exact realized volumes and
+at most one exact private `/tmp` tmpfs are checked before comparison; Docker
+may omit that tmpfs from the exited realized view, but the configured tmpfs,
+mount options and all other frozen fields remain bound. A close racing
+preflight must be serialized before reading the mutable SDK client. The
+separate deletion client has a cancellable admission gate and one absolute
+five-second mutation budget. net/http-visible 204 framing plus two complete
+post-delete inventories is the required local evidence, not a raw-wire or
+late-daemon quiescence proof. Private evidence must omit Docker diagnostic
+strings that might contain host paths. Active Completed evidence remains
+checked on routine ledger reads; historical Released evidence is checked on
+Open/reopen and target lookup/snapshot, so unrelated hot reads do not scan
+all historical evidence files. None of these component rules replaces the
+Provider↔Control authenticated wire or the fixed Slice 6 topology gate.
+
+Decision `S6-Provider-Control-v2-wire-and-retirement-barrier-reviewed-20261005`
+selects a durable Provider-PG retirement barrier, not a distributed lock.
+The first current cleanup PG transaction already records `Cleaning` and
+`Retirements` under the singleton `control_state` row lock. Every applicable
+generic lifecycle write to that allocation must read and respect the same
+record in that transaction, including separate generic repository instances
+and create/mutation/sandbox/lease/operation/event/reconcile paths. A
+conflicting higher fence committed first makes cleanup admission fail without
+effects; retirement committed first makes the later conflicting write
+temporarily unavailable without changing its lifecycle highwater. Read-only
+status, exact idempotent replay, and the same terminate attempt's lawful
+`OutcomeUnknown` plus matching event remain possible. Only the dedicated
+Released→final CAS removes the barrier. Control uncertainty, expiry or CRL
+loss does not release it. This protects safety at the cost of potentially
+long-lived occupied capacity.
+
+We reject a new higher-fence supersession protocol here because it would
+introduce another authority transfer after irreversible physical deletion.
+We also reject a cross-system PG/Control distributed abort or lock service:
+the existing row transaction and retained retirement are enough for this
+allocation boundary, and no SQL lock is held during network or Docker work.
+An unaccepted conflicting request maps to existing retryable 503
+`SANDBOX_PROVIDER_UNAVAILABLE`, not a fabricated stale-fence error; truly
+stale requests and idempotency mismatches keep their existing mappings.
+Admission JTI consumption is independent and never rolled back to recreate a
+physical permit. If this inactive source integration must be rolled back,
+keep Coding v3 guarded and withdraw only the unactivated composition;
+persisted retirement and Control tombstones remain, never erased or
+downgraded to free resources.
+
+The approved wire direction is one full Profile v2 source with exactly
+declared Provider↔Control private edges, dedicated TLS identities/agents,
+issuer roots and directional CRL guards. It may reuse TLS primitives, but
+not widen Browser/Desktop-specific attach helpers. Typed canonical
+create/cleanup/status requests bind the authenticated peer and original
+authority/effect; responses expose bounded status/revision/digests only,
+not physical IDs, paths or private proof. Status can read a historical
+completed effect after authority expiry, never renew authority to mutate.
+This decision authorizes source/component development and a separately
+bounded future two-client PG barrier test. It does not authorize real Coding
+Docker deletion, v3 activation, the complete topology gate or a change from
+Phase 6 **5/15**.
+
+Follow-up `S6-retirement-barrier-corrections-and-bounded-PG-batch-reviewed-20261005`
+accepted the source design and authorized one bounded PG component batch. The
+generic lifecycle writer now validates finite, unique reservations and the
+Cleaning/retirement bijection, canonical cleanup envelope, and original/current
+operation, idempotency, sandbox, lease and fence bindings inside the same row
+transaction. A historical create Unknown event uses birth generation/fence;
+the existing State stale-fence rule is not widened. A single transaction clock
+rejects future events without a hidden grace interval. The private wire maps
+Completed plus durable cleanup intent to `cleanup_pending`; Released remains
+bound to the original cleanup time window. A create-only status response is
+observation, not an input to the trusted final PG release CAS. The approved
+real-PG batch passed in one disposable pinned PostgreSQL container, using
+two independent pools for the retirement-first path and one pool for the
+higher-fence-first ordering. These are committed-order checks, not a new
+simultaneous generic-mutation-versus-cleanup race. It covered retryable blocking,
+admission JTI independence, Unknown/event replay, unrelated sandbox writes,
+restart retention and the existing final release/new occupant path. Synthetic
+Control receipts and pure malformed-binding tests remain component inputs;
+this does not add a Control mTLS/CRL peer, physical deletion, or Slice 6 gate.
+
+Decision `S6-Control-authenticated-observation-layering-reviewed-20261005`
+keeps the local `CodingCompletedSnapshot` and `CodingReleasedSnapshot` as
+Control-owner component types, not constructors from a private wire response.
+For production, an application coordinator reads the current minimal Provider
+binding through a repository port, calls one dedicated Control observation
+port over the fixed Profile-v2 mTLS/CRL edge outside PG locks, then checks
+the actual peer, configured edge/scope, canonical action/effect/authority and
+freshness. Separate internal Completed and Released observations may then be
+passed to typed PG entry points. Those entry points re-read the actual
+reservation/retirement and lifecycle tuple under the existing row lock and
+reuse the existing private cleanup/release CAS. The network client cannot
+read PG; PG cannot authenticate over a callback while locked. Private Go
+fields reduce accidental fabrication by ordinary callers, but do not make a
+same-process malicious caller cryptographically impossible. The trust root is
+the fixed production composition, authenticated connection and sealed Control
+ledger. No bare response/digest/bool factory, local-ledger production fallback,
+generic Doer, additional signing service or caller-supplied PG floor is
+authorized. Before Begin there is no retirement floor; Finish uses the
+persisted retirement's strictly older Control revision and changed state
+digest. Loss, cancellation or pending status produces no consumable release
+observation. Expired authority cannot renew a physical mutation permit, but
+an authenticated historical status read may consume a sealed Released result
+for the existing PG retirement. The v3 startup guard remains closed until this
+vertical path, complete Profile v2 and its gates are actually composed.
+
+Decision `S6-original-create-envelope-atomic-persistence-reviewed-20261005`
+closes the restart gap between first PG permit and the historical Control
+effect key. The production first-permit transaction must mint the originally
+deadline-clamped create authority under the same singleton-row lock as
+Creating/Running/Provisioning and save its exact canonical bytes/digest in
+`coding_identity_state`, indexed by original allocation ID. A post-commit
+mint or later re-sign is forbidden: even if effect/request IDs remained the
+same, changed issuance bytes would alter the authority digest. The retained
+record is immutable, bounded to 4 KiB per item and 4096 items, survives slot
+release/reuse, and is read after expiry only for historical status. Missing
+legacy Creating/Active/Cleaning records remain occupied and may be diagnosed
+read-only, never guessed, renewed, redispatched or erased. Current first
+permit, typed cleanup and typed release must recheck this original against
+the local PG tuple. This source rule does not itself authenticate a Control
+peer, change the existing Controller guard, or close Slice 6 Step 2.
+
+Follow-up `S6-Coding-durable-authority-mode-marker-reviewed-20261005` closes
+the cross-instance legacy entry-point bypass. The existing Coding-only PG
+identity marker, not Browser/Desktop's shared marker type, freezes one exact
+`atomic-original-envelope` mode and Control policy digest at a new, one-time
+v3 initialization. A legacy initialized marker cannot be upgraded in place,
+even with no live slots; a missing, partial, unknown or mismatched marker is
+fail-closed. Every first-permit, cleanup and release wrapper checks the actual
+marker under the singleton row lock. The generic lifecycle retirement guard
+also uses that marker: each v3 live Coding reservation needs its exact
+original envelope, and a retirement needs the same original digest. Old
+component-only first-create and local-snapshot cleanup/release entry points
+cannot be runtime fallbacks in a v3 PG, including through another pool or
+after restart. Existing JTI/high-water commitments remain independent.
+The v3 coordinator must pass the exact PG-persisted original authority to a
+dedicated dispatcher; a ticket-only dispatcher or later re-signing cannot
+recover the same effect bytes. Its historical readback never redispatches.
+Until the dedicated Control/typed-PG lifecycle route is composed, that v3
+coordinator also refuses to route terminate, suspend, resume or lease
+reconciliation through the legacy Driver's Inspect/Remove/state-control
+methods, even if that Driver implements them. A legacy marker mixed with v3
+original records is invalid, and every v3 stateful PG entry rechecks the
+current marker and all active originals before admitting another effect.
+This is a source decision, not PG cross-instance proof, Control mTLS evidence,
+v3 startup authorization or a Phase 6 count change.
+
+The authorized PG aggregate component was accepted under
+`S6-atomic-original-PG-aggregate-accepted-20261005` after retaining an
+initial failed fixture attempt and one approved repair supplement. Its
+two-pool, one-disposable-container run tested atomic first-permit original
+retention, legacy/mixed-mode denial, exact row-lock queue orderings
+(retirement-first against an otherwise-valid lease update;
+higher-fence-first against an older cleanup), typed PG Completed→Released
+with an explicitly synthetic Observer, slot reuse, PostgreSQL restart and
+exact run-owned cleanup. This proves those local PG boundaries only. The
+legacy cleanup/release probe used zero-value snapshots for marker pre-denial,
+not valid old Control proofs; the queued cancellation was before commit, not
+actual COMMIT-packet loss. It does not authenticate Control, attest physical
+Coding Docker absence, provide a full Profile v2 or close any 16-scenario
+Slice 6 gate. The v3 guard and Phase 6 **5/15** remain unchanged.
+
+### Profile-v2 CRL document and Control status transport, 2026-10-05
+
+Sandbox decision `S6-ProfileV2-CRL-typed-boundary-reviewed-20261005`
+preserves the existing peer-CRL source/role wire identifiers, fields and
+digest domains. Each document already binds a whole security-profile digest;
+the independent Profile-v2 digest separates versions without a second CRL
+wire migration. New entry points must explicitly accept `ProfileV2`, verify
+its formal public validator and the operator-pinned mapping/role digests, and
+must not strip v2 fields or invoke the v1 `Profile` admission path. The
+certificate controller, dedicated TLS agent and consuming role independently
+authorize the same exact edge, direction, local principal, peer anchor and
+immediate issuer DER. The complete required mapping includes the three
+Provider↔Control edges and Coding↔Scanner in both directions, plus the
+closed existing PostgreSQL-purpose and DNS exceptions; neither Control nor
+Scanner gains the broker-only DNS client issuer. Ordinary and PostgreSQL
+purpose agents cannot exchange source rights.
+
+The present source adds a package-private complete-field graph check,
+minimal Control/Scanner role documents, strict canonical v2-entry decoders
+with external expected digests, and an immutable scalar authorization index.
+Synthetic tests cover exact positive tuple coverage and cross-profile,
+missing/extra edge, wrong peer/issuer/purpose and canonical-wire failures.
+The first synthetic source fixture incorrectly introduced a third
+PostgreSQL issuer; Sandbox rejected that as incomplete two-issuer coverage.
+The corrected field validator requires exactly the existing general and
+five-broker-only sources in one `/pki` mount, distinct UUID/DER, with the
+broker source matching the DNS client CA and each edge selected by the
+verified peer's issuer group. PostgreSQL uses the general source. Controller
+policy/agent enforcement and live Vault evidence remain separate gates.
+All public v2 entry points still reject because `ProfileV2.Validate` retains
+its final source/image admission hold. The package-private status transport
+has a real localhost TLS 1.3 mutual-certificate round trip and reads a
+single locked receipt/state projection; `not_found` never means Docker
+absence. Its test TLS verification hook is not the production CRL guard.
+Production Control/Scanner commands, source-bound images, fixed-source
+CRL bootstrap/poll/drain, real daemon actions and the final 16-scenario gate
+remain required before the hold may be reviewed. Phase 6 stays **5/15**.

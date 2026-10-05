@@ -25,6 +25,26 @@ func validateFiniteIssuerPolicyGroups(profile phase6security.Profile,
 // policy/edge partition can be tested without a fabricated complete Profile.
 func validateFiniteIssuerPolicyGroupsBound(profile phase6security.Profile,
 	sources phase6security.PeerCRLSources, policies []workloadpki.Policy) error {
+	return validateFiniteIssuerPolicyGroupsFields(profile.TLSAgentBindings,
+		profile.TrustEdges, profile.External, sources, policies)
+}
+
+// This v2 entry is deliberately uncallable until the whole Profile-v2 gate
+// opens. It does not project a v2 document through Profile.Validate(v1).
+func validateFiniteIssuerPolicyGroupsV2(profile phase6security.ProfileV2,
+	sources phase6security.PeerCRLSources, expectedMappingDigest string,
+	policies []workloadpki.Policy) error {
+	if profile.Validate() != nil || sources.Digest() != expectedMappingDigest ||
+		sources.ValidateV2(profile) != nil {
+		return errInvalidIssuerGroups
+	}
+	return validateFiniteIssuerPolicyGroupsFields(profile.TLSAgentBindings,
+		profile.TrustEdges, profile.External, sources, policies)
+}
+
+func validateFiniteIssuerPolicyGroupsFields(bindings []phase6security.TLSAgentBinding,
+	edges []phase6security.TrustEdge, external []phase6security.ExternalService,
+	sources phase6security.PeerCRLSources, policies []workloadpki.Policy) error {
 	if len(sources.Sources) != 2 || len(policies) == 0 {
 		return errInvalidIssuerGroups
 	}
@@ -34,7 +54,7 @@ func validateFiniteIssuerPolicyGroupsBound(profile phase6security.Profile,
 		"egress-broker-provider-desktop": true,
 	}
 	brokerPolicies := make(map[string]bool, len(brokerNames))
-	for _, binding := range profile.TLSAgentBindings {
+	for _, binding := range bindings {
 		if brokerNames[binding.SubjectDeployment] {
 			if brokerPolicies[binding.IssuerPolicyID] || binding.IssuerPolicyID == "" {
 				return errInvalidIssuerGroups
@@ -75,7 +95,7 @@ func validateFiniteIssuerPolicyGroupsBound(profile phase6security.Profile,
 		sourceByID[brokerSource].IssuerDigest == sourceByID[generalSource].IssuerDigest {
 		return errInvalidIssuerGroups
 	}
-	for _, service := range profile.External {
+	for _, service := range external {
 		if service.Name == "dns" {
 			if service.DNSClientCA == nil ||
 				service.DNSClientCA.IssuerID != sourceByID[brokerSource].IssuerID ||
@@ -84,12 +104,12 @@ func validateFiniteIssuerPolicyGroupsBound(profile phase6security.Profile,
 			}
 		}
 	}
-	edges := make(map[string]phase6security.TrustEdge, len(profile.TrustEdges))
-	for _, edge := range profile.TrustEdges {
-		edges[edge.ID] = edge
+	edgeByID := make(map[string]phase6security.TrustEdge, len(edges))
+	for _, edge := range edges {
+		edgeByID[edge.ID] = edge
 	}
 	for _, binding := range sources.Edges {
-		edge, found := edges[binding.EdgeID]
+		edge, found := edgeByID[binding.EdgeID]
 		if !found {
 			return errInvalidIssuerGroups
 		}

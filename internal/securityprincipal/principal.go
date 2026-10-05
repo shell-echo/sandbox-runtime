@@ -26,6 +26,8 @@ const (
 	KindExecutorBackend Kind = "executor_backend"
 	KindEgressBroker    Kind = "egress_broker"
 	KindIngressRelay    Kind = "ingress_relay"
+	KindDockerControl   Kind = "docker_control"
+	KindArtifactScanner Kind = "artifact_scanner"
 
 	RoleProduct  Role = "product"
 	RoleProvider Role = "provider"
@@ -33,6 +35,8 @@ const (
 	RoleGuest    Role = "guest"
 	RoleBrowser  Role = "browser"
 	RoleDesktop  Role = "desktop"
+	RoleControl  Role = "control"
+	RoleScanner  Role = "scanner"
 
 	maxDocumentBytes = 4 << 10
 )
@@ -154,6 +158,21 @@ func NewRegistryWithPolicyAuthorities(environmentDigest, profileDigest string, e
 		}
 		registry.allowed[KindController][name] = role
 	}
+	return registry, nil
+}
+
+// NewSlice6V2Registry adds only the four reviewed private principals. The
+// general v1 registry and egress/material/controller vocabularies remain
+// unchanged; this function is not a caller-supplied role extension point.
+func NewSlice6V2Registry(environmentDigest, profileDigest string, egressBrokers map[string]Role, authorities map[string]Role) (*Registry, error) {
+	registry, err := NewRegistryWithPolicyAuthorities(environmentDigest, profileDigest, egressBrokers, authorities)
+	if err != nil {
+		return nil, err
+	}
+	registry.allowed[KindDockerControl] = map[string]Role{"provider_docker_control": RoleControl}
+	registry.allowed[KindArtifactScanner] = map[string]Role{"provider_artifact_scanner": RoleScanner}
+	registry.allowed[KindTLSAgent]["provider_docker_control_tls_agent"] = RoleControl
+	registry.allowed[KindTLSAgent]["provider_artifact_scanner_tls_agent"] = RoleScanner
 	return registry, nil
 }
 

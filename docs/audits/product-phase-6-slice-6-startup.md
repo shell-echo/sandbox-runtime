@@ -5490,3 +5490,1701 @@ no-Docker child emits over 1 MiB and times out; its targeted tagged race
 test, tagged vet and diff check pass. This helper-only change does not alter
 either real Docker fault boundary, so the 96.30-second real observation stays
 at its recorded commit rather than being relabeled as a fresh run.
+
+Three Provider `serve` v3 wiring difference audit (2026-10-05, **source
+inspection, not a live gate**): “three commands” means three separately
+launched `provider serve` OS processes with mutually exclusive Profile-bound
+configurations, not three new Provider API surfaces. `runProviderServe` already
+dispatches by `profile` to three compositions. The old comment above
+`newProductionBrowserProvider` saying that `provider serve` did not select it
+is stale; this audit uses the actual `runProviderServe` dispatch. The comment
+is deliberately left for the next reviewed runtime-source revision so a
+documentation-only checkpoint does not silently change frozen R. Static
+wiring is not live process proof.
+
+| Deployment / selected entry | Existing source-enforced dependency | Missing final-topology observation |
+| --- | --- | --- |
+| `provider-runtime` / `coding_shell`, v3 `production` | `preflightProviderCodingV3Postgres` binds the final Profile, Contract address and PG peer-CRL role. `openProviderCodingV3Postgres` uses its own PostgreSQL client signer and direct final PG edge. `newProductionCodingProvider` composes lifecycle/exec/Terminal/artifact, Contract and private Terminal listeners, then reconciliation/readiness. | Own Vault-backed material and TLS agents, direct PG server/HBA/SQL role/grants and live mTLS/CRL, workload/terminal, dependency-loss, restart and drain observations from this exact PID. The older production-process integration uses a local test CA/v1-style configuration, not this v3 final Profile. |
+| `provider-browser-runtime` / `browser`, v3 `production` | `preflightProviderV3Serve` checks pinned Browser image, Profile-bound Contract/private action-ingress/attach addresses and CRL role. `openProviderV3Postgres` uses its separate PG client signer and broker-only final PG edge. The composition binds the PostgreSQL finite-slot ledger to Docker/network, action-ingress private v2 listener, Provider-owned allocation mux, Browser executor TLS/CRL client, backend probe and protected admission readiness. | Own Vault-backed signers, egress broker, PG server/HBA/role/grants, ingress plus action-history PostgreSQL/Valkey witnesses, executor backend and one live Provider PID. The independent-PID crash test covers only the application/identity-runtime component, not this full command or every unknown Docker cut. |
+| `provider-desktop-runtime` / `desktop`, v3 `local_candidate` only | `preflightProviderV3Serve` checks local candidate manifest, exact source, architecture and slot UID/GID allowlist; PG uses its own client signer and broker-only edge. The composition binds finite-slot Desktop Docker/broker mux, signed bridge key, private Desktop listener, executor TLS/CRL client and backend probe. | Own Vault-backed signers, broker, PG server/HBA/role/grants, real Desktop candidate/broker/executor PID1, RTP/input, restart/drain and exact cleanup. This is not published production Desktop artifact admission. |
+| Three one-shot Provider migration jobs, outside the runtime PIDs | `provider migrate` v2 requires the exact Profile-bound job (`provider-migration-job`, `provider-browser-migration-job`, `provider-desktop-migration-job`), own PG signer/material agent, distinct SQL migrator role and precreated schema; unknown DDL outcome is not replayed automatically. | Observe each job's real exit and removal before corresponding runtime admission, with server HBA/grants and no migrator connection/authority retained by the runtime. |
+
+Reuse the existing final Profile and `Slice6PrivateConfigMount`/archive contract
+as the *single* source of deployment/file identities. For the already frozen
+78-deployment inventory, prepare the three runtime config volumes and three
+migration volumes from their declared private file sets; do not add a second
+roster or translate Provider DTOs into local `/instances` structs. After the
+shared Vault, PostgreSQL, policy/broker and TLS/CRL sources are live, run and
+observe the three one-shot migrations, then start each runtime with its own
+material agent, subject signer and PostgreSQL client signer. Browser/Desktop
+executor backend and Provider mux may start as a bounded dependency group;
+wait for both actual readiness checks before admitting work, rather than
+assuming a fixed sequential readiness order. Record distinct PID1/UID/GID,
+source/config/agent/role/edge bindings, Contract and private listener identity,
+real DB privilege denials, peer-CRL/agent loss, restart and drain under the
+same future run ID. The presently accepted Guest E and Browser crash
+components cannot be spliced into that run. This table narrows the existing
+second and third ledger rows only; it neither introduces an extra slice nor
+changes Phase 6 **5/15**.
+
+The direct-versus-broker distinction matters to placement: the coding-shell
+Provider owns a direct PostgreSQL service bridge; Browser and Desktop
+Provider PIDs must **not** join their broker's PostgreSQL service network.
+Their own Profile network membership and broker endpoint must be checked
+separately. A discarded, uncommitted static projection draft failed on this
+exact false direct-network assumption before any deployment or issuer call.
+The next gate-only wiring must reuse existing Profile accessors and produce
+actual per-deployment `startup-config.toml` and closed private-file inputs;
+a static launch projection alone is not a completed step or evidence.
+
+Checkpoint 2026-10-05 (Provider startup prerequisite audit, **open architecture
+decision**): the attempted no-issuer offline input run hit Go's default
+10-minute test timeout inside the pre-existing source-image/build-context
+reverification, before any new Provider migration builder assertion. It did
+not validate migration inputs; exact run-owned Docker resources were absent
+afterward. Sandbox permits one 20-minute outer timeout only after meaningful
+aggregation of all three runtime and three migration inputs, matching the
+test's existing 20-minute context; no production deadline or admission bound
+changes. Because runtime inputs lack an authorized Docker-control and storage
+path, that aggregate run has **not** been repeated.
+
+The three v2 migration startup/private-file constructors are now gate-only
+drafts. They recheck the selected job, SQL role, direct PostgreSQL signer,
+one-purpose material binding, owner-specific PostgreSQL peer CRL role and
+exact Profile/archive inventory. Cross-job startup, role, signer and material
+swaps are added to the opt-in negative matrix, but the full source-bound
+positive run has not yet reached them. A green tagged compile is not positive
+migration evidence and none of the jobs has run.
+One previously retained 78-principal Profile/peer-source pair was checked as
+a no-Docker shortcut: the current strict peer-source decoder rejected it.
+The optional diagnostic was removed rather than treating an older fixture as
+current authority or creating a second synthetic Profile framework.
+
+Read-only Provider PID1 prerequisite review found a more basic conflict:
+all three current runtime constructors synchronously open and ping Docker via
+the Moby client, whereas the final Profile bans daemon sockets, host mounts,
+host network and unreviewed egress. No Profile-declared scoped Docker API
+channel was found. The coding driver also needs a real daemon-visible
+workspace DataRoot and artifact staging root; Browser/Desktop drivers need
+their state DataRoots, and Desktop needs its broker mux socket directory.
+The frozen Provider mount inventories do not declare these writable roots
+(Browser alone has its reviewed mux socket). Coding additionally always
+constructs artifact staging and advertises content checks, yet its bounded
+command configuration proves only executable presence; `/bin/true` is not a
+real active-content or malware check. Treating it as one would contradict
+the existing Provider capability and artifact semantics. Sandbox has been
+asked to decide an explicit least-privilege Docker/control-and-storage design
+and real scanner asset source before runtime config or a six-input rerun.
+There is no new issuer, approved exception, runtime topology, manifest,
+release claim, push or Phase 6 count change.
+
+Sandbox decision `S6-Docker-control-storage-and-scanner-direction-20261005`
+approves a **new reviewed design direction**, not activation: one
+operator-owned daemon-facing control principal with three authenticated,
+typed Provider scopes; isolated per-owner persistent state/staging and
+daemon-managed per-allocation coding volumes; and one real, fixed-asset
+coding scanner with a separate active-content policy. The old 78-deployment
+inventory must be revised explicitly, retaining the same 16 scenario
+meanings and adding negative control/storage/scanner observations. Direct
+Provider daemon sockets, generic Docker HTTP proxy, unrecorded host gateway,
+privileged/DinD and `/bin/true` content checks remain forbidden.
+
+| Required runtime dependency | Existing call or Profile input | Boundary packet still needed |
+| --- | --- | --- |
+| Coding Docker lifecycle/exec/Terminal/output | `newProductionCodingProvider` calls `lifecycledocker.New`, whose Moby client pings the daemon before admission; its `DataRoot` creates sandbox inputs/workspace/outputs for Docker bind mounts. | Closed coding operation projection and daemon-managed allocation volumes, transfer confinement, one private durable state volume, exact cleanup and unknown-outcome receipt. Current host-bind path is not an admissible container input. |
+| Browser Docker/network | `newProductionBrowserProvider` constructs restricted-network and bound Docker drivers; each opens its own Moby client. Its `DataRoot` holds per-sandbox local state; the final Profile has a Browser mux socket volume. | Same control principal but separate Browser scope, own durable state volume, ownership/relay/network operation types and replay/recovery denial. No Browser executor Docker access. |
+| Desktop Docker/network/broker | `newProductionDesktopProvider` constructs restricted-network and bound Docker drivers; its `DataRoot` holds per-sandbox state, while its broker mux needs an exact socket directory. | Separate Desktop scope, state and broker-mux volumes, bounded container broker session type and same-slot close ordering. Local-candidate artifact boundary stays intact. |
+| Three material/TLS/PostgreSQL signer chains | Existing final Profile accessors, v2 migration preflight, runtime v3 preflight and direct coding versus broker-only Browser/Desktop PG edges. | Actual agent/socket UID, CRL, HBA, SQL/grant and PID1 observations; no substitution of one Provider or migration job's signer/role for another. |
+| Coding artifact checks | `newProductionProviderArtifact` unconditionally builds active-content and malware `CommandChecker`; support currently checks only executable presence. | One isolated scanner, exact engine/platform/rule digest and freshness, real active-content format policy, bounded private transport, resources and fail-closed negative cases. No content-check advertisement on a fixture. |
+
+Current-daemon read-only observation: Docker Desktop `linux/arm64`, Engine
+`29.7.2` / API `1.55`, VM memory `12,526,370,816` bytes. On this host the
+Docker context socket is owned by UID 501/GID 20 at mode 0755, and
+`/var/run/docker.sock` is a symlink to it. The old Profile admits ordinary
+role UIDs only in its high-UID partition. These facts do **not** prove that
+the proposed control principal can mount or connect to a daemon endpoint;
+no privileged diagnostic container has been started. The next boundary
+packet must resolve its exact daemon-side UID/GID/socket mapping and deny
+cross-principal access before any activation. ClamAV's official Docker
+guidance requires at least 3 GiB RAM; this cannot be silently fitted into
+the old small-role budget. A source-pinned engine/rule/version choice and
+current-daemon volume behavior are still open, with no pull or installation.
+
+The subsequently authorized **one-container, no-control diagnostic** used
+an already local `linux/arm64` Alpine 3.23 image at
+`sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0`
+and fixed probe-argv source digest
+reported `sha256:e10e3cf3804bbc17fbabac6ee0209ea4f85ef2986e5fb6eb949ca25c3a20d70f`.
+`sr-p6-docker-socket-probe-20261005-1` had only the exact read-only
+`/var/run/docker.sock` mount, UID/GID 21099:31099, read-only root, no
+network/capabilities/privilege escalation, and 64 MiB/0.25 CPU/16-PID
+limits. Inside the container the socket was a socket owned by `0:0` at mode
+`0660`, unlike the host-side `501:20`/`0755` view. The image's BusyBox `nc`
+did not support `-U`; the fixed `/_ping` was **not sent**. Thus there is no
+observed connection success or `EACCES`, only an on-container UID/mode
+observation that suggests a high-UID permission conflict. The attempted
+response path bounded stdout to 64 bytes, but unsupported-flag help from
+`nc` went unbounded to stderr; the extra text was tool usage, not daemon
+data. The shell pipe lacked `pipefail`, so `head` masked `nc`'s failure;
+the command's exit zero is not counted as a ping. Only `nc` had a five-second
+timeout; the approved 30-second total wall deadline was not enforced by a
+separate supervisor, although this run ended in 443 ms. Future probes must
+capture critical status and bound combined stdout/stderr and total lifetime.
+The exact named and
+labeled probe is absent after `--rm`; no image, volume, network or historic
+Docker cache was removed. No retry with root/group addition/chmod/other
+image was made. This diagnostic neither authorizes the daemon mount for a
+production broker nor establishes a workable broker UID.
+
+Validation at this uncommitted checkpoint: the ordinary full
+`go test -race -shuffle=on -count=1 ./...` exited zero in 370.955 seconds;
+`internal/phase6security` alone took 338.700 seconds. Ordinary `go vet
+./...`, Slice 6 tagged package vet, targeted tagged race compilation,
+`git diff --check`, and the **Product** Contract lock verifier exited zero.
+The opt-in source-bound migration positive path remains unexecuted; none of
+these checks is the Provider Contract lock verifier or the final gate.
+
+#### Reviewed control/storage/scanner implementation direction (not activated)
+
+This is the Sandbox-reviewed implementation direction
+`S6-Control-storage-scanner-boundary-v1-reviewed-20261005`, **not** an
+accepted new Profile or a running service. The old inventory is 78 deployments. The minimum
+proposed explicit delta is four deployments: one daemon-facing
+`provider-docker-control`, its dedicated TLS agent, one
+`provider-artifact-scanner`, and its dedicated TLS agent (provisional 82,
+subject to exact Profile derivation). Reuse the two existing issuer roots;
+new identity policies/edges are not a new issuer. No other principal may
+mount or connect to the daemon. The existing three Provider material, live
+TLS and separate PostgreSQL signer chains remain unchanged.
+
+| Principal / edge | Closed inputs and permission | Volume / resource proposal and unresolved proof |
+| --- | --- | --- |
+| Three Providers → `provider-docker-control` | Three separate private internal control networks, each containing only one Provider and the common broker; no direct Provider-to-Provider L3 path. Direct mTLS plus ingress-network identity pins the exact Provider URI and disjoint coding/Browser/Desktop operation set; no additional application-message signing key. Request binds Provider revision, tenant digest, opaque allocation, sandbox/session, generation/fence, operation/request digest, request ID and expiry. Broker checks its retained physical ownership record before every action. | No Provider Docker socket/host bind. Existing Provider TLS agents supply caller identity. Exact private network addresses and byte/time/capacity bounds must be derived in the revised Profile. |
+| `provider-docker-control` → daemon | One fixed daemon endpoint only for this operator TCB; no generic HTTP/JSON, arbitrary image/path/mount/label/network/exec target. Persist accepted, completed or unknown physical-operation receipts before/after dispatch and require exact reconciliation before reuse. | One exclusive bounded persistent receipt volume and the exact read-only daemon socket mount; read-only socket mount does **not** limit Docker authority. Preferred candidate is one unique high numeric UID/primary GID with **only this principal** explicitly granted the observed socket's supplementary GID 0. The group is fixed in the revised Profile, never autodetected at startup. Actual access, ACLs and cross-role denial remain unproved; no root primary UID, chmod, generic proxy or extra agent is permitted. |
+| Coding Provider → allocation storage | Lifecycle create/start/inspect/pause/unpause/remove, exact sandbox-bound exec/Terminal/output under the one coding scope. User-supplied sandbox argv remains permitted only after immutable allocation/UID/path/resource checks. | Dedicated persistent coding state and staging volumes, plus separate daemon-managed per-allocation inputs(read-only)/workspace/outputs volumes. Driver's current host bind mount must be replaced; confined transfer and daemon-side path semantics require a real current-daemon component gate. |
+| Browser/Desktop Provider → control | Fixed image/provenance/finite-slot allocate/inspect/start/relay or broker session/close and restricted-network acquire/inspect/release; no caller-selected Docker ID or network. Unknown result retains the allocation and denies redispatch. | Separate persistent Browser/Desktop state volumes; existing Browser mux volume, new Desktop broker-mux socket volume. No executor Docker authority. |
+| Coding Provider → `provider-artifact-scanner` | One private mTLS content stream with exact coding URI and bounded request size/deadline; separate active-content and malware results. Scanner has no Docker, Provider DB or Vault secret, and no runtime public or updater listener. | Selected candidate ClamAV `1.4.6-debian13-slim` image index `sha256:6d0680780fd29855cb7018f68272cb520821f614259e2066f8ec669069ac91b3` / arm64 manifest `sha256:fe182632e3f8de585c539fb22d84144dd6a7e2bf7d9470607b86ad8c368d1e3b`, observed remotely but **not** pulled or verified locally. Rules/config need operator-supplied immutable read-only volume, verified whole-set identity and 72-hour trusted successful-check freshness; hard limits are 4 GiB, 2 CPU, 64 PIDs and one concurrent scan, outside old small-role budget. |
+
+The control protocol must expose role-specific typed operations rather than
+mirror `engine` structs or Docker HTTP. Existing coding, Browser, Desktop and
+restricted-network engine interfaces identify call sites; a remote adapter
+must not make physical IDs stable Provider API fields. A pending request
+records its exact owner before the daemon call; an ambiguous completion is
+`unknown` and is not silently retried or released. Broker restart reloads a
+strict receipt ledger; Provider restart reauthorizes from PostgreSQL and
+queries that exact receipt. Drift, extra endpoint/volume, label mismatch,
+replayed ID, stale fence/epoch, wrong Provider, missing ledger, broker loss,
+or unknown operation all fail closed. Drain stops new actions, waits boundedly
+for in-flight operations, closes streams before exact owned resource removal,
+and verifies zero. The scanner needs benign, EICAR, actual active-content,
+oversize/encrypted/unsupported, rule-loss/stale, cancellation and error
+negatives. The 16 original scenario meanings remain; these are additional
+negative observations, not substitute scenarios.
+
+Proposed closed broker operation families (internal v1, not Provider Contract):
+
+| Authenticated caller | Typed request family | Existing implementation to adapt; excluded caller fields |
+| --- | --- | --- |
+| `provider-runtime` | `coding.ready_image`, `coding.allocate`, `coding.inspect`, `coding.start`, `coding.pause`, `coding.resume`, `coding.exec_create`, `coding.exec_start`, `coding.exec_attach`, `coding.exec_inspect`, `coding.terminal`, `coding.read_output`, `coding.release` | `provider/lifecycle/driver/docker` engine, exec and terminal plus artifact output reader. User argv is permitted only for sandbox-bound `coding.exec`/`coding.terminal`. Fixed image inspect/readiness, exec lifecycle and stream termination must be covered; current Moby `ImagePull` branch is **not** a production action. Image, mount, host path, UID, limits and privilege are broker/Profile-fixed, not request-selected. |
+| `provider-browser-runtime` | `browser.ready_image`, `browser.network_acquire`, `browser.network_inspect`, `browser.allocate`, `browser.inspect`, `browser.relay`, `browser.close`, `browser.network_release` | Browser bound Docker engine plus shared restricted-network provisioner. The latter internally uses fixed image/network/container inspect, create, connect, start and removal; a typed composite may keep those physical steps private but must receipt each side effect/unknown. No runtime pull. Policy reference and exact owner tuple select one frozen network/gateway/template; arbitrary container/network IDs and attachment endpoints never travel as authority. |
+| `provider-desktop-runtime` | `desktop.ready_image`, `desktop.network_acquire`, `desktop.network_inspect`, `desktop.allocate`, `desktop.inspect`, `desktop.broker_describe`, `desktop.broker_session`, `desktop.broker_session_end`, `desktop.close`, `desktop.network_release` | Desktop bound Docker engine/session plus shared restricted-network provisioner. The existing code uses `ExecCreate`/`ExecAttach`/`ExecInspect` and close ordering for the broker session; each status and stream terminal path needs an exact typed projection. Broker command remains one fixed argv in the owned Desktop allocation, not arbitrary exec; no runtime pull. |
+
+Every request is strict/size-bounded and carries a short-lived typed
+envelope over role, tenant binding, opaque allocation, sandbox/session,
+generation, fence, Provider revision, operation/request digest and request ID.
+Only the corresponding mTLS Provider principal can exercise the family.
+There is no second per-request signature or repurposed TLS private key.
+The broker binds the authenticated peer, Profile/policy digest and physical
+mapping in its durable receipt. Identical request IDs and digests may query
+safe status or completed results without redispatch; conflicting use fails.
+The broker records physical IDs and the exact ownership template privately;
+it never trusts caller-supplied IDs or exports them to stable APIs. Its
+receipt has `reserved`, `completed`, `unknown` and `released` states; an
+unresolved `unknown` prevents second dispatch or capacity release. This
+physical receipt is **not** a second Provider session or desired-state ledger.
+
+The current host has about 42 GiB free on the workspace filesystem and the
+Docker VM reports 12.53 GB memory, but these figures do not establish enough
+headroom for 78 existing roles plus scanner and renewal peaks. No source/
+image/volume change is made before an exact R/F/E impact and resource budget
+check. Rollback closes new admission, retains unknown run-owned resources for
+quiescence proof and exact cleanup, and restores the old frozen inputs only as
+historical component evidence, **not** an operable Slice 6 topology.
+The active-content policy must inspect bytes independently. The accepted
+first policy is `passive-json-v1`: only actual UTF-8 JSON documents with
+`application/json`, complete parse/EOF, duplicate-key and malformed-Unicode
+rejection, and bounded depth/token/string complexity. HTML/SVG/PDF/Office,
+scripts/executables, archives and text/plain are not initially supported.
+This does not promise arbitrary downstream rendering or prompt-injection
+safety. The stager's prior filename-extension-first MIME detection is being
+removed; injected `true` checkers stay component fixtures, not production
+evidence. Raw EICAR must independently reach the real malware scanner, while
+benign JSON must pass both checks and staging.
+ClamAV's malware verdict cannot substitute for that policy. The observed
+official ClamAV index/arm64 digests above are selected download-verification
+candidates only; no rule database snapshot, engine runtime, test corpus or
+license disposition has yet been verified. The operator-side rule check must
+be real, whole-set and no older than 72 hours; copying or retimestamping old
+files cannot refresh it. Runtime update/networking is forbidden. The
+aggregate hard-cap budget must include all simultaneous roles, allocation
+peaks, helper/build conflicts and 512 MiB Docker VM reserve, not merely RSS.
+Changing the canonical inventory, mount/identity/edge allowlists and driver
+adapters changes the selected source: the old R/F candidate pair cannot be
+relabeled. A new clean source revision must rebuild and independently reload
+the affected repository-local images, prove any unchanged external/published
+images separately, rederive the exact new Profile and issuer-source mappings,
+and run fresh E observations under one run ID. Earlier Guest E and Browser
+crash components remain historical component evidence only; no old receipt
+may be spliced into the revised 16-scenario gate. Failure rolls back only
+the new candidate/config after exact owned-resource accounting, not the
+previous evidence or the locked Provider Contract.
+
+Checkpoint 2026-10-05 (`passive-json-v1` source component, no scanner runtime):
+Sandbox's reviewed boundary is now recorded in ADR 0055 and this audit. The
+new `provider/artifact/staging.PassiveJSONChecker` accepts only a complete
+UTF-8 JSON document with expected `application/json`; it rejects duplicate
+keys (including escaped-equivalent keys), malformed UTF-16 surrogate escapes,
+trailing content, and policy complexity beyond depth 64, 250,000 tokens or
+1 MiB per decoded string/number, with an at-most-6 MiB encoded-string
+preallocation bound. The existing 64 MiB Contract artifact maximum is
+unchanged. One invocation of the closed policy parser enforces token limits
+before allocation and checks cancellation at most every 4 KiB while scanning
+strings, numbers and long whitespace; an individual object key is decoded
+atomically only after its 6 MiB encoded bound, with direct cancellation checks
+before and after key decoding/map insertion. That bounded key decode is not
+interruptible mid-call. The parser does not hand a 64 MiB token to
+`json.Decoder`. Content-based MIME detection uses the staging context and
+propagates cancellation instead of falling back to text/plain. It never
+consults a filename extension. Targeted race/shuffle tests cover benign
+JSON, HTML rejection, MIME/extension mismatch, in-flight cancellation,
+escaped and duplicate keys, valid/invalid JSON grammar and Unicode, exact
+and limit+1 string/number/key/depth/token boundaries, and a legal 64 MiB
+total document. That 64 MiB whitespace-dominated parse allocated under
+8 MiB beyond its already-held input buffer in the targeted test; this is
+not a measured worst-case Stage or large-key-map memory bound. The same
+Stager currently parses valid JSON once for MIME and again in an injected
+`PassiveJSONChecker`; any future production composition must account for or
+remove that duplicate CPU work without bypassing scanner verification.
+The Provider Contract lock verifier passed. Existing generic
+injected-checker tests remain component fixtures; this checker is **not yet
+wired** into production `provider serve`; it does not establish real malware
+scanning, ClamAV rule identity, production scanner transport, coding
+advertisement or staging at the final
+multi-process gate. `stager.Stage` still buffers up to 64 MiB in Provider
+memory; scanner transport and exact Provider peak-memory budget remain open.
+The Stager now treats a checker returning `not_run` without error as an
+unavailable check error, which the existing application maps to
+`outcome_unknown`; it no longer manufactures a content-rejected evidence
+record for a skipped active-content or malware check. Targeted staging and
+application race tests pass; an actual scanner skip/timeout drill remains
+necessary.
+
+The single authorized official-asset fetch completed: Docker pulled
+`clamav/clamav@sha256:6d0680780fd29855cb7018f68272cb520821f614259e2066f8ec669069ac91b3`
+for `linux/arm64`; local inspect reports the same repository digest,
+`arm64/linux`, 186,283,862 bytes and upstream `/init` entrypoint with an
+empty configured user. This is **not** a source-bound scanner image, an SBOM/
+vulnerability/license verification, a rule snapshot or a running scan. The
+upstream root/default-entrypoint configuration is not accepted as the final
+runtime. No container, rule updater or daemon-facing service was started, and
+Phase 6 remains **5/15**.
+
+Current-VM admission arithmetic is already negative before a new complete
+Profile exists. The old source-bound arm64 candidate's conservative
+`browser_desktop_active` hard-cap sum is 8,896 MiB
+(`internal/phase6profilebuilder/resource_seccomp_test.go`), including its five
+external services. Adding only the reviewed scanner's 4,096 MiB and the
+minimum 512 MiB Docker VM reserve yields 13,504 MiB. The observed Docker VM
+has 12,526,370,816 bytes, about 11,946 MiB, so this lower bound is short by
+about 1,558 MiB **before** the new control service, two agents, dynamic coding
+allocation, helper/build conflicts or daemon/kernel overhead. This arithmetic
+does not claim a measured new Profile or production capacity. It does forbid
+starting the complete revised topology on the current VM without a separately
+reviewed resource/environment change; no VM setting, existing cap or cache
+was changed to hide the shortfall. The old envelope's CPU quota sum is 9,450
+millicores; adding the candidate scanner's 2,000 gives 11,450 millicores
+before new roles against the observed 10-vCPU VM. Unlike hard memory
+reservation, summed CPU quotas alone do not prove an OS startup refusal;
+actual concurrency, overcommit policy and deadline behavior require a
+complete revised envelope and load observation. No timeout was extended.
+
+Final validation of this source-component checkpoint: the repository-wide
+`go test -race -shuffle=on -count=1 ./...` exited 0 with
+`internal/phase6security` taking 337.488 seconds; ordinary `go vet ./...`,
+both Provider and Product Contract lock verifiers, tagged Slice 6 gate
+compile/race and tagged vet, plus `git diff --check` exited 0. The tagged
+offline-input test's actual positive path is opt-in and remained skipped;
+the separately allowed 20-minute six-input source-bound rerun was **not**
+spent. No new scanner/broker/Provider PID, Vault issuer or final 16-scenario
+gate was run. This is not a Slice 6 success receipt or a Phase 6 manifest.
+
+Checkpoint 2026-10-05 (private scanner source components, still no v3
+composition): `internal/artifactscanner` now has a strict canonical private
+authority/response protocol, a bounded Unix-only ClamD `INSTREAM` adapter,
+an mTLS scanner service and client, one shared scan/readiness permit, exact
+Profile/rule/body/request bindings, and a canonical Profile-digest-pinned
+three-file rule verifier. The verifier checks actual file bytes, version
+floors, a 72-hour asserted operator-check time and in-process clock rollback;
+the manifest is mode 0600. It does not introduce an unapproved rule-signing
+private key. This source verification does **not** prove official-current
+rules, the operator receipt, engine-loaded identity or an immutable deployed
+mount. Tests use tiny fake rule files and injected engine verdicts.
+
+Sandbox review `S6-Scanner-v3-composition-review-20261005` found and corrected
+an accepted-request time bug: validating the original `Retention` again at
+scan time would reject a valid request immediately after acceptance when
+`Deadline = acceptedAt + Retention`. The private authority now validates
+the already accepted structure without restarting that window and uses the
+earliest live context/original request/operation deadline; expired or
+early/future responses fail. A real TLS partial-body test repeated three
+times under race proves timeout releases the sole capacity slot; policy
+rejection does not invoke malware scanning; simultaneous expensive ready
+verification is bounded. A scanner peer monitor is now required on the
+server, and the client requires an injected non-keepalive guarded TLS
+transport and monitor rather than silently building a default dialer.
+An injected peer-loss test closes an already established TLS scan, returns no
+clean result, releases the one scan permit and refuses subsequent readiness;
+five targeted race/shuffle repetitions pass. The peer in that test is an
+in-memory monitor, not the production CRL/agent source.
+Existing `phase6tls` Profile/agent/CRL assembly is **not yet wired** to this
+component, so no established-peer revocation claim follows from the test
+double. Scanner Client/Server v3 Profile entries, production Provider
+composition, whole-set official check, loaded-engine proof, and complete
+resource envelope are still missing.
+
+Two isolated real-engine diagnostics failed and are retained as failures,
+not successful scanner evidence. The first Docker attempt could not mount
+the host's private temporary tree because Docker Desktop did not share it.
+The second started a candidate container from the exact local image but
+readiness did not appear within 60 seconds; `--rm` removed the exited
+container before an exit/OOM/log diagnosis could be captured. Afterward,
+the exact test-name container query was empty; a separate directory query
+mistakenly included a leading dot that the actual `sr-clamd-real-*` prefix
+did not have, so that query was **not** proof of directory absence. The test's
+exact `t.Cleanup` returned no error, but the earlier diagnostic remains
+incomplete. Neither benign nor EICAR reached a verified real-engine result.
+
+An offline, single-container identity probe then observed the image's
+`/var/lib/clamav` directory as UID/GID `1000:1000`, mode 0700, and the
+`clamav` account as `1000:1000`; the probe's `--rm` container was absent
+afterward. This invalidated the old host-UID attempt. Sandbox also rejected
+the premise that a macOS process can necessarily dial a Linux VM Unix socket
+merely because the shared path is visible. The revised tagged candidate
+therefore cross-compiles a small current-source Go probe and runs it **inside
+the same Linux ClamAV container** at fixed non-root `1000:1000`; it checks the
+three image-embedded rule bytes, starts `clamd`, and calls this repository's
+`NewClamd/Ready/Scan` on a private owned tmpfs socket. It has no raw TCP or
+host writable socket mount. The only host mount is one exact read-only,
+non-secret probe binary directory. It fixes `--pull=never`, exact image index,
+no network, read-only root, 4 GiB/2 CPU/64 PID, bounded Docker output and
+contexts, process exit/OOM/log observation, owner-labelled exact removal and
+successful Docker absence query. Linux/arm64 cross-build and tagged
+compile/skip pass. Sandbox approved one exact local trial under
+`S6-Clamd-single-container-local-trial-approved-20261005`; it passed in
+12.78 seconds (full Go command 13.244543375 seconds). The source-subset
+digest was `sha256:b7a70b03683707b59e757e25956cc3536ebcfcd2782a6932ba7be259df28ac75`
+(not a complete clean source-tree digest), with HEAD
+`c22d5340e3ea30ea67e3e0fc64be00c5e147cd63` and a dirty worktree.
+Go 1.26.8 built the Linux/arm64 CGO-disabled tagged probe binary at
+`sha256:fdfeeaa4a9079a02aa640c267f7f8d444f400d396611d6ee3fe7202535beb3ec`.
+Within the one container, the fixed `1000:1000` probe read/hash-checked all
+three image rules, reached real private Unix PING, and obtained
+`benign=clean` plus raw 68-byte `EICAR=infected` from this repository's
+`NewClamd/Ready/Scan` adapter. The fixed configuration digest was
+`sha256:c657038742d626c5fc869ef496095660ed68900b3da6fa57e4e13603aae23de9`;
+rule digests were bytecode
+`sha256:6d4aa01f219e988060fc419f495d07f27e0cdf1a2cccc065971da922c76f7ffb`,
+daily `sha256:0f7520addba76ca2fc500a95a9da946f3f12de512b42f861f7f89a4fddeb2375`,
+and main `sha256:0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`.
+The tagged test asserted stopped exit 0, non-OOM state, owner-label/ID-checked
+removal and successful exact-name absence; a separate post-run query found no
+remaining test container or `sr-clamd-probe-*` host directory. No fourth
+attempt was made. The [bounded raw component receipt](product-phase-6-slice-6-clamd-adapter-component.md)
+retains the non-SKIP output and source/binary/config/rule hashes. This is real
+engine/adapter component evidence only. The
+image-bundled database observed on 2026-10-05 was already older
+than the 72-hour rule window, even though `sigtool --info` reported signature
+verification for `daily.cvd`; it cannot qualify the final rule-set gate.
+The current VM memory shortfall and Phase 6 **5/15** status are unchanged.
+
+Security Profile migration decision (`S6-Security-Profile-v2-boundary-reviewed-20261005`):
+the old v1 closed validator/digest/source remains historical, while the
+revised Docker-control/scanner/storage/rule/resource permissions require
+explicit Profile v2 protocol/version/digest domain and one complete new
+source-derived inventory. This distinction is driven by trust semantics,
+not mechanically by adding four to 78. Current `ProviderProcess` v3 coding
+still assembles both legacy command checkers, so it cannot select scanner
+composition or advertise that new boundary. A v2 draft missing any required
+control, scanner, network, volume, current-rule or peak-resource field is
+non-runnable. The next offline work is v1 byte/digest replay plus v2 closed
+DTO/roster/negative validators, then v3 fail-before-side-effect preflight
+and guarded checker injection. No daemon-facing control service, new issuer,
+full topology or 16-scenario runner was started by this decision.
+
+The first v2 identity slice now adds only Sandbox-approved control, scanner,
+and their two TLS-agent name/kind/role tuples to a separate registry; the
+v1 built-in registry and principal wire/digest remain unchanged. An offline
+fragment checks the provisional 78+4 Profile inventory, unique numeric UID/GID
+and TLS URI, and exact new agent-to-subject delegation. This is **not** the
+final inventory: dynamic coding allocation identities, whole volumes and
+peak envelope still need source-derived bounds. A v1 Profile containing the
+four new identities is rejected. The original v1 Profile test factory has
+map-dependent ordering. A deterministic historical sample sorts its set-like
+mount lists, then freezes canonical document SHA-256
+`27c5d37f02b5f0158d1b576f29a0f890bd1a18b1ba7da01fe19a9c229b0087f0`
+and v1 Profile digest
+`sha256:5eb253af1da927bce2810b9c0b208bf5bc7efc7bd39a3886e28ef802769cfb36`;
+Decode/re-encode must reproduce the exact bytes. Source provenance is HEAD
+`c22d5340e3ea30ea67e3e0fc64be00c5e147cd63`, with historical Git blobs
+`6973a6ef1d4796975c8b72dafbf11c5a9b5b42fb` for `profile_test.go`
+and `f5eb7c67488a554fed32d7058b260e592dcaed6f` for `profile.go`.
+This is frozen v1 byte/digest replay, not merely an implementation-vs-itself
+digest calculation.
+
+The coding Provider v3 serve and direct composition paths now deliberately
+refuse startup before material, PostgreSQL or Docker side effects. Its
+existing implementation still builds two legacy command scanners and a
+daemon-facing lifecycle driver. Until complete Profile v2 authority,
+private scanner and Docker-control composition replace those paths, allowing
+the old code under a v3 production label would violate the reviewed boundary.
+Historical Provider v2 compatibility and Browser/Desktop v3 routes are not
+changed by this coding-specific guard. This is a safety hold, **not** a
+completed implementation or a passing Slice 6 gate; Phase 6 remains **5/15**.
+
+Sandbox decision `S6-Coding-allocation-v2-bounded-plan-reviewed-20261005`
+now fixes the *current local candidate* at two explicit coding slots. This
+does not turn terminal session limits into container capacity or make two a
+production default. The old 78-entry Profile roster includes one-shot jobs
+and Browser/Desktop dynamic templates; 82 is only the provisional v2
+Profile inventory count, not a steady-running process count or final resource
+envelope. Coding needs a dedicated bounded reservation model under existing
+Provider PG operation truth, distinct high UID/GID, `network=none`, and three
+whole named volumes per slot (six allocation data volumes total). Unknown
+physical outcomes hold capacity through restart until exact container/volume
+absence is verified; timeout does not reclaim or redispatch. This remains
+an offline design/coding authorization. It does not approve a new daemon
+service, unreviewed volume ownership helper or full Docker deployment.
+An `internal/codingidentity` offline model now validates explicit finite
+capacity, owner/Profile/template/image/config digest, `network=none`, limits,
+globally supplied UID/GID collision set, and exactly three whole volume
+names per slot. Effective names bind Profile, allocation and generation. Its
+reservation-state test holds two unknown/active slots through serialization,
+rejects a third, refuses replay/cleanup while create outcome is unresolved,
+retains capacity on failed absence callback and rejects an old ticket after
+verified-model cleanup/reuse. These tests use an in-memory absence callback;
+they are **not** PostgreSQL atomicity or physical Docker/volume-absence
+evidence. Sandbox review identified that deleting a cleaned reservation alone
+would allow the old Claim to reserve again. The model now requires an
+`authorize` callback at every Reserve; the eventual Provider PG transaction
+must atomically verify the existing lifecycle operation is accepted and still
+eligible, with exact tenant/allocation/generation/fence/request binding and
+terminal replay rejection. An offline callback negative covers old Claim and
+Reserved-ticket replay after cleanup/restart, but is **not** proof of the
+actual PG coupling. The model has no terminal SessionID, gateway or egress
+authority.
+The cleanup API was then split so the external exact-absence callback runs
+through `ConfirmAbsence` **outside** the future Provider PG row lock; the
+state mutation consumes only its ticket-bound proof and rejects missing or
+stale-fence proofs. This API shape prevents accidental Docker I/O inside the
+locked reservation mutation, but a simulated callback still is not real
+container/three-volume absence evidence.
+
+Sandbox decision `S6-Coding-allocation-origin-approved-20261005` resolved the
+missing AllocationID mapping without a new business table or public field.
+The offline mapping now hashes fixed-order canonical JSON of the persisted
+Provider revision, tenant, sandbox and accepted create operation ID under a
+versioned domain. A separate tenant digest reuses the existing private
+scanner domain. A pure Provider lifecycle-state projection checks exactly
+one matching idempotency record for the original request digest (because
+`StartCreate` does not populate `Operation.RequestDigest`), current initial
+generation/fence/lease, accepted non-cancelled unexpired create, and the
+no-network coding profile. It rejects missing/mixed records, already Running
+or terminal create, and post-create generation drift. It passes repeated
+offline race/shuffle tests and preserves ID across state export/import.
+The next private PostgreSQL adapter increment now wraps that projection in
+`CodingBoundCreateRepository.BeginFirstCreate`: one locked `control_state` row
+loads the initialization marker, finite coding reservations and existing
+lifecycle ledger. It checks the original Accepted create, reserves one of the
+two local-candidate slots, transitions Reserved→Creating, and writes the
+operation to Running plus sandbox to Provisioning in the same commit. It
+cannot replay a committed first permit from Running/Unknown; no Docker I/O
+occurs under the row lock. Initialization requires an explicit external
+clean-namespace callback and cannot silently recreate a missing marker.
+Unit race/shuffle negatives and the real pinned PostgreSQL integration
+`TestProviderTransactionalStateIntegration` passed: 16 contenders across
+two PG clients yielded exactly one first permit, and restart retained the
+Creating ticket while refusing redispatch. That integration's clean callback
+is a component fixture, **not** physical absence evidence. The adapter is not
+yet wired into production coordinator or a complete Profile v2 projection;
+the v3 startup guard remains active. Docker-control receipt/reconciliation,
+real three-volume cleanup, complete v2 admission and the 16-scenario gate
+remain open. No coding create was physically dispatched; Phase 6 remains
+**5/15**.
+
+Sandbox review of the PostgreSQL component found that the prior test cleanup
+removed only the container: the pinned Postgres image declares an anonymous
+`/var/lib/postgresql/data` volume. Earlier runs proved the transaction and
+restart behavior but **not** complete test-resource cleanup; anonymous volumes
+from those historical runs have no retained exact ownership record and were
+not guessed at or pruned. The tagged harness now assigns a run-specific label,
+captures the exact Docker container ID and its single anonymous data-volume
+name, rechecks that identity under an independent bounded cleanup context,
+uses `docker rm -fv` on only that container, and verifies both container and
+that volume absent. The first rerun correctly exposed a case-sensitive
+Docker "no such volume" response parser and failed without promoting the
+result; after fixing the parser, the real pinned-PostgreSQL tagged race test
+passed with exact cleanup. This is still only component evidence, not the
+Slice 6 physical coding-volume cleanup gate.
+
+Sandbox ruling `S6-Coding-coordinator-pending-dispatch-approved-20261005`
+then selected a dedicated optional Coding lifecycle path rather than reusing
+legacy `Driver.Create`/`Inspect`. `CodingLifecycleRepository` binds lifecycle
+reads and `BeginCodingFirstCreate` to the same Provider Store and freezes the
+two local-candidate slot spec digests. The PG transaction now writes the
+existing `provisioning` event with the Running/Provisioning/Creating first
+permit; an event collision aborts all three documents and produces no ticket.
+The coordinator's explicit `NewWithCodingFirstCreate` requires a ticket-only
+`DispatchCodingCreate` capability. Nil dispatch means only accepted/in-flight:
+Operation stays Running, Sandbox Provisioning, slot Creating. Running/Unknown
+recovery never uses legacy `Create` or `Inspect` and returns unresolved until
+exact control receipt handling exists; it cannot rewrite OutcomeUnknown as
+Succeeded. Expired, cancelled, conflict and exhausted attempts do not use a
+stale Accepted snapshot to mark another contender Failed or release a slot.
+After a contested first-permit error, the coordinator performs one bounded
+read-only operation/sandbox readback and preserves the original error with
+`Dispatched=false`; it does not present its earlier Accepted snapshot as the
+current state. Cancelled contexts return promptly, and failed readback is
+reported without fabricated state.
+
+Unit race/shuffle tests cover no legacy fallback, no premature Ready,
+Unknown/restart no redispatch, missing capability and expired first permit.
+The real pinned-PostgreSQL tagged race integration now also goes through the
+coordinator: 16 cross-pool contenders for a second accepted allocation yield
+one ticket-only dispatch; two slots remain held, a third stays Accepted with
+no dispatch, and restart cannot reissue the second permit. A real row-lock
+delay past its deadline, cancellation while waiting for the row lock, missing
+marker/state and corrupt state all reject without dispatch. A deliberately
+conflicting provisioning event proves rollback of the first permit and slot.
+The same real-PG concurrency path checks that conflict losers report the
+winner's durable Running/Provisioning observation without new dispatch.
+The dispatch driver in this integration is a probe, **not** Docker-control or
+physical readiness evidence. The v3 startup guard remains in place; actual
+control receipt, exact three-volume cleanup, complete v2 Profile, full
+resource envelope and the 16-scenario gate remain open. Phase 6 stays
+**5/15**, with no release manifest or push from these component checks.
+
+### 2026-10-05: offline Coding Docker-control authority and receipt component
+
+Sandbox ruling `S6-Control-receipt-ledger-order-and-keys-reviewed-20261005`
+requires the first `Unknown` intent to be durable before a one-time physical
+callback; reopened `Unknown` and ambiguous commits may only be inspected,
+never redispatched. The new private `internal/dockercontrol` component now
+models that order. Its strict Coding authority carries separate request and
+physical-effect keys: changing attempt, fence, policy or request ID cannot
+make a second effect for the same original allocation/creation generation.
+The authority is bound to the Provider-accepted ticket, exact two-slot plan,
+three-volume mapping digest, original deadline, authenticated peer digest
+and current generation. Its canonical decoder rejects noncanonical, unknown,
+duplicate, oversized, expired or drifted input.
+
+The local ledger uses an exclusive private lock, strict bounded canonical
+state plus digest, temporary-file sync, rename and directory sync. An explicit
+clean-namespace check is required for first initialization. A missing ledger
+after initialization does not become an empty ledger. A callback failure or
+restart leaves `Unknown` and preserves the effect tombstone; two unreleased
+effects and 4096 retained records are the closed local-candidate bounds.
+Focused race/shuffle tests exercise replay, changed request/same effect,
+capacity, corruption, missing state, permission drift, cancellation and
+callback ordering. The initializer's clean-namespace callback and physical
+callback in these tests are fixtures, **not** Docker observations. There is
+no completed/released proof transition, daemon activation, mTLS socket, full
+Profile v2, exact container/volume cleanup or full topology gate yet. The
+Coding v3 startup guard stays active; Phase 6 remains **5/15** with no
+production-readiness or push claim from this component.
+
+Sandbox's aggregated review exposed and closed four model-level gaps. First,
+the dedicated Coding dispatcher now receives the Running operation from the
+same PostgreSQL first-permit transaction as its ticket. The authority cannot
+borrow its original deadline from its own wire fields; the Provider verifies
+the operation's create/running/uncancelled identity, deadline and (when
+present) request digest, while preserving the historical empty operation
+digest whose accepted value resides in the idempotency record. It also
+independently derives the allocation ID and matches the frozen plan owner to
+the peer. Second, Control validation uses its own frozen plan, per-slot spec
+map, mapping derivation, policy and authenticated peer, without accessing PG.
+An unreleased physical slot cannot be claimed by a different allocation.
+The persisted complete spec-map digest also rejects a changed unused slot
+after restart, not merely drift in already occupied records.
+Third, the ledger samples a trusted local clock after acquiring its lock and
+after the durable write, bounds callback context by expiry, runs external
+work outside the state lock, and retains the writer lock until in-flight
+callbacks finish or a bounded Close reports non-quiescence. Fourth,
+deterministic pre-write and post-rename failures, queued expiry, post-commit
+expiry/cancellation and callback-time lookup are tested. A test callback is
+still not a Docker operation or a trustworthy completion/absence proof;
+`Completed` and `Released` remain unimplemented. This review does not change
+the **5/15** count, v3 startup guard or live-gate obligations.
+
+Validation of this final component snapshot: `go test -race -shuffle=on -count=1 ./...`
+exited 0 (the longest `internal/phase6security` package
+took 345.159 seconds); `go vet ./...` exited 0; the tagged real pinned-
+PostgreSQL `TestProviderTransactionalStateIntegration` with race/shuffle
+exited 0 after the dedicated dispatcher/Running-deadline change; Provider
+and Product Contract lock verifiers and `git diff --check` exited 0.
+`internal/dockercontrol` plus coordinator repeated race/shuffle count=5
+also passed. These are component/source-bound results, not evidence that
+the daemon-facing process, exact Docker volumes, failover/quiescence, Profile
+v2 or the full 16-scenario gate ran. No Phase 6 count or push change follows.
+
+A separate current-daemon permission probe used the already-local pinned
+Alpine index `sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40`,
+one uniquely named/labelled temporary Docker volume and two `--rm` probe
+containers. With `network=none`, read-only root, all capabilities dropped,
+`no-new-privileges` and UID:GID `57000:58000`, a write to a newly mounted
+named `/workspace` failed `Permission denied`; the volume root inspected as
+`0:0 755`. Both probe containers were absent afterward, and the exact
+labelled test volume was removed. This is **not** the pinned Coding image or
+three-volume release gate. It establishes a concrete incompatibility between
+the approved distinct high-UID slot plan and an unprepared local named
+volume. A restricted, observable daemon-side ownership/preparation design
+and real Coding image test are required; the old host bind/0777 fixture is
+not an acceptable v3 fallback.
+
+The same narrow probe was repeated with the actual published arm64 Coding
+image `ghcr.io/shell-echo/sandbox-runtime-coding-shell@sha256:1996e44f8ddc464f22556bd57f1c69079fe6b1a821b65bd9be24f86619c31bb1`.
+A newly attached named `/workspace` reported `65532:65532 770`, inherited
+from the image directory. Under the same `network=none`/read-only-root/
+drop-all/no-new-privileges options, `57000:58000` failed to write with exit
+1, while image-default `65532:65532` wrote successfully with exit 0. All
+three unique `--rm` probe containers were absent, and the exact labelled
+temporary volume was deleted and verified missing; the pinned image remains
+as a local cache for later gates. This confirms the high-UID mismatch on the
+real image, but is still not a three-volume or exact physical-cleanup gate.
+
+### 2026-10-05: v2-only template and bounded volume-preparation probe
+
+Sandbox ruling `S6-Coding-template-and-volume-prep-probe-reviewed-20261005`
+selected one closed v2 Coding runtime-template projection and a bounded
+current-daemon experiment. The new source-derived template pins the published
+OCI index identity and selected platform/config, embedded image manifest
+command, fixed environment and workdir, network `none`, read-only root,
+all-capability drop, no-new-privileges, pinned seccomp digest, memory/CPU/PID
+limits, exactly three named-volume mount targets, per-slot high UID:GID, and
+one 32 MiB owner-only `/tmp` tmpfs. The template omits the final Profile
+digest to avoid a cycle; a Plan must reference the template digest. This
+fragment does **not** constitute a complete admitted Profile v2. The archive
+generator accepts only `/workspace` or `/outputs` and emits one zero-length
+directory header with fixed slot owner and mode `0770`, no files or caller
+content. Focused race/shuffle component tests pass.
+
+The approved real-daemon probe uses the already-pulled pinned Coding image,
+Docker 29.7.2/API 1.55 on linux/arm64, one uniquely labelled disposable
+container and three uniquely labelled named volumes. Its first invocation
+stopped in local preflight before any Docker creation because the test's slot
+volume-prefix fixture violated the existing exact `codingidentity.Slot`
+rule. After correcting that fixture, the second invocation created exactly
+one stopped container and three volumes, observed the original workspace
+inode as `65532:65532 0770`, then failed its strict post-create
+inspect/template equality check **before** `CopyToContainer`, container
+start, or high-UID write checks. The original failure output did not identify
+the differing field; it cannot be attributed to daemon normalization without
+another observation. The test now reports only the mismatched field name,
+without dumping seccomp or daemon diagnostics. Independent label-filtered
+Docker container and volume listings for run
+`18db83e3f41a3830bdab` were both empty after exact cleanup. No
+archive-put success, ownership change, writable high-UID slot, input/root
+denial, production Control service or release gate is claimed. A further
+physical attempt awaited Sandbox review. The v3 guard remained active and
+Phase 6 stayed **5/15**.
+
+Sandbox review `S6-Coding-volume-prep-aggregate-retry-approved-20261005`
+found that the published image supplies a fixed `PATH` that Docker merges
+into container environment. The v2-only template now freezes the complete
+four-entry environment, the published index/selected-manifest sizes and
+selected config digests for both platforms. The probe's denial check now
+requires the actual `touch` process to exit with a matching permission or
+read-only message; a context or Docker transport failure cannot pass. A
+subsequent single physical attempt again stopped before archive-put, this
+time because the probe incorrectly equated Docker's containerd store image
+ID with the OCI config digest. Only that field differed in its aggregated
+closed-field diagnostic; run `18db849061aeb608c0b8` had exact zero owned
+containers and volumes after cleanup. Existing `ObserveDockerRuntimeImage`
+already binds store ID, selected manifest, original OCI config and RootFS
+diffIDs distinctly. The probe now reuses that verifier and the existing OCI
+archive descriptor/layer-chain checks instead of dropping image identity
+verification.
+
+The separately reviewed corrected attempt `18db84d26d870178c1ec` passed
+the cached published-image index→selected manifest→config→layers check
+before creation, and passed stopped-container/template/actual-image checks.
+Its single `CopyToContainer` of a zero-size USTAR `.` directory into
+`/workspace` returned success with `CopyUIDGID=false` and directory/file
+overwrite disabled, but an independent `CopyFromContainer` immediately
+observed the mount root still owned by `65532:65532` at `0770`, not slot
+`57000:58000`. The probe failed before `/outputs` preparation, container
+start or high-UID write/denial checks. Label-filtered independent Docker
+container and volume queries were empty after exact cleanup. This is a real
+negative result for the proposed root-metadata archive mechanism on Docker
+29.7.2/API 1.55, not a successful volume-preparation gate. The daemon's
+published `go.mod` pins `github.com/moby/go-archive v0.3.3`; that version's
+`Unpack` explicitly skips any tar entry whose cleaned name is `.` before
+metadata application. See the [pinned extractor source](https://raw.githubusercontent.com/moby/go-archive/v0.3.3/archive.go)
+and [daemon extraction path](https://raw.githubusercontent.com/moby/moby/docker-v29.7.2/daemon/archive_unix.go).
+The observed success-without-change is therefore consistent with the exact
+daemon implementation, not proof that the archive safely changed the root.
+No other tar shape or root/helper fallback has been run. Production Control
+activation and complete Profile v2 remain open;
+Phase 6 is **5/15**.
+
+Sandbox ruling `S6-Coding-stopped-preparation-carrier-probe-approved-20261005`
+allowed one different, finite mechanism experiment. The old `.` archive
+shape is no longer the template's preparation mode. The new generator emits
+only two zero-length USTAR directory headers, `workspace` and `outputs`,
+with the exact slot owner and `0770`; the extraction destination is fixed
+`/`. A dedicated never-started preparation carrier uses the same pinned
+image and slot high UID, three named mounts, network `none`, cap-drop ALL,
+no-new-privileges, pinned seccomp and resource bounds. Its rootfs is
+explicitly writable only to pass the daemon's extraction-point check; its
+argv is inert `/bin/false`, and it is deleted before a distinct workload
+container can be created. The latter retains read-only rootfs, original
+manifest command, owner-only bounded `/tmp` and `NoCopy=true` on all three
+volumes. Focused tagged race/shuffle tests check the phase separation,
+wrong slot/policy/plan/phase rejection and archive allowlist. These are
+component checks, not production authority.
+
+The one approved current-daemon run `18db85b5f45aa0b8d203` passed. Its
+cached published-image index→selected-manifest→config→layers chain and both
+container image observations matched the frozen template. Before extraction,
+the newly created workspace and outputs roots were `65532:65532 0770` and
+empty. The stopped carrier remained `created`/not-running/PID 0 with zero
+start time; one `/` archive-put made both roots `57000:58000 0770`, while
+root and read-only inputs metadata remained unchanged. After carrier
+deletion was confirmed, the separately created runtime preserved both
+owners through `NoCopy=true`, retained rootfs read-only and started. Fixed
+high-UID `touch` commands succeeded in workspace, outputs and `/tmp` and
+returned actual exit-1 permission/read-only errors for inputs and the root.
+The tagged test exited 0 in 1.26 seconds. Its exact cleanup and independent
+label-filtered Docker container/volume listings found zero of the two
+containers and three volumes afterward. No new image was pulled/built and no
+root helper or host bind was used. This proves only that the bounded
+two-container preparation mechanism works on this daemon. The production
+Control ledger still has no physical Completed/Released receipt,
+crash/uncertainty recovery and whole-resource cleanup, complete Profile v2,
+scanner/rule/CRL composition or fixed 78-deployment/16-scenario gate.
+Coding v3 startup remains fail-closed and Phase 6 remains **5/15**.
+
+Sandbox independently accepted run `18db85b5f45aa0b8d203` only as a
+current-daemon mechanism component (`S6-Coding-stopped-preparation-component-
+accepted-20261005`). It then approved single-effect, deterministic resource
+inventory and durable `Unknown` before the first physical action, without a
+second per-Docker-command phase ledger (`S6-Coding-single-effect-receipts-and-
+cleanup-reviewed-20261005`). The new offline resource projection derives
+both possible container names and three whole volume names from the same
+frozen Plan/create authority; labels bind effect, authority, Profile, Plan,
+template, slot and exact object role. It is not a create/inspect adapter.
+
+The remaining production proof cannot be shortened to a digest setter or
+caller boolean: `Completed` requires original-daemon raw observation of
+the exact resource set, stopped-carrier removal, runtime policy and actual
+ownership/permissions. Cleanup must have a separate Provider-PG-authorized,
+durably fenced intent before any deletion. A local callback returning,
+client cancellation, flock acquisition, elapsed time or even two exact
+absence reads do not exclude a late Docker daemon create after timeout.
+That branch retains `Unknown` and its UID/capacity claim. Release requires
+external quiescence/fence proof, precise ID/name/label/config-matched deletion
+and independent twice-observed absence of both containers and all three
+volumes, including effect-label inventory; only then may a durable Control
+tombstone precede Provider's PG CAS. This is the next Step 2 test matrix,
+not an assertion that those transitions already exist. Phase 6 is **5/15**.
+
+The offline source now provides that deterministic five-object projection
+and exact-label comparison, plus a separate canonical short-lived cleanup
+authority bound to the original create effect, original birth generation and
+fence, a current Provider `terminate` operation, current generation and
+higher fence. It refuses `Creating` tickets. Receipt schema v2 records this
+cleanup authority orthogonally to `Completed`; the ledger commits it before
+any optional cleanup callback, never infers `Released` from callback success,
+and rejects same-effect replay. Race/shuffle tests exercise source drift,
+stale fences, wrong tenant, callback-after-commit ordering, persistence
+failure before write and after rename, and a deterministic late-effect model
+where two empty reads precede a delayed create. The tests use a deliberately
+constructed `Completed` fixture because no trusted production completion
+observer, daemon quiescence proof, release transition or PG cleanup CAS is
+implemented yet. They are component evidence only; the production guard and
+5/15 count remain unchanged. The offline receipt schema changed from v1 to
+v2 for the cleanup authority field; an old persisted v1 ledger is rejected
+rather than silently reinterpreted or reset. The v2 receipt digest uses a
+separate v2 domain and freezes the original Docker daemon identity digest;
+opening the same ledger against a different daemon fails closed. This is
+still only a binding until a trusted observer supplies the actual daemon
+identity and resource observations.
+
+The reviewed read-only observer now separates `Info.ID` plus a frozen
+endpoint-scope digest from an environment digest of Linux OS type, explicit
+native-architecture mapping, root-path digest and daemon version. It reads
+through one supplied client before/after inventory and rejects drift,
+cancellation, missing/unsafe fields and errors without returning absence.
+The opt-in actual Docker API component run of `TestCodingDaemonInfoObservationRealAPI`
+passed in 0.07 seconds on this host and observed `linux/arm64/v8`; it read
+`Info` twice and made no container, volume, image-build or network mutation.
+Its endpoint scope was a fixture, so it is not authenticated daemon identity,
+not external quiescence and not a production Control or Slice 6 gate.
+
+The adjacent source-only private `readCodingResourceInventory` checks the same
+source-verified template/OCI-config inherited labels, exact two container
+names, three generation-scoped volume names and effect-label listings on a
+single supplied client bracketed by the before/after daemon observation.
+Its deterministic fake-API matrix rejects foreign same-name objects,
+missing/extra inherited or binding labels, unlisted/extra effect resources,
+volume warnings, API errors and cancellation. The returned private IDs and
+presence bits are only one observation. The component does not verify full
+runtime config, authorize deletion, prove daemon quiescence or emit a
+`Completed`/`Released` receipt. The real descriptor→container-label→inventory
+chain and full physical proof remain open; 5/15 is unchanged.
+
+Independent cleanup-model review found and corrected three source-level
+gaps before production wiring: Provider rebinding now permits a legitimate
+earlier parent-context expiry while rejecting any expiry beyond the original
+operation/30-second ceiling and any operation-deadline drift; the cleanup
+request digest is nonempty even when the general lifecycle model would allow
+both idempotency fields absent; and container label matching now combines
+the exact labels from a descriptor-verified pinned OCI image config with the
+eight Control binding labels, rejecting collisions and extras. Volumes still
+use only their closed binding labels. Pure tests cover inherited labels,
+collision, extra/missing labels, parent deadline and blank digest. A future
+Provider PG cleanup transaction must additionally compare the current fence
+high-water mark: being above the create fence alone is not current authority.
+The private Control process never reads Provider PG.
+
+The subsequent read-only client component applies Sandbox ruling
+`S6-Control-unix-only-bounded-observer-reviewed-20261005`: one explicitly
+bound Unix socket, root:root mode `0660`, root-owned non-writable ancestors,
+no symlinks, no environment/context/default endpoint or fallback. Its fixed
+Moby v1.55 client has a restrictive `RoundTripper`, not a response hook:
+the SDK forbids a hook from reading or closing the response Body. The
+transport refuses all unreviewed methods/paths/queries/endpoint Hosts
+before the underlying dial, and reads at most 1 MiB plus one byte before
+SDK decoding, including 404 responses. It rejects oversized, truncated,
+malformed-success, read/close-error and cancelled responses as errors rather
+than `NotFound`; the request and full-inventory ceilings are five and ten
+seconds respectively, without extending a shorter caller deadline. Focused
+race/shuffle tests repeated three times pass for
+socket metadata/path denial, the eight actual SDK inventory requests,
+foreign method/path/host denial before dial and slow-404 cancellation.
+The source does **not** yet authenticate a complete Profile v2/operator
+endpoint or run as a production Control service. It has no trusted complete
+runtime-config observer, external daemon quiescence proof, deletion path or
+`Completed`/`Released` receipt. The current Coding v3 startup guard stays
+active; no fresh mechanism run, issuer, manifest or push was produced and
+Phase 6 remains **5/15**.
+
+Sandbox's independent review then caught three unsafe assumptions in that
+first client draft. A bounded but malformed inspect `404` could still be
+classified by the SDK as NotFound; a syntactically valid `null` container
+list or missing/null `Volumes` field could be decoded as an empty list;
+and a contended mutex could delay cancelled inventory/close callers.
+The correction validates an inspect-404 JSON error envelope/media type
+before SDK classification, validates successful list top-level shapes and
+required `Volumes`, and replaces the blocking mutex with a context-selectable
+single-client admission gate. `CloseContext` reports a timed-out acquisition
+as failure; `Close` uses a bounded context and does not silently mark drain.
+The real SDK is exercised through the transport and inventory for both
+container and volume malformed 404, invalid/empty list shapes, and a valid
+empty inventory. A controlled held-gate test shows the second expired read
+and close return without waiting for the first. Targeted
+`go test -race -shuffle=on -count=3 ./internal/dockercontrol` passes after
+these changes. All 404/list sources in this correction are deterministic
+test transports, not a newly observed physical daemon; native Linux socket
+permission and actual daemon-response conformance remain to be measured.
+This repair does not activate Control or change Phase 6 **5/15**.
+
+Sandbox's final same-batch review found two smaller mismatches: a lowercase
+`volumes`/`warnings` alias can overwrite the independently checked canonical
+field during SDK decoding, and the first ten-second budget began after
+waiting for client admission. Both are corrected. The validator rejects
+case-fold aliases of the two known fields in either order, without making
+unrelated future top-level fields illegal. The same absolute budget is now
+created before queue admission. The SDK→inventory alias matrix and a held-
+gate short-budget test pass in a fresh three-repeat race/shuffle package run.
+
+Under `S6-Control-observer-response-and-budget-closeout-reviewed-20261005`,
+one opt-in local read-only component run of
+`TestCodingReadOnlyEmptyNamespaceRealDaemon` used a unique newly derived
+effect and exactly one frozen test-only Unix SDK client/API 1.55. It made
+exactly nine bounded GETs: Info before/after, five named-object inspects
+and two effect-filtered lists. The observed status counts were four `200`
+and five `404`, with JSON media type on all five `404`s; the strict current
+list parser accepted both empty lists, and the before/after projected
+daemon identity/environment digests matched. The tagged test passed in
+0.03 seconds. No create, delete, build, retry, issuer or new resource was
+involved. Its host endpoint and endpoint-scope digest were test fixtures,
+not the admitted production Profile/operator scope; no raw endpoint,
+daemon ID, path or 404 body is audit evidence. This proves current-daemon
+response compatibility for one empty namespace only, not delayed-effect
+quiescence, exact physical config/metadata, Completed, cleanup, Released,
+PG CAS, Control activation or a Slice 6 release gate. Phase 6 remains
+**5/15** and the Coding v3 startup guard remains active.
+
+Next source-only work follows
+`S6-Control-complete-runtime-observation-scoped-reads-reviewed-20261005`.
+The read-only transport now admits only the template's exact digest-pinned
+image reference, with no query or the frozen native-platform query. Its
+archive branch is initially closed until an exact runtime ID is verified;
+it recognizes only the three roots of this allocation, caps the full
+response at 32 KiB before SDK use, and rejects wrong tar media, status,
+path-stat metadata, owner, mode, extra entries, truncation and nonzero
+trailing bytes. The existing real stopped-carrier probe's container-policy
+comparator was moved unchanged into shared source, except that its selected
+manifest platform comparison now derives arm64/v8 or amd64 from the frozen
+template instead of assuming arm64. Original tagged probe pure tests and
+new read-route/aggregate-tar rejection tests pass. No new physical Docker
+operation was made for these source changes. The live runtime-ID binding,
+descriptor→image inspect chain, full one-budget observation and durable
+Completed transition remain unimplemented. Archive GET can hold a daemon
+container lock and emit an archive event; client cancellation cannot prove
+daemon quiescence. Rollback closes the new observer entry and holds Unknown,
+resources and UID capacity. Phase 6 remains **5/15**.
+
+The subsequent unexported `observeCompleted` source skeleton now combines
+those checks under one pre-admission ten-second deadline, returning a
+Control-private proof only after exact initial and final five-object
+inventories, original-daemon Info equality, a running runtime with full
+shared probe-policy comparison, descriptor-verified index/selected image,
+three bounded empty-root archives and final same-ID inspect. It binds
+authority/effect/Profile/Plan/template/receipt revision and the observed
+digests. The constructor additionally binds exact seccomp bytes to the
+template digest. Positive pure tests exercise the selected-image and
+running-runtime projections; negative tests reject wrong effect, fabricated
+Completed status and zero revision before physical reads, with cancellable
+admission. Three-repeat package race/shuffle passes. No durable Completed
+setter, Provider outcome change, full positive physical chain or production
+Control service exists; the prior 9-GET empty-namespace test does not fill
+that gap. If a late daemon call remains possible, snapshot equality does
+not prove quiescence. This source-only progress leaves **5/15** unchanged.
+
+2026-10-05 follow-up, still fixed Slice 6 Step 2. Sandbox review found
+that the locked Coding image's `/inputs` is root:root `0555`, while only
+`/workspace` and `/outputs` are prepared to the selected high UID/GID and
+`0770`. The bounded archive reader now checks those root-specific owners,
+full directory mode including special bits, and a single PathStat response
+header. The actual HTTP parser has a 16 KiB total response-header ceiling.
+The shared runtime comparator additionally rejects supplementary groups,
+host/other-container namespace sharing, secondary devices/volumes/ports,
+sysctls and unapproved runtime options; single-field mutations are tested.
+The private proof now retains bounded initial/final identity and volume
+metadata, safe runtime-security projections, descriptor observations and
+three empty-root metadata projections, then rechecks them against the frozen
+plan/policy before return. Neither that recheck nor a checksum proves the
+durable ledger revision is still current; there is no Completed setter.
+
+The original cached, digest-pinned Coding image was exported exactly once
+through an explicitly fixed local Unix endpoint to a private 0600 archive
+under Sandbox ruling `S6-Control-cached-image-raw-doc-recovery-approved-20261005`.
+The archive was 6,526,464 bytes. Existing descriptor/layer verifiers accepted
+its index, selected arm64/v8 manifest, config and layers. Only the exact raw
+public metadata bytes were retained in
+`internal/dockercontrol/testdata/coding-oci-arm64-v8/` (index 670 bytes,
+manifest 668 bytes, config 4,037 bytes); their SHA-256 values equal the
+repository publication/config locks. The full tar is not a repository
+fixture. A positive same-client bounded SDK test now walks all 23 expected
+GETs using those bytes, and branch-specific negative tests verify receipt,
+runtime ID/privilege, volume labels, image digest, root metadata, final list
+and daemon drift. Three-repeat targeted race/shuffle and tagged vet passed.
+
+The one conditionally approved real-daemon batch then persisted a single
+Unknown receipt before mutations, created three exact labelled volumes,
+prepared and removed one never-started carrier, and started one separate
+read-only runtime. Every mutation returned success, with no timeout,
+disconnect or retry. The first full observation nevertheless rejected at
+the initial inventory's seventh GET: the Docker Desktop 29.7.2 container
+list reports one extra list-only `desktop.docker.io/ports.scheme=v2` label
+not present in the exact container inspect `Config.Labels`. The inspect has
+the exact 20 expected inherited/binding labels; the list has those same 20
+plus that one key. ID, name and effect match. One bounded read-only diagnosis
+of the *retained same effect* reported Info 200, prep inspect 404, runtime
+inspect 200, three volume inspects 200, then container list 200 and the
+closed label mismatch. The exact effect volume-list read found only the
+three expected local volumes, each with eight binding labels, and no
+warning. No second resource batch, exec/touch, cleanup, Completed or
+Released transition occurred. The durable receipt remained Unknown and the
+runtime plus three volumes stayed retained pending a narrow compatibility
+decision; Phase 6 remained **5/15**.
+
+Sandbox ruling `S6-Control-list-only-metadata-compatibility-and-retained-effect-review-20261005`
+then permitted exactly that one additional key only in container-list
+labels, bounded to 4,096 bytes and never treated as ownership authority.
+Inspect still requires the complete exact 20-key set; list still requires
+every expected key/value, exact single ID/name, no duplicate or extra effect
+object. Any other additional list label is rejected. The raw value of the
+list-only key is not trusted or retained in the ownership proof. Pure tests
+cover the observed `v2` projection and all the forbidden variants. With this
+change, one authorized same-effect, same-runtime read-only recheck completed
+all 23 bounded GETs in 0.22 seconds, including initial/final daemon Info,
+two exact whole-effect inventories, index/selected image, and the three
+empty-root archives. The safe private proof independently rechecked against
+the frozen plan, original OCI bytes and seccomp policy, producing digest
+`sha256:dda5c571f7115857fb755db1c50c035a20d0250eda9a6e313ca7e1cfd005254f`.
+This is component evidence only; the durable receipt is still Unknown.
+
+Under Sandbox ruling
+`S6-Control-retained-effect-proof-persistence-and-cleanup-approved-20261005`,
+one further *same-effect* tagged race integration run repeated the full
+23-GET observation in the same process that performed exact cleanup. Before
+any delete, it exclusively persisted the full minimal proof, 23-request
+trace, original OCI reference and Unknown receipt revision 2 to a private
+0600 file, then fsynced, read back and independently rechecked the record.
+The proof digest remained
+`sha256:dda5c571f7115857fb755db1c50c035a20d0250eda9a6e313ca7e1cfd005254f`.
+After verifying the same runtime ID against its complete frozen policy,
+labels and effect, the absent prep carrier, and all three exact volume
+identities/labels, the run removed that one runtime and those three volumes
+exactly once. Two subsequent complete container/volume inventories each
+reported zero effect resources. The tagged test passed; no second physical
+resource batch or retry occurred.
+
+The observed tool receipt was `exec-30232e79-ce81-4688-a955-dd777907a3b4`
+(`TestCodingExistingUnknownReadOnlyDiagnosis`, test body 0.45 seconds). The
+source snapshot was base HEAD `c22d5340e3ea30ea67e3e0fc64be00c5e147cd63`
+plus uncommitted files; the test source SHA-256 was
+`0012bfde710bfb15d7db7effdbc7681a423aee5f54abc93d851da0a91c257b20`,
+observation source `048445c30476de0c8ed1654f11c9460daca6034d8a4a0450286b472dcdd98ac2`,
+proof recheck source `c1e54bbfa7b61a034c9b441be62e009db5c3383c0e51543d3bed0d498d69f277`,
+inventory source `e2dc125ac88c76bc0f4d992dc79f46e9aba23131c7c08161ee7fa012fdbaef3c`
+and private-record test source
+`a65a3dfc461591b16e9a0de2233d48f8f0318fc5a64cf3ab366b781d51c59791`.
+This identifies the exercised implementation without implying that HEAD
+alone contains the uncommitted changes.
+
+Private retained evidence is in
+`/Users/echo/.codex/phase6-coding-control-3935310749` (directory 0700,
+files 0600): `private-completion-observation-retained.json` SHA-256
+`1df5dcb98ad3c5df3067691e149ef5a7a61b04a7da8b55c93faca7de15227cd6`,
+`private-cleanup-intent.json` SHA-256
+`6359f00fbcbb0d84e89fae72bbe947a7cf488048dd12fa023b5cdab61bf4292c`,
+and `private-cleanup-result.json` SHA-256
+`0d8783b29f8b6a752dbb8a753affadd9db0f6645286d8e770a80d41f5409c81d`.
+The no-longer-needed 6,526,464-byte private OCI tar was moved from its
+temporary directory to the user's Trash as
+`/Users/echo/.Trash/phase6-coding-published-20261005.oci.tar`; the empty
+temporary directory was removed. The private proof/cleanup records were
+not moved or deleted. The tar remains recoverable from Trash.
+The original durable receipt remains Unknown at revision 2; neither
+Completed nor Released was fabricated. The two clean inventories establish
+observed absence after this batch, not a general late-effect quiescence
+fence, production Control activation or a Slice 6 release gate. Sandbox
+accepted this as a component result under
+`S6-Control-complete-observation-and-retained-cleanup-component-accepted-20261005`;
+it does not advance the step. Do not recreate or rerun this physical effect
+to establish the same result. Phase 6 stays **5/15** and the Coding v3
+startup guard remains active.
+
+2026-10-05 live-completion source follow-up, still fixed Slice 6 Step 2.
+Sandbox ruling
+`S6-Control-live-completion-CAS-and-historical-Unknown-boundary-20261005`
+forbids retroactive completion of the now-cleaned test effect. The new
+unexported ledger path accepts only the internally constructed live Unix
+observer after this process's create callback returned unambiguously and
+synchronously. It excludes other local physical dispatch during the bounded
+observation without holding the ledger mutex over Docker I/O, then rechecks
+the original receipt revision, authority, effect, status and closing state.
+A canonical full proof is exclusively written to a 0600 file in a private
+0700 ledger directory, fsynced, read back and rechecked before the atomic
+receipt write; active Completed reads/reopen require the matching evidence.
+Persist-before-write and post-rename ambiguity tests preserve fail-closed
+behavior. Cancellation, close/drain, wrong authority, stale revision,
+reopened/ambiguous Unknown and replay tests do not grant a second physical
+create. Three-repeat targeted race/shuffle passed. This is source/component
+validation, not an activated Control service, daemon late-effect fence,
+Released transition, PG CAS or a formal gate. Phase 6 remains **5/15**.
+
+The next Sandbox review,
+`S6-Control-live-Completed-aggregate-boundary-corrections-20261005`,
+identified three candidate gaps and the source was corrected together.
+The original create authority expiry now bounds the entire normal live
+observation; fake-clock expiry before admission performs zero GET. Expiry
+or cancellation after evidence durability but before receipt commit leaves
+Unknown plus unusable orphan evidence; cancellation after commit reports an
+uncertain response while read-only reconciliation finds Completed. The
+receipt now separately seals the entire canonical evidence envelope and
+retains the original physical proof digest. Reopen rejects missing evidence,
+inner proof drift, noncanonical JSON, capture-time drift and source-state
+digest drift, including when the inner proof digest is unchanged. Unknown
+receipts omit the new field and preserve existing canonical bytes; old
+unsealed Completed prototypes are rejected. The first full race run after
+the initial live path passed, but it predates these three corrections and
+is not the final source candidate gate. No real Docker batch was repeated.
+
+Sandbox accepted the three source corrections as a component under
+`S6-Control-live-Completed-three-boundary-fixes-accepted-20261005` after
+reviewing race/shuffle/count=3 receipt
+`exec-e74232d0-999d-41c1-b1f5-4aaa98629d66` (package 9.392 seconds)
+and full vet receipt `exec-3e112a2d-43e9-46e1-97f2-fd235fa8c274`.
+The reviewed source SHA-256 values were `coding_completion_ledger.go`
+`44896e1ddb279cd607caf0a08cb60b92f09b614119fb6dc01040a255a5c38ccb`,
+its test `8bc6a4248178d8a3af4b6d7dca2ed98a382a16f63dddc02de6f6f0e2663a34a4`,
+`receipt_state.go`
+`97437cc51883b2d503fef68b5578aa0fd0d3c10f7eab734297478cfb15d15521`
+and `receipt_ledger.go`
+`ad18c623b91504c4ddc837903463c557d14fc684285e5f54546adfedbfbb1451`.
+These files are still uncommitted on base HEAD
+`c22d5340e3ea30ea67e3e0fc64be00c5e147cd63`. Acceptance covers this
+source component only; the stable-candidate full race gate is reported
+separately after it finishes.
+
+The stable candidate's required `go test -race -shuffle=on -count=1 ./...`
+then exited zero; its long-running `internal/phase6security` package passed
+in 342.526 seconds, and `internal/dockercontrol` had already passed in the
+same full run. `go vet ./...`, tagged integration compilation and tagged
+vet for the affected packages, the Product Contract lock verifier, `gofmt`
+and `git diff --check` also passed. The tagged integration compile is only
+compile evidence; no second physical Docker batch was run. These checks do
+not turn the Component into a production release gate or advance **5/15**.
+
+2026-10-05 PG current-cleanup source follow-up, still fixed Slice 6 Step 2.
+Under `S6-Coding-current-terminate-and-historical-create-outcome-reviewed-20261005`,
+the private cleanup authority now accepts a fence equal to birth only when
+it represents the current PG highwater; lower fences remain invalid. A
+Provider-owned retirement binding is retained on a Cleaning slot with the
+original claim/authority, current terminate operation/attempt/request,
+generation/fence and Control Completed receipt revision/state/proof/evidence
+digests. The source-only PG triple-row projection checks the current
+accepted terminate and unique idempotency record, original create identity,
+lease/current highwater and trusted in-process Control Completed snapshot,
+then moves Creating/Active to Cleaning, the terminate to Running, the
+sandbox to Terminating and appends the existing event together. The old
+create remains Succeeded or outcome_unknown exactly as stored; no Ready
+intermediate state is published. Control Unknown, wrong IDs, record aliases,
+stale highwater and a second same-fence operation are rejected in pure
+tests.
+
+Sandbox review `S6-Coding-PG-current-cleanup-projection-reviewed-20261005`
+found that the first draft had lost the shorter caller deadline and had
+not checked map-key/value identity for operation and lease reads. Both were
+corrected. The retirement binding now stores the exact canonical cleanup
+envelope and its digest, so a lost PG response can be read back without
+renewing its original clamped expiry. A canceled admission returns no
+permit. Three-repeat race/shuffle of `internal/codingidentity`,
+`internal/dockercontrol` and `provider/adapter/postgres` passed after these
+source corrections. This is not a real two-client PG row-lock or
+crash/restart gate: running the existing tagged PG integration would create
+a new Docker container, which was not done under the no-new-batch ruling.
+The cross-process Control edge, durable cleanup intent/deletion/Released,
+Provider exact release CAS and all full-topology gates remain open. Coding
+v3 stays guarded; Phase 6 remains **5/15**.
+
+2026-10-05 bounded real-PostgreSQL current-cleanup component gate. Sandbox
+approved one aggregated PG-only batch under
+`S6-Coding-PG-cleanup-source-corrections-and-bounded-PG-gate-20261005`.
+The existing `TestProviderTransactionalStateIntegration` reused a single
+locally present digest-pinned `postgres:16-alpine` image without pulling,
+with 512 MiB/one CPU/128-PID limits, a three-minute parent context and
+30-second exact cleanup. Its new test-only input is an explicitly synthetic
+Control Completed receipt; it cannot attest a production Control process or
+authorize Docker. Two actual PostgreSQL clients contended on the same
+`control_state` row with different terminate operations at the same fence.
+Exactly one cleanup authority committed; replay, Control Unknown and stale
+allocation failed. An injected post-event transaction abort rolled back the slot
+and terminating event, and a second client's shorter deadline canceled on
+the held row lock without a write. The original create outcome_unknown
+remained unchanged. The winning exact canonical envelope survived a
+*simulated* lost success response (the test ignored the return value and
+read back independently) and an actual PostgreSQL container restart without
+expiry renewal or a second permit. It did not inject a SQL COMMIT response
+loss or real connection interruption.
+
+The sole tagged run passed on its first attempt in 2.92 seconds of test body
+(3.648 seconds package). The test removed its exact labeled container and
+anonymous volume and verified both absent; a separate read-only label
+inventory returned no containers. The affected tagged packages compiled,
+the untagged full repository race/shuffle/count-one suite and `go vet ./...`
+passed, the Product Contract verifier passed, and `gofmt`/`git diff --check`
+were clean. The full untagged race suite predates only the newly tagged
+integration test source and does not include that tagged test; the tagged
+PG run did not use `-race` or `-shuffle`. The stale allocation test changes
+only the input create authority while leaving the synthetic Completed
+receipt unchanged, so it rejects at admission rather than proving a PG
+new-occupant CAS. A different-fence contest and the public
+`BeginCodingCurrentCleanup` post-commit cancellation branch were not
+exercised. These remain for the later release-CAS aggregate gate; no extra
+PG container is opened now. Sandbox accepted only this bounded component
+under `S6-Coding-PG-current-cleanup-bounded-component-accepted-20261005`.
+No Coding
+Docker effect was recreated. This is a real PG transaction component gate,
+not cross-process Control attestation, exact Control Released/Provider release
+CAS, a 16-scenario Slice 6 gate, a success manifest or production readiness.
+The startup guard remains closed and Phase 6 remains **5/15**.
+
+2026-10-05 Control Released → PG final release CAS source candidate, under
+Sandbox review. An unexported Control path now uses the existing durable
+cleanup-intent transition before any deletion. It binds a sealed original
+completion runtime ID to a fresh full-effect inventory, then uses a separate
+typed Unix client whose transport admits only one exact runtime ID DELETE
+and the three effect-derived whole-volume DELETEs. Each deletion requires
+a net/http-visible 204 with an empty exposed body; that alone cannot prove
+raw late wire bytes or daemon quiescence. Any error, cancellation or uncertain
+response stops the sequence and retains the occupied Completed receipt with
+its cleanup intent. After confirmed mutations, two complete same-daemon
+absence inventories feed a private proof. The full canonical evidence is
+exclusively written at 0600, fsynced and read back before the durable
+Released tombstone. `AbsenceDigest` binds the physical proof and the new
+optional `AbsenceEvidenceDigest` seals the whole envelope; non-Released
+receipts omit the new field. Open/reopen and a targeted Released Lookup or
+snapshot recheck both release evidence and retained completion evidence;
+routine unrelated reads only recheck active Completed evidence. A private
+in-process Released snapshot is
+not cross-process attestation.
+
+The companion PG source-only transaction verifies the exact original
+claim/create operation and idempotency record, stored retirement envelope,
+current terminate operation/attempt/request/generation/fence, sandbox and
+lease highwater, plus Control Released revision/state and the completion and
+absence digests before it removes only that slot/retirement, applies
+ObservedTerminated, updates a Running terminate to Succeeded while retaining
+an already-Unknown terminate, and appends the existing terminated event.
+It does not use a generic `ConfirmAbsence(callback)` as release authority.
+Fake-daemon and pure-state tests exercise normal/reopen/replay, bounded
+DELETE allowlist, failure, cancellation, evidence/commit ambiguity, stale
+proof/occupant and event conflict. No real Coding DELETE was run and no
+mTLS Control/Provider wire is enabled. Sandbox review may change this
+candidate. The Coding v3 guard remains closed; Phase 6 remains **5/15**.
+
+The follow-up Sandbox review
+`S6-Coding-release-source-review-and-bounded-PG-CAS-gate-20261005` required
+five corrections. The pre-delete observation now checks the full frozen
+runtime configuration against the sealed completion proof while allowing a
+config-matching exited runtime; a config drift causes zero DELETE. The
+deletion client's serial admission and CloseContext use a cancellable gate,
+with the five-second mutation budget starting before admission and no lock
+held across network I/O. The PG final CAS compares the current terminate
+deadline to the cleanup authority and accepts a later PG repair only if the
+durable Released timestamp was formed inside the original authority window.
+Historical Released evidence is fully checked on Open/reopen or a targeted
+lookup/snapshot, not scanned on every unrelated ledger read. The 204 check
+asserts only net/http-visible framing and empty body; the fake malformed-204
+test is not raw-wire evidence. Two post-delete full inventories remain
+necessary but do not establish arbitrary future daemon quiescence.
+
+The same approved, single-container PostgreSQL-only final-CAS aggregate
+ran once with `-race -shuffle=on -count=1` and passed on its first attempt
+(shuffle seed `1791191549780953000`; test 3.81 s, package 5.569 s). Two
+real PG clients competed for the same final release and exactly one won.
+The aggregate also exercised a transaction-local higher-fence drift and
+rollback, forced post-event rollback, short row-lock deadline and canceled
+context, simulated lost-return readback, retention of the original create
+Unknown, actual normal first-create of a new occupant in the freed slot with
+old-proof rejection, and PG restart/readback. It used a synthetic Released
+receipt as PG test input, not cross-process Control attestation. The exact
+labeled PostgreSQL container and its anonymous volume were removed and a
+separate read-only labeled inventory was empty. There was no actual COMMIT
+packet loss, persisted competing higher-fence operation, real Coding Docker
+deletion, physical absence attestation or complete 16-scenario Slice 6 gate.
+The Coding v3 guard remains closed; Phase 6 remains **5/15**.
+
+Sandbox then accepted the bounded PG-only final-release component as
+`S6-Coding-PG-final-release-bounded-component-accepted-20261005`, not as a
+cross-process or release gate. The test source and output bind the one real
+PG run described above; there is no reason to recreate it for subsequent
+Control-only corrections. The full untagged repository race/shuffle/count-one
+run on the preceding Control source snapshot passed, including the existing
+long security suite; `go vet ./...` and the Product Contract lock verifier
+also passed. These results predate the following narrowly scoped Control
+patch and are not presented as its full-repository validation.
+
+That review identified four additional Control source boundaries. Pre-delete
+GET admission now checks the mutable observer client only *after* obtaining
+its serial gate, so a CloseContext winner cannot race a queued preflight
+into a nil client. The configuration comparison first validates all three
+realized volumes and at most one exact private `/tmp` tmpfs, then normalizes
+only that optional tmpfs's presence and semantically irrelevant realized
+mount order; the closed pre-delete projection remains in private evidence
+except its non-authoritative diagnostic text, while configured mounts and
+HostConfig.Tmpfs stay in the frozen digest. A
+matching exited runtime may therefore be cleaned up whether Docker reports
+the private tmpfs or omits it; an unknown, duplicated or mismatched mount
+still reaches zero DELETE. The DELETE transport also checks visible
+`Response.TransferEncoding` and explicit nonzero `Content-Length` headers,
+without claiming raw-wire parsing. Finally, daemon `State.Error` text is
+discarded before persistence because it can carry a host path; it never
+serves as cleanup authority. These remain source/fake-daemon checks, not a
+real Coding deletion or full Slice 6 acceptance. Coding v3 stays guarded
+and Phase 6 remains **5/15**.
+
+Sandbox accepted those four corrections under
+`S6-Control-cleanup-four-source-boundaries-accepted-20261005`. The stable
+post-correction repository snapshot passed `go test -race -shuffle=on
+-count=1 ./...` (the security package took 340.317 seconds), `go vet
+./...`, `go run ./cmd/verify-product-contract -source-root .`, `gofmt`
+and `git diff --check`. The Product Contract verifier's tree digest was
+`sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560`;
+this is not a claim that a separately named Provider Contract lock gate ran
+for a later Provider API change. These full-suite results precede the new
+retirement-barrier source below.
+
+Sandbox decision
+`S6-Provider-Control-v2-wire-and-retirement-barrier-reviewed-20261005`
+keeps the fixed Slice 6 Step 2 open. A code audit found that the generic
+`LifecycleRepository` could advance a Coding sandbox's fence/lease through
+`ReserveMutation` while a separate Coding transaction held a durable
+`Cleaning`/`Retirements` slot. That would not admit a new slot occupant, but
+it could leave an already physically deleted effect with its final PG
+release CAS rejected. The chosen correction checks protected lifecycle
+writes against the retirement under the *same* PG singleton-row lock, even
+for a separately constructed generic repository. Conflict is a temporary,
+retryable 503 before acceptance, not a stale-fence fiction; exact replay,
+reads and the same attempt's lawful Unknown report remain. No lock spans
+network/Docker work. A higher fence first wins only if cleanup has not yet
+committed; retirement first wins until trusted Released→final CAS. A new
+supersession protocol or distributed abort service is out of scope.
+
+The first source implementation adds that guard to generic PG lifecycle
+mutations and maps its internal blocked sentinel to the existing Provider
+503 error shape. Pure tests cover highwater, sandbox, lease, terminal
+operation and event drift, exact replay, same-attempt Unknown and unrelated
+sandbox work. This is not yet a real two-client PG barrier run or an active
+Provider↔Control wire. Full Profile v2, authenticated typed wire, real Coding
+physical create/cleanup and the fixed topology gate remain open. The v3
+guard stays closed and Phase 6 remains **5/15**.
+
+The adjacent source-only `internal/codingcontrolprotocol` candidate fixes
+three repository-private Coding actions (`create`, `cleanup`, `status`) under
+one exact version and scope. Canonical, bounded decoding rejects unknown or
+duplicate members, cross-effect cleanup, wrong authenticated peer digest,
+expired physical authorities and future-issued status keys. A historical
+status read may use the original expired authority but cannot renew or
+dispatch it. The closed response has only status, original authority/effect
+digests, Control revision/state digest, completion/absence seals and capture
+time; it has no Docker/container/volume IDs, paths or full private receipt.
+`not_found` carries no absence proof. Pure protocol tests are not mTLS
+identity/CRL evidence, a trusted client constructor, PG final CAS input or
+an activated Control service. The full Profile v2 source and real process
+gate remain missing, so Phase 6 remains **5/15**.
+
+The pending state is explicit: `cleanup_pending` means the original create
+proof and exact cleanup intent are durable, but absence is not yet
+confirmed; a cleanup mutation cannot label the original create's plain
+`completed` state as cleanup success. A malformed `Cleaning` reservation
+whose `Retirements` binding is missing is corruption, not an unprotected
+slot that a generic lifecycle writer may advance.
+
+Sandbox review
+`S6-retirement-barrier-corrections-and-bounded-PG-batch-reviewed-20261005`
+accepted the source boundary and authorized one new, bounded PG-only batch.
+The corrected guard validates finite/sorted/unique reservations, both sides
+of the Cleaning/retirement binding, the canonical historical cleanup envelope,
+and original/current operation, idempotency, sandbox, lease, tenant, network
+and fence bindings. Generic lifecycle writes still use the same singleton
+row lock. Historical create Unknown events use birth generation/fence; an
+old birth fence below current highwater remains rejected by the pre-existing
+State writer. Event time uses one explicit transaction clock with no hidden
+allowance. The wire maps Completed plus durable cleanup intent to
+`cleanup_pending`, rejects a Released timestamp outside the original cleanup
+window, and requires an exact cleanup, current time and a later Control
+revision/state for a read-side release observation. That observation does
+not construct PG-trusted release evidence or attest an mTLS peer.
+
+Sandbox accepted this bounded PG component under
+`S6-retirement-barrier-bounded-PG-component-accepted-20261005`. The one
+approved real PG run used the existing pinned, cached
+`postgres:16-alpine@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28`
+single-container harness, two independent pools in the retirement-first path,
+`--pull=never`, 512 MiB,
+one CPU, 128 PIDs, loopback random port, the original three-minute parent
+deadline and exact container/anonymous-volume cleanup. Command:
+`SANDBOX_RUNTIME_PROVIDER_PROCESS_INTEGRATION=1 mise exec go@1.26.8 -- env -u GOROOT GOFLAGS= GOTOOLCHAIN=local go test -tags=integration -race -shuffle=on -count=1 -run '^TestProviderTransactionalStateIntegration$' -v ./provider/adapter/postgres`.
+It passed once (seed `1791196881993510000`, test body 4.08 seconds, package
+5.814 seconds). The test asserts retirement-first higher-fence/lease/terminal
+rejection with unchanged PG row, independent consumed JTI/replay/highwater,
+same-attempt replay and Unknown/event, unrelated sandbox mutation,
+higher-fence-first rejection of an older cleanup permit through one pool,
+restart retention,
+final CAS preserving Unknown and an old proof unable to displace a new
+occupant. The harness verified its exact container and anonymous volume absent;
+a separate post-run label query found zero containers. Nil/wrong binding and
+old birth-fence rejections are pure tests, not new two-client observations.
+The two ordering checks are sequential committed states; this batch did not
+add a simultaneous generic-mutation-versus-cleanup lock race. Existing
+cleanuppermit/final-CAS tests provide their own two-client concurrency and
+row-lock deadline checks. The synthetic Completed/Released receipts are not
+authenticated Control attestations, and discard-return readback is not
+actual COMMIT packet loss.
+No Control mTLS/CRL edge, real Coding Docker operation, late-effect producer,
+full Profile v2 or topology gate ran. Coding v3 remains guarded and Phase 6
+remains **5/15**.
+
+On the same post-PG source snapshot, the required all-package
+`go test -race -shuffle=on -count=1 ./...` passed (the security package took
+339.978 seconds), as did `go vet ./...`, `go run ./cmd/verify-contract
+-source-root .`, `go run ./cmd/verify-product-contract -source-root .`,
+`gofmt` for changed Go files and `git diff --check`. The Provider lock remains
+at revision `720ad15c343e71f36615dc4499edd5e764178bca`, tree
+`343ffde0819207cf99c005096c336735dd33a735`; the Product tree remains
+`sha256:9490513228774da2e06cc3d01bc65192d37adea89d12d4ad83efdd6ce0f14560`.
+These checks do not replace the missing authenticated Control or topology
+gate, and they do not advance **5/15**.
+
+After that full-suite snapshot, the read-side private Released observation
+helper was narrowed to reject a zero Control revision floor or absent prior
+state digest; this prevents an empty caller-provided floor from appearing
+fresh. Its source and tests, `provider/adapter/postgres` and `providerapi`
+passed `go test -race -shuffle=on -count=3` afterward. The earlier full-suite
+result is not silently attributed to those later lines. Sandbox then ruled
+under `S6-Control-authenticated-observation-layering-reviewed-20261005` that
+the next production path must keep repository pre-read, actual mTLS/CRL
+observation, application binding and PG row-locked CAS separate. A transport
+client may not read PG, and a wire response may not manufacture the local
+Control snapshot. That vertical source path is not yet implemented.
+
+The current post-floor Go source was subsequently rerun with the full
+required `go test -race -shuffle=on -count=1 ./...` and passed (security package
+342.413 seconds); `go vet ./...` passed again. This supersedes the preceding
+full-suite timing for the current source, without changing the component-only
+claim or the **5/15** count.
+
+### Atomic-original Coding PG component extension, 2026-10-05
+
+Sandbox rulings `S6-original-create-envelope-atomic-persistence-reviewed-20261005`,
+`S6-Coding-durable-authority-mode-marker-reviewed-20261005` and
+`S6-atomic-original-PG-aggregate-batch-reviewed-20261005` authorized a new
+source and one bounded real-PG component extension. A Coding-only marker
+freezes `atomic-original-envelope` mode and Control policy before permits;
+the first permit persists its exact canonical original authority in the same
+PG transaction. Legacy first-create and local-snapshot cleanup/release reject
+v3 mode, as does a legacy marker mixed with v3 originals. New typed PG
+Completed/Released observation entries recheck marker, exact original,
+retirement and lifecycle tuple under the singleton row lock. The v3
+coordinator carries the original bytes to a focused dispatcher and refuses
+old Driver lifecycle shortcuts. The Control ledger's status projection reads
+receipt, revision and state digest under one lock. These are source/component
+boundaries, not authenticated transport or a runnable v3 composition.
+
+The first authorized PG attempt used source
+`coding_atomic_original_integration_test.go` SHA256
+`35e44b67a20503c4cd4d71d2d287608d1cb11c8ff3604d33c81e273f71f28d4a`.
+The integration-tagged race/shuffle/count-one package exited 1 after a
+4.23-second test body (4.955-second package), seed
+`1791203173252292000`. Its retirement-first overlap fixture prepared a
+new terminate from an older sandbox timestamp. Ordinary
+`ReserveMutation` returned lifecycle conflict before the retirement guard;
+the result did not prove the guard had run. Later release, reuse, restart and
+damage cases therefore had not executed. The failure is retained, not
+retroactively reported as a pass. The harness reported no exact cleanup
+error; a post-run label query was empty and the Docker container/volume
+counts matched the pre-run check.
+
+Sandbox approved one fixture-repair supplement under
+`S6-atomic-PG-fixture-repair-once-reviewed-20261005`. A pure State clone
+test first proved that a lease-expiry change passes ordinary lifecycle
+validation after cleanup but is rejected specifically by the retirement
+barrier. The revised source SHA256 was
+`92ca3bcc767015d656f5df12cd58c8b6c1f01670c43e90d0f572b30213cf36ac`.
+The same `TestProviderTransactionalStateIntegration` with `-tags=integration
+-race -shuffle=on -count=1` exited 0; the package took 6.293 seconds. Go's
+successful output did not print its shuffle seed, so no seed is claimed.
+The one cached pinned PostgreSQL container kept `--pull=never`, 512 MiB,
+one CPU, 128 PIDs, a loopback random port, a three-minute parent context,
+one-second Store operations and exact 30-second cleanup. The additional
+database existed only inside this disposable container.
+
+The successful run covers the rejected clean-check bootstrap with unchanged
+documents/revision; zero-record v3 rejection by another legacy instance;
+legacy local cleanup/release rejection; a canceled, visibly row-queued
+first permit with no commit; one winning first permit across two pools and
+exact original readback; wrong-policy read/mutation rejection; controlled
+retirement-first row queues in both pools where only Begin commits and an
+otherwise-valid lease update receives `ErrRetirementBlocked` without lease,
+operation or fence drift; the inverse higher-fence-first queued commit where
+the other pool's old cleanup receives no permit/retirement; typed PG
+Completed→Released CAS supplied by an explicitly synthetic Observer; original
+retention after release and slot reuse; PostgreSQL restart readback of both
+historical and new-occupant originals; and rejection of another accepted
+create after isolated missing-original or mixed-marker damage, with unchanged
+row bytes/revision for each rejected attempt. The test's exact run-owned
+container ID/name/label/anonymous-volume cleanup reported no error. After
+the run, the label-filtered container list was empty, total containers were
+zero, and total local volumes were 144, equal to pre-run. The run does not
+simulate actual COMMIT-packet loss or a production Control peer.
+
+Targeted five-package race/shuffle/count-three, tagged PG compilation,
+`go vet ./...`, Provider/Product Contract locks and `git diff --check` passed
+on the relevant source checkpoints. A full `go test -race -shuffle=on
+-count=1 ./...` also exited 0 during this work, but the fixture and two
+legacy pre-read checks changed after it began; that full-suite result is not
+claimed for the final PG supplement snapshot. No Control mTLS/CRL process,
+real Coding Docker deletion/absence, full Profile v2, fixed 16-scenario gate
+or Slice 6 manifest followed. Coding v3 startup remains guarded; Phase 6
+remains **5/15**.
+
+### Profile-v2 inventory cross-check checkpoint, 2026-10-05
+
+Sandbox confirmed an independent `ProfileV2` type, strict decoder/validator
+and v2 digest domain; the frozen v1 `Profile` wire, digest and validator remain
+unchanged. The current v2-only static identity fragment now rejects drift of
+historical principal digests/authorization and missing or crossed historical
+TLS delegation, in addition to its four new principals. It remains a
+fragment, not a runnable Profile v2.
+
+A new v2-only Coding slot subcheck intersects the two Coding UIDs/GIDs and
+six whole-volume prefixes with all 82 provisional static identities and
+Browser/Desktop workload/gateway slots. This exposed a real fixture gap:
+isolated Coding template GIDs `58000/58001` collide with the existing
+`gateway-postgres-tls-agent` and `product-migration-postgres-tls-agent` GIDs;
+`57000` also collides with a historical TLS agent GID. The cross-inventory
+test preserves those collisions as negatives and uses `57500/57501` only
+for its positive fixture. These are not selected production IDs.
+
+Conservative v2 resource arithmetic now counts all 80 non-template static
+deployments (including every migration bundle, Control, scanner and agents),
+every declared Browser/Desktop workload plus its gateway, both Coding
+workloads, all five external services and a 128-MiB minimum double-parse
+memory allowance. It requires the reviewed scanner cap of 4 GiB, 2 CPU and
+64 PIDs, rejecting missing/surplus limits. This is source arithmetic, not
+real cgroup, daemon/kernel, disk-quota or host-headroom evidence. The full
+v2 document still must bind gateway/external limits and all authority fields
+to one canonical digest and pass the live topology gate. The three focused
+v2 tests passed `-race -shuffle=on -count=3`; no daemon was activated or
+manifest produced. Coding v3 stays closed and Phase 6 stays **5/15**.
+
+The follow-on source draft adds a separate `ProfileV2` Go type and
+`DecodeV2`/`VerifyFileV2` entrypoints. They reject duplicate, unknown,
+oversized, trailing and noncanonical JSON; v2 uses its own digest domain,
+and cross-version decoding fails. A v2-only validator links the static
+identity fragment, slot/resource subchecks, shared pure field checks and
+fixed Control/Scanner scope checks. Focused synthetic boundary tests cover
+the sole daemon socket owner, exact supplementary socket GID, three
+Provider-Control networks and Coding-only scanner route/rules. The v1
+canonical/digest golden test still passes. This is not a complete positive
+Profile-v2 candidate: Control/Scanner command and image-source targets,
+actual TLS/CRL composition, host-scope socket enforcement and final
+source-to-binary image checks do not yet exist. A partial v2 document is
+rejected; `ProfileV2.Validate` also retains an unconditional final admission
+hold so a self-consistent draft cannot become runnable by accident.
+`provider serve v3` remains fail-closed. The earlier full
+repository race run passed before these v2 source files were added, so it
+does not verify this later draft; targeted v2 race, vet, both Contract locks
+and diff-check pass. No change to **5/15** follows.
+
+Sandbox review `S6-ProfileV2-draft-fields-order-reviewed-20261005` found a
+real draft omission: the two new TLS agents could otherwise inherit the
+new-principal TCP listener allowance. Their v2-only field rule now requires
+zero listeners and zero networks, leaving only the declared Unix signer and
+controller sockets. Dedicated negative tests cover both. The v2 field chain
+was split from the final admission hold solely for same-package testing. A
+complete synthetic 82-static plus two-Coding-slot, four-private-network,
+dedicated-TLS, receipt/rule-volume and resource-limit fixture passes that
+unexported field chain. The identical canonical fixture remains rejected by
+public `Validate`/`DecodeV2`. Self-consistent digest mutations at the field
+layer reject wrong protocol/version, Control socket group/receipt/route,
+scanner scope/rules/issuer, TLS-agent listener, identity and Coding slot
+collisions, and resource omission/undercount. The aggregate focused
+`-race -shuffle=on -count=3` run passed (79.252 seconds). All identities,
+digests and rules in this fixture are test-only; this is neither a real
+image/issuer nor permission to remove the production admission hold.
+
+A subsequent package-private Control status HTTP server draft accepts only
+TLS 1.3 with verified client certificates, an exact SPIFFE Provider URI,
+bounded canonical Coding status POSTs and a concrete receipt-ledger
+projection. Its test hook and projector are not exported; no production
+constructor, client, Control OS process or v2 TLS/CRL factory is connected.
+Focused race tests reject plaintext/header peer spoofing, unverified TLS,
+missing handshake verification and loose listener/timeout/profile inputs.
+Follow-on tests exercise the real ledger-locked bound read: a missing record
+returns only `not_found`, while an ambiguously failed create remains
+`unknown` with a sealed Control revision and never gains an absence claim.
+Wrong peer/policy and write-action requests are rejected. A localhost TLS
+1.3 mutual-certificate HTTP round trip confirms the bounded status route,
+wrong content-type and write-action rejection. Its test-only verification
+hook is not a production Profile-v2 CRL guard; there is still no positive
+live fixed-source CRL exchange or source-bound Control command. The full
+repository `go test -race -shuffle=on -count=1 ./...` exited 0 on the
+earlier v2/status-server draft (security package 366.331 seconds); after
+these follow-on status changes, focused `-race -shuffle=on -count=3` passed.
+The v2/public startup holds remain closed and Phase 6 stays **5/15**.
+
+Sandbox decision `S6-ProfileV2-CRL-typed-boundary-reviewed-20261005`
+retains the old peer-CRL source/role wire and digest domains but requires
+explicit Profile-v2 entry points. The new source-level required-set compiler
+derives all ordinary role-owned mTLS directions, the fixed DNS exception and
+nine PostgreSQL-purpose owner edges from one complete synthetic v2 field
+graph. The resulting mapping must contain every required tuple exactly once;
+unknown and missing tuples, wrong direction/anchor/principal, cross-profile
+reuse and a broker-only DNS issuer assigned to Control/Scanner fail. It
+derives Control's three inbound and Scanner's one Coding inbound role
+documents and compiles a scalar-only exact tuple/purpose index. Strict
+canonical decoders compare against independently supplied source/role
+digests. Focused `-race -shuffle=on -count=3` passed for the mapping and
+status transport; this does not demonstrate the controller/agent/role
+independently loading and enforcing that mapping, actual issuer DER/CRL
+freshness, or a live Vault-backed peer. All public v2 validation and
+derivation still fail closed under `ProfileV2.Validate`; there is no Control
+OS process or image-bound activation. Phase 6 remains **5/15**.
+
+Sandbox then found the first synthetic v2 CRL source fixture had invented a
+third PostgreSQL issuer/mount and mapped all non-PostgreSQL edges to a generic
+source. Its passing tests established tuple enumeration only, not the
+approved two-issuer partition; this is retained as a failed review finding,
+not accepted component evidence. The corrected field validator now requires
+exactly two distinct issuer UUIDs and DER digests from the existing `/pki`
+mount. The broker source must match the Profile's DNS broker-client CA, and
+each mapping selects the broker source only when the *verified peer* is one
+of the five fixed egress brokers; all other peers, including Control,
+Scanner, PostgreSQL and the DNS server, select the general source. The
+synthetic positive uses only those two sources. Recomputed-digest negatives
+cover omitted broker source, a used third PostgreSQL issuer, broker/general
+edge swaps, broker UUID/DER drift and coincident issuers. The isolated v2
+mapping test passed `-race -shuffle=on -count=3` after correction. This is
+still pure source validation, not controller policy/Vault enforcement or a
+live CRL handshake; public v2 admission remains closed and **5/15** holds.
+The affected synthetic Profile/CRL and certificate-controller issuer-policy
+tests passed focused race/shuffle/count-three checks. A separate, parallel
+whole-`internal/phase6security` count-three run hit Go's default ten-minute
+test timeout inside the existing large evidence-validation test; it is not a
+passing full-package result or evidence against that test's semantics. The
+required final whole-repository `go test -race -shuffle=on -count=1 ./...`
+then exited 0 without another concurrent heavy security-package run
+(`internal/phase6security`: 383.709 seconds). Final `go vet ./...`, both
+Provider/Product Contract locks and `git diff --check` also passed. These
+are source-quality checks only, not the live Slice 6 release gate.
+
+### Interim old-to-new-computer source checkpoint, 2026-10-05
+
+The operator requested a machine change after the two-issuer correction
+naturally finished. This is a reviewed source checkpoint, not a new Slice 6
+acceptance result. Sandbox identifier
+`S6-ProfileV2-CRL-two-issuer-correction-reviewed-20261005` accepted only the
+corrected component boundary: exact existing `/pki` broker/general sources,
+selection by verified peer, PostgreSQL on general. The earlier invented
+third-issuer fixture is a failed review finding. The final corrected source
+passed the required whole-repository race/shuffle/count-one test, vet, both
+Contract locks and diff check. Focused affected v2 CRL/Profile, status
+transport and certificate-controller issuer-policy count-three runs passed;
+the concurrently attempted entire security package count-three timed out
+at Go's default ten minutes in a pre-existing large evidence-validation
+test. Do not report that timeout as a passing three-run suite. No source
+behavior changed after the final count-one run; the subsequent checkpoint
+edits are documentation and Git handoff only.
+
+The fixed step ledger remains: step 1 bounded Guest E component accepted;
+step 2 live startup edges still open; step 3 fresh 78-deployment/16-scenario
+same-run gate and strict evidence review absent; formal step 4 post-gate
+handoff not yet reached. The 82-static Profile-v2 fixture is provisional
+synthetic data, not the 78-deployment release topology. Public Profile-v2
+validation and v3 admission remain held closed. There is no live Controller/
+agent v2 CRL enforcement, Control/Scanner OS process or image, physical
+Coding deletion/absence gate, release manifest or production readiness.
+
+The accepted bounded Guest E run ID is
+`550dba360065dce4f46fa14476225ce5` with clean E
+`a065277e406bf09c4c22d4ce187e1d181e513316` and clean R/F
+`e5816d0d3de0541bd9a677560096b3527f58f7b9`. Its 119-file private
+root `~/.codex/phase6-slice6-run-evidence-Efix.GTGjew/<run-id>/` is 0700;
+final binding SHA256 is
+`e66dc29a217c82e1ae9071b8046c33461afae8d216e488751c9a68e312549177`.
+The separate 0600 gate log under
+`~/.codex/phase6-slice6-run-Efix.CQdy6i/` has SHA256
+`44d2d3337d5893eba37db2658a0e3c366d92c8aa07e6eb660fc66fe208c2c084`.
+Old-host Docker container/network/volume lists filtered by this exact run
+label were all empty at checkpoint. The three Coding private receipt hashes
+and local OCI candidate/rebuild inventory are in the handoff plan; none of
+these files or the ignored `e2e/evidence/` directory is carried by Git.
+Preserve private observations with verified digest and restrictive access;
+do not put their contents or credentials in a source commit.

@@ -38,13 +38,29 @@ func New(repo repository.Repository, driver coordinator.Driver, clock coordinato
 	if err != nil {
 		return nil, err
 	}
+	return newApplication(service), nil
+}
+
+// NewWithCodingFirstCreate opts into the ticket-bound coordinator path. The
+// production coding v3 composition remains fail-closed until the restricted
+// control receipt and Profile-v2 authority are implemented and gated.
+func NewWithCodingFirstCreate(repo coordinator.CodingFirstCreateRepository,
+	driver coordinator.Driver, clock coordinator.Clock) (*Application, error) {
+	service, err := coordinator.NewWithCodingFirstCreate(repo, driver, clock)
+	if err != nil {
+		return nil, err
+	}
+	return newApplication(service), nil
+}
+
+func newApplication(service *coordinator.Coordinator) *Application {
 	workerContext, cancel := context.WithCancel(context.Background())
 	application := &Application{
 		coordinator: service, workerContext: workerContext, cancelWorkers: cancel,
 		workers: make(map[string]struct{}),
 	}
 	application.startLeaseWorker()
-	return application, nil
+	return application
 }
 
 // Recover reconciles provider-local operations that survived a process

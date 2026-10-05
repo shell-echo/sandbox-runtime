@@ -1566,9 +1566,30 @@ func validateTLSAgentBindingsWithPostgresAndMaterial(values []TLSAgentBinding, p
 	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
 	materialSockets []Slice6MaterialSocketBinding, breakGlassSockets []Slice6BreakGlassSocketBinding,
 	principals map[string]Principal, edges map[string]TrustEdge) error {
-	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies))
+	return validateTLSAgentBindingsForVersion(values, postgres, policies, controllerAuthority,
+		credentialSockets, materialSockets, breakGlassSockets, principals, edges, false)
+}
+
+func validateTLSAgentBindingsV2(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
+	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
+	materialSockets []Slice6MaterialSocketBinding, breakGlassSockets []Slice6BreakGlassSocketBinding,
+	principals map[string]Principal, edges map[string]TrustEdge) error {
+	return validateTLSAgentBindingsForVersion(values, postgres, policies, controllerAuthority,
+		credentialSockets, materialSockets, breakGlassSockets, principals, edges, true)
+}
+
+func validateTLSAgentBindingsForVersion(values []TLSAgentBinding, postgres []PostgresClientAgentBinding,
+	policies []EgressPolicy, controllerAuthority CertificateControllerAuthority, credentialSockets []CredentialIssuerSocketBinding,
+	materialSockets []Slice6MaterialSocketBinding, breakGlassSockets []Slice6BreakGlassSocketBinding,
+	principals map[string]Principal, edges map[string]TrustEdge, v2 bool) error {
+	expected := make(map[string]string, len(requiredTLSAgentSubjects)+len(policies)+len(slice6V2TLSAgentDelta))
 	for agent, subject := range requiredTLSAgentSubjects {
 		expected[agent] = subject
+	}
+	if v2 {
+		for agent, subject := range slice6V2TLSAgentDelta {
+			expected[agent] = subject
+		}
 	}
 	policyStorage := map[string]struct{}{controllerAuthority.SelfSocketStorageID: {}, controllerAuthority.CredentialController.SocketStorageID: {}}
 	credentialStorage := make(map[string]struct{}, len(credentialSockets))
@@ -1607,7 +1628,8 @@ func validateTLSAgentBindingsWithPostgresAndMaterial(values []TLSAgentBinding, p
 		_, dynamicSubject := brokerSubjects[value.SubjectDeployment]
 		if value.AgentDeployment <= previous || !agentOK || !subjectOK || !edgeOK || !controllerEdgeOK ||
 			!(staticAgent && staticSubject == value.SubjectDeployment) && !(dynamicSubject && !staticAgent) || agent.Kind != "tls_agent" ||
-			(subject.Kind != "runtime" && subject.Kind != "executor" && subject.Kind != "egress_broker" && subject.Kind != "material_agent") ||
+			(subject.Kind != "runtime" && subject.Kind != "executor" && subject.Kind != "egress_broker" && subject.Kind != "material_agent" &&
+				!(v2 && (subject.Kind == "docker_control" || subject.Kind == "artifact_scanner"))) ||
 			agent.AuthorizationPrincipal == nil || subject.AuthorizationPrincipal == nil ||
 			agent.AuthorizationPrincipal.Role != subject.AuthorizationPrincipal.Role ||
 			value.AgentPrincipalDigest != agent.PrincipalDigest || value.SubjectPrincipalDigest != subject.PrincipalDigest ||

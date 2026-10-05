@@ -19,9 +19,13 @@ var (
 	ErrCorrupt             = errors.New("lifecycle repository is corrupt")
 	ErrDurability          = errors.New("lifecycle repository durability failure")
 	ErrClosed              = errors.New("lifecycle repository is closed")
-	ErrInvalidCursor       = errors.New("lifecycle event cursor is invalid")
-	ErrCursorExpired       = errors.New("lifecycle event cursor is behind retention floor")
-	ErrCursorAhead         = errors.New("lifecycle event cursor is ahead of latest sequence")
+	// A committed Coding retirement temporarily prevents new mutations of
+	// that allocation. The caller may retry after read-only reconciliation;
+	// this is neither a stale fence nor a newly accepted operation.
+	ErrRetirementBlocked = errors.New("lifecycle allocation retirement is in progress")
+	ErrInvalidCursor     = errors.New("lifecycle event cursor is invalid")
+	ErrCursorExpired     = errors.New("lifecycle event cursor is behind retention floor")
+	ErrCursorAhead       = errors.New("lifecycle event cursor is ahead of latest sequence")
 )
 
 type EventPage struct {

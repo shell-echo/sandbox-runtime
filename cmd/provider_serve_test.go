@@ -183,6 +183,30 @@ func TestProviderServeSchemaMatrix(t *testing.T) {
 	}
 }
 
+func TestCodingV3RefusesLegacyCompositionBeforeSideEffects(t *testing.T) {
+	candidate := &config.ProviderProcessConfig{
+		SchemaVersion: config.ProviderProductionSchemaV3,
+		Profile:       config.ProviderProcessCodingShellProfile,
+	}
+	if err := rejectUncomposedCodingV3(candidate); err == nil || !strings.Contains(err.Error(), "Security Profile v2") {
+		t.Fatalf("coding v3 guard = %v", err)
+	}
+	if composition, err := newProductionCodingProvider(context.Background(), candidate, nil, nil, nil); err == nil || composition != nil {
+		t.Fatalf("coding v3 reached repository/Docker composition: %v, %v", composition, err)
+	}
+	for _, other := range []config.ProviderProcessProfile{config.ProviderProcessBrowserProfile, config.ProviderProcessDesktopProfile} {
+		candidate.Profile = other
+		if err := rejectUncomposedCodingV3(candidate); err != nil {
+			t.Fatalf("unrelated Provider profile blocked by coding guard: %v", err)
+		}
+	}
+	candidate.SchemaVersion = config.ProviderProductionSchemaV2
+	candidate.Profile = config.ProviderProcessCodingShellProfile
+	if err := rejectUncomposedCodingV3(candidate); err != nil {
+		t.Fatalf("historical v2 compatibility blocked: %v", err)
+	}
+}
+
 func TestProviderExecutorReadinessRequiresExactVerifiedEndpoint(t *testing.T) {
 	status := http.StatusNoContent
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

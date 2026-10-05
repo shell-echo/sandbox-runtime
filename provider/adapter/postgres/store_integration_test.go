@@ -5,6 +5,7 @@ package providerpostgres
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shell-echo/sandbox-runtime/internal/browserbinding"
 	"github.com/shell-echo/sandbox-runtime/internal/browserhandoffv2"
+	"github.com/shell-echo/sandbox-runtime/internal/codingidentity"
 	"github.com/shell-echo/sandbox-runtime/internal/executorprotocol"
 	"github.com/shell-echo/sandbox-runtime/provider/admission"
 	"github.com/shell-echo/sandbox-runtime/provider/artifact"
@@ -29,11 +31,20 @@ import (
 	desktoprepository "github.com/shell-echo/sandbox-runtime/provider/desktop/repository"
 	providerexec "github.com/shell-echo/sandbox-runtime/provider/exec"
 	"github.com/shell-echo/sandbox-runtime/provider/lifecycle"
+	lifecyclecoordinator "github.com/shell-echo/sandbox-runtime/provider/lifecycle/coordinator"
+	lifecyclerepository "github.com/shell-echo/sandbox-runtime/provider/lifecycle/repository"
 	"github.com/shell-echo/sandbox-runtime/provider/session"
 	"github.com/shell-echo/sandbox-runtime/provider/usage"
 )
 
 const providerPostgresImage = "postgres:16-alpine@sha256:866efe7070b471f3a5397edac0e5edd65c23ff056587c6e47c07d008caaedd28"
+const providerPostgresRunLabel = "sandbox-runtime.phase6.pg-integration"
+
+type providerPostgresOwned struct {
+	ID     string
+	Name   string
+	Volume string
+}
 
 type fixedClock struct{ now time.Time }
 
@@ -49,13 +60,47 @@ func TestProviderTransactionalStateIntegration(t *testing.T) { //nolint:maintidx
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	container := fmt.Sprintf("sandbox-runtime-provider-state-%d-%d", time.Now().UnixNano(), os.Getpid())
-	remove := func() { _ = exec.Command("docker", "rm", "-f", container).Run() }
+	var owned providerPostgresOwned
+	cleaned := false
+	remove := func() {
+		if cleaned {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if owned.ID == "" {
+			// A failed docker run can have created a container without returning
+			// its ID. Inspect only this unique name and verify its run label.
+			var err error
+			owned, err = inspectOwnedProviderPostgres(cleanupCtx, container, container, "")
+			if errors.Is(err, os.ErrNotExist) {
+				cleaned = true
+				return
+			}
+			if err != nil {
+				t.Errorf("identify run-owned PostgreSQL for cleanup: %v", err)
+				return
+			}
+		}
+		if err := removeOwnedProviderPostgres(cleanupCtx, owned); err != nil {
+			t.Errorf("exact PostgreSQL container/anonymous-volume cleanup: %v", err)
+			return
+		}
+		cleaned = true
+	}
 	t.Cleanup(remove)
 	output, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", container,
+		"--label", providerPostgresRunLabel+"="+container,
+		"--pull=never", "--memory=512m", "--cpus=1", "--pids-limit=128",
 		"-e", "POSTGRES_PASSWORD=provider-admin", "-e", "POSTGRES_DB=provider",
 		"-p", "127.0.0.1::5432", providerPostgresImage).CombinedOutput()
 	if err != nil {
 		t.Fatalf("start PostgreSQL: %v: %s", err, output)
+	}
+	containerID := strings.TrimSpace(string(output))
+	owned, err = inspectOwnedProviderPostgres(ctx, containerID, container, containerID)
+	if err != nil {
+		t.Fatalf("capture exact PostgreSQL container and anonymous data volume: %v", err)
 	}
 	portOutput, err := exec.CommandContext(ctx, "docker", "port", container, "5432/tcp").Output()
 	if err != nil {
@@ -120,6 +165,8 @@ REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_provi
 	storeB, _ := New(secondPool, time.Second)
 	now := time.Now().UTC()
 	exerciseProviderRepositories(t, ctx, storeA, storeB, now)
+	codingTicket := exerciseCodingBoundCreate(t, ctx, storeA, storeB, now)
+	codingCoordinatorTicket, codingDispatch := exerciseCodingCoordinatorFirstPermit(t, ctx, storeA, storeB, now)
 	request := admission.MutationGuardRequest{ProviderRevisionID: "provider-revision-1", SandboxID: "sandbox-1", OperationID: "operation-1", AttemptID: "attempt-1", FencingToken: 1, JTIFingerprint: sha256.Sum256([]byte("one-use-jti")), ExpiresAt: now.Add(4 * time.Minute)}
 	var accepted, replayed, failed atomic.Int64
 	var wait sync.WaitGroup
@@ -153,6 +200,8 @@ REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_provi
 	if err := usageRepository.Put(ctx, evidence); err != nil {
 		t.Fatal(err)
 	}
+	cleanupOutcome := exerciseCodingCurrentCleanupPG(t, ctx, storeA, storeB, codingTicket)
+	exerciseCodingRetirementBarrierPG(t, ctx, storeA, storeB, cleanupOutcome)
 	if output, err := exec.CommandContext(ctx, "docker", "pause", container).CombinedOutput(); err != nil {
 		t.Fatalf("pause PostgreSQL: %v: %s", err, output)
 	}
@@ -188,6 +237,39 @@ REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_provi
 	}
 	defer restartedPool.Close()
 	restartedStore, _ := New(restartedPool, time.Second)
+	restartedCoding, err := NewCodingBoundCreateRepository(restartedStore, codingBoundTestPlan())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := restartedCoding.BeginFirstCreate(ctx, "coding-operation-1", codingBoundSpecs(codingBoundTestPlan())); !errors.Is(err, codingidentity.ErrConflict) {
+		t.Fatalf("coding first permit reopened after PostgreSQL restart: %v", err)
+	}
+	restartedCodingLifecycle, err := NewCodingLifecycleRepository(restartedStore, codingBoundTestPlan(), codingBoundSpecs(codingBoundTestPlan()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restartedCodingCoordinator, err := lifecyclecoordinator.NewWithCodingFirstCreate(restartedCodingLifecycle, codingDispatch, fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restartedCodingCoordinator.ReconcileOperation(ctx, "coding-operation-2"); !errors.Is(err, lifecyclecoordinator.ErrUnknownRuntime) {
+		t.Fatalf("coding coordinator inferred ready or redispatched after PostgreSQL restart: %v", err)
+	}
+	if codingDispatch.dispatches.Load() != 1 || codingDispatch.legacyCreates.Load() != 0 || codingDispatch.legacyInspects.Load() != 0 {
+		t.Fatal("coding coordinator used a legacy driver or replayed dispatch after restart")
+	}
+	restoredCoding, err := readState(ctx, restartedStore, codingIdentityStateDocument,
+		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState)
+	if err != nil || len(restoredCoding.Reservations) != 2 ||
+		restoredCoding.Reservations[0].Status != codingidentity.Cleaning ||
+		restoredCoding.Reservations[0].Claim != codingTicket.Claim ||
+		restoredCoding.Reservations[1] != codingCoordinatorTicket {
+		t.Fatalf("coding reservation changed across PostgreSQL restart: %#v, %v", restoredCoding, err)
+	}
+	if retained, err := restartedCodingLifecycle.ReadCodingCleanupEnvelope(ctx, cleanupOutcome.create,
+		cleanupOutcome.terminationID, cleanupOutcome.create.ControlPolicyDigest); err != nil || retained != cleanupOutcome.authority {
+		t.Fatalf("PG restart changed exact cleanup envelope: %#v, %v", retained, err)
+	}
 	restartedGuard, _ := NewAdmissionGuard(restartedStore, fixedClock{now: now})
 	if decision, err := restartedGuard.Reserve(ctx, request); err != nil || decision != admission.MutationGuardReplayed {
 		t.Fatalf("post-restart admission = %v, %v", decision, err)
@@ -221,10 +303,454 @@ REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON sandbox_runtime_provi
 	if retained, err := restartedReference.Get(ctx, "ref:browser-session:00000000000000000000000000000001"); err != nil || retained.RevokedAt == nil || retained.TenantBindingDigest == "" {
 		t.Fatalf("post-restart Browser revoked reference = %#v, %v", retained, err)
 	}
+	finalPool, err := pgxpool.New(ctx, runtimeDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer finalPool.Close()
+	finalStore, _ := New(finalPool, time.Second)
+	finalOutcome := exerciseCodingFinalReleasePG(t, ctx, restartedStore, finalStore, cleanupOutcome)
+	if output, err := exec.CommandContext(ctx, "docker", "restart", container).CombinedOutput(); err != nil {
+		t.Fatalf("restart PostgreSQL after final Coding release CAS: %v: %s", err, output)
+	}
+	portOutput, err = exec.CommandContext(ctx, "docker", "port", container, "5432/tcp").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, port, err = net.SplitHostPort(strings.TrimSpace(string(portOutput)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalDSN := "postgres://provider_runtime:runtime-secret@127.0.0.1:" + port + "/provider?sslmode=disable"
+	waitForProviderPostgres(t, ctx, finalDSN)
+	postReleasePool, err := pgxpool.New(ctx, finalDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer postReleasePool.Close()
+	postReleaseStore, _ := New(postReleasePool, time.Second)
+	postReleaseSlots, err := readState(ctx, postReleaseStore, codingIdentityStateDocument,
+		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState)
+	if err != nil || len(postReleaseSlots.Reservations) != 2 ||
+		postReleaseSlots.Reservations[0] != finalOutcome.newTicket ||
+		len(postReleaseSlots.Retirements) != 0 {
+		t.Fatalf("final PG release/new occupant changed across restart: %#v, %v", postReleaseSlots, err)
+	}
+	postReleaseLifecycle, err := NewLifecycleRepository(postReleaseStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current, err := postReleaseLifecycle.GetOperation(ctx, finalOutcome.terminationID); err != nil ||
+		current.State != lifecycle.OperationOutcomeUnknown {
+		t.Fatalf("final release terminate result changed across restart: %#v, %v", current, err)
+	}
+	if original, err := postReleaseLifecycle.GetOperation(ctx, finalOutcome.createID); err != nil ||
+		original.State != lifecycle.OperationOutcomeUnknown {
+		t.Fatalf("historical create result changed across restart: %#v, %v", original, err)
+	}
+	exerciseCodingHigherFenceBeforeCleanupPG(t, ctx, postReleaseStore, finalOutcome.newTicket)
+	exerciseCodingAtomicOriginalPG(t, ctx, container, port)
 	remove()
-	output, err = exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "name=^/"+container+"$", "--format", "{{.Names}}").CombinedOutput()
-	if err != nil || strings.TrimSpace(string(output)) != "" {
-		t.Fatalf("PostgreSQL container retained: err=%v output=%s", err, output)
+	if !cleaned {
+		t.Fatal("run-owned PostgreSQL container or anonymous volume was not proven absent")
+	}
+}
+
+func inspectOwnedProviderPostgres(ctx context.Context, target, expectedName, expectedID string) (providerPostgresOwned, error) {
+	output, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{json .}}", target).CombinedOutput()
+	if err != nil {
+		message := strings.ToLower(string(output))
+		if strings.Contains(message, "no such object") || strings.Contains(message, "no such container") {
+			return providerPostgresOwned{}, os.ErrNotExist
+		}
+		return providerPostgresOwned{}, fmt.Errorf("docker inspect: %w: %s", err, output)
+	}
+	var observed struct {
+		ID     string `json:"Id"`
+		Name   string `json:"Name"`
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"Config"`
+		Mounts []struct {
+			Type        string `json:"Type"`
+			Name        string `json:"Name"`
+			Destination string `json:"Destination"`
+		} `json:"Mounts"`
+	}
+	if err := json.Unmarshal(output, &observed); err != nil {
+		return providerPostgresOwned{}, fmt.Errorf("decode Docker ownership: %w", err)
+	}
+	if observed.ID == "" || expectedID != "" && observed.ID != expectedID ||
+		observed.Name != "/"+expectedName || observed.Config.Labels[providerPostgresRunLabel] != expectedName ||
+		len(observed.Mounts) != 1 || observed.Mounts[0].Type != "volume" ||
+		observed.Mounts[0].Destination != "/var/lib/postgresql/data" || observed.Mounts[0].Name == "" {
+		return providerPostgresOwned{}, errors.New("Docker container, run label or anonymous data volume differs from this test run")
+	}
+	return providerPostgresOwned{ID: observed.ID, Name: expectedName, Volume: observed.Mounts[0].Name}, nil
+}
+
+func removeOwnedProviderPostgres(ctx context.Context, owned providerPostgresOwned) error {
+	current, err := inspectOwnedProviderPostgres(ctx, owned.ID, owned.Name, owned.ID)
+	if err != nil {
+		return fmt.Errorf("run-owned PostgreSQL identity changed before cleanup: %w", err)
+	}
+	if current != owned {
+		return errors.New("run-owned PostgreSQL identity changed before cleanup")
+	}
+	if output, err := exec.CommandContext(ctx, "docker", "rm", "-fv", owned.ID).CombinedOutput(); err != nil {
+		return fmt.Errorf("remove exact container and its anonymous volume: %w: %s", err, output)
+	}
+	containers, err := exec.CommandContext(ctx, "docker", "ps", "-a", "--no-trunc", "--filter", "id="+owned.ID, "--format", "{{.ID}}").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(containers)) != "" {
+		return fmt.Errorf("container absence not verified: %v: %s", err, containers)
+	}
+	volume, err := exec.CommandContext(ctx, "docker", "volume", "inspect", owned.Volume).CombinedOutput()
+	if err == nil || !strings.Contains(strings.ToLower(string(volume)), "no such volume") {
+		return fmt.Errorf("anonymous data volume absence not verified: %v: %s", err, volume)
+	}
+	return nil
+}
+
+func exerciseCodingBoundCreate(t *testing.T, ctx context.Context, writer, reader *Store, now time.Time) codingidentity.Reservation {
+	t.Helper()
+	plan := codingBoundTestPlan()
+	boundWriter, err := NewCodingBoundCreateRepository(writer, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundReader, err := NewCodingBoundCreateRepository(reader, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Component-only test fixture: this PG exercise creates no coding Docker
+	// resources. Production bootstrap must independently verify exact absence.
+	if err := boundWriter.Initialize(ctx, func(context.Context, codingidentity.Plan) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := boundReader.Initialize(ctx, func(context.Context, codingidentity.Plan) error { return nil }); !errors.Is(err, codingidentity.ErrConflict) {
+		t.Fatalf("coding identity marker was reinitialized: %v", err)
+	}
+	request := lifecycle.CreateRequest{
+		OperationID: "coding-operation-1", AttemptID: "coding-attempt-1", FencingToken: 7,
+		IdempotencyKey: "coding-idempotency-1", RequestDigest: codingTestDigest("a"),
+		Deadline: now.Add(10 * time.Minute),
+		Spec: lifecycle.SandboxSpec{SandboxID: "coding-sandbox-1", TenantID: "coding-tenant-1",
+			WorkOrderID: "coding-work-1", WorkspaceID: "coding-workspace-1", ProviderRevisionID: "provider-revision-1",
+			RuntimeProfile: "sandbox-runtime-coding-shell-v1", Network: lifecycle.NetworkPolicy{Mode: lifecycle.NetworkNone},
+			SandboxSlotKey: "coding/slot-1", LeaseExpiresAt: now.Add(time.Hour)},
+	}
+	sandbox, operation, err := lifecycle.StartCreate(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycleWriter, _ := NewLifecycleRepository(writer)
+	conflicting := codingIntegrationRequest(now, 0)
+	conflictSandbox, conflictOperation, err := lifecycle.StartCreate(conflicting, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lifecycleWriter.ReserveCreate(ctx, conflicting.IdempotencyKey, conflicting.RequestDigest, conflictSandbox, conflictOperation); err != nil {
+		t.Fatal(err)
+	}
+	eventDigest := sha256.Sum256([]byte(conflicting.OperationID + "\x00running\x00provisioning"))
+	if _, err := lifecycleWriter.AppendEvent(ctx, lifecycle.Event{
+		ID: "event-" + fmt.Sprintf("%x", eventDigest[:]), SandboxID: conflicting.Spec.SandboxID,
+		OperationID: conflicting.OperationID, Generation: 1, FencingToken: conflicting.FencingToken,
+		Kind: "conflict", OccurredAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := boundWriter.BeginFirstCreate(ctx, conflicting.OperationID, codingBoundSpecs(plan)); !errors.Is(err, lifecyclerepository.ErrConflict) {
+		t.Fatalf("conflicting provisioning event failed to abort first permit: %v", err)
+	}
+	if operation, err := lifecycleWriter.GetOperation(ctx, conflicting.OperationID); err != nil || operation.State != lifecycle.OperationAccepted {
+		t.Fatalf("event failure retained partial lifecycle transition: %#v, %v", operation, err)
+	}
+	before, err := readState(ctx, writer, codingIdentityStateDocument,
+		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState)
+	if err != nil || len(before.Reservations) != 0 {
+		t.Fatalf("event failure retained first-create slot: %#v, %v", before, err)
+	}
+	if _, err := lifecycleWriter.ReserveCreate(ctx, request.IdempotencyKey, request.RequestDigest, sandbox, operation); err != nil {
+		t.Fatal(err)
+	}
+	var success atomic.Int64
+	var first codingidentity.Reservation
+	var mu sync.Mutex
+	var workers sync.WaitGroup
+	for index := 0; index < 16; index++ {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			bound := boundWriter
+			if index%2 == 1 {
+				bound = boundReader
+			}
+			ticket, running, provisioning, beginErr := bound.BeginFirstCreate(ctx, request.OperationID, codingBoundSpecs(plan))
+			if beginErr != nil {
+				if !errors.Is(beginErr, codingidentity.ErrConflict) {
+					t.Errorf("coding first permit contender: %v", beginErr)
+				}
+				return
+			}
+			if running.State != lifecycle.OperationRunning || provisioning.ObservedState != lifecycle.ObservedProvisioning || ticket.Status != codingidentity.Creating {
+				t.Errorf("incomplete coding first permit: %#v, %#v, %#v", ticket, running, provisioning)
+				return
+			}
+			success.Add(1)
+			mu.Lock()
+			first = ticket
+			mu.Unlock()
+		}(index)
+	}
+	workers.Wait()
+	if success.Load() != 1 {
+		t.Fatalf("coding first permit count = %d, want 1", success.Load())
+	}
+	events, err := lifecycleWriter.ListEvents(ctx, request.Spec.SandboxID, 0, 10)
+	if err != nil || len(events) != 1 || events[0].Kind != "provisioning" || events[0].OperationID != request.OperationID {
+		t.Fatalf("coding first permit/event atomicity = %#v, %v", events, err)
+	}
+	return first
+}
+
+type codingIntegrationDispatch struct {
+	legacyCreates  atomic.Int64
+	legacyInspects atomic.Int64
+	dispatches     atomic.Int64
+}
+
+func (d *codingIntegrationDispatch) Create(context.Context, lifecycle.Sandbox) error {
+	d.legacyCreates.Add(1)
+	return errors.New("legacy coding Docker path must not be called")
+}
+
+func (d *codingIntegrationDispatch) Inspect(context.Context, string) (lifecyclecoordinator.RuntimeObservation, error) {
+	d.legacyInspects.Add(1)
+	return lifecyclecoordinator.RuntimeObservation{State: lifecyclecoordinator.RuntimeReady}, nil
+}
+
+func (d *codingIntegrationDispatch) DispatchCodingCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox,
+	ticket codingidentity.Reservation) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ticket.Status != codingidentity.Creating || ticket.Claim.SandboxID != sandbox.ID ||
+		operation.ID != ticket.Claim.OperationID || operation.Deadline.IsZero() {
+		return codingidentity.ErrConflict
+	}
+	d.dispatches.Add(1)
+	return nil
+}
+
+func codingIntegrationRequest(now time.Time, index int) lifecycle.CreateRequest {
+	identifier := fmt.Sprintf("%d", index)
+	return lifecycle.CreateRequest{
+		OperationID: "coding-operation-" + identifier, AttemptID: "coding-attempt-" + identifier,
+		FencingToken: uint64(index + 6), IdempotencyKey: "coding-idempotency-" + identifier,
+		RequestDigest: codingTestDigest("a"), Deadline: now.Add(10 * time.Minute),
+		Spec: lifecycle.SandboxSpec{SandboxID: "coding-sandbox-" + identifier, TenantID: "coding-tenant-" + identifier,
+			WorkOrderID: "coding-work-" + identifier, WorkspaceID: "coding-workspace-" + identifier,
+			ProviderRevisionID: "provider-revision-1", RuntimeProfile: "sandbox-runtime-coding-shell-v1",
+			Network: lifecycle.NetworkPolicy{Mode: lifecycle.NetworkNone}, SandboxSlotKey: "coding/slot-" + identifier,
+			LeaseExpiresAt: now.Add(time.Hour)},
+	}
+}
+
+func exerciseCodingCoordinatorFirstPermit(t *testing.T, ctx context.Context, writer, reader *Store,
+	now time.Time) (codingidentity.Reservation, *codingIntegrationDispatch) {
+	t.Helper()
+	plan := codingBoundTestPlan()
+	specs := codingBoundSpecs(plan)
+	repoA, err := NewCodingLifecycleRepository(writer, plan, specs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoB, err := NewCodingLifecycleRepository(reader, plan, specs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := &codingIntegrationDispatch{}
+	request := codingIntegrationRequest(now, 2)
+	firstCoordinator, err := lifecyclecoordinator.NewWithCodingFirstCreate(repoA, driver, fixedClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := firstCoordinator.AcceptCreate(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	cancelledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := firstCoordinator.ReconcileOperation(cancelledCtx, request.OperationID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled coding dispatch was admitted: %v", err)
+	}
+	if operation, err := repoA.GetOperation(ctx, request.OperationID); err != nil || operation.State != lifecycle.OperationAccepted {
+		t.Fatalf("cancelled coding first permit changed operation: %#v, %v", operation, err)
+	}
+	var successes atomic.Int64
+	var workers sync.WaitGroup
+	for index := 0; index < 16; index++ {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			repo := repoA
+			if index%2 == 1 {
+				repo = repoB
+			}
+			coordinator, createErr := lifecyclecoordinator.NewWithCodingFirstCreate(repo, driver, fixedClock{now: now})
+			if createErr != nil {
+				t.Errorf("construct coding coordinator: %v", createErr)
+				return
+			}
+			result, reconcileErr := coordinator.ReconcileOperation(ctx, request.OperationID)
+			if reconcileErr != nil {
+				if !errors.Is(reconcileErr, codingidentity.ErrConflict) && !errors.Is(reconcileErr, lifecyclecoordinator.ErrUnknownRuntime) {
+					t.Errorf("coding coordinator contender: %v", reconcileErr)
+				}
+				if errors.Is(reconcileErr, codingidentity.ErrConflict) &&
+					(result.Dispatched || result.Operation.State != lifecycle.OperationRunning ||
+						result.Sandbox.ObservedState != lifecycle.ObservedProvisioning) {
+					t.Errorf("coding conflict returned stale Accepted snapshot: %#v", result)
+				}
+				return
+			}
+			if !result.Dispatched || result.Operation.State != lifecycle.OperationRunning ||
+				result.Sandbox.ObservedState != lifecycle.ObservedProvisioning {
+				t.Errorf("coding coordinator claimed ready or did not dispatch: %#v", result)
+				return
+			}
+			successes.Add(1)
+		}(index)
+	}
+	workers.Wait()
+	if successes.Load() != 1 || driver.dispatches.Load() != 1 ||
+		driver.legacyCreates.Load() != 0 || driver.legacyInspects.Load() != 0 {
+		t.Fatalf("coding coordinator first dispatch counts: successes=%d dispatch=%d legacy-create=%d legacy-inspect=%d",
+			successes.Load(), driver.dispatches.Load(), driver.legacyCreates.Load(), driver.legacyInspects.Load())
+	}
+	events, err := repoA.ListEvents(ctx, request.Spec.SandboxID, 0, 10)
+	if err != nil || len(events) != 1 || events[0].Kind != "provisioning" || events[0].OperationID != request.OperationID {
+		t.Fatalf("coding coordinator first permit/event atomicity = %#v, %v", events, err)
+	}
+	third := codingIntegrationRequest(now, 3)
+	if _, err := firstCoordinator.AcceptCreate(ctx, third); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := firstCoordinator.ReconcileOperation(ctx, third.OperationID); !errors.Is(err, codingidentity.ErrExhausted) {
+		t.Fatalf("third coding allocation did not fail capacity: %v", err)
+	}
+	if operation, err := repoA.GetOperation(ctx, third.OperationID); err != nil || operation.State != lifecycle.OperationAccepted || driver.dispatches.Load() != 1 {
+		t.Fatalf("capacity failure advanced ledger or dispatch: %#v, %v", operation, err)
+	}
+	// A read of Accepted before row-lock acquisition is never enough. The
+	// trusted PG mutation rechecks expiry after the lock becomes available.
+	fourth := codingIntegrationRequest(now, 4)
+	fourth.Deadline = time.Now().UTC().Add(250 * time.Millisecond)
+	if _, err := firstCoordinator.AcceptCreate(ctx, fourth); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := writer.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Rollback(context.Background()) }()
+	var lockedRevision int64
+	if err := lock.QueryRow(ctx, `SELECT revision FROM sandbox_runtime_provider.control_state WHERE singleton FOR UPDATE`).Scan(&lockedRevision); err != nil {
+		t.Fatal(err)
+	}
+	deadlineResult := make(chan error, 1)
+	go func() {
+		_, reconcileErr := firstCoordinator.ReconcileOperation(ctx, fourth.OperationID)
+		deadlineResult <- reconcileErr
+	}()
+	if wait := time.Until(fourth.Deadline.Add(100 * time.Millisecond)); wait > 0 {
+		time.Sleep(wait)
+	}
+	if err := lock.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-deadlineResult; !errors.Is(err, codingidentity.ErrConflict) {
+		t.Fatalf("row-lock wait crossed deadline but first permit was not refused: %v", err)
+	}
+	if operation, err := repoA.GetOperation(ctx, fourth.OperationID); err != nil || operation.State != lifecycle.OperationAccepted || driver.dispatches.Load() != 1 {
+		t.Fatalf("expired row-lock contender advanced ledger or dispatch: %#v, %v", operation, err)
+	}
+	fifth := codingIntegrationRequest(now, 5)
+	if _, err := firstCoordinator.AcceptCreate(ctx, fifth); err != nil {
+		t.Fatal(err)
+	}
+	cancelLock, err := writer.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cancelLock.Rollback(context.Background()) }()
+	if err := cancelLock.QueryRow(ctx, `SELECT revision FROM sandbox_runtime_provider.control_state WHERE singleton FOR UPDATE`).Scan(&lockedRevision); err != nil {
+		t.Fatal(err)
+	}
+	waitCtx, stopWait := context.WithCancel(ctx)
+	cancelResult := make(chan error, 1)
+	go func() {
+		_, reconcileErr := firstCoordinator.ReconcileOperation(waitCtx, fifth.OperationID)
+		cancelResult <- reconcileErr
+	}()
+	time.Sleep(50 * time.Millisecond)
+	stopWait()
+	if err := <-cancelResult; !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled PG row-lock waiter gained a permit: %v", err)
+	}
+	if err := cancelLock.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if operation, err := repoA.GetOperation(ctx, fifth.OperationID); err != nil || operation.State != lifecycle.OperationAccepted || driver.dispatches.Load() != 1 {
+		t.Fatalf("cancelled row-lock contender advanced ledger or dispatch: %#v, %v", operation, err)
+	}
+	exerciseCodingDamagedAuthority(t, ctx, writer, firstCoordinator, driver, third.OperationID)
+	state, err := readState(ctx, writer, codingIdentityStateDocument,
+		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState)
+	if err != nil || len(state.Reservations) != 2 || state.Reservations[1].Claim.OperationID != request.OperationID ||
+		state.Reservations[1].Status != codingidentity.Creating {
+		t.Fatalf("coding coordinator did not retain second slot: %#v, %v", state, err)
+	}
+	return state.Reservations[1], driver
+}
+
+func exerciseCodingDamagedAuthority(t *testing.T, ctx context.Context, store *Store,
+	coordinator *lifecyclecoordinator.Coordinator, driver *codingIntegrationDispatch, operationID string) {
+	t.Helper()
+	var original []byte
+	if err := store.pool.QueryRow(ctx, `SELECT documents FROM sandbox_runtime_provider.control_state WHERE singleton`).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() error {
+		_, err := store.pool.Exec(ctx, `UPDATE sandbox_runtime_provider.control_state SET documents=$1::jsonb WHERE singleton`, original)
+		return err
+	}
+	defer func() {
+		if err := restore(); err != nil {
+			t.Errorf("restore test-owned Provider documents: %v", err)
+		}
+	}()
+	for _, testCase := range []struct {
+		name    string
+		command string
+		want    error
+	}{
+		{"missing marker", `UPDATE sandbox_runtime_provider.control_state SET documents=documents-'coding_identity_marker' WHERE singleton`, codingidentity.ErrInvalidState},
+		{"missing reservations", `UPDATE sandbox_runtime_provider.control_state SET documents=documents-'coding_identity_state' WHERE singleton`, codingidentity.ErrInvalidState},
+		{"corrupt reservations", `UPDATE sandbox_runtime_provider.control_state SET documents=jsonb_set(documents,'{coding_identity_state}','"corrupt"'::jsonb,true) WHERE singleton`, ErrCorrupt},
+	} {
+		if _, err := store.pool.Exec(ctx, testCase.command); err != nil {
+			t.Fatalf("inject %s: %v", testCase.name, err)
+		}
+		if _, err := coordinator.ReconcileOperation(ctx, operationID); !errors.Is(err, testCase.want) {
+			t.Fatalf("%s reopened or silently rebuilt coding authority: %v", testCase.name, err)
+		}
+		if driver.dispatches.Load() != 1 || driver.legacyCreates.Load() != 0 {
+			t.Fatalf("%s caused physical dispatch", testCase.name)
+		}
+		if err := restore(); err != nil {
+			t.Fatalf("restore after %s: %v", testCase.name, err)
+		}
 	}
 }
 

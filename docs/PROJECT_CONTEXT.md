@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-04
+Updated: 2026-10-05
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -13,11 +13,13 @@ The [delivery priorities and handoff plan](plan/product-v1-phase-6-delivery-and-
 records the 2026-10-04 comparator findings, product-positioning hypothesis,
 architecture boundaries, evidence-reuse decisions and next work. Phase 6
 remains **5/15**, with Slice 6 open; component results are not full-topology
-acceptance. After Slice 6 independent acceptance, synchronize the handoff,
-commit, normally push and verify full local/live remote SHAs before advancing
-to Slice 7. Inventory private evidence and local artifacts separately from Git
-so continuation on another computer does not restart completed work. The
-existing authorization and fixed order for Slices 7–15 remain unchanged.
+acceptance. The 2026-10-05 interim source checkpoint is for changing
+computers, not completion of the formal Slice 6 step 4: commit and normally
+push reviewed source, compare full local/upstream/live remote SHAs, and
+inventory private evidence and local artifacts separately from Git. Resume
+Slice 6 step 2 on the new computer; only independent acceptance of step 3
+permits 6/15, and formal step 4 still follows that acceptance. The existing
+authorization and fixed order for Slices 7–15 remain unchanged.
 
 ## Current verified state
 

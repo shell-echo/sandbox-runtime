@@ -1,6 +1,7 @@
 package phase6security
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -958,6 +959,17 @@ func testDigest(value string) string {
 
 func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
 	profile := validProfile()
+	// The historical test factory at HEAD c22d534 (Git blob 6973a6ef for
+	// profile_test.go; Profile implementation blob f5eb7c67 for profile.go)
+	// builds certificate-controller mounts from maps. Sorting only those
+	// set-like mount lists yields a deterministic pre-v2 sample without
+	// changing the v1 wire validator or production candidate builder.
+	for index := range profile.Principals {
+		sort.Slice(profile.Principals[index].Mounts, func(i, j int) bool {
+			return profile.Principals[index].Mounts[i].Target < profile.Principals[index].Mounts[j].Target
+		})
+	}
+	profile.ProfileDigest = profile.Digest()
 	if err := profile.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -965,9 +977,28 @@ func TestProfileAcceptsClosedCompleteInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	unsigned := profile
+	unsigned.ProfileDigest = ""
+	unsignedDocument, err := json.Marshal(unsigned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyDigest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-security-profile/v1\x00"), unsignedDocument...))
+	if profile.ProfileDigest != "sha256:"+hex.EncodeToString(legacyDigest[:]) {
+		t.Fatalf("v1 digest domain drifted: %s", profile.ProfileDigest)
+	}
+	documentHash := sha256.Sum256(document)
+	if hex.EncodeToString(documentHash[:]) != "27c5d37f02b5f0158d1b576f29a0f890bd1a18b1ba7da01fe19a9c229b0087f0" ||
+		profile.ProfileDigest != "sha256:5eb253af1da927bce2810b9c0b208bf5bc7efc7bd39a3886e28ef802769cfb36" {
+		t.Fatalf("frozen pre-v2 v1 sample drifted: %x, %s", documentHash, profile.ProfileDigest)
+	}
 	decoded, err := Decode(document)
 	if err != nil || decoded.ProfileDigest != profile.ProfileDigest {
 		t.Fatalf("Decode() = %#v, %v", decoded, err)
+	}
+	reencoded, err := json.Marshal(decoded)
+	if err != nil || !bytes.Equal(reencoded, document) {
+		t.Fatal("frozen v1 document failed byte-for-byte Decode/Encode replay")
 	}
 }
 

@@ -30,7 +30,7 @@ func importLifecycleState(state *lifecyclerepository.State, document json.RawMes
 func exportLifecycleState(state lifecyclerepository.State) any { return state.Export() }
 
 func (r *LifecycleRepository) mutate(ctx context.Context, mutation func(*lifecyclerepository.State) error) error {
-	return mutateState(ctx, r.store, lifecycleDocument, newLifecycleState, importLifecycleState, exportLifecycleState, mutation)
+	return mutateLifecycleWithRetirementGuard(ctx, r.store, mutation)
 }
 func (r *LifecycleRepository) read(ctx context.Context) (lifecyclerepository.State, error) {
 	return readState(ctx, r.store, lifecycleDocument, newLifecycleState, importLifecycleState)

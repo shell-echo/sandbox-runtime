@@ -108,6 +108,39 @@ func TestStagerRejectsChecksAndPreservesUnknownScannerFailure(t *testing.T) {
 	}
 }
 
+func TestStagerNeverClassifiesSkippedChecksAsContentRejection(t *testing.T) {
+	content := []byte("hello")
+	request := stagingRequest(content)
+	for _, test := range []struct {
+		name    string
+		active  artifact.CheckStatus
+		malware artifact.CheckStatus
+	}{
+		{"active not run", artifact.CheckNotRun, artifact.CheckPassed},
+		{"malware not run", artifact.CheckPassed, artifact.CheckNotRun},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			active := &testContentChecker{status: test.active}
+			malware := &testContentChecker{status: test.malware}
+			root := t.TempDir()
+			stager, err := New(testOutputReader{content: content}, testTenantChecker{status: artifact.CheckPassed}, active, malware, root, ClockFunc(func() time.Time { return stagerTestTime }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if evidence, err := stager.Stage(context.Background(), request, stagerTestTime); evidence.Status != "" || !errors.Is(err, artifact.ErrUnsupportedChecks) {
+				t.Fatalf("skipped check classified as rejection: %#v, %v", evidence, err)
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("staging after skipped check = %d, %v", len(entries), err)
+			}
+			if test.active == artifact.CheckNotRun && malware.calls != 0 {
+				t.Fatalf("malware ran after active check skipped: %d", malware.calls)
+			}
+		})
+	}
+}
+
 func TestStagerStopsWhenRetentionExpiresDuringChecks(t *testing.T) {
 	now := stagerTestTime
 	content := []byte("hello")

@@ -25,6 +25,13 @@ import (
 	providerv1 "github.com/shell-echo/sandbox-runtime/providerapi/v1"
 )
 
+func TestCodingRetirementBarrierMapsToExistingRetryableUnavailable(t *testing.T) {
+	status, code, retryable := mapLifecycleError(repository.ErrRetirementBlocked)
+	if status != http.StatusServiceUnavailable || code != "SANDBOX_PROVIDER_UNAVAILABLE" || !retryable {
+		t.Fatalf("retirement conflict must not masquerade as stale authority: %d %s %v", status, code, retryable)
+	}
+}
+
 type projectionApplication struct {
 	accepted          lifecycle.CreateRequest
 	acceptedDesired   lifecycle.DesiredStateRequest

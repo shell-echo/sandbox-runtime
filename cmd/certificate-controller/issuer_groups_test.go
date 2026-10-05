@@ -80,3 +80,69 @@ func TestFiniteIssuerGroupsKeepDNSBrokerCAExclusive(t *testing.T) {
 		})
 	}
 }
+
+func TestFiniteIssuerGroupsV2FieldsKeepControlScannerOnGeneral(t *testing.T) {
+	brokers := phase6security.Slice6DNSBrokerSubjects()
+	bindings := make([]phase6security.TLSAgentBinding, 0, len(brokers)+2)
+	policies := []workloadpki.Policy{{ID: "ordinary-policy", IssuerSourceID: "general"}}
+	for _, name := range brokers {
+		id := "policy-" + name
+		bindings = append(bindings, phase6security.TLSAgentBinding{
+			SubjectDeployment: name, IssuerPolicyID: id})
+		policies = append(policies, workloadpki.Policy{ID: id, IssuerSourceID: "broker"})
+	}
+	for _, name := range []string{"provider-docker-control", "provider-artifact-scanner"} {
+		id := "policy-" + name
+		bindings = append(bindings, phase6security.TLSAgentBinding{
+			SubjectDeployment: name, IssuerPolicyID: id})
+		policies = append(policies, workloadpki.Policy{ID: id, IssuerSourceID: "general"})
+	}
+	edges := []phase6security.TrustEdge{
+		{ID: "provider-coding-control", From: "provider-runtime", To: "provider-docker-control"},
+		{ID: "provider-coding-scanner", From: "provider-runtime", To: "provider-artifact-scanner"},
+	}
+	external := []phase6security.ExternalService{{Name: "dns", DNSClientCA: &phase6security.DNSClientCA{
+		IssuerID:     "11111111-1111-4111-8111-111111111111",
+		IssuerDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}
+	sources := phase6security.PeerCRLSources{Sources: []phase6security.PeerCRLSource{
+		{ID: "broker", IssuerID: "11111111-1111-4111-8111-111111111111",
+			IssuerDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{ID: "general", IssuerID: "22222222-2222-4222-8222-222222222222",
+			IssuerDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+	}, Edges: []phase6security.PeerCRLEdgeBinding{
+		{EdgeID: "provider-coding-control", Direction: "inbound", SourceID: "general"},
+		{EdgeID: "provider-coding-scanner", Direction: "inbound", SourceID: "general"},
+	}}
+	if err := validateFiniteIssuerPolicyGroupsFields(bindings, edges, external, sources, policies); err != nil {
+		t.Fatalf("v2 source-only finite policy partition: %v", err)
+	}
+	profile := phase6security.ProfileV2{TLSAgentBindings: bindings, TrustEdges: edges, External: external}
+	if validateFiniteIssuerPolicyGroupsV2(profile, sources, sources.Digest(), policies) == nil {
+		t.Fatal("partial v2 policy fixture bypassed formal profile hold")
+	}
+	for name, mutate := range map[string]func(*phase6security.PeerCRLSources, *[]workloadpki.Policy){
+		"Control signing policy gets broker": func(_ *phase6security.PeerCRLSources, p *[]workloadpki.Policy) {
+			(*p)[len(*p)-2].IssuerSourceID = "broker"
+		},
+		"Scanner signing policy gets broker": func(_ *phase6security.PeerCRLSources, p *[]workloadpki.Policy) {
+			(*p)[len(*p)-1].IssuerSourceID = "broker"
+		},
+		"Control peer source gets broker": func(s *phase6security.PeerCRLSources, _ *[]workloadpki.Policy) {
+			s.Edges[0].SourceID = "broker"
+		},
+		"Scanner peer source gets broker": func(s *phase6security.PeerCRLSources, _ *[]workloadpki.Policy) {
+			s.Edges[1].SourceID = "broker"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			changedSources := sources
+			changedSources.Edges = slices.Clone(sources.Edges)
+			changedPolicies := slices.Clone(policies)
+			mutate(&changedSources, &changedPolicies)
+			if validateFiniteIssuerPolicyGroupsFields(bindings, edges, external,
+				changedSources, changedPolicies) == nil {
+				t.Fatal("v2 Control/Scanner broker issuer crossed signing or peer boundary")
+			}
+		})
+	}
+}

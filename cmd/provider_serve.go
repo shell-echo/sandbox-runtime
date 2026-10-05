@@ -74,6 +74,9 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
+	if err := rejectUncomposedCodingV3(providerConfig); err != nil {
+		return err
+	}
 	var securityProfile phase6security.Profile
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
@@ -166,6 +169,19 @@ func providerServeSchemaAllowed(cfg *config.ProviderProcessConfig) bool {
 			(cfg.Profile == config.ProviderProcessDesktopProfile && cfg.DeploymentLevel == config.ProviderLocalCandidateLevel))
 }
 
+// The coding v3 route still constructs the legacy command scanners and a
+// daemon-facing lifecycle driver. The reviewed v2 Profile, private scanner,
+// and Docker-control composition must all exist before this route can start.
+// Keep this guard ahead of material, PostgreSQL, and Docker side effects;
+// schema admission alone is not a production-readiness claim.
+func rejectUncomposedCodingV3(cfg *config.ProviderProcessConfig) error {
+	if cfg != nil && cfg.SchemaVersion == config.ProviderProductionSchemaV3 &&
+		cfg.Profile == config.ProviderProcessCodingShellProfile {
+		return errors.New("coding Provider v3 requires the complete Security Profile v2, private scanner, and Docker-control composition")
+	}
+	return nil
+}
+
 type productionProviderComposition struct {
 	provider   server.Server
 	private    server.Server
@@ -215,6 +231,12 @@ func (s *providerCloseStack) close() error {
 }
 
 func newProductionCodingProvider(ctx context.Context, cfg *config.ProviderProcessConfig, state *providerpostgres.Store, pool *pgxpool.Pool, registry *secretref.Registry) (*productionProviderComposition, error) { //nolint:cyclop
+	if cfg == nil {
+		return nil, errors.New("coding Provider configuration is unavailable")
+	}
+	if err := rejectUncomposedCodingV3(cfg); err != nil {
+		return nil, err
+	}
 	stack := &providerCloseStack{}
 	fail := func(err error) (*productionProviderComposition, error) { return nil, errors.Join(err, stack.close()) }
 	lifecycleRepo, err := providerpostgres.NewLifecycleRepository(state)

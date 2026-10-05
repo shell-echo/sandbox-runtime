@@ -143,3 +143,55 @@ func TestTLSAgentKindIsDistinctAndBrokerRegistrationIsExact(t *testing.T) {
 		t.Fatalf("unregistered broker TLS agent accepted: %v", err)
 	}
 }
+
+func TestSlice6V2RegistryAddsOnlyReviewedControlAndScannerPrincipals(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	legacy, err := NewRegistry(digest, digest, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := NewSlice6V2Registry(digest, digest, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved := []struct {
+		kind Kind
+		name string
+		role Role
+	}{
+		{KindDockerControl, "provider_docker_control", RoleControl},
+		{KindArtifactScanner, "provider_artifact_scanner", RoleScanner},
+		{KindTLSAgent, "provider_docker_control_tls_agent", RoleControl},
+		{KindTLSAgent, "provider_artifact_scanner_tls_agent", RoleScanner},
+	}
+	for _, item := range approved {
+		if _, err := legacy.New(item.kind, item.name, item.role, digest); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("legacy registry accepted %s/%s: %v", item.kind, item.name, err)
+		}
+		principal, err := v2.New(item.kind, item.name, item.role, digest)
+		if err != nil || v2.Validate(principal) != nil {
+			t.Fatalf("v2 registry rejected %s/%s: %v", item.kind, item.name, err)
+		}
+		if legacy.Validate(principal) == nil {
+			t.Fatalf("legacy registry validated %s/%s", item.kind, item.name)
+		}
+	}
+	for _, item := range []struct {
+		kind Kind
+		name string
+		role Role
+	}{
+		{KindDockerControl, "provider_artifact_scanner", RoleControl},
+		{KindArtifactScanner, "provider_docker_control", RoleScanner},
+		{KindDockerControl, "provider_docker_control", RoleProvider},
+		{KindTLSAgent, "provider_docker_control_tls_agent", RoleProvider},
+		{KindTLSAgent, "provider_artifact_scanner_tls_agent", RoleControl},
+		{KindMaterialAgent, "provider_docker_control_tls_agent", RoleControl},
+		{KindController, "provider_docker_control", RoleControl},
+		{KindEgressBroker, "provider_artifact_scanner", RoleScanner},
+	} {
+		if _, err := v2.New(item.kind, item.name, item.role, digest); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("v2 registry accepted cross-kind/role %s/%s/%s: %v", item.kind, item.name, item.role, err)
+		}
+	}
+}

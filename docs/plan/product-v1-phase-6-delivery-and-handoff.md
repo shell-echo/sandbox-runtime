@@ -285,6 +285,259 @@ uncertainty cuts, the three Provider commands, remaining TLS/CRL/network/
 privilege rows and one-run 78-deployment/16-scenario gate remain in step 2/3;
 there is no Slice 6 manifest or release claim, and Phase 6 remains **5/15**.
 
+Step 2 three-Provider source-difference checkpoint (2026-10-05): the existing
+`provider serve` v3 entry selects coding-shell, Browser and Desktop with
+mutually exclusive configurations; the remaining issue is real deployment
+composition/observation, not a new Provider API. The [startup audit](../audits/product-phase-6-slice-6-startup.md)
+now maps each PID's Profile, direct-versus-broker PostgreSQL signer path,
+Contract/private/executor boundary, migration job, and missing final-topology
+probe. Reuse one frozen Profile and its exact private-config archive contract
+for all three; run the separate migration jobs before runtime admission and
+start Browser/Desktop Provider mux and executor backend as a bounded
+dependency group. The source audit alone does not close the three-command
+row, authorize a sixth issuer, or alter the 5/15 count.
+
+Sandbox review `S6-Provider-v3-wiring-scope-reviewed-20261005` keeps this
+work gate-only: derive per-deployment startup and private-file inputs in the
+existing `productphase6gate` helpers using exported final-Profile accessors,
+not a new `internal/phase6security` production projection API or roster.
+The first static draft was discarded after it incorrectly assumed that
+Browser/Desktop Provider PIDs shared a direct PostgreSQL service bridge;
+their paths are broker-only. Coding-shell remains direct. No new issuer,
+runtime-source revision, release or push was authorized.
+
+Subsequent prerequisite audit (2026-10-05) narrows that conclusion: the
+three v3 command entries exist, but the frozen container Profile supplies no
+approved Docker daemon/control channel or daemon-visible writable Provider
+DataRoot/staging roots. Coding-shell also cannot honestly advertise its
+mandatory artifact content checks with the older `/bin/true` test scanner.
+These are open integration/architecture dependencies, not a request to
+weaken the existing Profile or accept a static config as PID1 evidence.
+The gate-only three migration input constructors and cross-job rejection
+matrix remain component drafts pending a source-bound positive run; the
+six-input 20-minute no-issuer rerun has not been spent. Sandbox was asked to decide
+the scoped Docker/storage and fixed real-scanner approach. Phase 6 remains
+**5/15**, with no Slice 6 manifest, push or release claim.
+
+Sandbox subsequently selected one explicit operator-owned, daemon-facing
+typed control principal, separate authenticated coding/Browser/Desktop
+scopes, exact durable Provider state and coding staging volumes, confined
+daemon-managed coding allocation volumes, and a real fixed-asset coding
+scanner plus active-content policy. See ADR 0055 and the startup audit for
+the source-to-input gap and current-daemon observations. This is a direction
+for revising the old frozen inventory, not permission to add a hidden Docker
+socket, start a privileged service, use a `true` scanner or relabel component
+tests as a passing 78/16 topology. The next checkpoint is the concrete
+closed-interface, principal/channel/volume/UID/resource, scanner and failure-
+recovery boundary packet, with old→new inventory and R/F/E impact; the 16
+scenario semantics remain fixed. Sandbox has since reviewed that packet:
+three isolated control networks, direct mTLS without a second message-signing
+key, per-allocation whole coding volumes, `passive-json-v1` content policy,
+and a fixed ClamAV 1.4.6 LTS candidate with a 72-hour verified-rule freshness
+bound and 4 GiB scanner cap. The standalone JSON policy/checker and private
+scanner are source components, not yet wired to `provider serve`. One isolated
+pinned-image ClamD/Unix-adapter probe has now passed real benign/EICAR scans
+with exact cleanup, but its image-bundled rules are stale and it does not
+establish the current-rule, v3 Profile/CRL or complete scanner service gate.
+The current Docker VM has a known hard-cap lower-bound shortfall of
+about 1,558 MiB even before all new roles and dynamic work are counted; no
+full revised topology is admitted on it. The next result must be a source-
+bound typed control/storage/scanner candidate with exact negative tests and
+an updated complete Profile/resource envelope, then separately reviewed
+daemon activation and fresh R/F/E. No full gate has passed, and **5/15** is
+unchanged.
+Sandbox has selected a distinct Security Profile v2 for that revised topology;
+v1 keeps its historical digest and forbidden-Docker semantics. Provider
+Process v3 coding must fail before side effects unless the complete v2
+control/scanner/storage/rule/resource and guarded TLS/CRL bindings are
+present. The accepted one-container ClamD adapter receipt is indexed in the
+[Slice 6 startup audit](../audits/product-phase-6-slice-6-startup.md), not
+promoted to an accepted 16-scenario run.
+The reviewed four new security-principal tuples are now restricted to an
+explicit v2-only registry and an offline provisional identity/TLS-delegation
+fragment. This is not the final dynamic inventory or a complete v2 Profile.
+Coding Provider v3 startup is held fail-closed ahead of material/PG/Docker
+while its old command-scanner/daemon-facing composition remains; Browser,
+Desktop and historical Provider v2 compatibility are unaffected. The hold
+must be removed only after full v2 authority and guarded private composition
+pass their named gates, never by relabelling the old checker path.
+Sandbox has since selected two explicit coding allocation slots for the
+current low-capacity local qualification candidate, with one no-network
+workload and separate inputs/workspace/outputs whole volumes per slot. This
+is not a production capacity default. Unknown create/cleanup outcomes keep
+their slot reserved through recovery; reuse needs exact physical cleanup
+evidence. The Profile v2 candidate and scenario budget must account for these
+slots without interpreting the provisional 82-entry inventory as 82 steady
+processes. Current VM resource shortfall and **5/15** status remain.
+The coding allocation ID is now specified as a deterministic private digest
+of the four persisted accepted-create origin fields, not a terminal SessionID
+or SandboxSlotKey. Pure projection checks the unique existing idempotency
+record for the original request digest and refuses a *new* allocation from
+Running/Unknown/terminal create; the generation frozen at birth must retain
+the same three volumes through later Suspend/Resume. A private same-row
+PostgreSQL component now combines the Accepted-create projection, finite
+reservation, first Creating permit and Running/Provisioning transitions; a
+two-client concurrency/restart integration permits exactly one first dispatch
+ticket. The optional Coding coordinator is now explicitly ticket-only and
+keeps dispatch in Running/Creating until a real completed control receipt;
+its tagged PostgreSQL component covers second-slot concurrency, third-slot
+capacity, deadline/cancel row-lock waits, damaged documents and atomic event
+rollback. This is not production composition, physical Docker dispatch,
+control receipt or verified coding-volume cleanup. Coding v3 startup stays
+fail-closed.
+
+Step 2 Coding volume checkpoint (2026-10-05): a v2-only source-derived
+runtime template and private Docker-control Unknown-intent ledger are
+component-tested, but neither activates `provider serve v3`. The published
+Coding image's named-volume root is `65532:65532 0770`, so the approved
+distinct high-UID slot cannot write it unprepared. The first zero-data
+`.` archive mechanism was disproved: Docker's pinned unpacker skips that
+entry. Under a subsequent Sandbox ruling, one stopped, never-started
+preparation carrier with an explicitly writable rootfs handled a two-
+directory metadata archive; it was removed before a distinct read-only
+runtime was created with `NoCopy=true` on the same three volumes. The one
+real current-daemon probe passed actual slot-owner, high-UID workspace/
+outputs/tmp writes, inputs/root denials and exact two-container/three-volume
+cleanup. It reused the OCI index→selected manifest→config→layers and
+Docker runtime-image checks. This is a bounded mechanism result, not a
+production Control receipt, complete Profile v2, full gate or count change.
+Sandbox subsequently accepted the probe as component evidence and approved
+one-effect/one-Unknown-intent source work. The next acceptance target is a
+bounded physical Completed observation plus an independently fenced durable
+cleanup intent and exact whole-resource release proof; client timeout and
+repeated absence alone cannot free a possibly late daemon effect. The
+deterministic two-container/three-volume projection is underway, not an
+activated Control service. No extra Slice 6 step is added.
+Step 2 remains open and Phase 6 is **5/15**.
+
+The later source-only Control observer now binds one test-scoped Unix client
+to exact read-only v1.55 routes and pre-decode bounded responses. Its
+SDK→inventory malformed-404/empty-list matrix and one specifically approved
+nine-GET real empty-namespace component check passed on the current daemon.
+This does not authenticate a production Profile/operator socket or prove
+post-timeout daemon quiescence, complete runtime/metadata observation,
+`Completed`, fenced deletion, `Released` or Provider PG release CAS.
+The Coding v3 startup guard and **5/15** count remain unchanged.
+
+The approved single retained Unknown effect subsequently passed a full
+23-GET same-effect observation; its complete private proof was durably
+saved before exact cleanup, followed by two zero-resource inventories.
+Sandbox accepted that observation/cleanup as component evidence, not a
+terminal receipt. The test receipt remains Unknown rev2 and must not be
+retrofitted to Completed or Released after its runtime was removed. The
+next source target is a generic *live* completion path: an unambiguously
+returned create callback, current same-effect observation, bounded internal
+exclusion, private proof persistence, and current-revision/authority CAS.
+An Unknown effect after restart or ambiguous daemon work remains Unknown
+without a separate quiescence producer; no historical proof import is
+authorized. A separate Unknown-retirement recovery and the existing
+fenced cleanup/Released/Provider-PG CAS remain open. This source progress
+does not activate Coding v3 or advance **5/15**.
+
+For the next normal cleanup leg, Sandbox ruled that a fresh legal terminate
+can retire an allocation whose old create operation remains
+`outcome_unknown` only when Control has a current, fully sealed Completed
+receipt for that exact create effect. The old create outcome is immutable.
+The accepted terminate and desired-state event are persisted first; a
+single current PG transaction then binds its Running/Terminating/Cleaning
+retirement identity before Control receives a short-lived cleanup permit.
+Equal-to-birth fences may be legal when equal to the *current* PG highwater;
+no synthetic fence increment is allowed. Control Unknown and unresolved
+daemon effects stay occupied. Released proof and Provider PG exact release
+CAS remain future gates; this is not permission to use the old cleaned
+test effect or lift the Coding v3 guard.
+
+The offline PG cleanup projection now records a current retirement binding
+alongside the Cleaning slot, Running terminate, Terminating observation and
+existing event in one candidate row mutation. It retains the exact
+parent-deadline-clamped cleanup envelope for read-only response-loss
+readback. Pure tests cover normal and historical-Unknown creates with
+Control Completed, same-fence/repeated-generation terminate, competition
+and identity/deadline drift. An approved single PostgreSQL-only component
+batch now passes real two-client same-fence contention, transaction rollback,
+row-lock deadline, exact readback and PG restart, with exact container and
+anonymous-volume cleanup. Its synthetic Control receipt does not establish
+cross-process attestation; SQL COMMIT response loss is not tested. The
+subsequent approved, once-run final release-CAS PostgreSQL component batch
+passed with race/shuffle: two PG clients contended with one winner, an actual
+new occupant was admitted by normal first-create after release, and the old
+proof could not release it. A transaction-local higher-fence drift, rollback,
+row-lock deadline/cancel, lost-return readback and PG restart were covered;
+this does not prove a persisted competing higher-fence operation. The Control
+Released and Provider exact release sources remain unactivated: there is no
+cross-process attestation, real Coding deletion or complete cleanup/release
+gate. Coding v3 stays guarded and Phase 6 remains **5/15**.
+
+Step 2 Provider↔Control integration decision (2026-10-05): Sandbox approved
+the existing PG `Cleaning`+`Retirements` record as the durable barrier for
+the original Coding allocation. A generic lifecycle writer must check it
+under the same PG row transaction, not through a Coordinator pre-read or
+an embedded repository escape. Conflicting new writes receive the existing
+retryable 503; exact replay, reads and lawful same-attempt Unknown reporting
+remain. This chooses the current PG barrier over a new supersession or
+distributed abort protocol and does not hold a SQL lock across Docker or
+network I/O. The companion typed Provider↔Control mTLS/CRL wire and full
+Profile v2 source are authorized for source/component work only. Actual
+physical Coding deletion, full-topology operation and gate acceptance are
+separate. One approved bounded real-PG two-client barrier component batch
+passed on 2026-10-05; it did not authenticate Control or perform Coding Docker
+work. The fixed Step 2 remains open and Phase 6 stays **5/15**.
+
+Next Step 2 source boundary: the reviewed authenticated Control observation
+layer separates repository pre-read, dedicated mTLS/CRL transport, application
+binding checks and the PG row-locked CAS. The transport cannot query PG, and
+an ordinary wire response cannot construct the old local Control snapshot or
+act as trusted release evidence. Begin checks the current original
+create/accepted terminate binding; Finish uses the persisted retirement's
+Control revision/state floor. Production composition must fix the real v2
+adapter and cannot configure a fake/local-ledger fallback. These are design
+constraints for the still-unimplemented vertical path, not acceptance of it.
+
+An additional reviewed Step 2 recovery invariant requires the original
+create-authority envelope to be minted and persisted in the same first-permit
+PG transaction, indexed by allocation rather than recyclable slot. It must
+survive final release and never be renewed for an expired status query. The
+source now has a bounded original-record model, an atomic first-permit method,
+read-only recovery and typed application/PG observation candidates; these are
+not yet wired to the frozen v2 mTLS/CRL production client or gate. Legacy
+unbound Creating slots remain occupied and cannot be silently repaired.
+
+The follow-up source decision freezes an atomic-original authority mode and
+Control policy digest in the existing Coding-specific PG marker at a separate
+one-time v3 initialization. A legacy initialized marker is not upgraded in
+place. Other repository instances, pools and restarts must see the same mode:
+legacy first-create and local-snapshot cleanup/release wrappers reject v3,
+while v3 entry points require the exact stored mode/policy and original
+envelope. The v3 coordinator carries the same original bytes to a dedicated
+dispatcher; a ticket-only or re-signed fallback is forbidden. Targeted source
+tests and an authorized disposable two-pool PG component supplement now cover
+the original/marker and queued retirement-first lease versus
+higher-fence-first cleanup orderings, typed PG cleanup/release with a
+synthetic Observer, slot reuse and restart. The first PG attempt failed on a
+fixture conflict and its single approved repair supplement passed; both are
+indexed in the [startup audit](../audits/product-phase-6-slice-6-startup.md).
+This is still not cross-process Control mTLS/CRL, real Coding Docker absence
+or the fixed topology gate. Step 2 and Phase 6 **5/15** remain unchanged.
+
+Step 2 transport/CRL source checkpoint (2026-10-05): the Control status
+server/client remain package-private and status-only. The server reads one
+bound, ledger-locked receipt/state projection; a real localhost mutual-TLS
+test passes `not_found` and denies a write action. Test handshake hooks are
+not production CRL evidence. Sandbox selected explicit Profile-v2 CRL
+validation/derivation/compilation entry points while preserving existing
+CRL wire identifiers and digest domains. The source now calculates a complete
+v2 mapping from the 82-static/two-Coding-slot synthetic graph, rejects
+missing/extra/cross-purpose tuples and checks externally pinned canonical
+source/role digests. Sandbox rejected the first synthetic mapping's
+unapproved third PostgreSQL issuer; the revised source check enforces the
+existing two `/pki` issuers and selects by the verified peer's fixed broker
+group, with PostgreSQL on the general issuer. This has focused component
+tests only; controller/agent source enforcement is still open. Every public
+v2 entry remains closed behind the formal
+`ProfileV2.Validate` source/image hold. Next is a real v2 TLS/CRL factory,
+Control/Scanner role commands and source-bound images, then the fixed live
+gate; none of these component checks advances **5/15**.
+
 ## Remaining Phase 6 order
 
 These are summaries of the existing plan, not additional slices. Each slice
@@ -310,11 +563,107 @@ conditions to avoid a blocker.
 
 ## Machine handoff checkpoint
 
-At this snapshot the implementation has uncommitted work and Slice 6 is open;
-the final migration checkpoint has not been produced. Git alone will not move
-ignored private evidence, local OCI candidates, Docker state or credentials.
+The 2026-10-05 interim source checkpoint is permitted before formal Slice 6
+step 3 because the operator is changing computers. It does not close step 2,
+execute step 3, complete formal step 4, or advance the **5/15** count. Git
+alone will not move ignored private evidence, local OCI candidates, Docker
+state or credentials. The final acceptance/migration checkpoint remains open.
 
-Before declaring the checkpoint ready:
+### Interim source checkpoint and restart boundary, 2026-10-05
+
+- Fixed step 1: bounded Guest recovery E component accepted under its recorded
+  source/run boundary; it is not the complete Guest security edge. Step 2 is
+  still open for Provider Browser crash and uncertain outcomes, three isolated
+  Provider commands, live TLS/CRL and external edges, actual least-privilege
+  probes, and Guest peer-revoke/CRL-loss/replacement behavior. Step 3 is the
+  fresh 78-deployment/16-scenario gate plus independent evidence review;
+  step 4 is the post-acceptance documentation/source handoff. This interim
+  commit/push is not a substitute for either step 3 or step 4.
+- The accepted E private run is `550dba360065dce4f46fa14476225ce5` at
+  clean E `a065277e406bf09c4c22d4ce187e1d181e513316` and clean R/F
+  `e5816d0d3de0541bd9a677560096b3527f58f7b9`. Its private 0700
+  evidence root under `~/.codex/phase6-slice6-run-evidence-Efix.GTGjew/`
+  has 119 inventoried files (about 548 KiB). The final binding SHA256 is
+  `e66dc29a217c82e1ae9071b8046c33461afae8d216e488751c9a68e312549177`;
+  the 0600 gate log under `~/.codex/phase6-slice6-run-Efix.CQdy6i/` has
+  SHA256 `44d2d3337d5893eba37db2658a0e3c366d92c8aa07e6eb660fc66fe208c2c084`.
+  The exact run-label filtered Docker container/network/volume inventories
+  were empty on the old host. These raw files are not in Git; preserve and
+  transfer only through an approved private channel, verify hashes and
+  restrictive permissions, and retain the original until recovery is proven.
+- The separate Coding component's three retained 0600 receipts remain under
+  `~/.codex/phase6-coding-control-3935310749/` (0700 directory), with SHA256
+  `1df5dcb98ad3c5df3067691e149ef5a7a61b04a7da8b55c93faca7de15227cd6`,
+  `6359f00fbcbb0d84e89fae72bbe947a7cf488048dd12fa023b5cdab61bf4292c`,
+  and `0d8783b29f8b6a752dbb8a753affadd9db0f6645286d8e770a80d41f5409c81d`
+  for completion, cleanup intent and cleanup result respectively. The
+  recoverable published test OCI tar is in the old host's Trash. These are
+  component observations, not a release artifact. The 54 ignored files in
+  `e2e/evidence/` and older private runs are also not transferred by Git.
+- Old R-bound local OCI candidate directories are about 133 MiB and 144 MiB
+  (`~/.codex/phase6-slice6-candidates-Re581.CzaUL7/` and
+  `~/.codex/phase6-desktop-Rc83fcbc.KTP1yl/`). They are not the new final
+  source-bound candidate: rebuild from the eventual clean, locked source on
+  the destination unless a particular old candidate must be independently
+  audited and securely transferred. Never infer a signed release, deployment
+  or current-source binding from their local presence. The runnable Slice 6
+  deployment inventory is 78; the 82-static Profile-v2 synthetic fixture is
+  provisional test data and cannot replace that topology.
+- The corrected two-issuer Profile-v2 CRL source and package-private Control
+  status transport passed focused race/shuffle/count-three checks. A parallel
+  full `internal/phase6security` count-three run timed out at Go's ten-minute
+  default in an existing large evidence-validation test; it is not a pass.
+  The final source snapshot passed `go test -race -shuffle=on -count=1 ./...`
+  (`internal/phase6security`: 383.709 seconds), `go vet ./...`, both Provider
+  and Product Contract verifiers, and `git diff --check`. This is source
+  quality only: public `ProfileV2.Validate` still has an unconditional
+  source/image admission hold, `provider serve v3` is closed, and there is no
+  live v2 CRL, Control/Scanner OS process, physical Coding Docker gate,
+  16-scenario manifest, publication or production-readiness claim.
+- Ruling `S6-ProfileV2-CRL-two-issuer-correction-reviewed-20261005` rejects
+  a third PostgreSQL issuer: the existing `/pki` broker/general pair is
+  exact, broker source is selected only by a verified broker peer, and
+  PostgreSQL uses general. The first three-issuer fixture remains a failed
+  review finding. The next substantive result is source-bound v2 TLS/CRL
+  enforcement through Controller/agents and actual Control/Scanner commands,
+  followed by the remaining step 2 live edges, not a synthetic gate receipt.
+
+The old development host is macOS arm64 with a Linux/arm64 Docker daemon and
+Go 1.26.8 selected through `mise`; the destination OS/chip/daemon are not yet
+known. Re-establish Git/registry/Vault and other authorized credentials
+securely on the destination; do not copy plaintext credentials or the old
+Docker daemon state. For an empty destination checkout, after verifying the
+normal push's exact full SHA from the handoff report:
+
+```bash
+git clone git@github.com:shell-echo/sandbox-runtime.git
+cd sandbox-runtime
+git fetch origin codex/product-v1-phase-6-hardening
+git switch --track origin/codex/product-v1-phase-6-hardening
+git rev-parse HEAD
+git ls-remote --exit-code origin refs/heads/codex/product-v1-phase-6-hardening
+mise exec go@1.26.8 -- env -u GOROOT GOFLAGS= GOTOOLCHAIN=local go version
+```
+
+Compare both full SHAs to the handoff report before work. Read
+`docs/PROJECT_CONTEXT.md`, this plan, `docs/STATUS.md`, architecture,
+development rules and ADR 0055. Verify the destination Docker architecture
+and digest-pinned inputs before rebuilding or running tagged gates. If
+private accepted observations are transferred, compare their SHA256 and
+permissions to the audit; otherwise leave historical evidence on the old
+host and rerun only what the next named gate actually requires. Start a new
+session with: “Continue Product v1 Phase 6 Slice 6 from the verified
+`codex/product-v1-phase-6-hardening` handoff SHA. Keep 5/15 and all v2/v3
+admission holds. Read PROJECT_CONTEXT, STATUS, the Phase 6 delivery plan,
+ADR 0055 and startup audit. Resume fixed step 2 at real v2 TLS/CRL
+Controller/agent and Control/Scanner source-bound composition, then close
+remaining live edges and the formal 78-deployment/16-scenario gate. Report
+progress and coordinate architecture issues with pinned Sandbox. Do not
+invent evidence or touch old-host private artifacts.”
+
+Before declaring the **final post-acceptance** checkpoint ready (the interim
+source handoff satisfies only the relevant inventory, safe commit/push and
+single-writer parts, not item 1's missing release acceptance):
 
 1. Finish the Slice 6 review and record accepted scope, remaining non-claims,
    exact R/F/E revisions, image identities, run ID, manifest/receipt hashes,

@@ -281,6 +281,110 @@ every uncertain Docker outcome, the three Provider commands, or a same-run
 Slice 6 scenario receipt. The audit records its limits; Phase 6 stays
 **5/15**.
 
+The later Coding retirement-barrier source and one approved real PostgreSQL
+component batch passed with two independent pools in the existing disposable
+pinned-container harness. The batch checked a committed retirement against
+subsequent generic higher-fence/lease/terminal writes, independent JTI
+consumption, same-attempt Unknown/event handling, unrelated sandbox writes,
+the opposite committed-fence ordering, restart retention and the existing
+final-CAS/new-occupant path. These are ordered PG observations, not a new
+simultaneous cleanup-versus-mutation race or an authenticated Control result;
+malformed binding and low historical fence negative cases remain pure tests.
+The [Slice 6 startup audit](audits/product-phase-6-slice-6-startup.md) records
+the exact run and cleanup. Full Profile v2, Control mTLS/CRL and physical
+Coding deletion remain open; v3 startup is guarded and Phase 6 stays
+**5/15**.
+
+Subsequent source-only v3 work adds a Coding-specific durable atomic-original
+marker/policy, an exact original-create envelope saved in the first-permit PG
+transaction, a ticket-free authority dispatcher interface, and typed
+Completed/Released application-to-PG observation gates. Legacy create and
+local-snapshot cleanup/release wrappers reject that v3 marker; the v3
+coordinator now refuses legacy Inspect/Remove/Suspend/Resume reconciliation.
+The Control ledger can project receipt/revision/state digest under one lock,
+but no authenticated Control OS-process client/server or full Profile v2 is
+composed. The new two-pool PG component extension has since passed one
+authorized repair supplement after an initial failed fixture run: it checked
+atomic original, legacy/mixed-mode denial, both observed row-lock orderings,
+typed PG cleanup/release with a synthetic Observer, slot reuse, restart and
+exact disposable PostgreSQL cleanup. Its scope and the failed first attempt
+are recorded in the [Slice 6 startup audit](audits/product-phase-6-slice-6-startup.md).
+This is not Control mTLS/CRL, Coding Docker physical absence or the fixed
+16-scenario gate; no Slice 6 evidence manifest or acceptance count follows.
+
+The next Profile-v2 source checkpoint tightens all 82 provisional static
+identity/TLS-delegation records and checks both Coding slot IDs, UIDs/GIDs and
+six whole-volume prefixes against that static roster plus Browser/Desktop
+slots. It found the isolated Coding fixture's `58000/58001` GIDs collide with
+existing PostgreSQL TLS agents; corrected IDs are test-only, not production
+assignments. Conservative resource arithmetic now includes all static and
+one-shot roles, both Coding workloads, all declared Browser/Desktop
+workload/gateway slots, five external services and double-parse headroom.
+Focused race tests pass. None of these fragments is a complete typed Profile
+v2, authenticated Control transport, live resource observation or Slice 6
+gate; v3 admission remains closed at **5/15**.
+
+A subsequent draft provides an independent `ProfileV2` wire type, v2-only
+canonical decoder/digest and explicit Control/Scanner private scope checks.
+The old v1 golden sample is unchanged and cross-version decoding fails.
+No complete positive v2 candidate, Control/Scanner source-bound image,
+authenticated OS process or final gate exists yet; `DecodeV2` rejects the
+partial sample and `Validate` keeps a final unconditional admission hold.
+Targeted race tests, vet and both Contract locks pass, while
+the whole-repository race/shuffle run now passes on the initial v2/status
+source snapshot. Follow-on status tests changed after that run and have
+their own focused race check. Phase 6 remains **5/15**.
+
+The v2 draft now also has a same-package synthetic complete-field positive
+path with self-consistent negative mutations; the public validator and
+decoder retain their final source/image admission hold. Sandbox review
+identified and closed an omitted restriction on the two new TLS agents:
+both must be networkless and listenerless. This remains test-only field
+evidence, not actual Control/Scanner process, PKI or profile admission.
+
+A package-private read-only Control status HTTP server draft now bounds one
+Coding status route and denies plaintext, unverified TLS and claimed-header
+identity before any receipt projection. Its constructor is not exported;
+the actual ledger-locked bound read returns `not_found` only for a missing
+record and preserves ambiguous creates as `unknown`. A real localhost TLS
+1.3 mutual-certificate HTTP test passes status and write-route denial, but
+uses a test-only verification hook, not Profile-v2 CRL or a Control role
+command. This is a transport component boundary only, with v3 and
+Profile-v2 holds unchanged.
+
+Sandbox's reviewed v2 CRL direction keeps the existing CRL wire/digest
+formats while adding explicit Profile-v2-only source, role, canonical
+decoder and exact tuple-index entry points. A complete synthetic field
+fixture yields all required ordinary, DNS and nine PostgreSQL-purpose
+edges; missing/extra/cross-profile/cross-purpose and Control/Scanner
+broker-issuer mappings reject in focused race tests. All public v2 CRL
+entry points still reject behind the Profile-v2 source/image hold. The
+Control status client is also package-private, bounded and read-only; its
+localhost TLS test is not a real Vault CRL or production Control process.
+Sandbox found and rejected an initial v2 CRL fixture that invented a third
+PostgreSQL issuer. The corrected source check requires exactly the two
+existing `/pki` issuers and selects broker/general by the verified peer;
+PostgreSQL uses general. Focused recomputed-digest negatives pass, but
+controller policy, agent and live Vault enforcement remain open. On the
+corrected source snapshot, the required whole-repository race/shuffle
+count-one run, `go vet ./...`, both Contract locks and diff check pass;
+these do not change the Slice 6 **5/15** release state.
+
+The 2026-10-05 computer-change checkpoint is an **interim source handoff**,
+not Slice 6 acceptance or the formal post-gate step 4. The fixed delivery
+sequence remains: (1) the bounded Guest E component accepted, with the full
+Guest edge open; (2) remaining Provider/Browser, isolated commands, live
+TLS/CRL/external and privilege edges open; (3) one fresh 78-deployment,
+16-scenario gate with strict independent evidence review open; and (4) final
+post-acceptance documentation/handoff open. The 82-static Profile-v2 graph
+is a synthetic field fixture, not a deployable replacement for 78. Git does
+not contain accepted private E/Coding receipts, ignored `e2e/evidence/`,
+local OCI candidates or credentials. Their old-host locations, hashes,
+transfer/rebuild rules, destination checkout commands and remaining holds
+are in the [machine handoff plan](plan/product-v1-phase-6-delivery-and-handoff.md).
+The normal-push SHA comparison belongs to the handoff report after the
+checkpoint commit; no new manifest, production claim or **6/15** follows.
+
 A separate same-run [PostgreSQL leaf component audit](audits/product-phase-6-slice-6-postgres-leaf-component-gap.md)
 records successful fixed-identity Vault signing but no PostgreSQL launch and
 no confirmed revocation of that extra leaf: the already-running diagnostic
