@@ -37,7 +37,7 @@ coding effort or remaining time.
 | --- | --- |
 | Phase 6 | 5 of 15 slices accepted; Slice 6 remains open |
 | Slice 6 final topology | 0 of the fixed 16 complete-topology scenarios accepted; this does not mean no implementation exists |
-| Final inventory | 78 deployments in the frozen gate inventory, not a claim of 78 containers per end-user sandbox |
+| Historical pre-v2 inventory | 78 deployments in the earlier frozen gate inventory, not the revised Profile-v2 live inventory or a claim of 78 containers per end-user sandbox |
 | Accepted Guest business-revoke component | Evidence-tool revision `f49ee748f5e8790cd58c62d04bc5304b1a363b49`, runtime and fixture revision `c83fcbc125f3d3f8f67ceaad403c6a7b8e7de635`, run `20efb6c95a0fa39cb0441f580a86888f` |
 | Latest verified pushed implementation-branch checkpoint at this snapshot | `516861f7b5a08a1247c9d7890752ea04b30ebdf2` on `codex/product-v1-phase-6-hardening` |
 | Work in progress | Guest PostgreSQL loss/recovery and replacement proof, helper cleanup and terminal ledger projection, then final component collection/binding; uncommitted work is not accepted or pushed evidence |
@@ -196,10 +196,14 @@ receives it promptly; periodic checks only fill genuine reporting gaps.
    TLS/CRL and external-service edges; and actual network/UID/GID/privilege
    probes. Include Guest peer revoke, CRL-source loss and replacement behavior.
    Reuse unaffected components while completing the existing full harness.
-3. Freeze and execute the complete 78-deployment/16-scenario gate with one
-   fresh run ID, raw observations, source/image/config bindings and exact
-   cleanup. Submit a compact evidence package for independent coordination
-   review. Only formal acceptance changes the count from 5/15 to 6/15.
+3. Freeze the revised complete Profile-v2 inventory from one source, including
+   Control/Scanner, dedicated agents, bounded dynamic Coding allocations and
+   peak resources; then execute the original 16 scenarios against that exact
+   inventory with one fresh run ID, raw observations, source/image/config
+   bindings and exact cleanup. The old 78-deployment inventory is only the
+   pre-v2 baseline; the provisional 82 static principals are not the final
+   live inventory. Submit a compact evidence package for independent
+   coordination review. Only formal acceptance changes 5/15 to 6/15.
 4. Synchronize STATUS, the plan/audit and handoff; commit and normally push the
    reviewed work, verify full local and live remote SHAs, and deliver the
    machine-handoff checkpoint below before advancing to Slice 7 work.
@@ -282,8 +286,9 @@ final test candidate), as did the ordinary repository race/shuffle suite,
 vet, tagged package vet and Contract lock. This covers only the bounded
 Browser crash component. Full `provider serve v3` replacement, other Docker
 uncertainty cuts, the three Provider commands, remaining TLS/CRL/network/
-privilege rows and one-run 78-deployment/16-scenario gate remain in step 2/3;
-there is no Slice 6 manifest or release claim, and Phase 6 remains **5/15**.
+privilege rows and one-run revised Profile-v2-inventory/16-scenario gate
+remain in step 2/3; there is no Slice 6 manifest or release claim, and
+Phase 6 remains **5/15**.
 
 Step 2 three-Provider source-difference checkpoint (2026-10-05): the existing
 `provider serve` v3 entry selects coding-shell, Browser and Desktop with
@@ -576,8 +581,8 @@ state or credentials. The final acceptance/migration checkpoint remains open.
   still open for Provider Browser crash and uncertain outcomes, three isolated
   Provider commands, live TLS/CRL and external edges, actual least-privilege
   probes, and Guest peer-revoke/CRL-loss/replacement behavior. Step 3 is the
-  fresh 78-deployment/16-scenario gate plus independent evidence review;
-  step 4 is the post-acceptance documentation/source handoff. This interim
+  fresh full-Profile-v2-inventory/16-scenario gate plus independent evidence
+  review; step 4 is the post-acceptance documentation/source handoff. This interim
   commit/push is not a substitute for either step 3 or step 4.
 - The accepted E private run is `550dba360065dce4f46fa14476225ce5` at
   clean E `a065277e406bf09c4c22d4ce187e1d181e513316` and clean R/F
@@ -606,9 +611,11 @@ state or credentials. The final acceptance/migration checkpoint remains open.
   source-bound candidate: rebuild from the eventual clean, locked source on
   the destination unless a particular old candidate must be independently
   audited and securely transferred. Never infer a signed release, deployment
-  or current-source binding from their local presence. The runnable Slice 6
-  deployment inventory is 78; the 82-static Profile-v2 synthetic fixture is
-  provisional test data and cannot replace that topology.
+  or current-source binding from their local presence. The old Slice 6
+  deployment baseline was 78; the 82-static Profile-v2 synthetic fixture is
+  provisional test data. Neither is the complete revised live inventory:
+  freeze it from the final Profile-v2 source with Control/Scanner, dedicated
+  agents, dynamic Coding allocations and peak resources before the gate.
 - The corrected two-issuer Profile-v2 CRL source and package-private Control
   status transport passed focused race/shuffle/count-three checks. A parallel
   full `internal/phase6security` count-three run timed out at Go's ten-minute
@@ -657,8 +664,8 @@ session with: “Continue Product v1 Phase 6 Slice 6 from the verified
 admission holds. Read PROJECT_CONTEXT, STATUS, the Phase 6 delivery plan,
 ADR 0055 and startup audit. Resume fixed step 2 at real v2 TLS/CRL
 Controller/agent and Control/Scanner source-bound composition, then close
-remaining live edges and the formal 78-deployment/16-scenario gate. Report
-progress and coordinate architecture issues with pinned Sandbox. Do not
+remaining live edges and the formal revised-Profile-v2-inventory/16-scenario
+gate. Report progress and coordinate architecture issues with pinned Sandbox. Do not
 invent evidence or touch old-host private artifacts.”
 
 Before declaring the **final post-acceptance** checkpoint ready (the interim

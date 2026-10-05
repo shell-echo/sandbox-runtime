@@ -245,7 +245,7 @@ authorization and fixed order for Slices 7–15 remain unchanged.
   readiness remain false. Slice 6 is underway under ADR 0055 with real Vault
   PKI, live TLS rotation/revocation, role-isolated egress enforcement and exact
   container least privilege as its frozen order. Current source-level work
-  now closes a corrected desired inventory of 78 deployments, 30 isolated
+  closed the historical pre-v2 desired inventory of 78 deployments, 30 isolated
   external paths, 35 external edge IDs, 11 actual material agents, 12
   credential issuer sockets, 9 PostgreSQL-purpose signers and one ordered
   nine-role shared-service HBA. Four unconsumed V2 Browser/Desktop material
@@ -286,8 +286,10 @@ authorization and fixed order for Slices 7–15 remain unchanged.
   remains despite independent operator cleanup. This is not the complete
   Guest security edge: PostgreSQL loss/recovery, peer TLS revocation, CRL-source
   loss and replacement restart/reconnect remain unproved. Nine live SQL callers,
-  the full 16-scenario/78-deployment Slice 6 gate, formal signed evidence and
-  deployment also remain unproved. Phase 6 stays 5/15.
+  the revised complete Profile-v2 inventory and its full 16-scenario Slice 6
+  gate, formal signed evidence and deployment also remain unproved. The
+  historical 78-deployment baseline and provisional 82-static-principal
+  fixture do not establish the revised live topology. Phase 6 stays 5/15.
 
 The qualification applies only to Provider revision
 `170459266af5f4fad359ca8c63f2ae19741055c5`, external-caller revision

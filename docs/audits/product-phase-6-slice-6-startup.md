@@ -7164,10 +7164,13 @@ behavior changed after the final count-one run; the subsequent checkpoint
 edits are documentation and Git handoff only.
 
 The fixed step ledger remains: step 1 bounded Guest E component accepted;
-step 2 live startup edges still open; step 3 fresh 78-deployment/16-scenario
-same-run gate and strict evidence review absent; formal step 4 post-gate
-handoff not yet reached. The 82-static Profile-v2 fixture is provisional
-synthetic data, not the 78-deployment release topology. Public Profile-v2
+step 2 live startup edges still open; step 3 must freeze the revised complete
+Profile-v2 source inventory (including Control/Scanner, dedicated agents,
+bounded dynamic Coding allocations and peak resources), then run the
+original 16 scenarios in one fresh gate with strict evidence review; formal
+step 4 post-gate handoff is not yet reached. The historical 78-deployment
+baseline and provisional 82-static Profile-v2 fixture are neither the final
+revised live inventory nor release evidence. Public Profile-v2
 validation and v3 admission remain held closed. There is no live Controller/
 agent v2 CRL enforcement, Control/Scanner OS process or image, physical
 Coding deletion/absence gate, release manifest or production readiness.
