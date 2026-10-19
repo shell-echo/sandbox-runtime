@@ -2,13 +2,26 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The [2026-10-19 local source checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-local-source-checkpoint-and-held-tuf-chain)
+The latest [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
+passes both base CPU/load/memory samples but fails original interval paging.
+At19:57:03/19:58:09 Asia/Shanghai, load is1.02/1.36, top idle82.61%/87.99%
+and memory free33%/33%. Over65.723560seconds, swapin+4112 pages (64.25MiB)
+exceeds32pages/second and swapout+1456 pages (22.75MiB) exceeds zero. The first
+Mach check passes; the second is not reached. No TUF case starts. All512
+locked files,9aliases and four mirrors remain exact; independent identity/input
+review precedes this one attempt, and the failed identity is retained without
+retry. Private evidence: `tuf-chain-resume-20261019-115426`. This is a dated
+observation, not a process attribution or current host guarantee. Frozen tests
+are reused, no build/scan/new external material or timer runs. Phase6 remains
+**5/15**; Slice6 step2 is ongoing, step3 incomplete and step4 not started.
+
+The earlier [2026-10-19 local source checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-local-source-checkpoint-and-held-tuf-chain)
 records three local batches: source/tests/tools/candidate records, design/audit
-history, then this current progress update. All2148 Go and2390 non-document
+history, then that checkpoint's progress update. All2148 Go and2390 non-document
 files match the previously validated source set and SHA256; the503.355-second
 race `-p=6`, vet and two Contract passes are historical same-source evidence,
 not new runs. No build or full test suite is started on the constrained host.
-At the last actual sample,14:53:30 Asia/Shanghai, load5.15/free31% pass but
+At that checkpoint's last actual sample,14:53:30 Asia/Shanghai, load5.15/free31% pass but
 CPU idle35.65% fails the original60% floor. No second sample or TUF case starts.
 The25 new same-boot tests pass only as component evidence; timestamp812 is
 still unverified. Old locks, raw evidence, public holds, quotas/deadlines and

@@ -35,12 +35,28 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-19 local source checkpoint and held TUF chain](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-local-source-checkpoint-and-held-tuf-chain)
+The latest [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
+uses a new independently reviewed identity and the unchanged implementation.
+At19:57:03/19:58:09 Asia/Shanghai, both base samples pass load, top CPU idle and
+memory floors; the first Mach observer also passes. Over65.723560seconds,
+swapin rises4112 pages (64.25MiB) and swapout1456 pages (22.75MiB), violating
+both original interval predicates. The second guard stops before its Mach
+observer, so original dual readiness fails and TUF four cases remain unstarted.
+All512 locked inputs,9aliases and four17-file mirrors match before/after;
+the previous184-file/19-directory checkpoint and seal remain exact. Frozen
+tests are reused without rerunning them. Evidence:
+`tuf-chain-resume-20261019-115426`. This dated observation does not establish
+ongoing host performance or attribute paging to a process. No retry, new
+external material, scanner/build or timer is started. The progress update
+follows the standing stage-checkpoint commit/push direction;
+Phase6 stays5/15 and Slice6 step2 remains ongoing, with steps3/4 incomplete/not started.
+
+The earlier [2026-10-19 local source checkpoint and held TUF chain](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-local-source-checkpoint-and-held-tuf-chain)
 preserves the existing implementation in local commits and updates this handoff.
 All2148 Go files and all2390 Git-visible non-document files exactly match the
 2026-10-13 validated snapshot by file set and SHA256. Its503.355-second full
 race run with `-p=6`, vet and both Contract results are same-source historical
-evidence; none was rerun during this resource-constrained checkpoint. The latest
+evidence; none was rerun during this resource-constrained checkpoint. Its last
 actual host attempt at14:53:30 Asia/Shanghai has load5.15/free31% but CPU idle
 35.65%<60%, so it stops at the first sample; no second sample or TUF case starts.
 The added same-boot guard has25 passing tests, but supplies no host or TUF

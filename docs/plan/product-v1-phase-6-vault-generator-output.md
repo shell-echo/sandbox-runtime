@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-19 local source checkpoint and held TUF chain](#2026-10-19-local-source-checkpoint-and-held-tuf-chain).
+Latest continuation: [2026-10-19 two-sample recheck refuses interval paging](#2026-10-19-two-sample-recheck-refuses-interval-paging).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1450,3 +1450,81 @@ APK, installation/GPG helpers and complete Node supply admission retain
 their own gates; one passing component cannot replace them. Preserve every
 old failure and lock, and do not widen cache/index/evidence reuse, quotas,
 timeouts or public admission to clear this checkpoint.
+
+## 2026-10-19 two-sample recheck refuses interval paging
+
+The user authorizes one new identity after independent identity/input review,
+the original two-sample host gate, and only on a complete pass the existing
+four-case TUF implementation. New private evidence is
+`tuf-chain-resume-20261019-115426`; its source workspace starts clean at
+`6368a344f26c88ad4a3a54cfad80e91c1abeea3b` on the same implementation branch.
+No source behavior, old lock, old receipt or failed identity is changed.
+
+Independent review checks the new512-file lock and all9 original tool aliases.
+All414 previous input rows remain present;98 added rows are96 original-byte
+copies, one new path-rebound mirror manifest and the old input lock itself.
+The copies contain the same15 Python modules including the frozen guard test,
+13 host source/lock files and68 mirror files. All four trees retain17 files
+each, exact directories/modes, role/target originals, case order and negative
+mutations. Only owned mirror paths/file URIs and explicit provenance metadata
+change. Old failed host/controller outputs are not runtime inputs. The old25
+guard tests are reused in their unchanged-source scope, not rerun. Full original
+tool/source/SDK checks pass; metadata time fields remain in the future without
+conferring signature authentication. No dynamic external material is acquired.
+
+The one actual attempt observes:
+
+| Base observation | First sample | Second sample | Original condition |
+| --- | --- | --- | --- |
+| Time, Asia/Shanghai | 19:57:03 | 19:58:09 | Same attempt |
+| Load1 | 1.02 | 1.36 | At most6; both pass |
+| Top CPU idle | 82.61% | 87.99% | At least60%; both pass |
+| Memory free | 33% | 33% | At least30%; both pass |
+| Swapin pages | 262110085 | 262114197 | Delta4112 |
+| Swapout pages | 286929986 | 286931442 | Delta1456 |
+
+The monotonic base interval is65.723560041seconds. The actual16KiB-page deltas
+are64.25MiB swapin and22.75MiB swapout. The original upper bounds are
+32pages/second for swapin (about2103.154 pages in this interval) and zero
+swapout. Both fail. The first guard passes naturally in2.090067seconds and
+includes the additional Mach CPU check, idle95.351137%. The second guard
+returns1 naturally in0.719497seconds with `interval paging bounds`, before
+starting its Mach observer or creating a readiness result. The positive
+first-state receipt is not a complete dual-host admission.
+
+All18 base commands complete naturally with their original5second/64KiB
+bounds, no timeout, signal or truncation, and all children reaped. Both samples
+retain the original desktop-linux context/Unix endpoint/daemon identity and
+29.8.2/8af9fe3/Linux arm64 version. All six Docker ping/version/info calls pass
+in10.464–42.978ms. Those responses and good CPU scalars do not override the
+paging refusal. The600second host recorder exits0 in66.824462seconds solely
+to record the failed summary; the controller exits1 for `host runner result`.
+No TUF claim,90second parent, case state or four-case result exists. **TUF
+actual cases started:0.** Timestamp812 and the frozen top chain remain unverified.
+
+Both same-boot predicates pass within their normal-UTC-clock and limited old
+N4 socket-proof scope; they do not grant host, general network or TUF admission.
+All512 locked inputs match completely before/after and on final readback,
+along with9aliases and four17-file mirrors; post_error is null. The previous
+sealed184-file/19-directory evidence set, index and seal remain exact. Every
+old failure is retained; this identity is not retried and no further sample
+is scheduled. The observation does not identify a responsible process or
+describe host performance after these two dated samples. No unrelated process,
+container or VM is stopped, limited or restarted.
+
+This stage changes only the three progress documents under the standing
+commit/push direction. No new Go/unit/race/vet/Contract test, scanner, compiler,
+container, build, native APK/GPG execution or tool installation runs; previously
+matching source evidence remains limited to its original scope. Existing mise,
+two issuers, public holds,9bindings/64barriers, quotas/deadlines and evidence-reuse
+rules are unchanged. Automation stays off. Recording this stage checkpoint
+does not complete Slice6 step4 or authenticate any new supply input.
+
+Phase6 remains **5/15**. Slice6 step1 retains bounded historical E acceptance;
+step2 is ongoing with the interval paging prerequisite failed; step3 complete
+live topology/original16/independent formal acceptance is incomplete; step4
+post-acceptance handoff is not started. Next manual continuation requires a
+new identity/input review and a complete original dual-host and same-boot pass
+before the reviewed four cryptographic cases. Subsequent external recovery,
+real metadata and37/19 scans remain separately reviewed. No gate, resource
+quota, timeout, cache/index rule or evidence-reuse standard is relaxed.
