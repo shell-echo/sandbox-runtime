@@ -141,6 +141,15 @@ func beginCodingCurrentCleanup(ctx context.Context, slots *codingidentity.State,
 	if original.Status != codingidentity.Creating && original.Status != codingidentity.Active {
 		return fail()
 	}
+	// A published Ready binding survives retirement and slot reuse. A direct
+	// Creating-to-Cleaning transaction never claims that Ready was published.
+	if binding, exists := slots.CreateCompletions[create.AllocationID]; exists {
+		if !validCodingCompletion(binding, create, now) || binding.CompletionDigest != input.Completed.CompletionDigest ||
+			binding.EvidenceDigest != input.Completed.CompletionEvidenceDigest || !binding.UpdatedAt.Equal(input.Completed.UpdatedAt) ||
+			!codingCompletionFloor(binding, input.ControlRevision, input.ControlStateDigest) {
+			return fail()
+		}
+	}
 	if original.Claim.AllocationID != create.AllocationID ||
 		original.Claim.SandboxID != create.SandboxID ||
 		original.Claim.OperationID != create.OperationID ||

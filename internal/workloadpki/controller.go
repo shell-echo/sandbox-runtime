@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
+	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
 )
 
 const (
@@ -67,9 +68,15 @@ type Controller struct {
 	quiescing        bool
 	quiesceErr       error
 	ledger           Ledger
-	peerCRLProfile   *phase6security.Profile
-	peerCRLSources   *phase6security.PeerCRLSources
-	peerCRLIdentity  peerCRLSourceAuthorizer
+	peerCRL          *controllerPeerCRLBinding
+}
+
+// Both typed admission paths compile to this immutable, version-independent
+// binding. Request handling never infers admission from a v1 Profile pointer.
+type controllerPeerCRLBinding struct {
+	profileDigest string
+	sources       []phase6security.PeerCRLSource
+	identity      peerCRLSourceAuthorizer
 }
 
 type peerCRLSourceAuthorizer interface {
@@ -79,27 +86,53 @@ type peerCRLSourceAuthorizer interface {
 }
 
 func NewController(config ControllerConfig) (*Controller, error) {
-	if config.Authority == nil || !namePattern.MatchString(config.ControllerKeyID) || len(config.ControllerKey) != ed25519.PrivateKeySize ||
-		config.Now == nil || config.Now().IsZero() || len(config.Policies) < 1 || len(config.Policies) > maxControllerPolicies ||
-		config.MaximumActive < 1 || config.MaximumActive > maxActiveCertificates || config.MaximumLedgerAge < time.Hour || config.MaximumLedgerAge > 7*24*time.Hour {
-		return nil, ErrUnavailable
+	// The legacy entry point may operate without a peer-CRL profile for its
+	// existing component callers. New private v2 roles must never use that
+	// path to bypass the explicit Profile-v2 source/image admission hold.
+	for _, policy := range config.Policies {
+		if policy.Subject.Kind == securityprincipal.KindDockerControl || policy.Subject.Kind == securityprincipal.KindArtifactScanner ||
+			policy.Requester.Name == "provider_docker_control_tls_agent" || policy.Requester.Name == "provider_artifact_scanner_tls_agent" {
+			return nil, ErrUnavailable
+		}
 	}
 	if (config.PeerCRLProfile == nil) != (config.PeerCRLSources == nil) {
 		return nil, ErrUnavailable
 	}
-	// Freeze policy purpose/owner and signature authority before validating
-	// issuer mappings. A caller cannot mutate these slices between validation
-	// and the controller's later read-only request path.
-	policies := make([]Policy, len(config.Policies))
-	for i, policy := range config.Policies {
+	var binding *controllerPeerCRLBinding
+	if config.PeerCRLProfile != nil {
+		profile, sources, identity, err := phase6security.CompilePrivatePeerCRLAuthorizer(
+			*config.PeerCRLProfile, *config.PeerCRLSources)
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+		binding = &controllerPeerCRLBinding{profileDigest: profile.ProfileDigest, sources: sources.Sources, identity: identity}
+	}
+	return newController(config, binding)
+}
+
+func freezeControllerPolicies(input []Policy) []Policy {
+	policies := make([]Policy, len(input))
+	for i, policy := range input {
 		policy.PublicKey = append(ed25519.PublicKey(nil), policy.PublicKey...)
 		policy.DNSNames = append([]string(nil), policy.DNSNames...)
 		policy.Usages = append([]string(nil), policy.Usages...)
 		policies[i] = policy
 	}
-	config.Policies = policies
-	if config.PeerCRLProfile != nil {
-		_, ok := config.Authority.(PeerIssuerAuthority)
+	return policies
+}
+
+func newController(config ControllerConfig, binding *controllerPeerCRLBinding) (*Controller, error) {
+	if config.Authority == nil || !namePattern.MatchString(config.ControllerKeyID) || len(config.ControllerKey) != ed25519.PrivateKeySize ||
+		config.Now == nil || config.Now().IsZero() || len(config.Policies) < 1 || len(config.Policies) > maxControllerPolicies ||
+		config.MaximumActive < 1 || config.MaximumActive > maxActiveCertificates || config.MaximumLedgerAge < time.Hour || config.MaximumLedgerAge > 7*24*time.Hour {
+		return nil, ErrUnavailable
+	}
+	// Freeze policy purpose/owner and signature authority before validating
+	// issuer mappings. A caller cannot mutate these slices between validation
+	// and the controller's later read-only request path.
+	config.Policies = freezeControllerPolicies(config.Policies)
+	if binding != nil {
+		peerAuthority, ok := config.Authority.(PeerIssuerAuthority)
 		if !ok {
 			return nil, ErrUnavailable
 		}
@@ -107,21 +140,14 @@ func NewController(config ControllerConfig) (*Controller, error) {
 		if !ok || policyAuthority.ValidatePolicyIssuers(config.Policies) != nil {
 			return nil, ErrUnavailable
 		}
+		if peerAuthority.ValidatePeerSources(binding.sources) != nil {
+			return nil, ErrUnavailable
+		}
 	}
 	controller := &Controller{permit: make(chan struct{}, 1), ledgerPath: config.LedgerPath, policies: make(map[string]Policy, len(config.Policies)), authority: config.Authority,
 		controllerKeyID: config.ControllerKeyID, controllerKey: append(ed25519.PrivateKey(nil), config.ControllerKey...), now: config.Now,
-		maximumActive: config.MaximumActive, maximumLedgerAge: config.MaximumLedgerAge}
+		maximumActive: config.MaximumActive, maximumLedgerAge: config.MaximumLedgerAge, peerCRL: binding}
 	controller.permit <- struct{}{}
-	if config.PeerCRLProfile != nil {
-		profile, sources, identity, err := phase6security.CompilePrivatePeerCRLAuthorizer(
-			*config.PeerCRLProfile, *config.PeerCRLSources)
-		if err != nil || config.Authority.(PeerIssuerAuthority).ValidatePeerSources(sources.Sources) != nil {
-			controller.Close()
-			return nil, ErrUnavailable
-		}
-		controller.peerCRLProfile, controller.peerCRLSources = &profile, &sources
-		controller.peerCRLIdentity = identity
-	}
 	for _, policy := range config.Policies {
 		if policy.Validate() != nil {
 			controller.Close()
@@ -279,7 +305,7 @@ func (c *Controller) issue(ctx context.Context, request Request, policy Policy, 
 func (c *Controller) revocations(ctx context.Context, request Request, policy Policy) (Response, error) {
 	var snapshot RevocationSnapshot
 	var err error
-	if c.peerCRLProfile != nil {
+	if c.peerCRL != nil {
 		snapshot, err = c.authority.(PolicyIssuerAuthority).PolicyRevocations(ctx, policy)
 	} else {
 		snapshot, err = c.authority.Revocations(ctx)

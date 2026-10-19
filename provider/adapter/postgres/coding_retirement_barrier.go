@@ -69,12 +69,16 @@ func mutateLifecycleWithRetirementGuard(ctx context.Context, store *Store,
 		}
 	} else if marker.PlanDigest != "" || slots.Initialized || slots.Version != 0 ||
 		slots.PlanDigest != "" || slots.Reservations != nil || slots.Retirements != nil ||
-		slots.OriginalCreates != nil {
+		slots.OriginalCreates != nil || slots.CreateCompletions != nil {
 		return ErrCorrupt
 	}
 	before := newLifecycleState()
 	if before.Import(ledger.Export()) != nil {
 		return ErrCorrupt
+	}
+	guard, err := codingExecWriteGuard(opCtx, tx, lifecycleDocument)
+	if err != nil {
+		return err
 	}
 	if err := mutation(&ledger); err != nil {
 		return err
@@ -85,6 +89,9 @@ func mutateLifecycleWithRetirementGuard(ctx context.Context, store *Store,
 	}
 	stored, err := encodeStoredState(exportLifecycleState(ledger))
 	if err != nil {
+		return err
+	}
+	if err := guard.checkWrites(map[string][]byte{lifecycleDocument: stored}); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state
@@ -108,7 +115,12 @@ func checkCodingRetirementBarrierWithMarker(marker codingIdentityMarker,
 		return err
 	}
 	if marker.AuthorityMode != codingAtomicOriginalMode {
-		if len(slots.OriginalCreates) != 0 {
+		for _, binding := range slots.Retirements {
+			if binding.DispatchAcknowledged {
+				return ErrCorrupt
+			}
+		}
+		if len(slots.OriginalCreates) != 0 || len(slots.CreateCompletions) != 0 {
 			return ErrCorrupt
 		}
 		return nil
@@ -164,7 +176,7 @@ func checkCodingRetirementBarrierWithMarker(marker codingIdentityMarker,
 			}
 		}
 	}
-	return nil
+	return checkCodingReadinessBarrier(slots, before, after, now)
 }
 
 // Only an exact Running -> OutcomeUnknown update of the already-bound
@@ -176,7 +188,7 @@ func checkCodingRetirementBarrier(slots codingidentity.State,
 	before, after lifecyclerepository.State, now time.Time) error {
 	if !slots.Initialized {
 		if slots.Version != 0 || slots.PlanDigest != "" || slots.Reservations != nil ||
-			slots.Retirements != nil || slots.OriginalCreates != nil {
+			slots.Retirements != nil || slots.OriginalCreates != nil || slots.CreateCompletions != nil {
 			return ErrCorrupt
 		}
 		return nil

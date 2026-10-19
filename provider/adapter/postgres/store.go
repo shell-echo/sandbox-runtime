@@ -118,6 +118,10 @@ func mutateState[T any](ctx context.Context, store *Store, key string, fresh fun
 			return ErrCorrupt
 		}
 	}
+	guard, err := codingExecWriteGuard(opCtx, tx, key)
+	if err != nil {
+		return err
+	}
 	if err := mutation(&state); err != nil {
 		return err
 	}
@@ -132,6 +136,9 @@ func mutateState[T any](ctx context.Context, store *Store, key string, fresh fun
 	stored, err := json.Marshal(base64.StdEncoding.EncodeToString(encoded))
 	if err != nil || len(stored) > maxStoredDocumentBytes {
 		return ErrCorrupt
+	}
+	if err := guard.checkWrites(map[string][]byte{key: stored}); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state
 SET documents=jsonb_set(documents,ARRAY[$1]::text[],$2::jsonb,true),revision=revision+1,updated_at=clock_timestamp()
@@ -182,6 +189,10 @@ func mutateStatePair[A, B any](ctx context.Context, store *Store,
 	if firstExists && importFirst(&first, firstDecoded) != nil || secondExists && importSecond(&second, secondDecoded) != nil {
 		return ErrCorrupt
 	}
+	guard, err := codingExecWriteGuard(opCtx, tx, firstKey, secondKey)
+	if err != nil {
+		return err
+	}
 	if err := mutation(&first, &second); err != nil {
 		return err
 	}
@@ -191,6 +202,9 @@ func mutateStatePair[A, B any](ctx context.Context, store *Store,
 	}
 	secondStored, err := encodeStoredState(exportSecond(second))
 	if err != nil {
+		return err
+	}
+	if err := guard.checkWrites(map[string][]byte{firstKey: firstStored, secondKey: secondStored}); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state
@@ -250,6 +264,10 @@ func mutateStateTriple[A, B, C any](ctx context.Context, store *Store,
 			return ErrCorrupt
 		}
 	}
+	guard, err := codingExecWriteGuard(opCtx, tx, firstKey, secondKey, thirdKey)
+	if err != nil {
+		return err
+	}
 	if err := mutation(&first, &second, &third); err != nil {
 		return err
 	}
@@ -263,6 +281,9 @@ func mutateStateTriple[A, B, C any](ctx context.Context, store *Store,
 	}
 	thirdStored, err := encodeStoredState(exportThird(third))
 	if err != nil {
+		return err
+	}
+	if err := guard.checkWrites(map[string][]byte{firstKey: firstStored, secondKey: secondStored, thirdKey: thirdStored}); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(opCtx, `UPDATE sandbox_runtime_provider.control_state

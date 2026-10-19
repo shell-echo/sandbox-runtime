@@ -252,6 +252,8 @@ func TestProviderProcessProductionV2RejectsRuntimeMigrationAndRawAuthority(t *te
 func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *testing.T) {
 	candidate := validProviderProcessConfig(t)
 	candidate.SchemaVersion = ProviderProductionSchemaV3
+	candidate.Coding = defaultProviderProcessConfig().Coding
+	candidate.Coding.PrivateServices = &ProviderCodingPrivateServicesConfig{ControlAddress: "172.31.200.3:8444", ScannerAddress: "172.31.201.3:8446", ReceiptBindingJSON: "{}"}
 	candidate.Transport.ServerCertificateFile = ""
 	candidate.Transport.ServerPrivateKeyFile = ""
 	candidate.Transport.ClientCABundleFile = ""
@@ -306,6 +308,9 @@ func TestProviderProcessV3RequiresTwoLiveListenersAndOnlyNonTLSMaterials(t *test
 		t.Fatalf("valid coding-shell Provider v3: %v", err)
 	}
 	for name, mutate := range map[string]func(*ProviderProcessConfig){
+		"missing private clients":     func(value *ProviderProcessConfig) { value.Coding.PrivateServices = nil },
+		"legacy daemon":               func(value *ProviderProcessConfig) { value.Coding.Lifecycle.Host = "unix:///tmp/legacy.sock" },
+		"legacy scanner":              func(value *ProviderProcessConfig) { value.Coding.Artifact.MalwareCommand = []string{"/bin/true"} },
 		"missing peer role":           func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleFile = "" },
 		"missing role digest":         func(value *ProviderProcessConfig) { value.Transport.PeerCRLRoleDigest = "" },
 		"missing mapping digest":      func(value *ProviderProcessConfig) { value.Transport.PeerCRLSourceMappingDigest = "" },

@@ -13,11 +13,17 @@ import (
 )
 
 const (
-	ProtocolID             = "sandbox-runtime.phase6-fd-startup.v1"
-	MaxEnvelopeBytes       = 4 << 20
-	RolePath               = "/usr/local/bin/phase6-role"
-	LoaderPath             = "/usr/local/bin/phase6-fd-loader"
-	FixedEntrypointCommand = "exec 3</dev/null 4</dev/null 5</dev/null 6</dev/null; exec /usr/local/bin/phase6-fd-loader"
+	ControlDeliveryTarget   = "provider-docker-control-delivery-v2"
+	ControlSourceTarget     = "provider-docker-control-source-v3"
+	ControlTrustTarget      = "provider-docker-control-trust-v4"
+	TrustStartupProtocol    = "sandbox-runtime.phase6-fd-startup.v4"
+	SourceStartupProtocol   = "sandbox-runtime.phase6-fd-startup.v3"
+	DeliveryStartupProtocol = "sandbox-runtime.phase6-fd-startup.v2"
+	ProtocolID              = "sandbox-runtime.phase6-fd-startup.v1"
+	MaxEnvelopeBytes        = 4 << 20
+	RolePath                = "/usr/local/bin/phase6-role"
+	LoaderPath              = "/usr/local/bin/phase6-fd-loader"
+	FixedEntrypointCommand  = "exec 3</dev/null 4</dev/null 5</dev/null 6</dev/null; exec /usr/local/bin/phase6-fd-loader"
 )
 
 var ErrInvalid = errors.New("invalid Phase 6 private-FD startup input")
@@ -38,6 +44,8 @@ type Specification struct {
 // SpecificationFor intentionally has no user-extensible target, path or FD.
 func SpecificationFor(target string) (Specification, bool) {
 	switch target {
+	case "provider-docker-control-bootstrap-v1", ControlDeliveryTarget, ControlSourceTarget, ControlTrustTarget:
+		return Specification{target, 256 << 10, []Descriptor{{3, "control-operator-verification-key", 32, true}}}, true
 	case "certificate-controller":
 		return Specification{target, 2 << 20, []Descriptor{
 			{3, "credential-agent-signing-key", 64, true},
@@ -122,7 +130,11 @@ func Decode(reader io.Reader, expected Expected) (Envelope, error) {
 
 func (value Envelope) Validate(expected Expected) error {
 	spec, ok := SpecificationFor(expected.Target)
-	if !ok || value.Protocol != ProtocolID || value.Target != expected.Target ||
+	protocol := ProtocolID
+	if framed := ControlStartupProtocol(expected.Target); framed != "" {
+		protocol = framed
+	}
+	if !ok || value.Protocol != protocol || value.Target != expected.Target ||
 		value.RunID != expected.RunID || value.Nonce != expected.Nonce ||
 		!lowerHex(value.RunID, 32) || !lowerHex(value.Nonce, 32) ||
 		!lowerHex(value.ContainerID, 64) ||
@@ -140,6 +152,20 @@ func (value Envelope) Validate(expected Expected) error {
 		}
 	}
 	return nil
+}
+
+// Only these closed Control targets retain a framed operator reply pipe.
+func ControlStartupProtocol(target string) string {
+	switch target {
+	case ControlDeliveryTarget:
+		return DeliveryStartupProtocol
+	case ControlSourceTarget:
+		return SourceStartupProtocol
+	case ControlTrustTarget:
+		return TrustStartupProtocol
+	default:
+		return ""
+	}
 }
 
 func (value *Envelope) Destroy() {

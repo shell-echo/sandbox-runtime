@@ -53,6 +53,9 @@ func newStatusClient(config statusClientConfig) (*statusClient, error) {
 		return nil, ErrInvalidStatusClient
 	}
 	transport := config.Transport.Clone()
+	// Preserve response framing/encoding for the bounded protocol decoder.
+	// Automatic gzip decoding would hide a peer's Content-Encoding header.
+	transport.DisableCompression = true
 	config.Transport = nil
 	return &statusClient{config: config, client: &http.Client{Transport: transport,
 		Timeout: config.OperationTimeout, CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -62,8 +65,16 @@ func newStatusClient(config statusClientConfig) (*statusClient, error) {
 
 func (c *statusClient) Read(ctx context.Context,
 	request codingcontrolprotocol.Request) (codingcontrolprotocol.Response, error) {
+	if request.Action != codingcontrolprotocol.ActionStatus {
+		return codingcontrolprotocol.Response{}, ErrInvalidStatusClient
+	}
+	return c.exchange(ctx, request)
+}
+
+// exchange is shared only by the read-only entry and the closed typed
+// mutation dispatcher. There is no exported generic request/Doer port.
+func (c *statusClient) exchange(ctx context.Context, request codingcontrolprotocol.Request) (codingcontrolprotocol.Response, error) {
 	if c == nil || c.client == nil || ctx == nil || ctx.Err() != nil ||
-		request.Action != codingcontrolprotocol.ActionStatus ||
 		request.Create.ProfileDigest != c.config.ProfileDigest ||
 		request.Create.ControlPolicyDigest != c.config.ControlPolicyDigest ||
 		request.Validate(time.Now().UTC(), c.config.ProviderPrincipalDigest) != nil {
@@ -81,6 +92,10 @@ func (c *statusClient) Read(ctx context.Context,
 	if err != nil {
 		return codingcontrolprotocol.Response{}, ErrInvalidStatusClient
 	}
+	// Even redirects that preserve POST and a replayable body cannot resend an
+	// original mutation. The admitted transport also disables keep-alives.
+	httpRequest.GetBody = nil
+	httpRequest.Close = true
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpResponse, err := c.client.Do(httpRequest)
 	if err != nil {
@@ -91,19 +106,20 @@ func (c *statusClient) Read(ctx context.Context,
 		len(httpResponse.Header.Values("Content-Type")) != 1 ||
 		httpResponse.Header.Get("Content-Type") != "application/json" ||
 		httpResponse.Header.Get("Content-Encoding") != "" ||
-		httpResponse.ContentLength > codingcontrolprotocol.MaxResponseBytes ||
+		httpResponse.ContentLength < 0 || httpResponse.ContentLength > codingcontrolprotocol.MaxResponseBytes ||
 		len(httpResponse.TransferEncoding) != 0 {
 		return codingcontrolprotocol.Response{}, ErrInvalidStatusClient
 	}
 	responseBody, err := io.ReadAll(io.LimitReader(httpResponse.Body,
 		codingcontrolprotocol.MaxResponseBytes+1))
 	defer clear(responseBody)
-	if err != nil || len(responseBody) > codingcontrolprotocol.MaxResponseBytes ||
+	closeErr := httpResponse.Body.Close()
+	if err != nil || closeErr != nil || int64(len(responseBody)) != httpResponse.ContentLength || len(responseBody) > codingcontrolprotocol.MaxResponseBytes ||
 		operation.Err() != nil || ctx.Err() != nil {
 		return codingcontrolprotocol.Response{}, ErrInvalidStatusClient
 	}
 	response, err := codingcontrolprotocol.DecodeResponse(responseBody, request)
-	if err != nil {
+	if err != nil || operation.Err() != nil || ctx.Err() != nil {
 		return codingcontrolprotocol.Response{}, ErrInvalidStatusClient
 	}
 	return response, nil

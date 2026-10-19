@@ -27,13 +27,15 @@ import (
 )
 
 const (
-	configProtocol         = "sandbox-runtime.workload-tls-agent-config.v2"
-	peerCRLConfigProtocol  = "sandbox-runtime.workload-tls-agent-config.v3"
-	postgresConfigProtocol = "sandbox-runtime.workload-tls-agent-config.v4"
-	maxConfigBytes         = 256 << 10
-	requestSigningFD       = 3
-	maximumPolicyTTL       = 3600
-	maximumSocketLoad      = 256
+	configProtocol           = "sandbox-runtime.workload-tls-agent-config.v2"
+	peerCRLConfigProtocol    = "sandbox-runtime.workload-tls-agent-config.v3"
+	postgresConfigProtocol   = "sandbox-runtime.workload-tls-agent-config.v4"
+	profileV2ConfigProtocol  = "sandbox-runtime.workload-tls-agent-config.v5"
+	postgresV2ConfigProtocol = "sandbox-runtime.workload-tls-agent-config.v6"
+	maxConfigBytes           = 256 << 10
+	requestSigningFD         = 3
+	maximumPolicyTTL         = 3600
+	maximumSocketLoad        = 256
 )
 
 type configDocument struct {
@@ -115,9 +117,7 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!((config.Protocol == configProtocol && config.Purpose == "" && config.Postgres == nil && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
-			(config.Protocol == peerCRLConfigProtocol && config.Purpose == "" && config.Postgres == nil && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "") ||
-			(config.Protocol == postgresConfigProtocol && config.Purpose == workloadpki.PostgresClientPurpose && config.Postgres != nil && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
+		!validConfigVersion(config) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -128,12 +128,21 @@ func run() error { //nolint:gocyclo
 		config.MaxConnections < 1 || config.MaxConnections > maximumSocketLoad || config.ReplayCapacity < 16 || config.ReplayCapacity > 65536 ||
 		config.AgentUID == 0 || config.AgentGID == 0 || config.ExpectedRoleUID == 0 || config.ExpectedRoleGID == 0 ||
 		config.AgentUID == config.ExpectedRoleUID || config.AgentGID == config.ExpectedRoleGID ||
-		config.SignerSocketUID != config.AgentUID || config.SignerSocketGID != config.ExpectedRoleGID ||
-		config.AgentUID != uint32(os.Getuid()) || config.AgentGID != uint32(os.Getgid()) {
+		config.SignerSocketUID != config.AgentUID || config.SignerSocketGID != config.ExpectedRoleGID {
 		clear(canonical)
 		return stageError("config-validate")
 	}
 	clear(canonical)
+	if !filepath.IsAbs(config.SecurityProfilePath) {
+		return stageError("security-profile-path")
+	}
+	startup, err := loadAgentProfile(config)
+	if err != nil {
+		return err
+	}
+	if config.AgentUID != uint32(os.Getuid()) || config.AgentGID != uint32(os.Getgid()) {
+		return stageError("process-identity")
+	}
 	groups, err := os.Getgroups()
 	if err != nil {
 		return stageError("supplementary-groups")
@@ -143,61 +152,20 @@ func run() error { //nolint:gocyclo
 			return stageError("supplementary-groups")
 		}
 	}
-	if !filepath.IsAbs(config.SecurityProfilePath) {
-		return stageError("security-profile-path")
+	registry := startup.registry
+	policy, agentPublic, controllerPublic, err := prepareAgentPolicy(config, registry)
+	if err != nil {
+		return err
 	}
-	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
-	if err != nil || !validateProfileBinding(profile, config) ||
-		phase6security.VerifySlice6PrivateConfigPath(profile, config.AgentDeployment,
-			phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
-		return stageError("security-profile-binding")
-	}
-	var peerSources *phase6security.PeerCRLSources
-	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
-		if phase6security.VerifySlice6PrivateConfigPath(profile, config.AgentDeployment,
-			phase6security.Slice6PeerCRLSourcesFile, config.PeerCRLSourcesPath) != nil {
-			return stageError("peer-crl-sources-path")
-		}
-		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
-		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
-			return stageError("peer-crl-sources")
-		}
-		peerSources = &mapping
-	}
-	registry, err := profile.PrincipalRegistry()
-	if err != nil || registry.Validate(config.Requester) != nil || registry.Validate(config.Subject) != nil {
-		return stageError("principal-registry")
-	}
+	defer clear(agentPublic)
+	defer clear(controllerPublic)
 	requestPrivate, err := readExactKey(requestSigningFD, "certificate-request-signing-key", ed25519.PrivateKeySize)
 	if err != nil {
 		return stageError("request-key")
 	}
 	defer clear(requestPrivate)
-	agentPublic, err := base64.RawURLEncoding.DecodeString(config.AgentPublicKey)
-	if err != nil || len(agentPublic) != ed25519.PublicKeySize ||
-		!ed25519.PrivateKey(requestPrivate).Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(agentPublic)) {
-		clear(agentPublic)
+	if !ed25519.PrivateKey(requestPrivate).Public().(ed25519.PublicKey).Equal(agentPublic) {
 		return stageError("request-identity")
-	}
-	defer clear(agentPublic)
-	controllerPublic, err := base64.RawURLEncoding.DecodeString(config.CertificateControllerPublic)
-	if err != nil || len(controllerPublic) != ed25519.PublicKeySize {
-		clear(controllerPublic)
-		return stageError("controller-identity")
-	}
-	defer clear(controllerPublic)
-	policy := workloadpki.Policy{ID: config.PolicyID, Registry: registry, Requester: config.Requester, Subject: config.Subject,
-		TrustDomain: config.TrustDomain, URI: config.URI, DNSNames: config.DNSNames, Usages: config.Usages, VaultRole: config.VaultRole,
-		MaxTTLSeconds: config.MaxTTLSeconds, ExpectedUID: config.AgentUID, ExpectedGID: config.AgentGID, PublicKey: ed25519.PublicKey(agentPublic)}
-	if config.Purpose == workloadpki.PostgresClientPurpose {
-		policy.Purpose = config.Purpose
-		policy.Postgres = workloadpki.PostgresClientIdentity{OwnerDeployment: config.Postgres.OwnerDeployment,
-			DatabaseName: config.Postgres.DatabaseName, RuntimeRole: config.Postgres.RuntimeRole,
-			ServiceName: "postgres", URI: config.URI, CommonName: config.Postgres.CommonName,
-			MaxTTL: time.Duration(config.MaxTTLSeconds) * time.Second}
-	}
-	if policy.Validate() != nil {
-		return stageError("certificate-policy")
 	}
 	client, err := workloadpki.NewProductionClient(workloadpki.ClientConfig{SocketPath: config.CertificateControllerSocket,
 		ExpectedUID: config.CertificateControllerUID, ExpectedGID: config.CertificateControllerGID,
@@ -208,18 +176,9 @@ func run() error { //nolint:gocyclo
 		return stageError("certificate-client")
 	}
 	defer client.Close()
-	var peerProvider workloadtlsagent.PeerCRLProvider
-	if peerSources != nil {
-		if config.Protocol == postgresConfigProtocol {
-			peerProvider, err = workloadtlsagent.NewPostgresControllerPeerCRLProvider(profile, *peerSources,
-				config.SubjectDeployment, config.Subject.Digest(), client, time.Now)
-		} else {
-			peerProvider, err = workloadtlsagent.NewControllerPeerCRLProvider(profile, *peerSources,
-				config.Subject.Digest(), client, time.Now)
-		}
-		if err != nil {
-			return stageError("peer-crl-provider")
-		}
+	peerProvider, err := startup.peerProvider(config, client)
+	if err != nil {
+		return stageError("peer-crl-provider")
 	}
 	manager, err := workloadtlsagent.NewProduction(workloadtlsagent.Config{Policy: policy, Client: client,
 		TTL: time.Duration(config.CertificateTTLSeconds) * time.Second, RotateAfter: time.Duration(config.RotateAfterSeconds) * time.Second,
@@ -281,6 +240,11 @@ func validateProfileBinding(profile phase6security.Profile, config configDocumen
 
 func matchesPostgresProfileBinding(profile phase6security.Profile, binding phase6security.PostgresClientAgentBinding,
 	target phase6security.Slice6PostgresSignerTarget, agent, subject phase6security.Principal, config configDocument) bool {
+	return matchesPostgresBindingFields(agentProfileFieldsV1(profile), binding, target, agent, subject, config)
+}
+
+func matchesPostgresBindingFields(profile agentProfileFields, binding phase6security.PostgresClientAgentBinding,
+	target phase6security.Slice6PostgresSignerTarget, agent, subject phase6security.Principal, config configDocument) bool {
 	if config.Purpose != workloadpki.PostgresClientPurpose || config.Postgres == nil || subject.TLS == nil ||
 		config.Postgres.OwnerDeployment != target.SubjectDeployment ||
 		config.Postgres.DatabaseName != target.DatabaseName || config.Postgres.RuntimeRole != target.SQLRole ||
@@ -291,10 +255,15 @@ func matchesPostgresProfileBinding(profile phase6security.Profile, binding phase
 	identity.DNSNames = nil
 	identity.Usages = []string{"client_auth"}
 	subject.TLS = &identity
-	return matchesProfileBinding(profile, binding.TLSAgentBinding, agent, subject, config)
+	return matchesBindingFields(profile, binding.TLSAgentBinding, agent, subject, config)
 }
 
 func matchesProfileBinding(profile phase6security.Profile, binding phase6security.TLSAgentBinding,
+	agent, subject phase6security.Principal, config configDocument) bool {
+	return matchesBindingFields(agentProfileFieldsV1(profile), binding, agent, subject, config)
+}
+
+func matchesBindingFields(profile agentProfileFields, binding phase6security.TLSAgentBinding,
 	agent, subject phase6security.Principal, config configDocument) bool {
 	if config.SecurityProfileDigest != profile.ProfileDigest || config.EnvironmentDigest != profile.EnvironmentDigest ||
 		config.ProfileDigest != profile.PrincipalProfileDigest || config.AgentDeployment == "" || config.SubjectDeployment == "" ||
@@ -302,7 +271,7 @@ func matchesProfileBinding(profile phase6security.Profile, binding phase6securit
 		return false
 	}
 	expectedTTL := subject.TLS.TTLSeconds
-	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
+	if config.Protocol != configProtocol {
 		var err error
 		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
 			subject.TLS.RotateAfterSeconds)

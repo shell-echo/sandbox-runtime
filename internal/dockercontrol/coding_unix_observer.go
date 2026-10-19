@@ -24,9 +24,9 @@ const (
 	maxCodingInventoryDuration          = 10 * time.Second
 )
 
-// codingBoundUnixEndpoint must eventually come only from the exact admitted
-// Security Profile v2/operator configuration. It has no exported constructor:
-// a caller-supplied path or digest is not an authenticated Docker endpoint.
+// codingBoundUnixEndpoint comes from the admitted Profile-v2 socket path and
+// the unchanged, persisted operator ledger binding. There is no exported raw
+// constructor. The scope digest alone is not daemon authentication.
 type codingBoundUnixEndpoint struct {
 	path        string
 	scopeDigest string

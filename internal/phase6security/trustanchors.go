@@ -15,10 +15,21 @@ func validateTrustAnchors(anchors []TrustAnchor, edges []TrustEdge, public []Pub
 func validateTrustAnchorsWithPostgres(anchors []TrustAnchor, edges []TrustEdge, public []PublicListenerBinding,
 	controller CertificateControllerAuthority, postgres []PostgresClientAgentBinding,
 	principals map[string]Principal, external map[string]ExternalService) error {
+	return validateTrustAnchorLayout(anchors, edges, public, controller, postgres, principals, external, false)
+}
+
+// Directory artifacts are confined to the explicitly versioned held v4 mode.
+// Legacy callers retain their exact file-target and empty-directory rules.
+func validateTrustAnchorLayout(anchors []TrustAnchor, edges []TrustEdge, public []PublicListenerBinding,
+	controller CertificateControllerAuthority, postgres []PostgresClientAgentBinding,
+	principals map[string]Principal, external map[string]ExternalService, directories bool) error {
 	byID := make(map[string]TrustAnchor, len(anchors))
 	storage, artifact, targets := map[string]bool{}, map[string]bool{}, map[string]TrustAnchor{}
 	previous := ""
 	for _, anchor := range anchors {
+		if !validControlTrustDirectory(anchor, directories) {
+			return ErrInvalidProfile
+		}
 		if anchor.ID <= previous || !namePattern.MatchString(anchor.ID) || !digestPattern.MatchString(anchor.BundleDigest) ||
 			(anchor.Purpose != "server_verification" && anchor.Purpose != "client_verification") ||
 			!validDNSName(anchor.TrustDomain) || !namePattern.MatchString(anchor.ArtifactID) ||
@@ -27,11 +38,11 @@ func validateTrustAnchorsWithPostgres(anchors []TrustAnchor, edges []TrustEdge, 
 			!strings.HasSuffix(anchor.TargetPath, ".pem") || anchor.WriterAuthority != "operator" ||
 			anchor.OwnerUID > 60000 || anchor.OwnerGID > 60000 || len(anchor.Consumers) < 1 ||
 			len(anchor.Consumers) > 128 || !sortedUniqueNames(anchor.Consumers) ||
-			storage[anchor.StorageID] || artifact[anchor.ArtifactID] || targets[anchor.TargetPath].ID != "" {
+			storage[anchor.StorageID] || artifact[anchor.ArtifactID] || targets[trustAnchorMountTarget(anchor)].ID != "" {
 			return ErrInvalidProfile
 		}
 		previous = anchor.ID
-		storage[anchor.StorageID], artifact[anchor.ArtifactID], targets[anchor.TargetPath] = true, true, anchor
+		storage[anchor.StorageID], artifact[anchor.ArtifactID], targets[trustAnchorMountTarget(anchor)] = true, true, anchor
 		for _, consumer := range anchor.Consumers {
 			principal, ok := principals[consumer]
 			if !ok || !hasTrustAnchorMount(principal, anchor) {
@@ -169,12 +180,19 @@ func validateTrustAnchorsWithPostgres(anchors []TrustAnchor, edges []TrustEdge, 
 
 func hasTrustAnchorMount(principal Principal, anchor TrustAnchor) bool {
 	for _, mount := range principal.Mounts {
-		if mount.Target == anchor.TargetPath && mount.Kind == "trust_anchor" && mount.ReadOnly &&
+		if mount.Target == trustAnchorMountTarget(anchor) && mount.Kind == "trust_anchor" && mount.ReadOnly &&
 			mount.StorageID == anchor.StorageID && mount.MaxBytes == 0 {
 			return true
 		}
 	}
 	return false
+}
+
+func trustAnchorMountTarget(anchor TrustAnchor) string {
+	if anchor.MountDirectory != "" {
+		return anchor.MountDirectory
+	}
+	return anchor.TargetPath
 }
 
 // EdgeTrustAnchors returns direction-specific bundle artifacts for one exact
@@ -188,12 +206,16 @@ func (p Profile) EdgeTrustAnchors(edgeID string) (TrustAnchor, TrustAnchor, erro
 
 // Only call for a locally held Profile already validated at this boundary.
 func (p Profile) edgeTrustAnchorsValidated(edgeID string) (TrustAnchor, TrustAnchor, error) {
-	for _, edge := range p.TrustEdges {
+	return edgeTrustAnchorsFields(p.TrustEdges, p.TrustAnchors, edgeID)
+}
+
+func edgeTrustAnchorsFields(edges []TrustEdge, anchors []TrustAnchor, edgeID string) (TrustAnchor, TrustAnchor, error) {
+	for _, edge := range edges {
 		if edge.ID != edgeID || edge.Authentication != "mtls" {
 			continue
 		}
 		var server, client TrustAnchor
-		for _, anchor := range p.TrustAnchors {
+		for _, anchor := range anchors {
 			if anchor.ID == edge.ServerAnchorID {
 				server = anchor
 			}
@@ -212,7 +234,11 @@ func (p Profile) ConsumerTrustAnchor(anchorID, consumer, purpose string) (TrustA
 	if p.Validate() != nil {
 		return TrustAnchor{}, ErrInvalidProfile
 	}
-	for _, anchor := range p.TrustAnchors {
+	return consumerTrustAnchorFields(p.TrustAnchors, anchorID, consumer, purpose)
+}
+
+func consumerTrustAnchorFields(anchors []TrustAnchor, anchorID, consumer, purpose string) (TrustAnchor, error) {
+	for _, anchor := range anchors {
 		if anchor.ID == anchorID && anchor.Purpose == purpose && slices.Contains(anchor.Consumers, consumer) {
 			return anchor, nil
 		}

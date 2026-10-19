@@ -191,7 +191,13 @@ func refreshPostgresOwn(ctx context.Context, guard postgresOwnStartupGuard, cons
 
 // openDirectV3Postgres is shared by Product and the coding Provider; neither
 // may select the Browser/Desktop broker-only database path.
-func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.Profile,
+type directPostgresProfile interface {
+	phase6security.Profile | phase6security.ProfileV2
+	ResolveSlice6FinalPostgresAuthority(string) (phase6security.Slice6PostgresAuthority, error)
+	PostgresClientSignerForOwner(string) (phase6security.PostgresClientAgentBinding, phase6security.Slice6PostgresSignerTarget, phase6security.Principal, phase6security.Principal, phase6security.TrustAnchor, error)
+}
+
+func openDirectV3Postgres[P directPostgresProfile](ctx, lifetime context.Context, profile P,
 	registry *secretref.Registry, settings directV3PostgresSettings) (*pgxpool.Pool, func(), error) {
 	if ctx == nil || lifetime == nil || ctx.Err() != nil || lifetime.Err() != nil || registry == nil {
 		return nil, nil, postgresStartupError(postgresStageAuthority, "direct v3 PostgreSQL startup is unavailable")
@@ -214,15 +220,25 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 	if err != nil {
 		return nil, nil, postgresStartupError(postgresStageSignerClient, "direct v3 PostgreSQL signer is unavailable")
 	}
-	role, err := phase6security.VerifyPeerCRLRoleFile(settings.PeerCRLRoleFile, profile,
-		settings.PeerCRLSourceMappingDigest, settings.PeerCRLRoleDigest)
+	var role phase6security.PeerCRLRoleDocument
+	switch p := any(profile).(type) {
+	case phase6security.Profile:
+		role, err = phase6security.VerifyPeerCRLRoleFile(settings.PeerCRLRoleFile, p, settings.PeerCRLSourceMappingDigest, settings.PeerCRLRoleDigest)
+	case phase6security.ProfileV2:
+		role, err = phase6security.VerifyPostgresPeerCRLRoleFileV2(settings.PeerCRLRoleFile, p, settings.PeerCRLSourceMappingDigest, settings.PeerCRLRoleDigest, settings.Owner, subject.PrincipalDigest)
+	}
 	if err != nil {
 		return nil, nil, postgresStartupError(postgresStagePeerRole, "direct v3 PostgreSQL peer role is unavailable")
 	}
-	guard, err := phase6tls.PostgresPeerGuard(profile, phase6tls.PostgresPeerAuthority{
-		Owner: authority.Owner, PeerCRLRole: role, AgentSocket: settings.ClientAgentSocket,
-		AgentUID: settings.ClientAgentUID, AgentGID: settings.ClientAgentGID,
-		OperationTimeout: operationTimeout})
+	peerAuthority := phase6tls.PostgresPeerAuthority{Owner: authority.Owner, PeerCRLRole: role, AgentSocket: settings.ClientAgentSocket,
+		AgentUID: settings.ClientAgentUID, AgentGID: settings.ClientAgentGID, OperationTimeout: operationTimeout}
+	var guard *phase6tls.PeerCRLGuard
+	switch p := any(profile).(type) {
+	case phase6security.Profile:
+		guard, err = phase6tls.PostgresPeerGuard(p, peerAuthority)
+	case phase6security.ProfileV2:
+		guard, err = phase6tls.PostgresPeerGuardV2(p, phase6tls.PostgresPeerAuthorityV2{PostgresPeerAuthority: peerAuthority, SourceMappingDigest: settings.PeerCRLSourceMappingDigest, RoleDigest: settings.PeerCRLRoleDigest})
+	}
 	var peerStartup postgresPeerStartupGuard
 	if guard != nil {
 		peerStartup = guard
@@ -230,7 +246,13 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 	if startupErr := bootstrapPostgresPeer(ctx, peerStartup, err); startupErr != nil {
 		return nil, nil, startupErr
 	}
-	direct, err := phase6egress.NewDirectPostgres(ctx, profile, authority.Owner, signer.CertificateForHandshake)
+	var direct *phase6egress.DirectPostgres
+	switch p := any(profile).(type) {
+	case phase6security.Profile:
+		direct, err = phase6egress.NewDirectPostgres(ctx, p, authority.Owner, signer.CertificateForHandshake)
+	case phase6security.ProfileV2:
+		direct, err = phase6egress.NewDirectPostgresV2(ctx, p, authority.Owner, signer.CertificateForHandshake)
+	}
 	if err != nil || direct == nil {
 		guard.Close()
 		return nil, nil, postgresStartupError(postgresStageTLSClient, "direct v3 PostgreSQL TLS identity is unavailable")
@@ -261,8 +283,13 @@ func openDirectV3Postgres(ctx, lifetime context.Context, profile phase6security.
 		guard.Close()
 		return nil, nil, postgresStartupError(postgresStagePoolBinding, "direct v3 PostgreSQL connection is unavailable")
 	}
-	ownGuard, err := phase6egress.NewPostgresOwnGuard(profile, settings.Owner, signer,
-		operationTimeout, time.Now)
+	var ownGuard *phase6egress.PostgresOwnGuard
+	switch p := any(profile).(type) {
+	case phase6security.Profile:
+		ownGuard, err = phase6egress.NewPostgresOwnGuard(p, settings.Owner, signer, operationTimeout, time.Now)
+	case phase6security.ProfileV2:
+		ownGuard, err = phase6egress.NewPostgresOwnGuardV2(p, settings.Owner, signer, operationTimeout, time.Now)
+	}
 	var ownStartup postgresOwnStartupGuard
 	if ownGuard != nil {
 		ownStartup = ownGuard

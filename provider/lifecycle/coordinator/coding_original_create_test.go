@@ -18,6 +18,41 @@ import (
 
 func originalTestDigest(character string) string { return "sha256:" + strings.Repeat(character, 64) }
 
+type codingReadbackProbe struct {
+	calls     int
+	operation lifecycle.Operation
+	sandbox   lifecycle.Sandbox
+}
+
+func (p *codingReadbackProbe) ReconcileCodingCreate(context.Context, string) (lifecycle.Operation, lifecycle.Sandbox, error) {
+	p.calls++
+	return p.operation, p.sandbox, nil
+}
+
+func TestCodingRecoveryUsesTypedReadbackWithoutLegacyOrRedispatch(t *testing.T) {
+	now := time.Now().UTC()
+	service, repo, driver, clock := newOriginalCoordinator(t, now)
+	request := codingRequest(now)
+	if _, err := service.AcceptCreate(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+	first, err := service.ReconcileOperation(t.Context(), request.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := &codingReadbackProbe{operation: first.Operation, sandbox: first.Sandbox}
+	probe.operation.State = lifecycle.OperationOutcomeUnknown
+	probe.sandbox.ObservedState = lifecycle.ObservedReady
+	service, err = NewWithCodingOriginalAuthorityAndReadback(repo, driver, probe, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := service.ReconcileOperation(t.Context(), request.OperationID)
+	if err != nil || probe.calls != 1 || got.Operation.State != lifecycle.OperationOutcomeUnknown || got.Sandbox.ObservedState != lifecycle.ObservedReady || len(driver.originals) != 1 {
+		t.Fatalf("typed recovery: %#v %v", got, err)
+	}
+}
+
 type testCodingOriginalRepository struct {
 	*testCodingBoundRepository
 	plan        codingidentity.Plan

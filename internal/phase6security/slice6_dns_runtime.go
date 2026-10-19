@@ -23,6 +23,12 @@ func VerifySlice6DNSRuntimePolicy(profile Profile) error {
 	if profile.Validate() != nil {
 		return errSlice6DesiredInventory
 	}
+	return verifySlice6DNSRuntimePolicyValidated(profile)
+}
+
+// verifySlice6DNSRuntimePolicyValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DNSRuntimePolicyValidated(profile Profile) error {
 	count := 0
 	for _, service := range profile.External {
 		if service.Name != "dns" {

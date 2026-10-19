@@ -24,7 +24,8 @@ func testV2PrivateBoundaries() (ProfileV2, map[string]Principal, map[string]Trus
 		[]string{"provider-coding-scanner"},
 		[]Listener{{Name: "scanner", Protocol: "tcp", Port: 8446, Exposure: "trust_edge"}},
 		[]Mount{{Target: v2ScannerRuleTarget, Kind: "scanner_rules", ReadOnly: true,
-			StorageID: "scanner-rules", MaxBytes: v2ScannerRuleMaxBytes}})
+			StorageID: "scanner-rules", MaxBytes: v2ScannerRuleMaxBytes},
+			{Target: ScannerRuntimeDirectoryV2, Kind: "tmpfs", MaxBytes: ScannerRuntimeMaxBytesV2}})
 	principals := map[string]Principal{control.Name: control, scanner.Name: scanner}
 	for _, spec := range v2ControlScopes {
 		principals[spec.ProviderDeployment] = principal(spec.ProviderDeployment, "runtime",

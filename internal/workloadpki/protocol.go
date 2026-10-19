@@ -567,6 +567,8 @@ func validPrincipalDelegation(requester, subject securityprincipal.Principal) bo
 		"desktop_tls_agent":                          {securityprincipal.KindRuntimeRole, "desktop"},
 		"browser_executor_tls_agent":                 {securityprincipal.KindExecutorBackend, "browser_executor"},
 		"desktop_executor_tls_agent":                 {securityprincipal.KindExecutorBackend, "desktop_executor"},
+		"provider_docker_control_tls_agent":          {securityprincipal.KindDockerControl, "provider_docker_control"},
+		"provider_artifact_scanner_tls_agent":        {securityprincipal.KindArtifactScanner, "provider_artifact_scanner"},
 		"browser_action_ingress_tls_agent":           {securityprincipal.KindRuntimeRole, "browser_action_ingress"},
 		"browser_action_ingress_agent_tls_agent":     {securityprincipal.KindMaterialAgent, "browser_action_ingress_agent"},
 		"gateway_agent_tls_agent":                    {securityprincipal.KindMaterialAgent, "gateway_agent"},

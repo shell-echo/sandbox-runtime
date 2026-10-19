@@ -72,7 +72,16 @@ func slice6FinalAnchorSpecs() []slice6AnchorSpec {
 }
 
 func verifySlice6TrustAnchors(profile Profile, expected []slice6AnchorSpec) error {
-	if profile.Validate() != nil || len(profile.TrustAnchors) != len(expected) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6TrustAnchorsValidated(profile, expected)
+}
+
+// verifySlice6TrustAnchorsValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6TrustAnchorsValidated(profile Profile, expected []slice6AnchorSpec) error {
+	if len(profile.TrustAnchors) != len(expected) {
 		return errSlice6DesiredInventory
 	}
 	for index, anchor := range profile.TrustAnchors {

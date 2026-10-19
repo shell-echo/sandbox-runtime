@@ -43,7 +43,10 @@ func (r *LifecycleRepository) ReserveCreate(ctx context.Context, key, digest str
 		result, err = state.ReserveCreate(key, digest, sandbox, operation)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return lifecyclerepository.CreateResult{}, err
+	}
+	return result, nil
 }
 
 func (r *LifecycleRepository) ReserveMutation(ctx context.Context, key, digest string, expected uint64, sandbox lifecycle.Sandbox, operation lifecycle.Operation, event lifecycle.Event) (lifecyclerepository.MutationResult, error) {
@@ -53,7 +56,10 @@ func (r *LifecycleRepository) ReserveMutation(ctx context.Context, key, digest s
 		result, err = state.ReserveMutation(key, digest, expected, sandbox, operation, event)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return lifecyclerepository.MutationResult{}, err
+	}
+	return result, nil
 }
 
 func (r *LifecycleRepository) GetSandbox(ctx context.Context, id string) (lifecycle.Sandbox, error) {
@@ -107,7 +113,10 @@ func (r *LifecycleRepository) AppendEvent(ctx context.Context, event lifecycle.E
 		result, err = state.AppendEvent(event)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return lifecycle.Event{}, err
+	}
+	return result, nil
 }
 func (r *LifecycleRepository) ListEvents(ctx context.Context, sandboxID string, after uint64, limit int) ([]lifecycle.Event, error) {
 	state, err := r.read(ctx)

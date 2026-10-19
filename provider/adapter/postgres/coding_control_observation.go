@@ -184,8 +184,11 @@ func (r *CodingLifecycleRepository) FinishWithObservation(ctx context.Context,
 			_, _, finishErr := finishCodingCurrentCleanup(ctx, slots, ledger, r.bound.plan,
 				codingReleaseAdmission{Create: create, Cleanup: cleanup, Released: released,
 					ControlRevision:    observed.ControlRevision(),
-					ControlStateDigest: observed.ControlStateDigest(), SpecBySlot: r.specBySlot}, now)
-			return finishErr
+					ControlStateDigest: observed.ControlStateDigest(), SpecBySlot: r.specBySlot, RequireDispatchAcknowledgement: true}, now)
+			if finishErr != nil {
+				return finishErr
+			}
+			return checkCodingRetirementBarrierWithMarker(*marker, *slots, *ledger, *ledger, now)
 		})
 	if err != nil {
 		return err

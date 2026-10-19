@@ -62,8 +62,20 @@ func AttachSlice6ControllerLedgerMounts(principals []Principal) ([]Principal, er
 // VerifySlice6ControllerLedgerMounts rejects aliases and path nesting across
 // every principal, not just a missing mount on the two owners.
 func VerifySlice6ControllerLedgerMounts(profile Profile) error {
-	owners := []string{"break-glass-controller", "certificate-controller", "workload-credential-controller"}
-	for _, principal := range profile.Principals {
+	return verifyControllerLedgerMountsFields(profile.Principals, controllerLedgerOwners())
+}
+
+func controllerLedgerOwners() map[string]Mount {
+	owners := make(map[string]Mount, 3)
+	for _, owner := range []string{"break-glass-controller", "certificate-controller", "workload-credential-controller"} {
+		mount, _, _ := Slice6ControllerLedgerMount(owner)
+		owners[owner] = mount
+	}
+	return owners
+}
+
+func verifyControllerLedgerMountsFields(principals []Principal, owners map[string]Mount) error {
+	for _, principal := range principals {
 		for _, mount := range principal.Mounts {
 			if mount.Kind != "persistent_ledger" {
 				continue
@@ -82,19 +94,15 @@ func VerifySlice6ControllerLedgerMounts(profile Profile) error {
 			if policyAuthority {
 				continue
 			}
-			want, _, err := Slice6ControllerLedgerMount(principal.Name)
-			if err != nil || mount != want {
+			want, ok := owners[principal.Name]
+			if !ok || mount != want {
 				return errSlice6DesiredInventory
 			}
 		}
 	}
-	for _, owner := range owners {
-		want, _, err := Slice6ControllerLedgerMount(owner)
-		if err != nil {
-			return errSlice6DesiredInventory
-		}
+	for owner, want := range owners {
 		found := 0
-		for _, principal := range profile.Principals {
+		for _, principal := range principals {
 			for _, mount := range principal.Mounts {
 				if mount.StorageID == want.StorageID || mount.Target == want.Target ||
 					strings.HasPrefix(mount.Target, want.Target+"/") ||

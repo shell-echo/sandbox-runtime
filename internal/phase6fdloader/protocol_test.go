@@ -88,3 +88,24 @@ func TestSpecificationForIsClosedAndOrdered(t *testing.T) {
 		}
 	}
 }
+
+func TestControlBootstrapDescriptorIsDistinctFromTLSPrivateKey(t *testing.T) {
+	s, ok := SpecificationFor("provider-docker-control-bootstrap-v1")
+	if !ok || len(s.Descriptors) != 1 || s.Descriptors[0] != (Descriptor{3, "control-operator-verification-key", 32, true}) {
+		t.Fatal("bootstrap table")
+	}
+	tls, _ := SpecificationFor("workload-tls-agent")
+	if tls.Descriptors[0].MaxBytes != 64 || tls.Descriptors[0].Purpose != "certificate-request-signing-key" {
+		t.Fatal("TLS key changed")
+	}
+	id := strings.Repeat("a", 64)
+	want := Expected{RunID: strings.Repeat("b", 32), Target: s.Target, Nonce: strings.Repeat("c", 32), ContainerHostname: id[:12]}
+	v := Envelope{Protocol: ProtocolID, RunID: want.RunID, Target: want.Target, ContainerID: id, Nonce: want.Nonce, Config: []byte("{}"), Files: []PrivateFile{{3, bytes.Repeat([]byte{1}, 32)}}}
+	if v.Validate(want) != nil {
+		t.Fatal("valid bootstrap input")
+	}
+	v.Files[0].Data = bytes.Repeat([]byte{1}, 64)
+	if v.Validate(want) == nil {
+		t.Fatal("private key on public FD")
+	}
+}

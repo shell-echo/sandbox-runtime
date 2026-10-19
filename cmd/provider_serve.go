@@ -74,21 +74,14 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if err := providerConfig.Validate(); err != nil {
 		return err
 	}
-	if err := rejectUncomposedCodingV3(providerConfig); err != nil {
-		return err
+	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 && providerConfig.Profile == config.ProviderProcessCodingShellProfile {
+		return runProviderCodingV3(cmd.Context(), providerConfig)
 	}
 	var securityProfile phase6security.Profile
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
 		var err error
 		securityProfile, err = preflightProviderV3Serve(providerConfig)
-		if err != nil {
-			return err
-		}
-	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
-		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
-		var err error
-		securityProfile, err = preflightProviderCodingV3Postgres(providerConfig)
 		if err != nil {
 			return err
 		}
@@ -106,9 +99,6 @@ func runProviderServe(cmd *cobra.Command, _ []string) (result error) {
 	if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
 		(providerConfig.Profile == config.ProviderProcessBrowserProfile || providerConfig.Profile == config.ProviderProcessDesktopProfile) {
 		runtimePool, poolClose, databaseAuthority, err = openProviderV3Postgres(startupContext, cmd.Context(), providerConfig, securityProfile, materialRegistry)
-	} else if providerConfig.SchemaVersion == config.ProviderProductionSchemaV3 &&
-		providerConfig.Profile == config.ProviderProcessCodingShellProfile {
-		runtimePool, poolClose, err = openProviderCodingV3Postgres(startupContext, cmd.Context(), providerConfig, securityProfile, materialRegistry)
 	} else {
 		runtimePool, err = openProviderPostgresRegistry(startupContext, materialRegistry, providerConfig.Postgres.RuntimeDSNBindingID, secretref.PurposePostgresRuntimeDSN, providerConfig.Postgres.MaxConnections, providerConfig.Postgres.MinConnections)
 		if err == nil {
@@ -169,9 +159,9 @@ func providerServeSchemaAllowed(cfg *config.ProviderProcessConfig) bool {
 			(cfg.Profile == config.ProviderProcessDesktopProfile && cfg.DeploymentLevel == config.ProviderLocalCandidateLevel))
 }
 
-// The coding v3 route still constructs the legacy command scanners and a
-// daemon-facing lifecycle driver. The reviewed v2 Profile, private scanner,
-// and Docker-control composition must all exist before this route can start.
+// The coding v3 route selects its own typed v2 dependency composition. Full
+// Control mutations and daemon-free lifecycle/exec/terminal/artifact runtime
+// ports are not composed, so the public serve route remains closed.
 // Keep this guard ahead of material, PostgreSQL, and Docker side effects;
 // schema admission alone is not a production-readiness claim.
 func rejectUncomposedCodingV3(cfg *config.ProviderProcessConfig) error {
@@ -849,7 +839,7 @@ func newProviderRuntimeMaterialRegistry(cfg *config.ProviderProcessConfig,
 		owner := ""
 		switch cfg.Profile {
 		case config.ProviderProcessCodingShellProfile:
-			owner = "provider-runtime"
+			return nil, errors.New("Coding v3 requires the typed v2 material composition")
 		case config.ProviderProcessBrowserProfile:
 			owner = "provider-browser-runtime"
 		case config.ProviderProcessDesktopProfile:

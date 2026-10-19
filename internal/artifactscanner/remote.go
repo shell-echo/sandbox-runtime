@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/connectiondrain"
@@ -30,9 +31,12 @@ type RemoteConfig struct {
 // Provider's local passive-json policy runs first; the scanner independently
 // returns both policy and malware results for the exact same bounded bytes.
 type RemoteMalwareChecker struct {
-	config RemoteConfig
-	client *http.Client
-	base   string
+	config    RemoteConfig
+	client    *http.Client
+	base      string
+	cleanup   func()
+	closeOnce sync.Once
+	lifetime  context.Context
 }
 
 func NewRemoteMalwareChecker(config RemoteConfig) (*RemoteMalwareChecker, error) {
@@ -64,9 +68,11 @@ func NewRemoteMalwareChecker(config RemoteConfig) (*RemoteMalwareChecker, error)
 }
 
 func (c *RemoteMalwareChecker) CheckSupport(ctx context.Context, _ artifact.Request) error {
-	if c == nil || c.client == nil || c.config.Peer == nil || !c.config.Peer.Ready() {
+	if ctx == nil || ctx.Err() != nil || !c.available() {
 		return artifact.ErrUnsupportedChecks
 	}
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/readyz", nil)
 	if err != nil {
 		return artifact.ErrUnsupportedChecks
@@ -77,7 +83,7 @@ func (c *RemoteMalwareChecker) CheckSupport(ctx context.Context, _ artifact.Requ
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusNoContent ||
-		response.Header.Get("X-Sandbox-Rule-Set-Digest") != c.config.ExpectedRuleSetDigest {
+		response.Header.Get("X-Sandbox-Rule-Set-Digest") != c.config.ExpectedRuleSetDigest || !c.available() {
 		return artifact.ErrUnsupportedChecks
 	}
 	return ctx.Err()
@@ -90,11 +96,13 @@ func (c *RemoteMalwareChecker) CheckContent(ctx context.Context, request artifac
 	if err := ctx.Err(); err != nil {
 		return artifact.CheckNotRun, err
 	}
-	if c == nil || c.client == nil || c.config.Peer == nil || !c.config.Peer.Ready() ||
+	if !c.available() ||
 		len(content) == 0 || len(content) > artifact.MaxArtifactBytes ||
 		scanDigest(content) != request.ExpectedDigest {
 		return artifact.CheckNotRun, artifact.ErrUnsupportedChecks
 	}
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	authority, err := NewAuthority(ctx, request, c.config.ProfileDigest, c.config.Clock().UTC(), c.config.OperationTimeout)
 	if err != nil {
 		return artifact.CheckNotRun, errors.Join(artifact.ErrUnsupportedChecks, err)
@@ -122,15 +130,34 @@ func (c *RemoteMalwareChecker) CheckContent(ctx context.Context, request artifac
 		return artifact.CheckNotRun, errors.Join(artifact.ErrUnsupportedChecks, err)
 	}
 	result, err := DecodeResponse(encodedResponse, authority, c.config.Clock().UTC())
-	if err != nil || result.RuleSetDigest != c.config.ExpectedRuleSetDigest || result.Active != artifact.CheckPassed {
+	if err != nil || result.RuleSetDigest != c.config.ExpectedRuleSetDigest || result.Active != artifact.CheckPassed || !c.available() {
 		return artifact.CheckNotRun, artifact.ErrUnsupportedChecks
 	}
 	return result.Malware, ctx.Err()
 }
 
+// A Provider-owned lifetime cancels in-flight requests as well as peer polling.
+// Existing component callers without a lifetime retain request cancellation.
+func (c *RemoteMalwareChecker) requestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	operation, cancel := context.WithTimeout(ctx, c.config.OperationTimeout)
+	if c.lifetime == nil {
+		return operation, cancel
+	}
+	stop := context.AfterFunc(c.lifetime, cancel)
+	return operation, func() { stop(); cancel() }
+}
+func (c *RemoteMalwareChecker) available() bool {
+	return c != nil && c.client != nil && c.config.Peer != nil && c.config.Peer.Ready() && (c.lifetime == nil || c.lifetime.Err() == nil)
+}
+
 func (c *RemoteMalwareChecker) Close() error {
 	if c != nil && c.client != nil {
-		c.client.CloseIdleConnections()
+		c.closeOnce.Do(func() {
+			c.client.CloseIdleConnections()
+			if c.cleanup != nil {
+				c.cleanup()
+			}
+		})
 	}
 	return nil
 }

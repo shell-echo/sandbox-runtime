@@ -12,6 +12,12 @@ func (p Profile) BrokerBoundaryForPolicy(policyID string) (TrustEdge, Principal,
 	if p.Validate() != nil {
 		return TrustEdge{}, Principal{}, Principal{}, Network{}, ErrInvalidProfile
 	}
+	return p.brokerBoundaryForPolicyValidated(policyID)
+}
+
+// brokerBoundaryForPolicyValidated requires p.Validate to have succeeded for
+// this unchanged profile in the current call. No result is retained across calls.
+func (p Profile) brokerBoundaryForPolicyValidated(policyID string) (TrustEdge, Principal, Principal, Network, error) {
 	for _, policy := range p.EgressPolicies {
 		if policy.ID != policyID {
 			continue

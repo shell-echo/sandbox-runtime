@@ -38,6 +38,11 @@ func (p Profile) ResolveSlice6FinalPostgresAuthority(owner string) (Slice6Postgr
 // authority check on the same, unmodified Profile value. Public resolution
 // always performs that check itself.
 func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Slice6PostgresAuthority, error) {
+	return resolveSlice6PostgresAuthorityFields(p.PostgresClientAgents, p.Principals, p.TrustAnchors, p.External, p.TrustEdges, owner)
+}
+
+func resolveSlice6PostgresAuthorityFields(bindings []PostgresClientAgentBinding, principals []Principal,
+	anchors []TrustAnchor, external []ExternalService, edges []TrustEdge, owner string) (Slice6PostgresAuthority, error) {
 	var rule Slice6PostgresHBARule
 	rules, err := Slice6DesiredFinalSharedPostgresHBARules()
 	if err != nil {
@@ -52,7 +57,7 @@ func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Sli
 	if rule.Owner == "" {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
-	signer, signerTarget, _, _, _, err := p.postgresClientSignerForOwnerValidated(owner)
+	signer, signerTarget, _, _, _, err := postgresClientSignerForOwnerFields(bindings, principals, anchors, owner)
 	if err != nil || signerTarget.DatabaseName != rule.Database || signerTarget.SQLRole != rule.SQLRole ||
 		signerTarget.Migration != rule.Migration {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
@@ -78,7 +83,7 @@ func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Sli
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
 	var service ExternalService
-	for _, candidate := range p.External {
+	for _, candidate := range external {
 		if candidate.Name == "postgres" {
 			service = candidate
 			break
@@ -88,7 +93,7 @@ func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Sli
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
 	var selected, peer TrustEdge
-	for _, edge := range p.TrustEdges {
+	for _, edge := range edges {
 		if slices.Contains(path.EdgeIDs, edge.ID) && edge.From == path.Dialer && edge.To == "postgres" {
 			if selected.ID != "" {
 				return Slice6PostgresAuthority{}, ErrInvalidProfile
@@ -111,7 +116,7 @@ func (p Profile) resolveSlice6FinalPostgresAuthorityValidated(owner string) (Sli
 		selected.ExternalIdentityDigest != service.IdentityDigest {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}
-	serverAnchor, clientAnchor, err := p.edgeTrustAnchorsValidated(selected.ID)
+	serverAnchor, clientAnchor, err := edgeTrustAnchorsFields(edges, anchors, selected.ID)
 	if err != nil || serverAnchor.ID != "external-server-ca" || clientAnchor.ID != "" {
 		return Slice6PostgresAuthority{}, ErrInvalidProfile
 	}

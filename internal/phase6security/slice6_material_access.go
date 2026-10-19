@@ -82,15 +82,22 @@ func BuildSlice6DesiredMaterialAccess(profile Profile) ([]Slice6MaterialAccess, 
 		len(slice6MaterialAccessTemplates) != 11 {
 		return nil, errSlice6DesiredInventory
 	}
-	byName := make(map[string]Principal, len(profile.Principals))
-	for _, principal := range profile.Principals {
+	return buildSlice6MaterialAccessFields(profile.ProfileDigest, profile.Principals, profile.CredentialIssuerSockets)
+}
+
+func buildSlice6MaterialAccessFields(profileDigest string, principals []Principal, sockets []CredentialIssuerSocketBinding) ([]Slice6MaterialAccess, error) {
+	if len(sockets) != len(slice6MaterialAccessTemplates)+1 || len(slice6MaterialAccessTemplates) != 11 {
+		return nil, errSlice6DesiredInventory
+	}
+	byName := make(map[string]Principal, len(principals))
+	for _, principal := range principals {
 		byName[principal.Name] = principal
 	}
 	seenAgents, seenPaths := map[string]bool{}, map[string]bool{}
 	result := make([]Slice6MaterialAccess, 0, len(slice6MaterialAccessTemplates))
 	for _, template := range slice6MaterialAccessTemplates {
 		agent, owner := byName[template.agent], byName[template.owner]
-		binding, _, resolved, err := profile.CredentialIssuerSocketForClient(template.agent)
+		binding, _, resolved, err := credentialIssuerSocketForClientFields(sockets, principals, template.agent)
 		if err != nil || seenAgents[template.agent] || agent.Name != template.agent || owner.Name != template.owner ||
 			resolved.PrincipalDigest != agent.PrincipalDigest || resolved.UID != agent.UID || resolved.GID != agent.GID ||
 			agent.Kind != "material_agent" || agent.AuthorizationPrincipal == nil ||
@@ -101,7 +108,7 @@ func BuildSlice6DesiredMaterialAccess(profile Profile) ([]Slice6MaterialAccess, 
 			return nil, errSlice6DesiredInventory
 		}
 		seenAgents[template.agent] = true
-		entry := Slice6MaterialAccess{SecurityProfileDigest: profile.ProfileDigest, Agent: agent.Name, Owner: owner.Name,
+		entry := Slice6MaterialAccess{SecurityProfileDigest: profileDigest, Agent: agent.Name, Owner: owner.Name,
 			Migration:      owner.Kind == "migration_job",
 			AgentPrincipal: agent.PrincipalDigest, OwnerPrincipal: owner.PrincipalDigest,
 			AgentUID: agent.UID, AgentGID: agent.GID, CredentialSocket: binding.SocketPath,
@@ -142,11 +149,11 @@ func BuildSlice6DesiredMaterialAccess(profile Profile) ([]Slice6MaterialAccess, 
 		if err != nil {
 			return nil, errSlice6DesiredInventory
 		}
-		sum := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6-material-access/v1\x00"+profile.ProfileDigest+"\x00"), encoded...))
+		sum := sha256.Sum256(append([]byte("sandbox-runtime/phase6-slice6-material-access/v1\x00"+profileDigest+"\x00"), encoded...))
 		entry.Digest = "sha256:" + hex.EncodeToString(sum[:])
 		result = append(result, entry)
 	}
-	for _, binding := range profile.CredentialIssuerSockets {
+	for _, binding := range sockets {
 		if binding.ClientDeployment != "certificate-controller" && !seenAgents[binding.ClientDeployment] {
 			return nil, errSlice6DesiredInventory
 		}

@@ -15,12 +15,13 @@ import (
 )
 
 type codingReleaseAdmission struct {
-	Create             dockercontrol.CodingCreateAuthority
-	Cleanup            dockercontrol.CodingCleanupAuthority
-	Released           dockercontrol.CodingReceipt
-	ControlRevision    uint64
-	ControlStateDigest string
-	SpecBySlot         map[string]string
+	Create                         dockercontrol.CodingCreateAuthority
+	Cleanup                        dockercontrol.CodingCleanupAuthority
+	Released                       dockercontrol.CodingReceipt
+	ControlRevision                uint64
+	ControlStateDigest             string
+	SpecBySlot                     map[string]string
+	RequireDispatchAcknowledgement bool
 }
 
 // FinishCodingCurrentCleanup is a source-only same-PG-row release CAS. The
@@ -206,30 +207,49 @@ func finishCodingCurrentCleanup(ctx context.Context, slots *codingidentity.State
 		return fail()
 	}
 	stage = "transaction-transition"
+	// Event collisions and invalid outcomes must not leave partial state even
+	// in the in-process helper. The enclosing PG CAS commits these together.
+	nextSlots := slots.Clone()
+	nextLedger := newLifecycleState()
+	if nextLedger.Import(ledger.Export()) != nil {
+		return fail()
+	}
 	terminated, err := lifecycle.ApplyObservedTransition(sandbox,
 		lifecycle.ObservedTerminated, sandbox.Generation, now)
-	if err != nil || ledger.UpdateSandbox(terminated, sandbox.Generation, binding.CurrentFence) != nil {
+	if err != nil || nextLedger.UpdateSandbox(terminated, sandbox.Generation, binding.CurrentFence) != nil {
 		return fail()
 	}
 	result := operation
 	if operation.State == lifecycle.OperationRunning {
-		result, err = lifecycle.SucceedOperation(operation, now)
-		if err != nil || ledger.UpdateOperation(result) != nil {
+		if operation.CancelRequested || !now.Before(operation.Deadline) || input.RequireDispatchAcknowledgement && !binding.DispatchAcknowledged {
+			code := "coding_cleanup_completion_late"
+			if input.RequireDispatchAcknowledgement && !binding.DispatchAcknowledged {
+				code = "coding_cleanup_dispatch_unknown"
+			}
+			result, err = lifecycle.MarkOutcomeUnknown(operation, now, lifecycle.Failure{Code: code, Retryable: true, Outcome: lifecycle.FailureUnknown})
+		} else {
+			result, err = lifecycle.SucceedOperation(operation, now)
+		}
+		if err != nil || nextLedger.UpdateOperation(result) != nil {
+			return fail()
+		}
+		if result.State == lifecycle.OperationOutcomeUnknown && appendCodingReadyEvent(&nextLedger, sandbox, result, "outcome-unknown", "", now) != nil {
 			return fail()
 		}
 	}
-	slots.Reservations = slices.Delete(slots.Reservations, index, index+1)
-	delete(slots.Retirements, create.SlotID)
-	if slots.Validate(plan) != nil {
+	nextSlots.Reservations = slices.Delete(nextSlots.Reservations, index, index+1)
+	delete(nextSlots.Retirements, create.SlotID)
+	if nextSlots.Validate(plan) != nil {
 		return fail()
 	}
 	stage = "terminated-event"
 	eventSum := sha256.Sum256([]byte(result.ID + "\x00" + string(result.State) + "\x00terminated"))
-	_, err = ledger.AppendEvent(lifecycle.Event{ID: "event-" + hex.EncodeToString(eventSum[:]),
+	_, err = nextLedger.AppendEvent(lifecycle.Event{ID: "event-" + hex.EncodeToString(eventSum[:]),
 		SandboxID: terminated.ID, OperationID: result.ID, Generation: terminated.Generation,
 		FencingToken: result.FencingToken, Kind: "terminated", OccurredAt: now})
 	if err != nil || ctx.Err() != nil {
 		return fail()
 	}
+	*slots, *ledger = nextSlots, nextLedger
 	return result, terminated, nil
 }

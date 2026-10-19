@@ -32,7 +32,7 @@ func (r *ExecRepository) mutate(ctx context.Context, mutation func(*execreposito
 	return mutateState(ctx, r.store, execDocument, newExecState, importExecState, exportExecState, mutation)
 }
 func (r *ExecRepository) read(ctx context.Context) (execrepository.State, error) {
-	return readState(ctx, r.store, execDocument, newExecState, importExecState)
+	return readLegacyExecState(ctx, r.store)
 }
 func (r *ExecRepository) ReserveExecution(ctx context.Context, request providerexec.Request, dispatch ...providerexec.Dispatch) (providerexec.ExecutionReservation, error) {
 	acceptedAt := time.Now().UTC()
@@ -48,7 +48,10 @@ func (r *ExecRepository) ReserveExecutionAt(ctx context.Context, request provide
 		result, err = state.ReserveExecutionAt(request, acceptedAt, dispatch...)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return providerexec.ExecutionReservation{}, err
+	}
+	return result, nil
 }
 func (r *ExecRepository) AttachExecution(ctx context.Context, attachment providerexec.ExecutionAttachment) (providerexec.ExecutionReservation, error) {
 	var result providerexec.ExecutionReservation
@@ -57,7 +60,10 @@ func (r *ExecRepository) AttachExecution(ctx context.Context, attachment provide
 		result, err = state.AttachExecution(attachment)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return providerexec.ExecutionReservation{}, err
+	}
+	return result, nil
 }
 func (r *ExecRepository) GetExecution(ctx context.Context, id string) (providerexec.ExecutionRecord, error) {
 	state, err := r.read(ctx)
@@ -83,7 +89,10 @@ func (r *ExecRepository) ReserveCancellationAt(ctx context.Context, intent provi
 		result, err = state.ReserveCancellation(intent, at)
 		return err
 	})
-	return result, err
+	if err != nil {
+		return providerexec.CancellationReservation{}, err
+	}
+	return result, nil
 }
 func (r *ExecRepository) GetCancellation(ctx context.Context, id string) (providerexec.CancellationIntent, error) {
 	state, err := r.read(ctx)

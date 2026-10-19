@@ -94,8 +94,7 @@ func TestControllerPeerCRLIndependentlyRejectsCrossPurposeAndOwner(t *testing.T)
 		policies:   map[string]Policy{postgres.ID: postgres, ordinary.ID: ordinary, otherOwner.ID: otherOwner},
 		authority:  authority, controllerKeyID: fixture.controllerID, controllerKey: fixture.controllerPriv,
 		now: func() time.Time { return fixture.now }, maximumActive: 2, maximumLedgerAge: time.Hour,
-		peerCRLProfile: &phase6security.Profile{ProfileDigest: index.mappingDigest}, peerCRLSources: &phase6security.PeerCRLSources{},
-		peerCRLIdentity: index}
+		peerCRL: &controllerPeerCRLBinding{profileDigest: index.mappingDigest, identity: index}}
 	controller.permit <- struct{}{}
 	request := func(policy Policy, key ed25519.PrivateKey, edge string, marker byte) PeerCRLRequest {
 		t.Helper()

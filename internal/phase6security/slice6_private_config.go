@@ -63,7 +63,14 @@ func Slice6PrivateConfigMount(deployment string) (Mount, bool) {
 // each reviewed static file purpose, including the four argv authority inputs.
 func Slice6PrivateConfigFileLimit(deployment, filename string) (int64, bool) {
 	mount, ok := Slice6PrivateConfigMount(deployment)
-	if !ok || !slices.Contains(strings.Split(mount.PrivateFiles, ","), filename) {
+	if !ok {
+		return 0, false
+	}
+	return privateConfigFileLimitFields(deployment, filename, mount)
+}
+
+func privateConfigFileLimitFields(deployment, filename string, mount Mount) (int64, bool) {
+	if !slices.Contains(strings.Split(mount.PrivateFiles, ","), filename) {
 		return 0, false
 	}
 	switch filename {
@@ -103,21 +110,33 @@ func AttachSlice6PrivateConfigMounts(principals []Principal) ([]Principal, error
 // VerifySlice6PrivateConfigMounts closes per-deployment storage identity,
 // target, file purposes and sharing, including overlaps with other kinds.
 func VerifySlice6PrivateConfigMounts(profile Profile) error {
-	if len(profile.Principals) != len(slice6DesiredImageTargets) {
+	names := make([]string, 0, len(slice6DesiredImageTargets))
+	for name := range slice6DesiredImageTargets {
+		names = append(names, name)
+	}
+	return verifyPrivateConfigMountsFields(profile.Principals, names, Slice6PrivateConfigMount)
+}
+
+func verifyPrivateConfigMountsFields(principals []Principal, names []string, mountFor func(string) (Mount, bool)) error {
+	expectedNames := make(map[string]bool, len(names))
+	for _, name := range names {
+		expectedNames[name] = true
+	}
+	if len(principals) != len(names) {
 		return errSlice6DesiredInventory
 	}
-	seenNames := make(map[string]bool, len(profile.Principals))
-	seenStorage := make(map[string]bool, len(profile.Principals))
-	for _, principal := range profile.Principals {
-		want, needed := Slice6PrivateConfigMount(principal.Name)
-		if seenNames[principal.Name] || slice6DesiredImageTargets[principal.Name] == "" {
+	seenNames := make(map[string]bool, len(principals))
+	seenStorage := make(map[string]bool, len(principals))
+	for _, principal := range principals {
+		want, needed := mountFor(principal.Name)
+		if seenNames[principal.Name] || !expectedNames[principal.Name] {
 			return errSlice6DesiredInventory
 		}
 		seenNames[principal.Name] = true
 		if needed {
 			var budget int64
 			for _, filename := range strings.Split(want.PrivateFiles, ",") {
-				limit, ok := Slice6PrivateConfigFileLimit(principal.Name, filename)
+				limit, ok := privateConfigFileLimitFields(principal.Name, filename, want)
 				if !ok {
 					return errSlice6DesiredInventory
 				}
@@ -148,7 +167,7 @@ func VerifySlice6PrivateConfigMounts(profile Profile) error {
 			seenStorage[want.StorageID] = true
 		}
 	}
-	for _, principal := range profile.Principals {
+	for _, principal := range principals {
 		for _, mount := range principal.Mounts {
 			if mount.Kind == "private_config" {
 				continue

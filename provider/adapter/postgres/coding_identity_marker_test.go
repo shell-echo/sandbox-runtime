@@ -91,6 +91,15 @@ func TestCodingAtomicMarkerRequiresOriginalForEveryLiveReservation(t *testing.T)
 		t.Fatalf("legacy marker mixed with v3 originals passed: %v", err)
 	}
 	if err := checkCodingRetirementBarrierWithMarker(marker, fixture.slots,
+		fixture.ledger, fixture.ledger, now); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("Succeeded original without readiness history passed: %v", err)
+	}
+	fixture.slots.CreateCompletions = map[string]codingidentity.CreateCompletionBinding{input.Create.AllocationID: {
+		AllocationID: input.Create.AllocationID, SlotID: input.Create.SlotID, AuthorityDigest: input.Create.Digest(),
+		ControlRevision: fixture.input.ControlRevision, ControlStateDigest: fixture.input.ControlStateDigest,
+		CompletionDigest: fixture.input.Completed.CompletionDigest, EvidenceDigest: fixture.input.Completed.CompletionEvidenceDigest,
+		UpdatedAt: fixture.input.Completed.UpdatedAt}}
+	if err := checkCodingRetirementBarrierWithMarker(marker, fixture.slots,
 		fixture.ledger, fixture.ledger, now); err != nil {
 		t.Fatalf("exact original/retirement tuple rejected: %v", err)
 	}

@@ -1,0 +1,124 @@
+{
+  "schema": "sandbox-runtime.phase6-coding-candidate-inputs.v1",
+  "status": "local-candidate-not-admitted",
+  "candidate": "phase6-coding-candidate-20261010",
+  "source": {
+    "commit": "91fe315641779e6ea640632538309d63ad1b303f",
+    "tree": "15070834772f766c46a62a61a7aaa8c5afd5411b",
+    "archive_sha256": "fc3505247e9f894859c90968ff6e191af9541e518d60d8b43d9f59813df92580",
+    "go_mod_sha256": "5a1f07bdcb6effe66523963ac1f70170e0e6a5c47619e5e33b057231d5942a80",
+    "go_sum_sha256": "c31d798720c86ff19438fa576c043551c013466ae1ca270c0218073603809bb2"
+  },
+  "toolchain": {
+    "filename": "go1.26.9.darwin-arm64.tar.gz",
+    "os": "darwin",
+    "arch": "arm64",
+    "version": "go1.26.9",
+    "sha256": "f9bb7c0a02506c5d9bf0d1eb1f7ee6c7684f844ae49558308a0427b830e022cc",
+    "size": 64675343,
+    "kind": "archive"
+  },
+  "base": {
+    "repository": "docker.io/library/alpine",
+    "tag_resolution_only": "3.23",
+    "index_digest": "sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0",
+    "index_size": 9218,
+    "platforms": {
+      "linux/amd64": {
+        "manifest": {
+          "annotations": {
+            "com.docker.official-images.bashbrew.arch": "amd64",
+            "org.opencontainers.image.base.name": "scratch",
+            "org.opencontainers.image.created": "2026-09-17T20:37:30Z",
+            "org.opencontainers.image.revision": "00d3407329e4c65f237cc1e325a4ab0cb4974df4",
+            "org.opencontainers.image.source": "https://github.com/alpinelinux/docker-alpine.git#00d3407329e4c65f237cc1e325a4ab0cb4974df4:x86_64",
+            "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+            "org.opencontainers.image.version": "3.23.6"
+          },
+          "digest": "sha256:1f3591b8a02ea153f41c5bba878ad477f63ab3d19349762cb77504db02a23e15",
+          "mediaType": "application/vnd.oci.image.manifest.v1+json",
+          "platform": {
+            "architecture": "amd64",
+            "os": "linux"
+          },
+          "size": 1022
+        },
+        "config": {
+          "mediaType": "application/vnd.oci.image.config.v1+json",
+          "digest": "sha256:f6d31b983274a75183386cda3aac54849498fac0fc3e0d98f92ff56ed517d92b",
+          "size": 611
+        },
+        "layers": [
+          {
+            "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+            "digest": "sha256:d0c1d894c237d8192cbcd37e435031ad4eddec173299568a5a05869c2e40dfa3",
+            "size": 3848507
+          }
+        ]
+      },
+      "linux/arm64/v8": {
+        "manifest": {
+          "annotations": {
+            "com.docker.official-images.bashbrew.arch": "arm64v8",
+            "org.opencontainers.image.base.name": "scratch",
+            "org.opencontainers.image.created": "2026-09-17T20:37:14Z",
+            "org.opencontainers.image.revision": "00d3407329e4c65f237cc1e325a4ab0cb4974df4",
+            "org.opencontainers.image.source": "https://github.com/alpinelinux/docker-alpine.git#00d3407329e4c65f237cc1e325a4ab0cb4974df4:aarch64",
+            "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+            "org.opencontainers.image.version": "3.23.6"
+          },
+          "digest": "sha256:ae959799024a09da597284763c417a6e820e020fad0634c5267cf4f125e682bf",
+          "mediaType": "application/vnd.oci.image.manifest.v1+json",
+          "platform": {
+            "architecture": "arm64",
+            "os": "linux",
+            "variant": "v8"
+          },
+          "size": 1025
+        },
+        "config": {
+          "mediaType": "application/vnd.oci.image.config.v1+json",
+          "digest": "sha256:189367d8c0703b7e99946d63d14f1ea3b62c9b8f31a686b1a22733a2436157a6",
+          "size": 627
+        },
+        "layers": [
+          {
+            "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+            "digest": "sha256:ace1621be7ff15b54252f68393ac33181df7f3e095e36a5d9a9892031b357d31",
+            "size": 4186056
+          }
+        ]
+      }
+    }
+  },
+  "recipe_sha256": "ce232aa4cc44206523252f5bd5d4222f2428f687b5a319d424cf37cd8667913d",
+  "broker_build": {
+    "package": "./cmd/terminal-broker",
+    "CGO_ENABLED": "0",
+    "GOOS": "linux",
+    "trimpath": true,
+    "buildvcs": false,
+    "ldflags": "-buildid=",
+    "module_policy": "readonly; locked go.sum; verified cached modules; offline build"
+  },
+  "image_build": {
+    "SOURCE_DATE_EPOCH": "0",
+    "network": "none",
+    "provenance": false,
+    "sbom": false,
+    "mutable_apk_add": false
+  },
+  "qualification": {
+    "historical_publication_inherited": false,
+    "production_template_admitted": false,
+    "signed": false
+  },
+  "development_environment": {
+    "tool_manager": "mise",
+    "candidate_command": "mise exec go@1.26.9 --",
+    "ordinary_repository_command": "mise exec go@1.26.8 --",
+    "scanner_command": "mise exec trivy@0.74.0 --",
+    "image_builder": "Docker BuildKit",
+    "global_activation": false
+  }
+}

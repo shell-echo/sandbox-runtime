@@ -318,6 +318,7 @@ type TrustAnchor struct {
 	ArtifactID      string   `json:"artifact_id"`
 	StorageID       string   `json:"storage_id"`
 	TargetPath      string   `json:"target_path"`
+	MountDirectory  string   `json:"mount_directory,omitempty"`
 	WriterAuthority string   `json:"writer_authority"`
 	OwnerUID        uint32   `json:"owner_uid"`
 	OwnerGID        uint32   `json:"owner_gid"`
@@ -866,12 +867,16 @@ func (p Profile) TLSAgentForSubject(subjectName string) (TLSAgentBinding, Princi
 	if err := p.Validate(); err != nil {
 		return TLSAgentBinding{}, Principal{}, Principal{}, err
 	}
-	for _, binding := range p.TLSAgentBindings {
+	return tlsAgentForSubjectFields(p.TLSAgentBindings, p.Principals, subjectName)
+}
+
+func tlsAgentForSubjectFields(bindings []TLSAgentBinding, principals []Principal, subjectName string) (TLSAgentBinding, Principal, Principal, error) {
+	for _, binding := range bindings {
 		if binding.SubjectDeployment != subjectName {
 			continue
 		}
 		var agent, subject Principal
-		for _, principal := range p.Principals {
+		for _, principal := range principals {
 			if principal.Name == binding.AgentDeployment {
 				agent = principal
 			}

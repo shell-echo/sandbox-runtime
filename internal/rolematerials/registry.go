@@ -31,18 +31,38 @@ func NewForDeployment(materials config.RoleMaterialsConfig, deployment string, r
 func NewSlice6ForDeployment(materials config.RoleMaterialsConfig, deployment string, profile phase6security.Profile,
 	role secretref.Role, allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
 	binding, err := profile.Slice6MaterialSocketForOwner(deployment)
-	if err != nil || materials.Provider.Type != config.UnixWorkloadMaterialProviderV2 ||
-		materials.Provider.SocketPath != binding.SocketPath ||
-		materials.Provider.ExpectedUID != int64(binding.AgentUID) ||
-		materials.Provider.ExpectedGID != int64(binding.AgentGID) ||
-		materials.Provider.DirectoryGID != int64(binding.OwnerGID) ||
-		uint32(os.Getuid()) != binding.OwnerUID || uint32(os.Getgid()) != binding.OwnerGID ||
-		materials.Provider.OperationTimeoutSeconds > binding.MaxOperationSeconds {
+	if err != nil {
 		return nil, errors.New("Slice 6 material owner boundary is invalid")
 	}
 	plan, err := phase6security.BuildSlice6DesiredMaterialAccess(profile)
 	if err != nil {
 		return nil, errors.New("Slice 6 material access plan is invalid")
+	}
+	return newSlice6Bound(materials, deployment, binding, plan, role, allowedPurposes, cache, now)
+}
+
+// NewSlice6ForDeploymentV2 never projects a v2 profile into the v1 authority.
+func NewSlice6ForDeploymentV2(materials config.RoleMaterialsConfig, deployment string, profile phase6security.ProfileV2,
+	role secretref.Role, allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
+	binding, err := profile.Slice6MaterialSocketForOwner(deployment)
+	if err != nil {
+		return nil, errors.New("Slice 6 v2 material owner boundary is invalid")
+	}
+	plan, err := phase6security.BuildSlice6DesiredMaterialAccessV2(profile)
+	if err != nil {
+		return nil, errors.New("Slice 6 v2 material access plan is invalid")
+	}
+	return newSlice6Bound(materials, deployment, binding, plan, role, allowedPurposes, cache, now)
+}
+
+func newSlice6Bound(materials config.RoleMaterialsConfig, deployment string, binding phase6security.Slice6MaterialSocketBinding,
+	plan []phase6security.Slice6MaterialAccess, role secretref.Role, allowedPurposes []secretref.Purpose, cache bool, now func() time.Time) (*secretref.Registry, error) {
+	if materials.Provider.Type != config.UnixWorkloadMaterialProviderV2 ||
+		materials.Provider.SocketPath != binding.SocketPath || materials.Provider.ExpectedUID != int64(binding.AgentUID) ||
+		materials.Provider.ExpectedGID != int64(binding.AgentGID) || materials.Provider.DirectoryGID != int64(binding.OwnerGID) ||
+		uint32(os.Getuid()) != binding.OwnerUID || uint32(os.Getgid()) != binding.OwnerGID ||
+		materials.Provider.OperationTimeoutSeconds > binding.MaxOperationSeconds {
+		return nil, errors.New("Slice 6 material owner boundary is invalid")
 	}
 	var expected *phase6security.Slice6MaterialAccess
 	for index := range plan {

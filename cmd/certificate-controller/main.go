@@ -37,14 +37,15 @@ import (
 )
 
 const (
-	configProtocol         = "sandbox-runtime.certificate-controller-config.v3"
-	postgresConfigProtocol = "sandbox-runtime.certificate-controller-config.v4"
-	peerCRLConfigProtocol  = "sandbox-runtime.certificate-controller-config.v4"
-	maxConfigBytes         = 2 << 20
-	credentialAgentFD      = 3
-	controllerSigningFD    = 4
-	vaultTLSKeyFD          = 5
-	vaultTLSRequestFD      = 6
+	configProtocol          = "sandbox-runtime.certificate-controller-config.v3"
+	postgresConfigProtocol  = "sandbox-runtime.certificate-controller-config.v4"
+	peerCRLConfigProtocol   = "sandbox-runtime.certificate-controller-config.v4"
+	profileV2ConfigProtocol = "sandbox-runtime.certificate-controller-config.v5"
+	maxConfigBytes          = 2 << 20
+	credentialAgentFD       = 3
+	controllerSigningFD     = 4
+	vaultTLSKeyFD           = 5
+	vaultTLSRequestFD       = 6
 )
 
 type configDocument struct {
@@ -159,9 +160,8 @@ func run() (runErr error) { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!((config.Protocol == configProtocol && config.PeerCRLSourcesPath == "" && config.PeerCRLSourcesDigest == "") ||
-			(config.Protocol == peerCRLConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "") ||
-			(config.Protocol == postgresConfigProtocol && filepath.IsAbs(config.PeerCRLSourcesPath) && config.PeerCRLSourcesDigest != "")) ||
+		!validControllerConfigVersion(config) ||
+		config.MaximumActiveCertificates < 1 || config.MaximumActiveCertificates > 2 ||
 		len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
 		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
 		config.VaultServerName == "" || config.OperationTimeoutSeconds < 1 || config.OperationTimeoutSeconds > 60 ||
@@ -178,71 +178,29 @@ func run() (runErr error) { //nolint:gocyclo
 		return stageError("config-validate")
 	}
 	clear(canonical)
-	profile, err := phase6security.VerifyFile(config.SecurityProfilePath)
-	if err != nil || profile.ProfileDigest != config.SecurityProfileDigest ||
-		profile.EnvironmentDigest != config.EnvironmentDigest || profile.PrincipalProfileDigest != config.ProfileDigest ||
-		(len(profile.PostgresClientAgents) != 0 && config.Protocol != postgresConfigProtocol) ||
-		phase6security.VerifySlice6PrivateConfigPath(profile, "certificate-controller",
-			phase6security.Slice6ProfileConfigFile, config.SecurityProfilePath) != nil {
-		return stageError("security-profile")
-	}
-	_, ledgerPath, ledgerErr := phase6security.Slice6ControllerLedgerMount("certificate-controller")
-	if ledgerErr != nil || config.LedgerPath != ledgerPath ||
-		phase6security.VerifySlice6ControllerLedgerMounts(profile) != nil {
-		return stageError("ledger-binding")
-	}
-	var peerSources *phase6security.PeerCRLSources
-	var peerProfile *phase6security.Profile
-	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
-	if config.Protocol == peerCRLConfigProtocol || config.Protocol == postgresConfigProtocol {
-		if phase6security.VerifySlice6PrivateConfigPath(profile, "certificate-controller",
-			phase6security.Slice6PeerCRLSourcesFile, config.PeerCRLSourcesPath) != nil {
-			return stageError("peer-crl-sources-path")
-		}
-		mapping, mappingErr := phase6security.VerifyPeerCRLSourcesFile(config.PeerCRLSourcesPath, profile)
-		if mappingErr != nil || mapping.Digest() != config.PeerCRLSourcesDigest {
-			return stageError("peer-crl-sources")
-		}
-		peerSources, peerProfile = &mapping, &profile
-		vaultPeerSources = make([]workloadpki.VaultPeerIssuerSource, 0, len(mapping.Sources))
-		for _, source := range mapping.Sources {
-			vaultPeerSources = append(vaultPeerSources, workloadpki.VaultPeerIssuerSource{
-				SourceID: source.ID, Mount: source.Mount, IssuerID: source.IssuerID, IssuerDigest: source.IssuerDigest})
-		}
-	}
-	registry, err := profile.PrincipalRegistry()
+	startup, err := loadControllerProfile(config)
 	if err != nil {
-		return stageError("profile-principal-registry")
+		return err
 	}
-
-	credentialPrivate, err := readExactKey(credentialAgentFD, "credential-agent-signing-key", ed25519.PrivateKeySize)
-	if err != nil {
-		return stageError("credential-key")
-	}
-	defer clear(credentialPrivate)
-	controllerPrivate, err := readExactKey(controllerSigningFD, "certificate-controller-signing-key", ed25519.PrivateKeySize)
-	if err != nil {
-		return stageError("controller-key")
-	}
-	defer clear(controllerPrivate)
-	vaultTLSKey, err := readBounded(vaultTLSKeyFD, "vault-client-tls-private-key", 64<<10)
-	if err != nil {
-		return stageError("vault-tls-key")
-	}
-	defer clear(vaultTLSKey)
-	vaultTLSRequestPrivate, err := readExactKey(vaultTLSRequestFD, "vault-tls-certificate-request-key", ed25519.PrivateKeySize)
-	if err != nil {
-		return stageError("vault-tls-request-key")
-	}
-	defer clear(vaultTLSRequestPrivate)
-	if !validateControllerProfileConfig(profile, config,
-		ed25519.PrivateKey(controllerPrivate).Public().(ed25519.PublicKey),
-		ed25519.PrivateKey(vaultTLSRequestPrivate).Public().(ed25519.PublicKey)) {
+	if !validateControllerConfigFields(startup.fields, config) {
 		return stageError("security-profile-binding")
+	}
+	if config.Protocol == profileV2ConfigProtocol && config.VaultMount != "pki" {
+		return stageError("vault-mount")
+	}
+	if config.Protocol == profileV2ConfigProtocol && !controllerProcessGroupsMatch(startup.fields.CertificateController.GID) {
+		return stageError("supplementary-groups")
+	}
+	registry, peerSources := startup.registry, startup.sources
+	var vaultPeerSources []workloadpki.VaultPeerIssuerSource
+	if peerSources != nil {
+		for _, source := range peerSources.Sources {
+			vaultPeerSources = append(vaultPeerSources, workloadpki.VaultPeerIssuerSource{SourceID: source.ID, Mount: source.Mount, IssuerID: source.IssuerID, IssuerDigest: source.IssuerDigest})
+		}
 	}
 
 	credentialPublic, err := base64.RawURLEncoding.DecodeString(config.Credential.PublicKey)
-	if err != nil || len(credentialPublic) != ed25519.PublicKeySize || !ed25519.PrivateKey(credentialPrivate).Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(credentialPublic)) ||
+	if err != nil || len(credentialPublic) != ed25519.PublicKeySize ||
 		registry.Validate(config.Credential.Principal) != nil || config.Credential.Principal.Kind != securityprincipal.KindController || config.Credential.Principal.Name != "certificate_controller" {
 		clear(credentialPublic)
 		return stageError("credential-identity")
@@ -254,35 +212,11 @@ func run() (runErr error) { //nolint:gocyclo
 	if credentialPolicy.Validate() != nil || config.Credential.CredentialTTLSeconds < 60 || config.Credential.CredentialTTLSeconds > config.Credential.MaxTTLSeconds {
 		return stageError("credential-policy")
 	}
-	credentialClient, err := workloadcredentialv2.NewProductionClient(workloadcredentialv2.ClientConfig{SocketPath: config.Credential.SocketPath,
-		ExpectedUID: config.Credential.ExpectedUID, ExpectedGID: config.Credential.ExpectedGID,
-		DirectoryGID: config.Credential.ControllerGID, Policy: credentialPolicy,
-		PrivateKey: ed25519.PrivateKey(credentialPrivate), OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
-	if err != nil {
-		return stageError("credential-client")
-	}
-	defer credentialClient.Close()
-	tokenSource, err := workloadpki.NewCredentialTokenSource(workloadpki.CredentialTokenSourceConfig{Client: workloadpki.V2CredentialAdapter{Client: credentialClient},
-		TTL: time.Duration(config.Credential.CredentialTTLSeconds) * time.Second, Now: time.Now})
-	if err != nil {
-		return stageError("credential-token-source")
-	}
-	defer func() {
-		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
-		if closeErr := tokenSource.Close(cleanupContext); closeErr != nil {
-			runErr = errors.Join(runErr, stageError("credential-revoke"))
-		}
-		cleanupCancel()
-	}()
 
-	if !vaultTrustEdgeMatches(profile, config.VaultEndpoint, config.VaultServerName) {
+	if !vaultTrustEdgeMatchesFields(startup.fields.External, startup.fields.TrustEdges, config.VaultEndpoint, config.VaultServerName) {
 		return stageError("vault-edge")
 	}
-	vaultAnchor, _, err := profile.EdgeTrustAnchors("certificate-vault")
-	if err != nil {
-		return stageError("vault-anchor")
-	}
-	vaultBundle, err := trustanchor.Load(vaultAnchor, time.Now())
+	vaultBundle, err := trustanchor.Load(startup.vaultAnchor, time.Now())
 	if err != nil {
 		return stageError("vault-ca")
 	}
@@ -292,12 +226,7 @@ func run() (runErr error) { //nolint:gocyclo
 		return stageError("vault-ca")
 	}
 	clear(vaultBundle)
-	bootstrapAnchor, err := profile.ConsumerTrustAnchor(profile.CertificateController.BootstrapClientAnchorID,
-		"certificate-controller", "client_verification")
-	if err != nil {
-		return stageError("vault-bootstrap-anchor")
-	}
-	bootstrapBundle, err := trustanchor.Load(bootstrapAnchor, time.Now())
+	bootstrapBundle, err := trustanchor.Load(startup.bootstrapAnchor, time.Now())
 	if err != nil {
 		return stageError("vault-bootstrap-ca")
 	}
@@ -312,6 +241,9 @@ func run() (runErr error) { //nolint:gocyclo
 	peerPairs := make(map[[2]uint32]struct{}, len(config.Policies))
 	var managedPolicy workloadpki.Policy
 	for _, value := range config.Policies {
+		if !validCertificatePolicyPurpose(value) {
+			return stageError("certificate-policy-purpose")
+		}
 		publicKey, decodeErr := base64.RawURLEncoding.DecodeString(value.AgentPublicKey)
 		if decodeErr != nil || len(publicKey) != ed25519.PublicKeySize {
 			clear(publicKey)
@@ -346,16 +278,63 @@ func run() (runErr error) { //nolint:gocyclo
 			managedPolicy = policy
 		}
 	}
-	if peerSources != nil && validateFiniteIssuerPolicyGroups(profile, *peerSources, policies) != nil {
+	if startup.validatePolicies(config, policies) != nil {
 		return stageError("certificate-policy-issuer-groups")
 	}
 	if managedPolicy.ID == "" || managedPolicy.Requester.Kind != securityprincipal.KindController ||
 		managedPolicy.Requester.Name != "certificate_controller" || managedPolicy.Subject != managedPolicy.Requester ||
 		!slices.Equal(managedPolicy.Usages, []string{"client_auth"}) ||
-		!ed25519.PrivateKey(vaultTLSRequestPrivate).Public().(ed25519.PublicKey).Equal(managedPolicy.PublicKey) ||
 		int64(config.ManagedVaultTLS.CertificateTTLSeconds) > managedPolicy.MaxTTLSeconds {
 		return stageError("managed-vault-tls-policy")
 	}
+	credentialPrivate, err := readExactKey(credentialAgentFD, "credential-agent-signing-key", ed25519.PrivateKeySize)
+	if err != nil {
+		return stageError("credential-key")
+	}
+	defer clear(credentialPrivate)
+	controllerPrivate, err := readExactKey(controllerSigningFD, "certificate-controller-signing-key", ed25519.PrivateKeySize)
+	if err != nil {
+		return stageError("controller-key")
+	}
+	defer clear(controllerPrivate)
+	vaultTLSKey, err := readBounded(vaultTLSKeyFD, "vault-client-tls-private-key", 64<<10)
+	if err != nil {
+		return stageError("vault-tls-key")
+	}
+	defer clear(vaultTLSKey)
+	vaultTLSRequestPrivate, err := readExactKey(vaultTLSRequestFD, "vault-tls-certificate-request-key", ed25519.PrivateKeySize)
+	if err != nil {
+		return stageError("vault-tls-request-key")
+	}
+	defer clear(vaultTLSRequestPrivate)
+	if !controllerKeyBindingMatches(startup.fields.CertificateController,
+		ed25519.PrivateKey(controllerPrivate).Public().(ed25519.PublicKey),
+		ed25519.PrivateKey(vaultTLSRequestPrivate).Public().(ed25519.PublicKey)) ||
+		!ed25519.PrivateKey(credentialPrivate).Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(credentialPublic)) {
+		return stageError("security-profile-key-binding")
+	}
+
+	credentialClient, err := workloadcredentialv2.NewProductionClient(workloadcredentialv2.ClientConfig{SocketPath: config.Credential.SocketPath,
+		ExpectedUID: config.Credential.ExpectedUID, ExpectedGID: config.Credential.ExpectedGID,
+		DirectoryGID: config.Credential.ControllerGID, Policy: credentialPolicy,
+		PrivateKey: ed25519.PrivateKey(credentialPrivate), OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now})
+	if err != nil {
+		return stageError("credential-client")
+	}
+	defer credentialClient.Close()
+	tokenSource, err := workloadpki.NewCredentialTokenSource(workloadpki.CredentialTokenSourceConfig{Client: workloadpki.V2CredentialAdapter{Client: credentialClient},
+		TTL: time.Duration(config.Credential.CredentialTTLSeconds) * time.Second, Now: time.Now})
+	if err != nil {
+		return stageError("credential-token-source")
+	}
+	defer func() {
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), time.Duration(config.OperationTimeoutSeconds)*time.Second)
+		if closeErr := tokenSource.Close(cleanupContext); closeErr != nil {
+			runErr = errors.Join(runErr, stageError("credential-revoke"))
+		}
+		cleanupCancel()
+	}()
+
 	vaultPair, err := workloadtlsagent.ValidateBootstrapCertificate(config.VaultClientCertificatePEM, vaultTLSKey, bootstrapRoots, managedPolicy, time.Now().UTC())
 	if err != nil || !workloadtlsagent.BootstrapWithinProfileLifetime(vaultPair.Leaf, managedPolicy.MaxTTLSeconds,
 		time.Duration(config.OperationTimeoutSeconds)*time.Second, time.Now()) {
@@ -384,10 +363,10 @@ func run() (runErr error) { //nolint:gocyclo
 	if err != nil {
 		return stageError("vault-pki")
 	}
-	controller, err := workloadpki.NewController(workloadpki.ControllerConfig{LedgerPath: config.LedgerPath, Policies: policies, Authority: client,
+	controllerConfig := workloadpki.ControllerConfig{LedgerPath: config.LedgerPath, Policies: policies, Authority: client,
 		ControllerKeyID: config.ControllerKeyID, ControllerKey: ed25519.PrivateKey(controllerPrivate), Now: time.Now,
-		MaximumActive: config.MaximumActiveCertificates, MaximumLedgerAge: time.Duration(config.MaximumLedgerAgeSeconds) * time.Second,
-		PeerCRLProfile: peerProfile, PeerCRLSources: peerSources})
+		MaximumActive: config.MaximumActiveCertificates, MaximumLedgerAge: time.Duration(config.MaximumLedgerAgeSeconds) * time.Second}
+	controller, err := startup.newController(config, controllerConfig)
 	if err != nil {
 		return stageError("controller")
 	}
@@ -580,11 +559,16 @@ func run() (runErr error) { //nolint:gocyclo
 
 func validateControllerProfileConfig(profile phase6security.Profile, config configDocument,
 	responsePublic, managedRequestPublic ed25519.PublicKey) bool {
+	fields, err := controllerFieldsV1(profile)
+	return err == nil && validateControllerConfigFields(fields, config) &&
+		controllerKeyBindingMatches(profile.CertificateController, responsePublic, managedRequestPublic)
+}
+
+func validateControllerConfigFields(profile controllerProfileFields, config configDocument) bool {
 	authority := profile.CertificateController
-	issuerSocketBinding, credentialServer, credentialClient, credentialErr := profile.CredentialIssuerSocketForClient("certificate-controller")
-	if credentialErr != nil || config.Credential.SocketPath != issuerSocketBinding.SocketPath ||
-		config.Credential.ExpectedUID != credentialServer.UID || config.Credential.ExpectedGID != credentialServer.GID ||
-		config.Credential.ControllerUID != credentialClient.UID || config.Credential.ControllerGID != credentialClient.GID {
+	if config.Credential.SocketPath != profile.issuerSocket.SocketPath ||
+		config.Credential.ExpectedUID != profile.credentialServer.UID || config.Credential.ExpectedGID != profile.credentialServer.GID ||
+		config.Credential.ControllerUID != profile.credentialClient.UID || config.Credential.ControllerGID != profile.credentialClient.GID {
 		return false
 	}
 	var controller phase6security.Principal
@@ -598,7 +582,7 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 		return false
 	}
 	expectedTTL := controller.TLS.TTLSeconds
-	if config.Protocol == peerCRLConfigProtocol {
+	if config.Protocol == peerCRLConfigProtocol || config.Protocol == profileV2ConfigProtocol {
 		var err error
 		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
 			controller.TLS.RotateAfterSeconds)
@@ -609,8 +593,6 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 	if controller.AuthorizationPrincipal == nil || controller.TLS == nil ||
 		uint32(os.Getuid()) != authority.UID || uint32(os.Getgid()) != authority.GID ||
 		config.ControllerKeyID != authority.ResponseKeyID ||
-		phase6security.CertificateControllerPublicKeyDigest(responsePublic) != authority.ResponsePublicKeyDigest ||
-		phase6security.TLSAgentRequestPublicKeyDigest(managedRequestPublic) != authority.ManagedRequestKeyDigest ||
 		config.Credential.Principal != *controller.AuthorizationPrincipal ||
 		config.ManagedVaultTLS.PolicyID != authority.ManagedPolicyID ||
 		config.ManagedVaultTLS.ControllerSocket != authority.SelfSocketPath ||
@@ -708,6 +690,9 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 	}
 	expectedListeners := make(map[string]listenerDocument, len(config.Listeners))
 	for _, listener := range config.Listeners {
+		if listener.MaxConnections < 1 || listener.MaxConnections > 256 {
+			return false
+		}
 		if _, duplicate := expectedListeners[listener.SocketPath]; duplicate {
 			return false
 		}
@@ -743,8 +728,12 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 }
 
 func vaultTrustEdgeMatches(profile phase6security.Profile, endpoint, serverName string) bool {
+	return vaultTrustEdgeMatchesFields(profile.External, profile.TrustEdges, endpoint, serverName)
+}
+
+func vaultTrustEdgeMatchesFields(externalServices []phase6security.ExternalService, edges []phase6security.TrustEdge, endpoint, serverName string) bool {
 	var service phase6security.ExternalService
-	for _, external := range profile.External {
+	for _, external := range externalServices {
 		if external.Name == "vault" {
 			service = external
 		}
@@ -758,7 +747,7 @@ func vaultTrustEdgeMatches(profile phase6security.Profile, endpoint, serverName 
 		(parsed.Path != "" && parsed.Path != "/") || parsed.String() != endpoint {
 		return false
 	}
-	for _, edge := range profile.TrustEdges {
+	for _, edge := range edges {
 		if edge.ID == "certificate-vault" && edge.From == "certificate-controller" && edge.To == "vault" &&
 			edge.Protocol == "https" && edge.Authentication == "mtls" && edge.ToURI == service.URI &&
 			parsed.Port() == strconv.Itoa(edge.Port) {

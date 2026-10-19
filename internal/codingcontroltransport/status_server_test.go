@@ -106,6 +106,11 @@ func TestStatusServerRequiresPrivateTLSAndRejectsUnauthenticatedHTTP(t *testing.
 
 func statusTestAuthority(t *testing.T, at time.Time) (dockercontrol.CodingCreateAuthority,
 	dockercontrol.CodingReceiptBinding) {
+	create, binding, _ := statusTestAuthorities(t, at)
+	return create, binding
+}
+
+func statusTestAuthorities(t *testing.T, at time.Time) (dockercontrol.CodingCreateAuthority, dockercontrol.CodingReceiptBinding, dockercontrol.CodingCleanupAuthority) {
 	t.Helper()
 	plan := codingidentity.Plan{Protocol: codingidentity.Protocol, Version: codingidentity.Version,
 		ProfileDigest: statusTestDigest("b"), OwnerDeployment: "provider-runtime",
@@ -169,12 +174,23 @@ func statusTestAuthority(t *testing.T, at time.Time) (dockercontrol.CodingCreate
 	if binding.Validate() != nil {
 		t.Fatal("invalid status fixture binding")
 	}
-	return create, binding
+	ticket.Status = codingidentity.Cleaning
+	sandbox.DesiredState = lifecycle.DesiredTerminated
+	sandbox.Generation++
+	sandbox.UpdatedAt = at.Add(time.Second)
+	terminate := lifecycle.Operation{ID: "termination-1", AttemptID: "termination-attempt-1", FencingToken: create.Fence + 1,
+		SandboxID: sandbox.ID, Type: lifecycle.OperationTerminate, State: lifecycle.OperationRunning, Deadline: at.Add(time.Minute),
+		ObservedAt: at.Add(time.Second), IdempotencyKey: "termination-key", RequestDigest: statusTestDigest("b")}
+	cleanup, err := dockercontrol.NewCodingCleanupAuthority(t.Context(), create, ticket, terminate, sandbox, plan, create.ControlPolicyDigest, create.PeerPrincipalDigest, at.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return create, binding, cleanup
 }
 
 func TestProjectStatusUsesBoundLedgerAndDoesNotTreatMissingAsAbsence(t *testing.T) {
 	at := time.Now().UTC().Truncate(time.Millisecond)
-	authority, binding := statusTestAuthority(t, at)
+	authority, binding, cleanup := statusTestAuthorities(t, at)
 	directory, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -208,6 +224,11 @@ func TestProjectStatusUsesBoundLedgerAndDoesNotTreatMissingAsAbsence(t *testing.
 		result.ControlRevision != 2 || result.ControlStateDigest == "" ||
 		result.AbsenceDigest != "" || result.Validate(request) != nil {
 		t.Fatalf("ambiguous create misrepresented: %#v, %v", result, err)
+	}
+	cleanupBound := request
+	cleanupBound.Cleanup = &cleanup
+	if _, err := projectStatus(ledger, cleanupBound, authority.PeerPrincipalDigest, at.Add(2*time.Second)); !errors.Is(err, codingcontrolprotocol.ErrInvalidWire) {
+		t.Fatalf("receipt without matching cleanup intent admitted: %v", err)
 	}
 	for name, change := range map[string]func(*codingcontrolprotocol.Request, *string){
 		"wrong peer": func(_ *codingcontrolprotocol.Request, peer *string) { *peer = statusTestDigest("0") },

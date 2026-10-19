@@ -100,7 +100,7 @@ func TestCodingCurrentReleaseCASAcceptsVerifiedReleaseAfterIntentExpiry(t *testi
 	late := input.Cleanup.ExpiresAt.Add(time.Minute)
 	result, sandbox, err := finishCodingCurrentCleanup(t.Context(), &fixture.slots,
 		&fixture.ledger, fixture.plan, input, late)
-	if err != nil || result.State != lifecycle.OperationSucceeded ||
+	if err != nil || result.State != lifecycle.OperationOutcomeUnknown ||
 		sandbox.ObservedState != lifecycle.ObservedTerminated {
 		t.Fatalf("historically valid Released proof could not finish PG CAS: %#v, %v", result, err)
 	}

@@ -77,8 +77,7 @@ func (p ProfileV2) validateFields() error { //nolint:gocyclo
 		c.BrokerProtocol != "sandbox.runtime/desktop-broker/v1" || c.SessionProtocol != "sandbox.runtime/desktop-session.v2" {
 		return ErrInvalidProfile
 	}
-	if validateSandboxIdentitySlots(p.SandboxIdentitySlots, principals) != nil ||
-		VerifySlice6V2CodingSlots(p.CodingTemplate, p.Principals, p.SandboxIdentitySlots) != nil {
+	if validateSandboxIdentitySlots(p.SandboxIdentitySlots, principals) != nil || p.verifyCodingMode() != nil {
 		return ErrInvalidProfile
 	}
 	external, err := validateExternal(p.External)
@@ -92,8 +91,9 @@ func (p ProfileV2) validateFields() error { //nolint:gocyclo
 		validateRuntimeEdges(edges, principals, p.Networks) != nil || validateBrowserMux(principals, edges) != nil ||
 		validatePublicListeners(p.PublicListeners, principals) != nil ||
 		validateIngressBindings(p.IngressBindings, p.PublicListeners, principals, p.Networks) != nil ||
-		validateTrustAnchorsWithPostgres(p.TrustAnchors, p.TrustEdges, p.PublicListeners,
-			p.CertificateController, p.PostgresClientAgents, principals, external) != nil ||
+		p.validateControlTrustDirectories() != nil ||
+		validateTrustAnchorLayout(p.TrustAnchors, p.TrustEdges, p.PublicListeners,
+			p.CertificateController, p.PostgresClientAgents, principals, external, p.controlTrustDirectories()) != nil ||
 		validateEgress(p.EgressPolicies, principals, edges) != nil ||
 		validateBrokerBoundaries(p.EgressPolicies, edges, principals, p.Networks) != nil ||
 		validateBrowserExternalAuthority(external, edges, p.EgressPolicies) != nil ||
@@ -123,12 +123,11 @@ func (p ProfileV2) validateFields() error { //nolint:gocyclo
 		VerifySlice6BreakGlassKeyAuthority(p.BreakGlassKeyAuthority) != nil ||
 		VerifySlice6BreakGlassExecutableArtifact(shared) != nil ||
 		validateV2ControlAuthority(p, principals, edges) != nil ||
-		validateV2ScannerAuthority(p, principals, edges) != nil {
+		validateV2ScannerAuthority(p, principals, edges) != nil ||
+		verifyPrivateConfigMountsV2Fields(p) != nil || verifyControllerLedgerMountsV2Fields(p) != nil || p.verifyPostgresV2Fields() != nil {
 		return ErrInvalidProfile
 	}
-	budget, err := CalculateSlice6V2ResourceBudget(p.Principals, p.SandboxIdentitySlots,
-		p.CodingTemplate, p.SandboxGatewayLimits, p.ExternalResourceLimits)
-	if err != nil || budget != p.ResourceBudget {
+	if p.verifyCodingResourceBudget() != nil {
 		return ErrInvalidProfile
 	}
 	encoded, err := json.Marshal(p)

@@ -64,6 +64,7 @@ type RuleVerifierConfig struct {
 
 type RuleVerifier struct {
 	config      RuleVerifierConfig
+	document    []byte
 	mu          sync.Mutex
 	lastNow     time.Time
 	clockRolled bool
@@ -82,6 +83,33 @@ func NewRuleVerifier(config RuleVerifierConfig) (*RuleVerifier, error) {
 	return &RuleVerifier{config: config}, nil
 }
 
+// NewRuleVerifierFromDocument receives canonical bytes pinned by the Profile.
+// Its exact versions are snapshot constraints, not cross-Profile anti-rollback.
+// EngineImage is the separately locked ClamAV supply input, not the composite
+// image containing this command. Source-to-image verification remains a gate.
+func NewRuleVerifierFromDocument(document []byte, rulesDirectory, expectedRuleSet, expectedEngineImage, expectedEngineConfig string) (*RuleVerifier, error) {
+	if len(document) < 1 || len(document) > ruleManifestMaxBytes || !absoluteClean(rulesDirectory) ||
+		!scanDigestPattern.MatchString(expectedRuleSet) || scanDigest(document) != expectedRuleSet ||
+		!scanDigestPattern.MatchString(expectedEngineImage) || !scanDigestPattern.MatchString(expectedEngineConfig) {
+		return nil, ErrRulesUnavailable
+	}
+	var manifest RuleManifest
+	if json.Unmarshal(document, &manifest) != nil {
+		return nil, ErrRulesUnavailable
+	}
+	canonical, err := json.Marshal(manifest)
+	if err != nil || !bytes.Equal(canonical, document) || manifest.Protocol != RuleSnapshotProtocol ||
+		manifest.EngineImageDigest != expectedEngineImage || manifest.EngineConfigDigest != expectedEngineConfig || len(manifest.Files) != 3 {
+		return nil, ErrRulesUnavailable
+	}
+	floor := RuleVersionFloor{Bytecode: manifest.Files[0].Version, Daily: manifest.Files[1].Version, Main: manifest.Files[2].Version}
+	if floor.Main == 0 || floor.Daily == 0 || floor.Bytecode == 0 || !validRuleFiles(manifest.Files, floor) {
+		return nil, ErrRulesUnavailable
+	}
+	return &RuleVerifier{config: RuleVerifierConfig{RulesDirectory: rulesDirectory, ExpectedRuleSet: expectedRuleSet, ExpectedEngineImage: expectedEngineImage,
+		ExpectedEngineConfig: expectedEngineConfig, VersionFloor: floor}, document: bytes.Clone(document)}, nil
+}
+
 func (v *RuleVerifier) Verify(ctx context.Context, now time.Time) (string, error) {
 	if ctx == nil {
 		return "", context.Canceled
@@ -89,7 +117,7 @@ func (v *RuleVerifier) Verify(ctx context.Context, now time.Time) (string, error
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if v == nil || !absoluteClean(v.config.ManifestPath) || !absoluteClean(v.config.RulesDirectory) {
+	if v == nil || (len(v.document) == 0 && !absoluteClean(v.config.ManifestPath)) || !absoluteClean(v.config.RulesDirectory) {
 		return "", ErrRulesUnavailable
 	}
 	v.mu.Lock()
@@ -102,9 +130,13 @@ func (v *RuleVerifier) Verify(ctx context.Context, now time.Time) (string, error
 	}
 	v.lastNow = now
 	v.mu.Unlock()
-	manifestBytes, err := secretfile.Read(v.config.ManifestPath, ruleManifestMaxBytes)
-	if err != nil {
-		return "", ErrRulesUnavailable
+	manifestBytes := v.document
+	if len(manifestBytes) == 0 {
+		var err error
+		manifestBytes, err = secretfile.Read(v.config.ManifestPath, ruleManifestMaxBytes)
+		if err != nil {
+			return "", ErrRulesUnavailable
+		}
 	}
 	var manifest RuleManifest
 	if json.Unmarshal(manifestBytes, &manifest) != nil {

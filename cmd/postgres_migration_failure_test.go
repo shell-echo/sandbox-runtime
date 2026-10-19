@@ -34,6 +34,17 @@ func migrationProbeConfig(t *testing.T) *pgxpool.Config {
 	}
 	config.MaxConns, config.MinConns = 1, 0
 	config.ConnConfig.ConnectTimeout = time.Second
+	// pgx resolves before calling DialFunc. Keep this pool fixture independent
+	// of host DNS while retaining the original hostname and exact dial check.
+	config.ConnConfig.LookupFunc = func(ctx context.Context, host string) ([]string, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if host != "postgres.sandbox-runtime.test" {
+			return nil, errors.New("unexpected migration fixture host")
+		}
+		return []string{"127.0.0.1"}, nil
+	}
 	config.BeforeConnect = func(_ context.Context, connection *pgx.ConnConfig) error {
 		connection.AfterNetConnect = func(_ context.Context, _ *pgconn.Config, socket net.Conn) (net.Conn, error) {
 			return socket, nil
@@ -210,7 +221,11 @@ func TestMigrationProbeRealPoolCancelCloseAndNoPrivateCause(t *testing.T) {
 	config := migrationProbeConfig(t)
 	started := make(chan struct{})
 	var once sync.Once
-	config.ConnConfig.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+	config.ConnConfig.DialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != "127.0.0.1:5432" {
+			t.Error("pool did not use the exact fixture dial target")
+			return nil, errors.New("unexpected migration fixture target")
+		}
 		once.Do(func() { close(started) })
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -222,6 +237,7 @@ func TestMigrationProbeRealPoolCancelCloseAndNoPrivateCause(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(pool.Close)
 	caller, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	result := make(chan error, 1)
@@ -251,7 +267,11 @@ func TestMigrationProbeRealPoolCancelCloseAndNoPrivateCause(t *testing.T) {
 
 func TestMigrationProbeRealPoolPreservesExactDialClass(t *testing.T) {
 	config := migrationProbeConfig(t)
-	config.ConnConfig.DialFunc = func(context.Context, string, string) (net.Conn, error) {
+	config.ConnConfig.DialFunc = func(_ context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != "127.0.0.1:5432" {
+			t.Error("pool did not use the exact fixture dial target")
+			return nil, errors.New("unexpected migration fixture target")
+		}
 		return nil, phase6egress.ErrUnavailable
 	}
 	if err := bindMigrationConnectionDiagnostic(t.Context(), config); err != nil {

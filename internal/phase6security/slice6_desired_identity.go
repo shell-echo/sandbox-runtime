@@ -166,6 +166,12 @@ func VerifySlice6DesiredPrincipalIDs(profile Profile) error {
 	if profile.Validate() != nil {
 		return errSlice6DesiredInventory
 	}
+	return verifySlice6DesiredPrincipalIDsValidated(profile)
+}
+
+// verifySlice6DesiredPrincipalIDsValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredPrincipalIDsValidated(profile Profile) error {
 	wanted := Slice6DesiredUIDGID()
 	if len(profile.Principals) != len(wanted) {
 		return errSlice6DesiredInventory

@@ -143,7 +143,16 @@ func Slice6DesiredNetworks() []Network {
 // Profile.Validate: the latter enforces a closed safe shape, while this
 // function rejects a self-consistent but broadened expected graph.
 func VerifySlice6DesiredNetworkGraph(profile Profile) error {
-	if profile.Validate() != nil || len(profile.Principals) != len(slice6ApprovedDeploymentKinds) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredNetworkGraphValidated(profile)
+}
+
+// verifySlice6DesiredNetworkGraphValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredNetworkGraphValidated(profile Profile) error {
+	if len(profile.Principals) != len(slice6ApprovedDeploymentKinds) {
 		return errSlice6DesiredInventory
 	}
 	names := make(map[string]bool, len(profile.Principals))
@@ -175,7 +184,16 @@ func VerifySlice6DesiredNetworkGraph(profile Profile) error {
 // The generator must resolve a real port/IPAM clash before this checkpoint,
 // never after the application starts or by silently expanding its policy.
 func VerifySlice6DesiredNetworks(profile Profile) error {
-	if VerifySlice6DesiredNetworkGraph(profile) != nil {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredNetworksValidated(profile)
+}
+
+// verifySlice6DesiredNetworksValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredNetworksValidated(profile Profile) error {
+	if verifySlice6DesiredNetworkGraphValidated(profile) != nil {
 		return errSlice6DesiredInventory
 	}
 	wanted := Slice6DesiredNetworks()

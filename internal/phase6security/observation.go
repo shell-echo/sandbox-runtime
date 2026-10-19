@@ -291,7 +291,8 @@ func validateBrokerObservedAddresses(profile Profile, observations ObservationSe
 		networks[observed.Name] = observed
 	}
 	for _, policy := range profile.EgressPolicies {
-		edge, caller, broker, network, err := profile.BrokerBoundaryForPolicy(policy.ID)
+		// ValidateObservationsWithExternal already validated this same profile.
+		edge, caller, broker, network, err := profile.brokerBoundaryForPolicyValidated(policy.ID)
 		if err != nil {
 			return ErrInvalidObservation
 		}

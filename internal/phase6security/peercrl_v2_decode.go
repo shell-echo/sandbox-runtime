@@ -64,6 +64,17 @@ func DecodePeerCRLRoleDocumentV2(document []byte, profile ProfileV2,
 
 func decodePeerCRLRoleDocumentV2Fields(document []byte, profile ProfileV2,
 	expectedMappingDigest, expectedRoleDigest, expectedLocalPrincipalDigest string) (PeerCRLRoleDocument, error) {
+	value, err := decodePinnedPeerCRLRoleV2(document, expectedRoleDigest, expectedLocalPrincipalDigest)
+	if err != nil || value.validateV2Fields(profile, expectedMappingDigest) != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	return value, nil
+}
+
+// The wire stays frozen; purpose selection belongs to the typed entry point,
+// never to a field inferred from the role document itself.
+func decodePinnedPeerCRLRoleV2(document []byte,
+	expectedRoleDigest, expectedLocalPrincipalDigest string) (PeerCRLRoleDocument, error) {
 	if len(document) < 1 || len(document) > 128<<10 ||
 		!digestPattern.MatchString(expectedRoleDigest) ||
 		!digestPattern.MatchString(expectedLocalPrincipalDigest) || rejectDuplicateMembers(document) != nil {
@@ -77,11 +88,42 @@ func decodePeerCRLRoleDocumentV2Fields(document []byte, profile ProfileV2,
 	}
 	canonical, err := json.Marshal(value)
 	if err != nil || !bytes.Equal(canonical, document) || value.Digest() != expectedRoleDigest ||
-		value.LocalPrincipalDigest != expectedLocalPrincipalDigest ||
-		value.validateV2Fields(profile, expectedMappingDigest) != nil {
+		value.LocalPrincipalDigest != expectedLocalPrincipalDigest {
 		return PeerCRLRoleDocument{}, ErrInvalidProfile
 	}
 	return value, nil
+}
+
+func DecodePostgresPeerCRLRoleDocumentV2(document []byte, profile ProfileV2,
+	expectedMappingDigest, expectedRoleDigest, owner, expectedLocalPrincipalDigest string) (PeerCRLRoleDocument, error) {
+	if profile.Validate() != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	return decodePostgresPeerCRLRoleDocumentV2Fields(document, profile, expectedMappingDigest,
+		expectedRoleDigest, owner, expectedLocalPrincipalDigest)
+}
+
+func decodePostgresPeerCRLRoleDocumentV2Fields(document []byte, profile ProfileV2,
+	expectedMappingDigest, expectedRoleDigest, owner, expectedLocalPrincipalDigest string) (PeerCRLRoleDocument, error) {
+	value, err := decodePinnedPeerCRLRoleV2(document, expectedRoleDigest, expectedLocalPrincipalDigest)
+	if err != nil || value.validatePostgresV2Fields(profile, expectedMappingDigest, owner) != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	return value, nil
+}
+
+func VerifyPostgresPeerCRLRoleFileV2(path string, profile ProfileV2,
+	expectedMappingDigest, expectedRoleDigest, owner, expectedLocalPrincipalDigest string) (PeerCRLRoleDocument, error) {
+	if profile.Validate() != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	document, err := secretfile.Read(path, 128<<10)
+	if err != nil {
+		return PeerCRLRoleDocument{}, ErrInvalidProfile
+	}
+	defer clear(document)
+	return decodePostgresPeerCRLRoleDocumentV2Fields(document, profile, expectedMappingDigest,
+		expectedRoleDigest, owner, expectedLocalPrincipalDigest)
 }
 
 func VerifyPeerCRLRoleFileV2(path string, profile ProfileV2,

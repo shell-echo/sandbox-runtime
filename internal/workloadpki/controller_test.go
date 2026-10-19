@@ -16,8 +16,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 type policyIssuerFixtureAuthority struct {
@@ -49,7 +47,7 @@ func TestControllerProductionV1RevocationsSelectsAuthenticatedPolicyIssuer(t *te
 	authority := &policyIssuerFixtureAuthority{fakeCertificateAuthority: fakeCertificateAuthority{fixture: fixture}}
 	controller := &Controller{authority: authority, controllerKeyID: fixture.controllerID,
 		controllerKey: fixture.controllerPriv, now: func() time.Time { return fixture.now },
-		peerCRLProfile: &phase6security.Profile{}}
+		peerCRL: &controllerPeerCRLBinding{}}
 	request, err := NewRevocationsRequest(fixture.policy, "request-crl-1",
 		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32)),
 		fixture.now.Add(30*time.Second), fixture.agentPrivate)

@@ -8,12 +8,14 @@ import (
 )
 
 const (
-	v2DaemonSocketPath    = "/var/run/docker.sock"
-	v2DaemonSocketStorage = "provider-docker-daemon-socket"
-	v2ReceiptTarget       = "/var/lib/sandbox-runtime/control-receipts"
-	v2ReceiptMaxBytes     = 1 << 30
-	v2ScannerRuleTarget   = "/var/lib/clamav"
-	v2ScannerRuleMaxBytes = 1 << 30
+	v2DaemonSocketPath        = "/var/run/docker.sock"
+	v2DaemonSocketStorage     = "provider-docker-daemon-socket"
+	v2ReceiptTarget           = "/var/lib/sandbox-runtime/control-receipts"
+	v2ReceiptMaxBytes         = 1 << 30
+	v2ScannerRuleTarget       = "/var/lib/clamav"
+	v2ScannerRuleMaxBytes     = 1 << 30
+	ScannerRuntimeDirectoryV2 = "/run/phase6-scanner"
+	ScannerRuntimeMaxBytesV2  = 256 << 20
 )
 
 var v2ControlScopes = []ControlEndpointV2{
@@ -32,7 +34,7 @@ func validateV2NewPrincipal(value Principal, control DockerControlAuthorityV2, s
 		value.GID < 10000 || value.GID > 60000 || !value.ReadOnlyRootFilesystem ||
 		!value.NoNewPrivileges || !exactStrings(value.DroppedCapabilities, []string{"ALL"}) ||
 		!digestPattern.MatchString(value.SeccompDigest) || !validSlice6CapacityLimit(value.Resources) ||
-		value.HostNetwork || value.HostDevices || value.ExternalUplink || !value.DirectEgressBlocked ||
+		value.HostNetwork || value.HostDevices != (control.SourceAccess != nil && value.Name == control.Deployment) || value.ExternalUplink || !value.DirectEgressBlocked ||
 		(value.Kind == "tls_agent" && len(value.Networks) != 0) ||
 		(value.Kind != "tls_agent" && (len(value.Networks) == 0 || len(value.Networks) > 8)) ||
 		!sortedUniqueNames(value.Networks) ||
@@ -67,8 +69,12 @@ func validateV2NewPrincipal(value Principal, control DockerControlAuthorityV2, s
 				return ErrInvalidProfile
 			}
 		case "daemon_socket":
-			if value.Name != control.Deployment || mount.Target != v2DaemonSocketPath ||
+			if value.Name != control.Deployment || mount.Target != control.DaemonSocketPath ||
 				mount.StorageID != v2DaemonSocketStorage || !mount.ReadOnly || mount.MaxBytes != 0 {
+				return ErrInvalidProfile
+			}
+		case "control_source":
+			if control.SourceAccess == nil || value.Name != control.Deployment || mount.Target != control.SourceAccess.Intent.BackingTarget || mount.StorageID != control.SourceAccess.Intent.BackingStorageID || !mount.ReadOnly || mount.MaxBytes != 0 {
 				return ErrInvalidProfile
 			}
 		case "persistent_ledger":
@@ -102,15 +108,22 @@ func validateV2NewPrincipal(value Principal, control DockerControlAuthorityV2, s
 func validateV2ControlAuthority(p ProfileV2, principals map[string]Principal, edges map[string]TrustEdge) error {
 	a := p.DockerControl
 	control := principals[a.Deployment]
+	socketPath := v2DaemonSocketPath
+	if a.SourceAccess != nil {
+		socketPath = ControlSourceSocketTarget
+	}
+	if p.validateControlSourceAccess(control) != nil || p.validateControlBootstrap() != nil {
+		return ErrInvalidProfile
+	}
 	if a.Deployment != "provider-docker-control" || control.Kind != "docker_control" ||
-		a.DaemonSocketPath != v2DaemonSocketPath || a.DaemonSocketGID != 0 ||
+		a.DaemonSocketPath != socketPath || a.DaemonSocketGID != 0 ||
 		a.DaemonSocketMode != 0o660 || !slices.Equal(a.SupplementaryGIDs, []uint32{0}) ||
 		a.ReceiptTarget != v2ReceiptTarget ||
 		a.ReceiptMaxBytes != v2ReceiptMaxBytes || !namePattern.MatchString(a.ReceiptStorageID) ||
 		len(a.Endpoints) != len(v2ControlScopes) || !slices.Equal(a.Endpoints, v2ControlScopes) ||
 		!slices.Equal(control.Networks, []string{
 			"provider-browser-control", "provider-coding-control", "provider-desktop-control"}) ||
-		!exactPolicyMount(control, "daemon_socket", v2DaemonSocketPath, v2DaemonSocketStorage, true) ||
+		!exactPolicyMount(control, "daemon_socket", socketPath, v2DaemonSocketStorage, true) ||
 		!exactPolicyMount(control, "persistent_ledger", a.ReceiptTarget, a.ReceiptStorageID, false) ||
 		len(control.Listeners) != 3 {
 		return ErrInvalidProfile
@@ -158,6 +171,7 @@ func validateV2ScannerAuthority(p ProfileV2, principals map[string]Principal, ed
 		a.MaxArtifactBytes != 64<<20 || a.MaxConcurrentScans != 1 ||
 		!slices.Equal(scanner.Networks, []string{a.Network}) || len(scanner.Listeners) != 1 ||
 		!exactPolicyMount(scanner, "scanner_rules", a.RuleTarget, a.RuleStorageID, true) ||
+		validateScannerRuntimeMountsV2(p, scanner) != nil ||
 		validateV2PrivateEdge(p, principals, edges, a.ProviderDeployment, scanner.Name,
 			a.Network, a.EdgeID, a.RoutePath, "scanner") != nil {
 		return ErrInvalidProfile
@@ -228,6 +242,27 @@ func validateV2PrivateEdge(p ProfileV2, principals map[string]Principal, edges m
 		}
 	}
 	if !found {
+		return ErrInvalidProfile
+	}
+	return nil
+}
+
+// The command confines its engine config, socket and scan scratch to this tmpfs.
+// UID/GID and mode 0700 are verified against the actual directory at runtime.
+func validateScannerRuntimeMountsV2(p ProfileV2, scanner Principal) error {
+	want := Mount{Target: ScannerRuntimeDirectoryV2, Kind: "tmpfs", MaxBytes: ScannerRuntimeMaxBytesV2}
+	count := 0
+	for _, principal := range p.Principals {
+		for _, m := range principal.Mounts {
+			if m.Target == want.Target || strings.HasPrefix(m.Target, want.Target+"/") || strings.HasPrefix(want.Target, m.Target+"/") {
+				if principal.Name != scanner.Name || m != want {
+					return ErrInvalidProfile
+				}
+				count++
+			}
+		}
+	}
+	if count != 1 {
 		return ErrInvalidProfile
 	}
 	return nil

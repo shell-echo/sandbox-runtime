@@ -43,14 +43,19 @@ func VerifySlice6DesiredFinalPostgresSignerTargets(targets []Slice6PostgresSigne
 // Slice6DesiredFinalSharedPostgresHBARules binds the actual broker or direct
 // dialer address, not the logical caller's address, to every SQL login.
 func Slice6DesiredFinalSharedPostgresHBARules() ([]Slice6PostgresHBARule, error) {
-	if VerifySlice6DesiredFinalPostgresSignerTargets(Slice6DesiredFinalPostgresSignerTargets()) != nil ||
-		VerifySlice6DesiredFinalExternalGraph(Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges()) != nil {
+	targets := Slice6DesiredFinalPostgresSignerTargets()
+	transports := Slice6DesiredFinalExternalTransports()
+	if VerifySlice6DesiredFinalPostgresSignerTargets(targets) != nil ||
+		VerifySlice6DesiredFinalExternalGraph(transports, Slice6DesiredFinalExternalEdges()) != nil {
 		return nil, errSlice6DesiredInventory
 	}
+	// These plans are fresh and local to this call. Each owner keeps its full
+	// match/address checks without reconstructing the same desired topology.
+	bridges := Slice6DesiredFinalServiceBridges()
 	rules := make([]Slice6PostgresHBARule, 0, 9)
-	for _, signer := range Slice6DesiredFinalPostgresSignerTargets() {
+	for _, signer := range targets {
 		var match Slice6ExternalTransportPath
-		for _, path := range Slice6DesiredFinalExternalTransports() {
+		for _, path := range transports {
 			if path.LogicalCaller == signer.SubjectDeployment && path.Service == "postgres" {
 				if match.Network != "" {
 					return nil, errSlice6DesiredInventory
@@ -62,7 +67,7 @@ func Slice6DesiredFinalSharedPostgresHBARules() ([]Slice6PostgresHBARule, error)
 			!slices.Contains([]string{"provider-browser-runtime", "provider-desktop-runtime"}, signer.SubjectDeployment)) {
 			return nil, errSlice6DesiredInventory
 		}
-		address, err := Slice6DesiredFinalServiceEndpointAddress(match.Network, match.Dialer)
+		address, err := slice6FinalServiceEndpointAddress(bridges, match.Network, match.Dialer)
 		ip, parseErr := netip.ParseAddr(address)
 		if err != nil || parseErr != nil || !ip.Is4() {
 			return nil, errSlice6DesiredInventory

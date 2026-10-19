@@ -16,7 +16,16 @@ var slice6DesiredIngress = []slice6IngressSpec{
 // allowed host publications and resource policy. The pre-freeze IP binder
 // calls this before assigning frontend/upstream container addresses.
 func VerifySlice6DesiredIngressPolicy(profile Profile) error {
-	if profile.Validate() != nil || len(profile.IngressBindings) != len(slice6DesiredIngress) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredIngressPolicyValidated(profile)
+}
+
+// verifySlice6DesiredIngressPolicyValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredIngressPolicyValidated(profile Profile) error {
+	if len(profile.IngressBindings) != len(slice6DesiredIngress) {
 		return errSlice6DesiredInventory
 	}
 	for index, binding := range profile.IngressBindings {
@@ -41,8 +50,17 @@ func VerifySlice6DesiredIngressPolicy(profile Profile) error {
 // VerifySlice6DesiredIngress also requires exact preplanned relay and target
 // container IPs; profile-valid arbitrary addresses inside a /24 are denied.
 func VerifySlice6DesiredIngress(profile Profile) error {
-	if VerifySlice6DesiredIngressPolicy(profile) != nil ||
-		(VerifySlice6DesiredNetworks(profile) != nil && VerifySlice6DesiredFinalNetworks(profile.Networks) != nil) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredIngressValidated(profile)
+}
+
+// verifySlice6DesiredIngressValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredIngressValidated(profile Profile) error {
+	if verifySlice6DesiredIngressPolicyValidated(profile) != nil ||
+		(verifySlice6DesiredNetworksValidated(profile) != nil && VerifySlice6DesiredFinalNetworks(profile.Networks) != nil) {
 		return errSlice6DesiredInventory
 	}
 	for index, binding := range profile.IngressBindings {

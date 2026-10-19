@@ -32,9 +32,27 @@ type Slice6V2ResourceBudget struct {
 func CalculateSlice6V2ResourceBudget(principals []Principal, sandboxSlots []SandboxIdentitySlot,
 	template CodingRuntimeTemplateV2, sandboxGatewayLimits, externalLimits map[string]Resources,
 ) (Slice6V2ResourceBudget, error) {
-	if VerifySlice6V2CodingSlots(template, principals, sandboxSlots) != nil ||
-		len(sandboxGatewayLimits) != len(sandboxTemplateOwners) ||
-		len(externalLimits) != len(slice6DesiredExternalServices) {
+	if VerifySlice6V2CodingSlots(template, principals, sandboxSlots) != nil {
+		return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
+	}
+	result, err := calculateV2NonCodingBudget(principals, sandboxSlots, sandboxGatewayLimits, externalLimits)
+	if err != nil {
+		return Slice6V2ResourceBudget{}, err
+	}
+	result.CodingContainers = len(template.Slots)
+	result.CodingWholeVolumeCount = len(template.Slots) * 3
+	for range template.Slots {
+		if !addV2Capacity(&result, Resources{MemoryBytes: template.Limits.MemoryBytes, CPUMillis: template.Limits.CPUMillis, PIDs: template.Limits.PIDs}) {
+			return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
+		}
+	}
+	return result, nil
+}
+
+// Shared arithmetic only: each caller validates its own Coding mode and full
+// identity inventory before counting. This helper cannot translate templates.
+func calculateV2NonCodingBudget(principals []Principal, sandboxSlots []SandboxIdentitySlot, sandboxGatewayLimits, externalLimits map[string]Resources) (Slice6V2ResourceBudget, error) {
+	if len(sandboxGatewayLimits) != len(sandboxTemplateOwners) || len(externalLimits) != len(slice6DesiredExternalServices) {
 		return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
 	}
 	for name, limit := range sandboxGatewayLimits {
@@ -66,7 +84,6 @@ func CalculateSlice6V2ResourceBudget(principals []Principal, sandboxSlots []Sand
 		return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
 	}
 	result := Slice6V2ResourceBudget{DoubleParseMemoryBytes: slice6V2DoubleParseHeadroom,
-		CodingContainers: len(template.Slots), CodingWholeVolumeCount: len(template.Slots) * 3,
 		ExternalServices: len(externalLimits)}
 	for _, principal := range principals {
 		if principal.Kind == "sandbox" {
@@ -83,12 +100,6 @@ func CalculateSlice6V2ResourceBudget(principals []Principal, sandboxSlots []Sand
 			return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
 		}
 		result.SandboxContainers += 2
-	}
-	for range template.Slots {
-		if !addV2Capacity(&result, Resources{MemoryBytes: template.Limits.MemoryBytes,
-			CPUMillis: template.Limits.CPUMillis, PIDs: template.Limits.PIDs}) {
-			return Slice6V2ResourceBudget{}, ErrInvalidSlice6CapacityPlan
-		}
 	}
 	for _, limit := range externalLimits {
 		if !addV2Capacity(&result, limit) {

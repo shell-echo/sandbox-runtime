@@ -9,16 +9,20 @@ import (
 // Slice 6 runner. It does not attest any running process or external service.
 // Earlier 17/12 and 28/33 profiles must never reach Docker side effects.
 func VerifySlice6FinalGateProfile(profile Profile) error {
-	if VerifySlice6DesiredFinalExternalProfile(profile) != nil ||
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	// All private checks below consume this unchanged, fully validated profile.
+	if verifySlice6DesiredFinalExternalProfileValidated(profile) != nil ||
 		VerifySlice6ControllerLedgerMounts(profile) != nil ||
 		VerifySlice6PrivateConfigMounts(profile) != nil ||
 		VerifySlice6MaterialSocketBindings(profile) != nil ||
 		VerifySlice6BreakGlassBoundaries(profile) != nil ||
 		VerifySlice6BreakGlassKeyAuthority(profile.BreakGlassKeyAuthority) != nil ||
 		VerifySlice6BreakGlassExecutableArtifact(profile) != nil ||
-		VerifySlice6DNSClientCA(profile) != nil ||
-		VerifySlice6DNSRuntimePolicy(profile) != nil ||
-		VerifySlice6DesiredImageLocations(profile) != nil ||
+		verifySlice6DNSClientCAValidated(profile) != nil ||
+		verifySlice6DNSRuntimePolicyValidated(profile) != nil ||
+		verifySlice6DesiredImageLocationsValidated(profile) != nil ||
 		len(profile.Principals) != len(Slice6DesiredDeploymentNames()) ||
 		len(profile.Networks) != len(Slice6DesiredFinalNetworks()) {
 		return errSlice6DesiredInventory

@@ -119,7 +119,16 @@ func BuildSlice6DesiredEgressPolicies(principals []Principal, publicKeys map[str
 // destination or lengthening an authority lease by merely rehashing itself.
 // Key digests remain run artifacts and are checked by the live authority gate.
 func VerifySlice6DesiredEgressPolicies(profile Profile) error {
-	if profile.Validate() != nil || len(profile.EgressPolicies) != len(slice6DesiredEgress) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredEgressPoliciesValidated(profile)
+}
+
+// verifySlice6DesiredEgressPoliciesValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredEgressPoliciesValidated(profile Profile) error {
+	if len(profile.EgressPolicies) != len(slice6DesiredEgress) {
 		return errSlice6DesiredInventory
 	}
 	for index, policy := range profile.EgressPolicies {

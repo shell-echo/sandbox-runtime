@@ -120,12 +120,14 @@ func (c *VaultClient) ValidatePeerSources(sources []phase6security.PeerCRLSource
 	if c == nil || !c.requireImmediateCompleteCRL || len(sources) == 0 || len(sources) != len(c.peerIssuerSources) {
 		return ErrUnavailable
 	}
+	seen := make(map[string]bool, len(sources))
 	for _, source := range sources {
 		configured, known := c.peerIssuerSources[source.ID]
-		if !known || configured.Mount != source.Mount || configured.IssuerID != source.IssuerID ||
+		if !known || seen[source.ID] || configured.Mount != source.Mount || configured.IssuerID != source.IssuerID ||
 			configured.IssuerDigest != source.IssuerDigest {
 			return ErrUnavailable
 		}
+		seen[source.ID] = true
 	}
 	return nil
 }

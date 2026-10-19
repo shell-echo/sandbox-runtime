@@ -23,6 +23,13 @@ func (p Profile) ProductProviderBoundary() (TrustEdge, Principal, Principal, Tru
 // locked Contract listener. Three Provider processes cannot share this TLS
 // or CRL authority simply because they implement the same Contract.
 func (p Profile) ProductProviderInstanceBoundary(providerName string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
+	if p.Validate() != nil {
+		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
+	}
+	return productProviderInstanceBoundaryFields(p.TrustEdges, p.Principals, p.Networks, p.TrustAnchors, providerName)
+}
+
+func productProviderInstanceBoundaryFields(edges []TrustEdge, principals []Principal, networks []Network, anchors []TrustAnchor, providerName string) (TrustEdge, Principal, Principal, TrustAnchor, TrustAnchor, error) {
 	var edgeID, networkName string
 	switch providerName {
 	case "provider-runtime":
@@ -34,18 +41,15 @@ func (p Profile) ProductProviderInstanceBoundary(providerName string) (TrustEdge
 	default:
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
-	if p.Validate() != nil {
-		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
-	}
 	var edge TrustEdge
 	var product, provider Principal
 	var network Network
-	for _, candidate := range p.TrustEdges {
+	for _, candidate := range edges {
 		if candidate.ID == edgeID {
 			edge = candidate
 		}
 	}
-	for _, candidate := range p.Principals {
+	for _, candidate := range principals {
 		switch candidate.Name {
 		case "product-runtime":
 			product = candidate
@@ -53,7 +57,7 @@ func (p Profile) ProductProviderInstanceBoundary(providerName string) (TrustEdge
 			provider = candidate
 		}
 	}
-	for _, candidate := range p.Networks {
+	for _, candidate := range networks {
 		if candidate.Name == networkName {
 			network = candidate
 		}
@@ -84,7 +88,7 @@ func (p Profile) ProductProviderInstanceBoundary(providerName string) (TrustEdge
 	if !listenerFound {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}
-	server, client, err := p.EdgeTrustAnchors(edge.ID)
+	server, client, err := edgeTrustAnchorsFields(edges, anchors, edge.ID)
 	if err != nil {
 		return TrustEdge{}, Principal{}, Principal{}, TrustAnchor{}, TrustAnchor{}, ErrInvalidProfile
 	}

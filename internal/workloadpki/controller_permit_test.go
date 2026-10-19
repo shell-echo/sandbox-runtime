@@ -12,8 +12,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
 type permitBlockedIssuer struct {
@@ -123,9 +121,7 @@ func TestControllerPermitCanceledAndExpiredWaitersDoNotMutate(t *testing.T) {
 			if variant.v2 {
 				// Admission must end before source validation; no invalid fixture
 				// can become an authorized source through this test path.
-				controller.peerCRLProfile = &phase6security.Profile{}
-				controller.peerCRLSources = &phase6security.PeerCRLSources{}
-				controller.peerCRLIdentity = &purposePeerIndex{}
+				controller.peerCRL = &controllerPeerCRLBinding{identity: &purposePeerIndex{}}
 				request, requestErr := NewPeerCRLRequest(fixture.policy, "permit-peer-crl",
 					base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{92}, 32)), fixture.now.Add(30*time.Second),
 					"sha256:"+strings.Repeat("a", 64), "product-provider-contract", fixture.policy.Subject.Digest(),
@@ -177,7 +173,7 @@ func TestControllerPermitCanceledAndExpiredWaitersDoNotMutate(t *testing.T) {
 				t.Fatalf("occupying issue: %v", err)
 			}
 			if variant.v2 {
-				controller.peerCRLProfile, controller.peerCRLSources, controller.peerCRLIdentity = nil, nil, nil
+				controller.peerCRL = nil
 			}
 			normal, err := NewRevocationsRequest(fixture.policy, "permit-normal-crl",
 				base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{93}, 32)), fixture.now.Add(30*time.Second), fixture.agentPrivate)
@@ -376,8 +372,7 @@ func TestServerCloseCancelsQueuedPeerCRLHandler(t *testing.T) {
 	defer controller.Close()
 	// The source mapping is deliberately invalid: shutdown must cancel admission
 	// before any source lookup, and must never authorize this fixture.
-	controller.peerCRLProfile = &phase6security.Profile{}
-	controller.peerCRLSources = &phase6security.PeerCRLSources{}
+	controller.peerCRL = &controllerPeerCRLBinding{}
 	socket := filepath.Join(securePKIDirectory(t), "controller.sock")
 	server, err := Listen(ServerConfig{SocketPath: socket, SocketUID: uint32(os.Getuid()), SocketGID: uint32(os.Getgid()),
 		InternalSelf: true, ExpectedClientUID: uint32(os.Getuid()), ExpectedClientGID: uint32(os.Getgid()),

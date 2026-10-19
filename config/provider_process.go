@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -91,9 +92,19 @@ type ProviderPostgresConfig struct {
 }
 
 type ProviderProcessCodingConfig struct {
-	Lifecycle ProviderLifecycleDockerConfig `mapstructure:"lifecycle"`
-	Terminal  ProviderTerminalConfig        `mapstructure:"terminal"`
-	Artifact  ProviderArtifactConfig        `mapstructure:"artifact"`
+	Lifecycle       ProviderLifecycleDockerConfig        `mapstructure:"lifecycle"`
+	Terminal        ProviderTerminalConfig               `mapstructure:"terminal"`
+	Artifact        ProviderArtifactConfig               `mapstructure:"artifact"`
+	PrivateServices *ProviderCodingPrivateServicesConfig `mapstructure:"private_services"`
+}
+
+// PrivateServices is a held v3 startup input, never a Provider wire DTO.
+// Both clients use the owner's ordinary signer/role from Transport; PG keeps
+// its distinct signer and role. No arbitrary scanner executable is admitted.
+type ProviderCodingPrivateServicesConfig struct {
+	ControlAddress     string `mapstructure:"control_address"`
+	ScannerAddress     string `mapstructure:"scanner_address"`
+	ReceiptBindingJSON string `mapstructure:"receipt_binding_json"`
 }
 
 // Browser is a separate Provider instance, never an executor process or a
@@ -200,6 +211,9 @@ func (c *ProviderProcessConfig) Validate() error { //nolint:cyclop
 	}
 	if !c.Enabled {
 		return nil
+	}
+	if c.Coding.PrivateServices != nil && (c.SchemaVersion != ProviderProductionSchemaV3 || c.Profile != ProviderProcessCodingShellProfile) {
+		return errors.New("Coding private services require the Coding v3 profile")
 	}
 	liveSchema := c.SchemaVersion == ProviderProductionSchemaV3
 	materialSchema := c.SchemaVersion == ProviderProductionSchemaV2 || liveSchema
@@ -419,6 +433,17 @@ func (c *ProviderProcessConfig) validatePostgres(materialSchema bool) error {
 }
 
 func (c *ProviderProcessConfig) validateCoding() error {
+	if c.SchemaVersion == ProviderProductionSchemaV3 {
+		legacy := c.Coding
+		legacy.PrivateServices = nil
+		p := c.Coding.PrivateServices
+		if !reflect.DeepEqual(legacy, defaultProviderProcessConfig().Coding) || p == nil ||
+			!validCodingPrivateAddress(p.ControlAddress) || !validCodingPrivateAddress(p.ScannerAddress) ||
+			p.ControlAddress == p.ScannerAddress || len(p.ReceiptBindingJSON) == 0 || len(p.ReceiptBindingJSON) > 64<<10 {
+			return errors.New("Coding v3 requires private Control/Scanner inputs and forbids legacy runtime overrides")
+		}
+		return nil
+	}
 	lifecycleConfig := ProviderLifecycleConfig{Enabled: true, Driver: ProviderLifecycleDockerDriver, Repository: ProviderLifecycleRepositoryConfig{Driver: ProviderLifecycleFileRepository, File: ProviderLifecycleRepositoryFileConfig{Path: "unused"}}, Docker: c.Coding.Lifecycle}
 	if err := lifecycleConfig.Validate(); err != nil {
 		return fmt.Errorf("provider_process.coding.lifecycle: %w", err)
@@ -441,6 +466,11 @@ func (c *ProviderProcessConfig) validateCoding() error {
 		return errors.New("provider_process.coding.artifact.staging_root must be absolute")
 	}
 	return nil
+}
+
+func validCodingPrivateAddress(address string) bool {
+	value, err := netip.ParseAddrPort(address)
+	return err == nil && value.Addr().Is4() && value.Addr().IsPrivate() && value.Port() != 0 && value.String() == address
 }
 
 func (c *ProviderProcessConfig) validateBrowser() error {

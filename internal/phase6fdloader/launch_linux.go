@@ -3,7 +3,9 @@
 package phase6fdloader
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -50,7 +52,17 @@ func Launch() error {
 	if err := unix.SetNonblock(0, true); err != nil {
 		return ErrStartupInput
 	}
-	value, err := Decode(deadlineInput{ctx: ctx, fd: 0}, expected)
+	var value Envelope
+	if ControlStartupProtocol(expected.Target) != "" {
+		var frame []byte
+		frame, err = ReadFrame(deadlineInput{ctx: ctx, fd: 0}, MaxEnvelopeBytes)
+		if err == nil {
+			value, err = Decode(bytes.NewReader(frame), expected)
+		}
+		clear(frame)
+	} else {
+		value, err = Decode(deadlineInput{ctx: ctx, fd: 0}, expected)
+	}
 	if err != nil || ctx.Err() != nil {
 		value.Destroy()
 		return ErrStartupInput
@@ -141,6 +153,23 @@ func execWithSealedFDs(ctx context.Context, value Envelope) error {
 			name string
 			data []byte
 		}{file.FD, spec.Descriptors[index].Purpose, file.Data})
+	}
+	if ControlStartupProtocol(value.Target) != "" {
+		// Only the validated outer envelope supplies this binding; Files cannot.
+		binding, err := json.Marshal(StartupBinding{ControlStartupProtocol(value.Target), value.RunID, value.Nonce, value.ContainerID, value.Target})
+		if err != nil || CheckReplyPipe(0) != nil {
+			return ErrStartupFD
+		}
+		input, err := unix.FcntlInt(0, unix.F_DUPFD_CLOEXEC, 32)
+		if err != nil {
+			return ErrStartupFD
+		}
+		files = append(files, sealedFD{destination: 4, source: input})
+		inputs = append(inputs, struct {
+			fd   int
+			name string
+			data []byte
+		}{5, "control-startup-binding", binding})
 	}
 	for _, input := range inputs {
 		if ctx.Err() != nil {

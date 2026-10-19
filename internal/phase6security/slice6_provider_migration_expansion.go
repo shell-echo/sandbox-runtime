@@ -119,7 +119,16 @@ func MissingSlice6FinalExternalDependencies(paths []Slice6ExternalTransportPath)
 // 33/28 candidate until the two additional migration jobs and every reviewed
 // physical dial path actually appear in one validated profile.
 func VerifySlice6FinalExternalDependencyClosure(profile Profile) error {
-	if profile.Validate() != nil || VerifySlice6DesiredProviderMigrationExpansions(Slice6DesiredProviderMigrationExpansions()) != nil {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6FinalExternalDependencyClosureValidated(profile)
+}
+
+// verifySlice6FinalExternalDependencyClosureValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6FinalExternalDependencyClosureValidated(profile Profile) error {
+	if VerifySlice6DesiredProviderMigrationExpansions(Slice6DesiredProviderMigrationExpansions()) != nil {
 		return errSlice6DesiredInventory
 	}
 	paths, expectedEdges := Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges()
@@ -274,7 +283,13 @@ func VerifySlice6DesiredFinalServiceBridges(bridges []Network) error {
 }
 
 func Slice6DesiredFinalServiceEndpointAddress(networkName, member string) (string, error) {
-	for _, network := range Slice6DesiredFinalServiceBridges() {
+	return slice6FinalServiceEndpointAddress(Slice6DesiredFinalServiceBridges(), networkName, member)
+}
+
+// Only a fresh repository-owned desired plan may reach this private
+// projection; it does not validate or authorize a caller-supplied graph.
+func slice6FinalServiceEndpointAddress(bridges []Network, networkName, member string) (string, error) {
+	for _, network := range bridges {
 		if network.Name != networkName {
 			continue
 		}

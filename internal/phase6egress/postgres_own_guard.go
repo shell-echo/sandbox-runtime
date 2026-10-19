@@ -74,6 +74,25 @@ func NewPostgresOwnGuard(profile phase6security.Profile, owner string, source po
 		target.DatabaseName != authority.Database || target.SQLRole != authority.SQLRole {
 		return nil, ErrUnavailable
 	}
+	return newPostgresOwnGuardBound(authority, binding, principal, anchor, source, timeout, now)
+}
+
+func NewPostgresOwnGuardV2(profile phase6security.ProfileV2, owner string, source postgresSnapshotSource, timeout time.Duration, now func() time.Time) (*PostgresOwnGuard, error) {
+	if source == nil || now == nil || now().IsZero() || timeout < time.Second || timeout > 30*time.Second {
+		return nil, ErrUnavailable
+	}
+	authority, err := profile.ResolveSlice6FinalPostgresAuthority(owner)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	binding, target, _, principal, anchor, err := profile.PostgresClientSignerForOwner(owner)
+	if err != nil || principal.TLS == nil || binding.SocketPath != authority.Signer.SocketPath || target.DatabaseName != authority.Database || target.SQLRole != authority.SQLRole {
+		return nil, ErrUnavailable
+	}
+	return newPostgresOwnGuardBound(authority, binding, principal, anchor, source, timeout, now)
+}
+
+func newPostgresOwnGuardBound(authority phase6security.Slice6PostgresAuthority, binding phase6security.PostgresClientAgentBinding, principal phase6security.Principal, anchor phase6security.TrustAnchor, source postgresSnapshotSource, timeout time.Duration, now func() time.Time) (*PostgresOwnGuard, error) {
 	staleness := time.Duration(principal.TLS.RevocationMaxStalenessSeconds) * time.Second
 	drain := time.Duration(principal.TLS.ConnectionDrainSeconds) * time.Second
 	boundedTimeout := min(timeout, drain/5)
@@ -98,7 +117,7 @@ func NewPostgresOwnGuard(profile phase6security.Profile, owner string, source po
 		return nil, ErrUnavailable
 	}
 	return &PostgresOwnGuard{source: source, issuerDER: bytes.Clone(block.Bytes),
-		identity: workloadpki.PostgresClientIdentity{OwnerDeployment: owner, DatabaseName: authority.Database,
+		identity: workloadpki.PostgresClientIdentity{OwnerDeployment: authority.Owner, DatabaseName: authority.Database,
 			RuntimeRole: authority.SQLRole, ServiceName: "postgres", URI: principal.TLS.URI,
 			CommonName: binding.CommonName, MaxTTL: time.Duration(principal.TLS.TTLSeconds) * time.Second},
 		maximumStaleness: staleness, timeout: boundedTimeout, interval: interval, closeBudget: closeBudget,

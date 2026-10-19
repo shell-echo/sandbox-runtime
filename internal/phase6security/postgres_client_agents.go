@@ -181,6 +181,10 @@ func (p Profile) PostgresClientSignerForOwner(owner string) (PostgresClientAgent
 // The caller must have validated this exact, unchanged Profile snapshot.
 // Keeping this private avoids giving ordinary callers a skip-validation path.
 func (p Profile) postgresClientSignerForOwnerValidated(owner string) (PostgresClientAgentBinding, Slice6PostgresSignerTarget, Principal, Principal, TrustAnchor, error) {
+	return postgresClientSignerForOwnerFields(p.PostgresClientAgents, p.Principals, p.TrustAnchors, owner)
+}
+
+func postgresClientSignerForOwnerFields(bindings []PostgresClientAgentBinding, principals []Principal, anchors []TrustAnchor, owner string) (PostgresClientAgentBinding, Slice6PostgresSignerTarget, Principal, Principal, TrustAnchor, error) {
 	var target Slice6PostgresSignerTarget
 	for _, candidate := range Slice6DesiredFinalPostgresSignerTargets() {
 		if candidate.SubjectDeployment == owner {
@@ -191,13 +195,13 @@ func (p Profile) postgresClientSignerForOwnerValidated(owner string) (PostgresCl
 	if target.SubjectDeployment == "" {
 		return PostgresClientAgentBinding{}, Slice6PostgresSignerTarget{}, Principal{}, Principal{}, TrustAnchor{}, ErrInvalidProfile
 	}
-	for _, binding := range p.PostgresClientAgents {
+	for _, binding := range bindings {
 		if binding.SubjectDeployment != owner {
 			continue
 		}
 		var agent, subject Principal
 		var anchor TrustAnchor
-		for _, principal := range p.Principals {
+		for _, principal := range principals {
 			if principal.Name == binding.AgentDeployment {
 				agent = principal
 			}
@@ -205,7 +209,7 @@ func (p Profile) postgresClientSignerForOwnerValidated(owner string) (PostgresCl
 				subject = principal
 			}
 		}
-		for _, item := range p.TrustAnchors {
+		for _, item := range anchors {
 			if item.ID == binding.IssuerAnchorID {
 				anchor = item
 			}

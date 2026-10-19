@@ -19,3 +19,7 @@ ENTRYPOINT ["/usr/local/bin/phase6-role"]
 FROM role-base AS fd-loader
 COPY --chmod=0555 loader /usr/local/bin/phase6-fd-loader
 ENTRYPOINT ["/bin/sh", "-ec", "exec 3</dev/null 4</dev/null 5</dev/null 6</dev/null; exec /usr/local/bin/phase6-fd-loader"]
+
+# Only the versioned Control delivery target contains this operator probe.
+FROM fd-loader AS control-delivery
+COPY --chmod=0555 probe /usr/local/bin/control-process-observe

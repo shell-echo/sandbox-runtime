@@ -186,25 +186,44 @@ func VerifySlice6DesiredExecutableExternalProfile(profile Profile) error {
 // VerifySlice6DesiredFinalExternalProfile freezes the complete 30-path/35-edge
 // external candidate. It deliberately does not assert live SQL, PKI or HBA loading.
 func VerifySlice6DesiredFinalExternalProfile(profile Profile) error {
-	if VerifySlice6FinalExternalDependencyClosure(profile) != nil ||
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredFinalExternalProfileValidated(profile)
+}
+
+// verifySlice6DesiredFinalExternalProfileValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredFinalExternalProfileValidated(profile Profile) error {
+	if verifySlice6FinalExternalDependencyClosureValidated(profile) != nil ||
 		profile.PostgresServerAuth.Scope != postgresSharedAuthScope ||
 		profile.PostgresServerAuth.IngressCIDR != "" ||
 		profile.PostgresServerAuth.HBAArtifactID != "shared-postgres-hba" ||
-		VerifySlice6DesiredFinalTrustAnchors(profile) != nil ||
+		verifySlice6TrustAnchorsValidated(profile, slice6FinalAnchorSpecs()) != nil ||
 		VerifySlice6GuestStorageMounts(profile) != nil ||
-		VerifySlice6DesiredEgressPolicies(profile) != nil ||
-		VerifySlice6DesiredTLSIdentities(profile) != nil ||
-		VerifySlice6DesiredIngress(profile) != nil {
+		verifySlice6DesiredEgressPoliciesValidated(profile) != nil ||
+		verifySlice6DesiredTLSIdentitiesValidated(profile) != nil ||
+		verifySlice6DesiredIngressValidated(profile) != nil {
 		return errSlice6DesiredInventory
 	}
-	return verifySlice6ExternalProfile(profile, VerifySlice6DesiredFinalNetworks,
+	return verifySlice6ExternalProfileValidated(profile, VerifySlice6DesiredFinalNetworks,
 		Slice6DesiredFinalExternalTransports(), Slice6DesiredFinalExternalEdges(), 18)
 }
 
 func verifySlice6ExternalProfile(profile Profile, verifyNetworks func([]Network) error,
 	paths []Slice6ExternalTransportPath, externalEdges []slice6ExternalEdge, additionalEdges int) error {
-	if profile.Validate() != nil || verifyNetworks(profile.Networks) != nil ||
-		VerifySlice6DesiredPrincipalIDs(profile) != nil || len(profile.TrustEdges) != len(slice6DesiredTrustEdges())+additionalEdges ||
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6ExternalProfileValidated(profile, verifyNetworks, paths, externalEdges, additionalEdges)
+}
+
+// verifySlice6ExternalProfileValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6ExternalProfileValidated(profile Profile, verifyNetworks func([]Network) error,
+	paths []Slice6ExternalTransportPath, externalEdges []slice6ExternalEdge, additionalEdges int) error {
+	if verifyNetworks(profile.Networks) != nil ||
+		verifySlice6DesiredPrincipalIDsValidated(profile) != nil || len(profile.TrustEdges) != len(slice6DesiredTrustEdges())+additionalEdges ||
 		len(profile.External) != len(slice6DesiredExternalServices) {
 		return errSlice6DesiredInventory
 	}

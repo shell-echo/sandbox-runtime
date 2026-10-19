@@ -1,5 +1,6 @@
-// Package codingcontroltransport contains the read-only Provider→Control
-// status HTTP endpoint. It cannot activate Docker or synthesize a PG snapshot.
+// Package codingcontroltransport contains the Provider→Control HTTP endpoint.
+// Status-only composition remains read-only. The held v2 mutation composition
+// accepts only a concrete Profile-bound Coding executor, never Docker options.
 // The production constructor requires a concrete Profile-bound peer CRL
 // guard and receipt ledger; v2 role composition remains separately gated.
 package codingcontroltransport
@@ -13,8 +14,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/codingcontrolprotocol"
@@ -49,10 +50,11 @@ type statusPeer interface {
 }
 
 type StatusServer struct {
-	config  statusServerConfig
-	peer    statusPeer
-	project statusProjector
-	server  *http.Server
+	config   statusServerConfig
+	peer     statusPeer
+	project  statusProjector
+	server   *http.Server
+	executor *dockercontrol.CodingExecutorV2
 }
 
 // projectStatus reads one ledger-locked receipt/state pair after the transport
@@ -60,21 +62,7 @@ type StatusServer struct {
 // record is an observation, not evidence of physical absence or cleanup.
 func projectStatus(ledger *dockercontrol.CodingReceiptLedger, request codingcontrolprotocol.Request,
 	peerDigest string, now time.Time) (codingcontrolprotocol.Response, error) {
-	if ledger == nil || request.Action != codingcontrolprotocol.ActionStatus ||
-		request.Validate(now, peerDigest) != nil {
-		return codingcontrolprotocol.Response{}, codingcontrolprotocol.ErrInvalidWire
-	}
-	receipt, revision, stateDigest, err := ledger.LookupBoundProjection(request.Create, peerDigest, now)
-	if errors.Is(err, os.ErrNotExist) {
-		return codingcontrolprotocol.Response{Protocol: codingcontrolprotocol.ProtocolID,
-			Scope: codingcontrolprotocol.ScopeCoding, Action: codingcontrolprotocol.ActionStatus,
-			Status:                codingcontrolprotocol.StatusNotFound,
-			CreateAuthorityDigest: request.Create.Digest(), EffectID: request.Create.EffectID}, nil
-	}
-	if err != nil {
-		return codingcontrolprotocol.Response{}, err
-	}
-	return codingcontrolprotocol.ProjectReceipt(request, receipt, revision, stateDigest)
+	return codingcontrolprotocol.ProjectLedgerStatus(ledger, request, peerDigest, now)
 }
 
 // This constructor remains package-private until one complete Profile-v2
@@ -173,14 +161,39 @@ func (s *StatusServer) handle(writer http.ResponseWriter, request *http.Request)
 	}
 	now := s.config.Clock().UTC()
 	bound, err := codingcontrolprotocol.DecodeRequest(document, now, s.config.ProviderPrincipalDigest)
-	if err != nil || bound.Action != codingcontrolprotocol.ActionStatus ||
+	if err != nil || (bound.Action != codingcontrolprotocol.ActionStatus && s.executor == nil) ||
 		bound.Create.ProfileDigest != s.config.ProfileDigest ||
 		bound.Create.ControlPolicyDigest != s.config.ControlPolicyDigest {
 		http.Error(writer, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
-	response, err := s.project(s.config.Ledger, bound, s.config.ProviderPrincipalDigest, now)
-	if err != nil || response.Validate(bound) != nil || ctx.Err() != nil {
+	var response codingcontrolprotocol.Response
+	if bound.Action == codingcontrolprotocol.ActionStatus {
+		response, err = s.project(s.config.Ledger, bound, s.config.ProviderPrincipalDigest, now)
+	} else {
+		switch bound.Action {
+		case codingcontrolprotocol.ActionCreate:
+			err = s.executor.Create(ctx, bound.Create)
+		case codingcontrolprotocol.ActionCleanup:
+			if bound.Cleanup == nil {
+				err = ErrInvalidStatusServer
+			} else {
+				err = s.executor.Cleanup(ctx, bound.Create, *bound.Cleanup)
+			}
+		default:
+			err = ErrInvalidStatusServer
+		}
+		if err == nil {
+			var receipt dockercontrol.CodingReceipt
+			var revision uint64
+			var digest string
+			receipt, revision, digest, err = s.config.Ledger.LookupBoundProjection(bound.Create, s.config.ProviderPrincipalDigest, s.config.Clock().UTC())
+			if err == nil {
+				response, err = codingcontrolprotocol.ProjectReceipt(bound, receipt, revision, digest)
+			}
+		}
+	}
+	if err != nil || response.Validate(bound) != nil || ctx.Err() != nil || s.peer.Poll(ctx) != nil || !s.peer.Ready() {
 		http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		return
 	}
@@ -190,6 +203,7 @@ func (s *StatusServer) handle(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")
+	writer.Header().Set("Content-Length", strconv.Itoa(len(encoded)))
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(encoded)
 }

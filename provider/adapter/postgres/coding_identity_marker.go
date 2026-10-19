@@ -19,9 +19,17 @@ type codingIdentityMarker struct {
 	PlanDigest          string `json:"plan_digest"`
 	AuthorityMode       string `json:"authority_mode,omitempty"`
 	ControlPolicyDigest string `json:"control_policy_digest,omitempty"`
+	ExecIntentMode      string `json:"exec_intent_mode,omitempty"`
+	ExecFenceMode       string `json:"exec_fence_mode,omitempty"`
 }
 
 func (m codingIdentityMarker) validate() error {
+	if m.ExecFenceMode != "" && (m.ExecFenceMode != codingExecFenceMode || m.ExecIntentMode != codingExecIntentMode) {
+		return ErrCorrupt
+	}
+	if m.ExecIntentMode != "" && (m.ExecIntentMode != codingExecIntentMode || !m.Initialized || m.AuthorityMode != codingAtomicOriginalMode) {
+		return ErrCorrupt
+	}
 	if !m.Initialized {
 		if m.PlanDigest != "" || m.AuthorityMode != "" || m.ControlPolicyDigest != "" {
 			return ErrCorrupt

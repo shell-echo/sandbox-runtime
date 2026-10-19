@@ -1,0 +1,24 @@
+{
+  "schema": "sandbox-runtime.phase6-coding-candidate-evidence.v1",
+  "scope": "historical-build-and-scan-records-not-current-admission",
+  "candidate_gate_sha256": "47c760d0a725a9ac0adec5bfedd4101cbfb5ee1f5b6812c9a924dce63724117b",
+  "scanner": {
+    "version": "0.74.0",
+    "sha256": "0ed07c205ca9ecc1065dc57b9f9f77adc79393bb469d9d1de9ec90c8c94ffc2f"
+  },
+  "database": {
+    "sha256": "36cbc2b355a4a9682a7bdcb9fa9e05d1f0841e0e1f4aee1d7495aa5ddbcdcf97",
+    "metadata": {
+      "Version": 2,
+      "NextUpdate": "2026-10-11T07:01:36.894063051Z",
+      "UpdatedAt": "2026-10-10T07:01:36.894063512Z",
+      "DownloadedAt": "2026-10-10T08:19:14.945358Z"
+    }
+  },
+  "high_critical_exceptions": [],
+  "independent_operator_signature": false,
+  "candidate_signed": false,
+  "separate_base_signature": "not established",
+  "four_volume_acceptance": false,
+  "production_admission": false
+}

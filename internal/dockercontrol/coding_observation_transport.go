@@ -117,11 +117,6 @@ func (t *codingObservationTransport) isArchiveRequest(request *http.Request) boo
 
 func (t *codingObservationTransport) validArchiveResponse(request *http.Request,
 	response *http.Response, document []byte) bool {
-	media, params, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	if err != nil || media != "application/x-tar" || len(params) != 0 ||
-		len(document) < 3*512 || len(document)%512 != 0 || document[156] != tar.TypeDir {
-		return false
-	}
 	var target string
 	for _, mount := range t.set.Mounts() {
 		if request.URL.RawQuery == (url.Values{"path": {mount.Target}}).Encode() {
@@ -129,6 +124,30 @@ func (t *codingObservationTransport) validArchiveResponse(request *http.Request,
 		}
 	}
 	if target == "" || t.archiveUID <= 0 || t.archiveGID <= 0 || t.archiveMode != 0o770 {
+		return false
+	}
+	uid, gid, mode := t.archiveUID, t.archiveGID, t.archiveMode
+	if target == "/inputs" {
+		uid, gid, mode = 0, 0, 0o555
+	}
+	return validCodingEmptyRootArchive(target, uid, gid, mode, response, document)
+}
+
+// Pure bounded archive validation. The legacy wrapper still admits only its
+// three data roots; the new transport separately binds /tmp and mode 0700.
+func validCodingEmptyRootArchive(target string, uid, gid int, mode int64,
+	response *http.Response, document []byte) bool {
+	if response == nil || response.Header == nil ||
+		(target != "/inputs" && target != "/workspace" && target != "/outputs" && target != "/tmp") ||
+		(target == "/inputs" && (uid != 0 || gid != 0 || mode != 0o555)) ||
+		(target != "/inputs" && (uid <= 0 || gid <= 0)) ||
+		(target == "/tmp" && mode != 0o700) ||
+		((target == "/workspace" || target == "/outputs") && mode != 0o770) {
+		return false
+	}
+	media, params, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if err != nil || media != "application/x-tar" || len(params) != 0 ||
+		len(document) < 3*512 || len(document)%512 != 0 || document[156] != tar.TypeDir {
 		return false
 	}
 	name := strings.TrimPrefix(target, "/")
@@ -160,10 +179,6 @@ func (t *codingObservationTransport) validArchiveResponse(request *http.Request,
 		}
 	}
 	var stat container.PathStat
-	uid, gid, mode := t.archiveUID, t.archiveGID, t.archiveMode
-	if target == "/inputs" {
-		uid, gid, mode = 0, 0, 0o555
-	}
 	if json.Unmarshal(statDocument, &stat) != nil || stat.Name != name ||
 		stat.Mode != os.ModeDir|os.FileMode(mode) || stat.LinkTarget != "" ||
 		stat.Size < 0 || stat.Size > maxCodingArchiveResponseBytes {

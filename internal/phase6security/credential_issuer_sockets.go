@@ -124,6 +124,10 @@ func credentialIssuerStorageMember(bindings []CredentialIssuerSocketBinding, pri
 // CredentialIssuerSocketForClient resolves the sole path and principals from
 // an already-verified profile. Production callers must first use VerifyFile.
 func (p Profile) CredentialIssuerSocketForClient(name string) (CredentialIssuerSocketBinding, Principal, Principal, error) {
+	return credentialIssuerSocketForClientFields(p.CredentialIssuerSockets, p.Principals, name)
+}
+
+func credentialIssuerSocketForClientFields(bindings []CredentialIssuerSocketBinding, principals []Principal, name string) (CredentialIssuerSocketBinding, Principal, Principal, error) {
 	approved := false
 	for _, client := range approvedCredentialIssuerClients {
 		if client == name {
@@ -136,7 +140,7 @@ func (p Profile) CredentialIssuerSocketForClient(name string) (CredentialIssuerS
 	}
 	var binding CredentialIssuerSocketBinding
 	count := 0
-	for _, candidate := range p.CredentialIssuerSockets {
+	for _, candidate := range bindings {
 		if candidate.ClientDeployment == name {
 			binding, count = candidate, count+1
 		}
@@ -145,7 +149,7 @@ func (p Profile) CredentialIssuerSocketForClient(name string) (CredentialIssuerS
 		return CredentialIssuerSocketBinding{}, Principal{}, Principal{}, ErrInvalidProfile
 	}
 	var client, server Principal
-	for _, principal := range p.Principals {
+	for _, principal := range principals {
 		switch principal.Name {
 		case name:
 			client = principal

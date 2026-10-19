@@ -47,6 +47,28 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 	if !matchesProfileBinding(profile, binding, agent, subject, config) {
 		t.Fatal("exact profile binding rejected")
 	}
+	v2Fields := agentProfileFields{profile.ProfileDigest, profile.EnvironmentDigest, profile.PrincipalProfileDigest, profile.CertificateController}
+	v2 := config
+	v2.Protocol = profileV2ConfigProtocol
+	if !matchesBindingFields(v2Fields, binding, agent, subject, v2) {
+		t.Fatal("v5 ordinary fields rejected")
+	}
+	for name, change := range map[string]func(*configDocument){
+		"requester-instance": func(c *configDocument) { c.Requester.InstanceDigest += "-drift" },
+		"subject-instance":   func(c *configDocument) { c.Subject.InstanceDigest += "-drift" },
+		"request-key-ID":     func(c *configDocument) { c.AgentRequestKeyID += "-drift" },
+		"controller-key-ID":  func(c *configDocument) { c.CertificateControllerKeyID += "-drift" },
+		"socket-owner":       func(c *configDocument) { c.SignerSocketUID++ },
+		"old-TTL":            func(c *configDocument) { c.CertificateTTLSeconds = 600 },
+	} {
+		t.Run("v5-"+name, func(t *testing.T) {
+			c := v2
+			change(&c)
+			if matchesBindingFields(v2Fields, binding, agent, subject, c) {
+				t.Fatal("v5 drift accepted")
+			}
+		})
+	}
 	legacy := config
 	legacy.Protocol = configProtocol
 	legacy.CertificateTTLSeconds = int(subject.TLS.TTLSeconds)
@@ -137,6 +159,15 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 		RevocationMaxStalenessSeconds: int(owner.TLS.RevocationMaxStalenessSeconds)}
 	if !matchesPostgresProfileBinding(profile, binding, target, agent, owner, config) {
 		t.Fatal("exact PostgreSQL certificate agent config rejected")
+	}
+	v2 := config
+	v2.Protocol = postgresV2ConfigProtocol
+	if !matchesPostgresBindingFields(agentProfileFieldsV1(profile), binding, target, agent, owner, v2) {
+		t.Fatal("v6 PostgreSQL fields rejected")
+	}
+	v2.CertificateTTLSeconds = 600
+	if matchesPostgresBindingFields(agentProfileFieldsV1(profile), binding, target, agent, owner, v2) {
+		t.Fatal("v6 accepted pre-backdate lifetime")
 	}
 	oldRequest := config
 	oldRequest.CertificateTTLSeconds = int(owner.TLS.TTLSeconds)

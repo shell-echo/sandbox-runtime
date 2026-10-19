@@ -131,7 +131,16 @@ func Slice6DesiredImageTarget(deployment string) (string, error) {
 // has not selected or proved one. This is admission only, not a supply-chain
 // or running-container observation.
 func VerifySlice6DesiredImageLocations(profile Profile) error {
-	if profile.Validate() != nil || len(profile.Principals) != len(slice6DesiredImageTargets) ||
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredImageLocationsValidated(profile)
+}
+
+// verifySlice6DesiredImageLocationsValidated requires Profile.Validate to have succeeded
+// for the same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredImageLocationsValidated(profile Profile) error {
+	if len(profile.Principals) != len(slice6DesiredImageTargets) ||
 		len(slice6DesiredImageTargets) != len(slice6ApprovedDeploymentKinds) {
 		return errSlice6DesiredInventory
 	}

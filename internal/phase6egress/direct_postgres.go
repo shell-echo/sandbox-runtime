@@ -40,6 +40,25 @@ func NewDirectPostgres(ctx context.Context, profile phase6security.Profile, owne
 		target.SQLRole != authority.SQLRole {
 		return nil, ErrUnavailable
 	}
+	return newDirectPostgresBound(ctx, authority, principal, clientAnchor, source)
+}
+
+func NewDirectPostgresV2(ctx context.Context, profile phase6security.ProfileV2, owner string, source remotetls.CertificateSource) (*DirectPostgres, error) {
+	if ctx == nil || ctx.Err() != nil || source == nil {
+		return nil, ErrUnavailable
+	}
+	authority, err := profile.ResolveSlice6FinalPostgresAuthority(owner)
+	if err != nil || authority.BrokerOnly || authority.Dialer != owner {
+		return nil, ErrUnavailable
+	}
+	_, target, _, principal, anchor, err := profile.PostgresClientSignerForOwner(owner)
+	if err != nil || principal.TLS == nil || target.DatabaseName != authority.Database || target.SQLRole != authority.SQLRole {
+		return nil, ErrUnavailable
+	}
+	return newDirectPostgresBound(ctx, authority, principal, anchor, source)
+}
+
+func newDirectPostgresBound(ctx context.Context, authority phase6security.Slice6PostgresAuthority, principal phase6security.Principal, clientAnchor phase6security.TrustAnchor, source remotetls.CertificateSource) (*DirectPostgres, error) {
 	clientPEM, err := trustanchor.Load(clientAnchor, time.Now().UTC())
 	if err != nil {
 		return nil, ErrUnavailable
@@ -55,7 +74,7 @@ func NewDirectPostgres(ctx context.Context, profile phase6security.Profile, owne
 		return nil, ErrUnavailable
 	}
 	certificate, err := newPostgresClientCertificate(ctx, clientRoots, workloadpki.PostgresClientIdentity{
-		OwnerDeployment: owner, DatabaseName: authority.Database, RuntimeRole: authority.SQLRole,
+		OwnerDeployment: authority.Owner, DatabaseName: authority.Database, RuntimeRole: authority.SQLRole,
 		ServiceName: "postgres", URI: principal.TLS.URI, CommonName: authority.Signer.CommonName,
 		MaxTTL: time.Duration(principal.TLS.TTLSeconds) * time.Second,
 	}, source, time.Now)

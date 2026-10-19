@@ -147,3 +147,48 @@ func TestRuleVerifierRejectsFreshnessManifestAndDirectoryDrift(t *testing.T) {
 		}
 	})
 }
+
+func TestRuleVerifierPinnedDocumentCannotBeMutatedOrRefreshOldRules(t *testing.T) {
+	fileVerifier, manifest, directory := testRuleSnapshot(t)
+	document, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := NewRuleVerifierFromDocument(document, directory, fileVerifier.config.ExpectedRuleSet, manifest.EngineImageDigest, manifest.EngineConfigDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range document {
+		document[i] = 0
+	}
+	now := time.Now().UTC()
+	if _, err := verifier.Verify(t.Context(), now); err != nil {
+		t.Fatal("caller mutated pinned snapshot", err)
+	}
+	if _, err := verifier.Verify(t.Context(), manifest.TrustedCheckAt.Add(RuleMaxAge+time.Second)); !errors.Is(err, ErrRulesUnavailable) {
+		t.Fatal("old rules accepted", err)
+	}
+	if _, err := verifier.Verify(t.Context(), now); !errors.Is(err, ErrRulesUnavailable) {
+		t.Fatal("clock rollback refreshed old rules", err)
+	}
+	document, _ = json.Marshal(manifest)
+	for _, change := range []func(*RuleManifest){func(m *RuleManifest) { m.TrustedCheckAt = now }, func(m *RuleManifest) { m.EngineImageDigest = scanDigest([]byte("other")) }, func(m *RuleManifest) { m.Files[1].Version++ }} {
+		altered := manifest
+		altered.Files = append([]RuleFile(nil), manifest.Files...)
+		change(&altered)
+		bad, _ := json.Marshal(altered)
+		if _, err := NewRuleVerifierFromDocument(bad, directory, fileVerifier.config.ExpectedRuleSet, manifest.EngineImageDigest, manifest.EngineConfigDigest); err == nil {
+			t.Fatal("changed snapshot accepted")
+		}
+	}
+	verifier, err = NewRuleVerifierFromDocument(document, directory, fileVerifier.config.ExpectedRuleSet, manifest.EngineImageDigest, manifest.EngineConfigDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "daily.cvd"), []byte("test-only:DAILY"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.Verify(t.Context(), now); err == nil {
+		t.Fatal("changed actual rules accepted")
+	}
+}

@@ -70,8 +70,8 @@ type codingEmptyRootObservation struct {
 // observeCompleted keeps the same ten-second deadline and one frozen SDK
 // client across admission, original-daemon Info, whole-effect inventory,
 // pinned image/config validation, initial empty-volume ownership, final
-// object remapping and Info. It is intentionally not connected to the
-// durable Completed transition until a real source/gate and review exist.
+// object remapping and Info. The held v2 executor connects it only after the
+// original same-process create callback returns without uncertainty.
 func (o *codingUnixObserver) observeCompleted(ctx context.Context, receipt CodingReceipt,
 	receiptRevision uint64) (codingCompletionObservation, error) {
 	if o == nil || ctx == nil || ctx.Err() != nil || receiptRevision == 0 ||

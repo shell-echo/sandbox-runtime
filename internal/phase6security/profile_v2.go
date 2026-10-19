@@ -48,6 +48,7 @@ type ProfileV2 struct {
 	DockerControl                DockerControlAuthorityV2           `json:"docker_control"`
 	ArtifactScanner              ArtifactScannerAuthorityV2         `json:"artifact_scanner"`
 	CodingTemplate               CodingRuntimeTemplateV2            `json:"coding_template"`
+	CodingExecution              *CodingExecutionProfileV3          `json:"coding_execution,omitempty"`
 	SandboxGatewayLimits         map[string]Resources               `json:"sandbox_gateway_limits"`
 	ExternalResourceLimits       map[string]Resources               `json:"external_resource_limits"`
 	ResourceBudget               Slice6V2ResourceBudget             `json:"resource_budget"`
@@ -56,15 +57,17 @@ type ProfileV2 struct {
 // DockerControlAuthorityV2 is a single fixed daemon owner. Browser and
 // Desktop get their own disjoint mTLS ingress scopes but never a daemon FD.
 type DockerControlAuthorityV2 struct {
-	Deployment        string              `json:"deployment"`
-	DaemonSocketPath  string              `json:"daemon_socket_path"`
-	DaemonSocketGID   uint32              `json:"daemon_socket_gid"`
-	DaemonSocketMode  uint32              `json:"daemon_socket_mode"`
-	SupplementaryGIDs []uint32            `json:"supplementary_gids"`
-	ReceiptStorageID  string              `json:"receipt_storage_id"`
-	ReceiptTarget     string              `json:"receipt_target"`
-	ReceiptMaxBytes   int64               `json:"receipt_max_bytes"`
-	Endpoints         []ControlEndpointV2 `json:"endpoints"`
+	OperatorBootstrap *ControlOperatorBootstrapV1 `json:"operator_bootstrap,omitempty"`
+	SourceAccess      *ControlSourceAccessV1      `json:"source_access,omitempty"`
+	Deployment        string                      `json:"deployment"`
+	DaemonSocketPath  string                      `json:"daemon_socket_path"`
+	DaemonSocketGID   uint32                      `json:"daemon_socket_gid"`
+	DaemonSocketMode  uint32                      `json:"daemon_socket_mode"`
+	SupplementaryGIDs []uint32                    `json:"supplementary_gids"`
+	ReceiptStorageID  string                      `json:"receipt_storage_id"`
+	ReceiptTarget     string                      `json:"receipt_target"`
+	ReceiptMaxBytes   int64                       `json:"receipt_max_bytes"`
+	Endpoints         []ControlEndpointV2         `json:"endpoints"`
 }
 
 type ControlEndpointV2 struct {

@@ -95,7 +95,7 @@ func (r *CodingBoundCreateRepository) Initialize(ctx context.Context,
 		func(marker *codingIdentityMarker, state *codingidentity.State) error {
 			if *marker != (codingIdentityMarker{}) || state.Version != 0 || state.Initialized ||
 				state.PlanDigest != "" || state.Reservations != nil || state.Retirements != nil ||
-				state.OriginalCreates != nil {
+				state.OriginalCreates != nil || state.CreateCompletions != nil {
 				return codingidentity.ErrConflict
 			}
 			fresh, err := codingidentity.NewState(r.plan)
@@ -132,7 +132,7 @@ func (r *CodingBoundCreateRepository) InitializeAtomicOriginal(ctx context.Conte
 		func(marker *codingIdentityMarker, state *codingidentity.State) error {
 			if *marker != (codingIdentityMarker{}) || state.Version != 0 || state.Initialized ||
 				state.PlanDigest != "" || state.Reservations != nil || state.Retirements != nil ||
-				state.OriginalCreates != nil {
+				state.OriginalCreates != nil || state.CreateCompletions != nil {
 				return codingidentity.ErrConflict
 			}
 			fresh, err := codingidentity.NewState(r.plan)

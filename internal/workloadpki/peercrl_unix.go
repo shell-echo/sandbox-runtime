@@ -8,7 +8,7 @@ import (
 
 func (s *Server) handlePeerCRL(parent context.Context, connection *net.UnixConn, document []byte,
 	policyID string, peerUID, peerGID uint32) {
-	if s.controller.peerCRLProfile == nil {
+	if s.controller.peerCRL == nil {
 		return
 	}
 	policy, known := s.controller.policies[policyID]

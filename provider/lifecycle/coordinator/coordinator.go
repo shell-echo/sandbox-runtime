@@ -82,6 +82,23 @@ type CodingAuthorityCreateDispatcher interface {
 	DispatchCodingCreateAuthority(context.Context, dockercontrol.CodingCreateAuthority) error
 }
 
+// The typed PG/Control readback commits readiness itself; Driver.Inspect and
+// the generic markReady path cannot substitute for it.
+type CodingCreateReconciler interface {
+	ReconcileCodingCreate(context.Context, string) (lifecycle.Operation, lifecycle.Sandbox, error)
+}
+
+// A focused v3 port owns cleanup admission, dispatch and Released readback.
+// The boolean records an attempted dispatch, never proof of release.
+type CodingTerminationReconciler interface {
+	ReconcileCodingTermination(context.Context, string) (lifecycle.Operation, lifecycle.Sandbox, bool, error)
+}
+
+// Lease completion is a PG-only effect, separate from runtime dispatch.
+type CodingLeaseReconciler interface {
+	ReconcileCodingLease(context.Context, string) (lifecycle.Operation, lifecycle.Sandbox, error)
+}
+
 // OrphanCleaner is a focused optional lifecycle capability. Composition must
 // not advertise lifecycle control unless the selected driver implements it.
 type OrphanCleaner interface {
@@ -129,8 +146,11 @@ type codingFirstCreateBoundary struct {
 }
 
 type codingOriginalCreateBoundary struct {
-	repository CodingOriginalCreateRepository
-	dispatcher CodingAuthorityCreateDispatcher
+	repository  CodingOriginalCreateRepository
+	dispatcher  CodingAuthorityCreateDispatcher
+	readback    CodingCreateReconciler
+	termination CodingTerminationReconciler
+	lease       CodingLeaseReconciler
 }
 
 func New(repo repository.Repository, driver Driver, clock Clock) (*Coordinator, error) {
@@ -170,6 +190,45 @@ func NewWithCodingOriginalAuthority(repo CodingOriginalCreateRepository,
 	}
 	service.codingAtomic = &codingOriginalCreateBoundary{repository: repo, dispatcher: dispatcher}
 	return service, nil
+}
+
+func NewWithCodingOriginalAuthorityAndReadback(repo CodingOriginalCreateRepository, driver Driver, readback CodingCreateReconciler, clock Clock) (*Coordinator, error) {
+	if readback == nil {
+		return nil, ErrInvalidCoordinator
+	}
+	c, err := NewWithCodingOriginalAuthority(repo, driver, clock)
+	if err != nil {
+		return nil, err
+	}
+	c.codingAtomic.readback = readback
+	return c, nil
+}
+
+// NewWithCodingOriginalAuthorityAndTermination adds only typed termination;
+// lease and suspend/resume execution remain closed for this candidate.
+func NewWithCodingOriginalAuthorityAndTermination(repo CodingOriginalCreateRepository, driver Driver, readback CodingCreateReconciler, termination CodingTerminationReconciler, clock Clock) (*Coordinator, error) {
+	if termination == nil {
+		return nil, ErrInvalidCoordinator
+	}
+	c, err := NewWithCodingOriginalAuthorityAndReadback(repo, driver, readback, clock)
+	if err != nil {
+		return nil, err
+	}
+	c.codingAtomic.termination = termination
+	return c, nil
+}
+
+// This adds PG-only lease completion; suspend/resume and automatic work stay held.
+func NewWithCodingOriginalAuthorityAndLease(repo CodingOriginalCreateRepository, driver Driver, readback CodingCreateReconciler, termination CodingTerminationReconciler, lease CodingLeaseReconciler, clock Clock) (*Coordinator, error) {
+	if lease == nil {
+		return nil, ErrInvalidCoordinator
+	}
+	c, err := NewWithCodingOriginalAuthorityAndTermination(repo, driver, readback, termination, clock)
+	if err != nil {
+		return nil, err
+	}
+	c.codingAtomic.lease = lease
+	return c, nil
 }
 
 // AcceptCreate validates and durably accepts a create request. No runtime
@@ -277,6 +336,17 @@ func (c *Coordinator) reconcileOperation(ctx context.Context, operationID string
 	operation, err := c.repository.GetOperation(ctx, operationID)
 	if err != nil {
 		return Result{}, err
+	}
+	// Route even retained Succeeded through the typed single-snapshot read.
+	// Generic terminal shortcuts and independent sandbox reads cannot stand
+	// in for the Coding allocation/retirement/released-state checks.
+	if c.codingAtomic != nil && c.codingAtomic.termination != nil && operation.Type == lifecycle.OperationTerminate {
+		current, sandbox, dispatched, err := c.codingAtomic.termination.ReconcileCodingTermination(ctx, operation.ID)
+		return Result{Operation: current, Sandbox: sandbox, Dispatched: dispatched}, err
+	}
+	if c.codingAtomic != nil && c.codingAtomic.lease != nil && operation.Type == lifecycle.OperationExtendLease {
+		current, sandbox, err := c.codingAtomic.lease.ReconcileCodingLease(ctx, operation.ID)
+		return Result{Operation: current, Sandbox: sandbox}, err
 	}
 	sandbox, err := c.repository.GetSandbox(ctx, operation.SandboxID)
 	if err != nil {
@@ -423,6 +493,13 @@ func (c *Coordinator) readCurrentCodingCreate(ctx context.Context, operationID s
 }
 
 func (c *Coordinator) reconcileCreate(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {
+	if c.codingAtomic != nil && c.codingAtomic.readback != nil {
+		current, ready, err := c.codingAtomic.readback.ReconcileCodingCreate(ctx, operation.ID)
+		if err != nil {
+			return Result{Operation: operation, Sandbox: sandbox}, err
+		}
+		return Result{Operation: current, Sandbox: ready}, nil
+	}
 	if c.coding != nil || c.codingAtomic != nil {
 		// An existing Creating/Running or Unknown operation cannot get a second
 		// create permit. Control receipt inspection is a later, explicit gate;

@@ -43,9 +43,14 @@ func ReadVerifiedOCIArchiveDesktopBroker(archivePath string, manifestDocument, c
 		"usr/local/libexec/sandbox-runtime/desktop-broker")
 }
 
+// ReadVerifiedOCIArchiveControlProbe verifies the fixed delivery probe bytes.
+func ReadVerifiedOCIArchiveControlProbe(archivePath string, manifestDocument, configDocument []byte) ([]byte, error) {
+	return readVerifiedOCIArchiveExecutable(archivePath, manifestDocument, configDocument, "usr/local/bin/control-process-observe")
+}
+
 func readVerifiedOCIArchiveExecutable(archivePath string, manifestDocument, configDocument []byte, target string) ([]byte, error) {
 	if len(manifestDocument) < 1 || len(manifestDocument) > 4<<20 ||
-		(target != "usr/local/bin/phase6-role" && target != "usr/local/bin/phase6-fd-loader" &&
+		(target != "usr/local/bin/phase6-role" && target != "usr/local/bin/phase6-fd-loader" && target != "usr/local/bin/control-process-observe" &&
 			target != "usr/local/libexec/sandbox-runtime/desktop-broker") ||
 		rejectDuplicateMembers(manifestDocument) != nil ||
 		VerifyOCIArchiveLayers(archivePath, manifestDocument, configDocument) != nil {

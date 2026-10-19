@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"slices"
+	"time"
 )
 
 const (
@@ -51,6 +52,31 @@ type State struct {
 	// An immutable historical original-create envelope is keyed by allocation,
 	// not slot. A released slot's old effect still needs read-only recovery.
 	OriginalCreates map[string]OriginalCreateEnvelope `json:"original_creates,omitempty"`
+	// Immutable allocation-keyed readiness history. The atomic PG marker requires
+	// Active to have a binding; the generic model also supports legacy state
+	// and the transient Active step inside direct Creating-to-Cleaning.
+	CreateCompletions map[string]CreateCompletionBinding `json:"create_completions,omitempty"`
+}
+
+type CreateCompletionBinding struct {
+	AllocationID       string    `json:"allocation_id"`
+	SlotID             string    `json:"slot_id"`
+	AuthorityDigest    string    `json:"authority_digest"`
+	ControlRevision    uint64    `json:"control_revision"`
+	ControlStateDigest string    `json:"control_state_digest"`
+	CompletionDigest   string    `json:"completion_digest"`
+	EvidenceDigest     string    `json:"evidence_digest"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func (b CreateCompletionBinding) Validate() error {
+	if !allocationID.MatchString(b.AllocationID) || !privateID.MatchString(b.SlotID) ||
+		!digest.MatchString(b.AuthorityDigest) || b.ControlRevision == 0 ||
+		!digest.MatchString(b.ControlStateDigest) || !digest.MatchString(b.CompletionDigest) ||
+		!digest.MatchString(b.EvidenceDigest) || b.UpdatedAt.IsZero() {
+		return ErrInvalidState
+	}
+	return nil
 }
 
 type OriginalCreateEnvelope struct {
@@ -87,6 +113,9 @@ type RetirementBinding struct {
 	// expiry. A readback is evidence of what committed, never a fresh permit.
 	CleanupAuthorityDocument string `json:"cleanup_authority_document"`
 	CleanupAuthorityDigest   string `json:"cleanup_authority_digest"`
+	// Only a typed result of this admission's successful Control dispatch may
+	// set this bit. Missing/false stays unconfirmed across process loss.
+	DispatchAcknowledged bool `json:"dispatch_acknowledged,omitempty"`
 }
 
 func (b RetirementBinding) Validate(reservation Reservation) error {
@@ -146,6 +175,17 @@ func (s State) Validate(plan Plan) error {
 	if len(s.Retirements) > len(s.Reservations) {
 		return ErrInvalidState
 	}
+	if len(s.CreateCompletions) > len(s.OriginalCreates) {
+		return ErrInvalidState
+	}
+	for key, binding := range s.CreateCompletions {
+		original, exists := s.OriginalCreates[key]
+		_, knownSlot := byID[binding.SlotID]
+		if key != binding.AllocationID || binding.Validate() != nil || !exists || !knownSlot || original.Digest != binding.AuthorityDigest {
+			return ErrInvalidState
+		}
+	}
+
 	if len(s.OriginalCreates) > MaxOriginalCreateEnvelopes {
 		return ErrInvalidState
 	}
@@ -182,6 +222,7 @@ func (s State) Clone() State {
 	s.Reservations = slices.Clone(s.Reservations)
 	s.Retirements = maps.Clone(s.Retirements)
 	s.OriginalCreates = maps.Clone(s.OriginalCreates)
+	s.CreateCompletions = maps.Clone(s.CreateCompletions)
 	return s
 }
 

@@ -42,6 +42,8 @@ func (codingPGFakeObserver) Observe(ctx context.Context,
 		CompletionDigest:         codingTestDigest("8"),
 		CompletionEvidenceDigest: codingTestDigest("9"), UpdatedAt: time.Now().UTC()}
 	if request.Cleanup == nil {
+		// A sealed create receipt is immutable across repeated status reads.
+		response.UpdatedAt = request.Create.IssuedAt
 		response.Status = codingcontrolprotocol.StatusCompleted
 		response.ControlRevision = 3
 		response.ControlStateDigest = codingTestDigest("a")
@@ -162,6 +164,8 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if after, revision := codingPGSnapshot(t, ctx, storeB); after != beforeLegacyCleanup || revision != beforeLegacyCleanupRevision {
 		t.Fatal("legacy cleanup/release denial changed v3 PG documents or revision")
 	}
+	exerciseCodingExecIntentBootstrapPG(t, ctx, storeA, plan, specs, policy)
+	exerciseCodingExecFenceBootstrapPG(t, ctx, storeA, plan, specs, policy)
 	lifecycleA, err := NewLifecycleRepository(storeA)
 	if err != nil {
 		t.Fatal(err)
@@ -253,6 +257,7 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if _, err := wrong.ReadOriginalCreateAuthority(ctx, original.AllocationID); err == nil {
 		t.Fatal("wrong Control policy read original")
 	}
+	exerciseCodingReadyPG(t, ctx, storeA, storeB, plan, specs, policy, original)
 	active, err := lifecycleA.GetSandbox(ctx, original.SandboxID)
 	if err != nil {
 		t.Fatal(err)
@@ -269,9 +274,9 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	}
 	if _, err := lifecycleA.ReserveMutation(ctx, terminate.IdempotencyKey,
 		terminate.RequestDigest, terminate.ExpectedGeneration, terminating, termination,
-		lifecycle.Event{ID: "event-coding-atomic-terminate-90", SandboxID: active.ID,
+		lifecycle.Event{ID: codingAdmissionEventID(termination.ID, "termination-requested"), SandboxID: active.ID,
 			OperationID: termination.ID, Generation: terminating.Generation,
-			FencingToken: termination.FencingToken, Kind: "termination-requested",
+			FencingToken: termination.FencingToken, Kind: "termination-requested", DataDigest: termination.RequestDigest,
 			OccurredAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -408,9 +413,9 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	}
 	if _, err := lifecycleA.ReserveMutation(ctx, firstRequest.IdempotencyKey,
 		firstRequest.RequestDigest, firstRequest.ExpectedGeneration, firstSandbox, firstOperation,
-		lifecycle.Event{ID: "event-coding-atomic-terminate-91", SandboxID: current2.ID,
+		lifecycle.Event{ID: codingAdmissionEventID(firstOperation.ID, "termination-requested"), SandboxID: current2.ID,
 			OperationID: firstOperation.ID, Generation: firstSandbox.Generation,
-			FencingToken: firstOperation.FencingToken, Kind: "termination-requested",
+			FencingToken: firstOperation.FencingToken, Kind: "termination-requested", DataDigest: firstOperation.RequestDigest,
 			OccurredAt: firstAt}); err != nil {
 		t.Fatal(err)
 	}
@@ -424,9 +429,9 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondEvent := lifecycle.Event{ID: "event-coding-atomic-higher-91", SandboxID: current2.ID,
+	secondEvent := lifecycle.Event{ID: codingAdmissionEventID(secondOperation.ID, "termination-requested"), SandboxID: current2.ID,
 		OperationID: secondOperation.ID, Generation: secondSandbox.Generation,
-		FencingToken: secondOperation.FencingToken, Kind: "termination-requested",
+		FencingToken: secondOperation.FencingToken, Kind: "termination-requested", DataDigest: secondOperation.RequestDigest,
 		OccurredAt: secondAt}
 	beforeHigherFirst, beforeHigherFirstRevision := codingPGSnapshot(t, ctx, storeA)
 	secondLockTx, err := adminAtomic.Begin(ctx)
@@ -523,6 +528,17 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if _, _, _, err := legacyRestarted.BeginFirstCreate(ctx, request2.OperationID, specs); !errors.Is(err, codingidentity.ErrInvalidState) {
 		t.Fatalf("PG restart reopened legacy first permit: %v", err)
 	}
+	readOwner, err := NewCodingLifecycleRepositoryWithPolicy(restartedStore, plan, specs, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op, sb, err := readOwner.ReadTermination(ctx, termination.ID); err != nil || op.State != lifecycle.OperationOutcomeUnknown || sb.ID != original.SandboxID || sb.ObservedState != lifecycle.ObservedTerminated {
+		t.Fatalf("restart/slot-reuse termination read: %#v %#v %v", op, sb, err)
+	}
+	exerciseCodingTerminationPG(t, ctx, restartedStore, plan, specs, policy)
+	exerciseCodingLeasePG(t, ctx, restartedStore, plan, specs, policy)
+	exerciseCodingRuntimePreflightPG(t, ctx, restartedStore, plan, specs, policy)
+	exerciseCodingExecIntentPG(t, ctx, restartedStore, plan, specs, policy)
 	restartLifecycle, err := NewLifecycleRepository(restartedStore)
 	if err != nil {
 		t.Fatal(err)
@@ -545,8 +561,10 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if currentRecord.Digest != newOriginal.Digest() {
 		t.Fatal("current occupant original was not retained before corruption test")
 	}
-	// Deliberate test-only persisted damage is isolated to this disposable DB.
-	// It must not grant a new first permit for another Accepted allocation.
+	// Production writers now reject this corruption before commit. Keep the
+	// historical readback checks by injecting damage directly into this exact
+	// disposable database, never by weakening the guarded repository API.
+	cleanBefore, cleanRevision := codingPGSnapshot(t, ctx, restartedStore)
 	if err := mutateStatePair(ctx, restartedStore,
 		codingIdentityMarkerDocument, codingIdentityStateDocument,
 		func() codingIdentityMarker { return codingIdentityMarker{} }, importCodingIdentityMarker,
@@ -556,7 +574,15 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 		func(_ *codingIdentityMarker, slots *codingidentity.State) error {
 			delete(slots.OriginalCreates, newOriginal.AllocationID)
 			return nil
-		}); err != nil {
+		}); !errors.Is(err, ErrCorrupt) {
+		t.Fatal("guarded slot corruption was not rejected", err)
+	}
+	if after, revision := codingPGSnapshot(t, ctx, restartedStore); after != cleanBefore || revision != cleanRevision {
+		t.Fatal("rejected slot corruption changed documents or revision")
+	}
+	damaged := stateBeforeDrift.Clone()
+	delete(damaged.OriginalCreates, newOriginal.AllocationID)
+	if _, err := restartedStore.pool.Exec(ctx, `UPDATE sandbox_runtime_provider.control_state SET documents=jsonb_set(documents,ARRAY[$1]::text[],$2::jsonb,true) WHERE singleton`, codingIdentityStateDocument, isolationStored(t, damaged)); err != nil {
 		t.Fatal(err)
 	}
 	corruptBefore, corruptRevision := codingPGSnapshot(t, ctx, restartedStore)
@@ -567,29 +593,14 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	if after, revision := codingPGSnapshot(t, ctx, restartedStore); after != corruptBefore || revision != corruptRevision {
 		t.Fatal("missing-original rejection changed PG documents or revision")
 	}
-	if err := mutateStatePair(ctx, restartedStore,
-		codingIdentityMarkerDocument, codingIdentityStateDocument,
-		func() codingIdentityMarker { return codingIdentityMarker{} }, importCodingIdentityMarker,
-		func(marker codingIdentityMarker) any { return marker },
-		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState,
-		func(state codingidentity.State) any { return state },
-		func(_ *codingIdentityMarker, slots *codingidentity.State) error {
-			slots.OriginalCreates[newOriginal.AllocationID] = currentRecord
-			return nil
-		}); err != nil {
+	if _, err := restartedStore.pool.Exec(ctx, `UPDATE sandbox_runtime_provider.control_state SET documents=$1::jsonb WHERE singleton`, cleanBefore); err != nil {
 		t.Fatal(err)
 	}
-	if err := mutateStatePair(ctx, restartedStore,
-		codingIdentityMarkerDocument, codingIdentityStateDocument,
-		func() codingIdentityMarker { return codingIdentityMarker{} }, importCodingIdentityMarker,
-		func(marker codingIdentityMarker) any { return marker },
-		func() codingidentity.State { return codingidentity.State{} }, importCodingIdentityState,
-		func(state codingidentity.State) any { return state },
-		func(marker *codingIdentityMarker, _ *codingidentity.State) error {
-			marker.AuthorityMode = ""
-			marker.ControlPolicyDigest = ""
-			return nil
-		}); err != nil {
+	if after, revision := codingPGSnapshot(t, ctx, restartedStore); after != cleanBefore || revision != cleanRevision {
+		t.Fatal("corruption fixture failed exact restoration")
+	}
+	mixedMarker := codingIdentityMarker{Initialized: true, PlanDigest: stateBeforeDrift.PlanDigest}
+	if _, err := restartedStore.pool.Exec(ctx, `UPDATE sandbox_runtime_provider.control_state SET documents=jsonb_set(documents,ARRAY[$1]::text[],$2::jsonb,true) WHERE singleton`, codingIdentityMarkerDocument, isolationStored(t, mixedMarker)); err != nil {
 		t.Fatal(err)
 	}
 	mixedBefore, mixedRevision := codingPGSnapshot(t, ctx, restartedStore)
@@ -599,6 +610,12 @@ GRANT SELECT,UPDATE ON sandbox_runtime_provider.control_state TO provider_runtim
 	}
 	if after, revision := codingPGSnapshot(t, ctx, restartedStore); after != mixedBefore || revision != mixedRevision {
 		t.Fatal("mixed marker/original rejection changed PG documents or revision")
+	}
+	if _, err := restartedStore.pool.Exec(ctx, `UPDATE sandbox_runtime_provider.control_state SET documents=$1::jsonb WHERE singleton`, cleanBefore); err != nil {
+		t.Fatal(err)
+	}
+	if after, revision := codingPGSnapshot(t, ctx, restartedStore); after != cleanBefore || revision != cleanRevision {
+		t.Fatal("mixed-marker fixture failed exact restoration")
 	}
 }
 

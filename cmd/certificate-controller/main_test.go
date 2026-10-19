@@ -20,6 +20,7 @@ func TestReadBoundedAcceptsOnlyPrivateRegularDescriptorAtStart(t *testing.T) {
 	}
 	name := file.Name()
 	t.Cleanup(func() { _ = os.Remove(name) })
+	t.Cleanup(func() { _ = file.Close() })
 	if err := file.Chmod(0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,6 @@ func TestReadBoundedAcceptsOnlyPrivateRegularDescriptorAtStart(t *testing.T) {
 	if _, err := readBounded(uintptr(descriptor), "public-secret", 32); !errors.Is(err, workloadpki.ErrUnavailable) {
 		t.Fatalf("public descriptor error = %v", err)
 	}
-	_ = file.Close()
 }
 
 func TestVaultEndpointMustMatchDeclaredTrustEdge(t *testing.T) {
@@ -185,13 +185,13 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			},
 			Listeners: []listenerDocument{
 				{SocketPath: authority.SelfSocketPath, SocketUID: authority.UID, SocketGID: authority.GID,
-					ExpectedClientUID: authority.UID, ExpectedClientGID: authority.GID},
+					MaxConnections: 8, ExpectedClientUID: authority.UID, ExpectedClientGID: authority.GID},
 				{SocketPath: authority.CredentialController.SocketPath, SocketUID: authority.UID, SocketGID: credential.GID,
-					ExpectedClientUID: credential.UID, ExpectedClientGID: credential.GID},
+					MaxConnections: 8, ExpectedClientUID: credential.UID, ExpectedClientGID: credential.GID},
 				{SocketPath: binding.ControllerSocketPath, SocketUID: authority.UID, SocketGID: agent.GID,
-					ExpectedClientUID: agent.UID, ExpectedClientGID: agent.GID},
+					MaxConnections: 8, ExpectedClientUID: agent.UID, ExpectedClientGID: agent.GID},
 				{SocketPath: postgresBinding.ControllerSocketPath, SocketUID: authority.UID, SocketGID: postgresAgent.GID,
-					ExpectedClientUID: postgresAgent.UID, ExpectedClientGID: postgresAgent.GID},
+					MaxConnections: 8, ExpectedClientUID: postgresAgent.UID, ExpectedClientGID: postgresAgent.GID},
 			}}
 	}
 	if !validateControllerProfileConfig(profile, valid(), responsePublic, managedPublic) {
@@ -202,6 +202,33 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	production.ManagedVaultTLS.CertificateTTLSeconds = 569
 	if !validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
 		t.Fatal("v4 managed request lifetime rejected")
+	}
+	fields, err := controllerFieldsV1(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2 := production
+	v2.Protocol = profileV2ConfigProtocol
+	if !validateControllerConfigFields(fields, v2) {
+		t.Fatal("v5 field preflight rejected exact inherited bindings")
+	}
+	for name, change := range map[string]func(*configDocument){
+		"request-key-ID":     func(c *configDocument) { c.Policies[2].AgentRequestKeyID += "-drift" },
+		"requester-instance": func(c *configDocument) { c.Policies[2].Requester.InstanceDigest += "-drift" },
+		"subject-instance":   func(c *configDocument) { c.Policies[2].Subject.InstanceDigest += "-drift" },
+		"response-key-ID":    func(c *configDocument) { c.ControllerKeyID += "-drift" },
+		"listener-owner":     func(c *configDocument) { c.Listeners[2].SocketUID++ },
+		"old-TTL":            func(c *configDocument) { c.ManagedVaultTLS.CertificateTTLSeconds = 600 },
+	} {
+		t.Run("v5-"+name, func(t *testing.T) {
+			c := valid()
+			c.Protocol = profileV2ConfigProtocol
+			c.ManagedVaultTLS.CertificateTTLSeconds = 569
+			change(&c)
+			if validateControllerConfigFields(fields, c) {
+				t.Fatal("v5 binding drift accepted")
+			}
+		})
 	}
 	production.ManagedVaultTLS.CertificateTTLSeconds = 600
 	if validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
@@ -215,6 +242,8 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			c.Policies[2].AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
 		},
 		"wrong issuer":                func(c *configDocument) { c.Policies[2].VaultRole = "other" },
+		"zero listener budget":        func(c *configDocument) { c.Listeners[2].MaxConnections = 0 },
+		"oversized listener budget":   func(c *configDocument) { c.Listeners[2].MaxConnections = 257 },
 		"missing listener":            func(c *configDocument) { c.Listeners = c.Listeners[:1] },
 		"extra listener":              func(c *configDocument) { c.Listeners = append(c.Listeners, c.Listeners[2]) },
 		"wrong peer":                  func(c *configDocument) { c.Listeners[2].ExpectedClientUID++ },
@@ -264,20 +293,39 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 }
 
 func TestReadBoundedRejectsPipeDirectoryMissingAndOversizedDescriptors(t *testing.T) {
+	// readBounded takes ownership of a raw inherited descriptor. The fixture's
+	// os.File must retain its own descriptor until Close disables its finalizer;
+	// passing Fd directly would leave two owners of one descriptor number.
+	readDuplicate := func(file *os.File, name string) error {
+		descriptor, err := syscall.Dup(int(file.Fd()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = readBounded(uintptr(descriptor), name, 32)
+		return err
+	}
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = reader.Close() })
 	_ = writer.Close()
-	if _, err := readBounded(reader.Fd(), "pipe", 32); !errors.Is(err, workloadpki.ErrUnavailable) {
+	if err := readDuplicate(reader, "pipe"); !errors.Is(err, workloadpki.ErrUnavailable) {
 		t.Fatalf("pipe descriptor error = %v", err)
+	}
+	if _, err := reader.Stat(); err != nil {
+		t.Fatalf("pipe fixture lost its owned descriptor: %v", err)
 	}
 	directory, err := os.Open("/tmp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readBounded(directory.Fd(), "directory", 32); !errors.Is(err, workloadpki.ErrUnavailable) {
+	t.Cleanup(func() { _ = directory.Close() })
+	if err := readDuplicate(directory, "directory"); !errors.Is(err, workloadpki.ErrUnavailable) {
 		t.Fatalf("directory descriptor error = %v", err)
+	}
+	if _, err := directory.Stat(); err != nil {
+		t.Fatalf("directory fixture lost its owned descriptor: %v", err)
 	}
 	file, err := os.CreateTemp("/tmp", "certificate-controller-oversized-")
 	if err != nil {
@@ -285,6 +333,7 @@ func TestReadBoundedRejectsPipeDirectoryMissingAndOversizedDescriptors(t *testin
 	}
 	name := file.Name()
 	t.Cleanup(func() { _ = os.Remove(name) })
+	t.Cleanup(func() { _ = file.Close() })
 	if err := file.Chmod(0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -294,8 +343,11 @@ func TestReadBoundedRejectsPipeDirectoryMissingAndOversizedDescriptors(t *testin
 	if _, err := file.Seek(0, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readBounded(file.Fd(), "oversized", 32); !errors.Is(err, workloadpki.ErrUnavailable) {
+	if err := readDuplicate(file, "oversized"); !errors.Is(err, workloadpki.ErrUnavailable) {
 		t.Fatalf("oversized descriptor error = %v", err)
+	}
+	if _, err := file.Stat(); err != nil {
+		t.Fatalf("oversized fixture lost its owned descriptor: %v", err)
 	}
 	if _, err := readBounded(^uintptr(0), "missing", 32); !errors.Is(err, workloadpki.ErrUnavailable) {
 		t.Fatalf("missing descriptor error = %v", err)

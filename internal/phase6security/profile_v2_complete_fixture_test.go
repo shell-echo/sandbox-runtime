@@ -66,7 +66,8 @@ func testCompleteV2Fields(t *testing.T) ProfileV2 {
 			candidate.Listeners = []Listener{{Name: "scanner", Protocol: "tcp", Port: 8446,
 				Exposure: "trust_edge"}}
 			candidate.Mounts = []Mount{{Target: v2ScannerRuleTarget, Kind: "scanner_rules",
-				ReadOnly: true, StorageID: "scanner-rules", MaxBytes: v2ScannerRuleMaxBytes}}
+				ReadOnly: true, StorageID: "scanner-rules", MaxBytes: v2ScannerRuleMaxBytes},
+				{Target: ScannerRuntimeDirectoryV2, Kind: "tmpfs", MaxBytes: ScannerRuntimeMaxBytesV2}}
 			candidate.Resources = Resources{MemoryBytes: 4 << 30, CPUMillis: 2000, PIDs: 64}
 		}
 		p.Principals = append(p.Principals, candidate)
@@ -174,6 +175,13 @@ func testCompleteV2Fields(t *testing.T) ProfileV2 {
 				ToPrincipalDigest: controller.PrincipalDigest, TenantScope: "system", MaxConnectionSeconds: 5})
 	}
 	for index := range p.Principals {
+		if _, added := slice6V2IdentityDelta[p.Principals[index].Name]; added {
+			mount, ok := slice6PrivateConfigMountV2(p.Principals[index].Name)
+			if !ok {
+				t.Fatal("new v2 role is missing private config")
+			}
+			p.Principals[index].Mounts = append(p.Principals[index].Mounts, mount)
+		}
 		slices.SortFunc(p.Principals[index].Mounts, func(a, b Mount) int {
 			return strings.Compare(a.Target, b.Target)
 		})

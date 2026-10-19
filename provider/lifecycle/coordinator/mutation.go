@@ -13,8 +13,6 @@ import (
 
 const eventPageSize = 100
 
-const leaseExpiryOperationTimeout = 5 * time.Minute
-
 // AcceptDesiredState durably records one suspend or resume intent before any
 // driver call. Exact operation replays return the retained operation.
 func (c *Coordinator) AcceptDesiredState(ctx context.Context, sandboxID string, request lifecycle.DesiredStateRequest) (repository.MutationResult, error) {
@@ -43,8 +41,19 @@ func (c *Coordinator) AcceptLease(ctx context.Context, sandboxID string, request
 	if err := contextError(ctx); err != nil {
 		return repository.MutationResult{}, err
 	}
-	if replay, ok, err := c.mutationReplay(ctx, sandboxID, request.MutationRequest); ok || err != nil {
-		return replay, err
+	if c.codingAtomic != nil && c.codingAtomic.lease != nil {
+		// A POST still needs a valid request even when the effect is retained.
+		// Historical reads use the typed reconciliation port without renewing it.
+		if err := request.Validate(c.clock.Now(), maxLeaseSeconds); err != nil {
+			return repository.MutationResult{}, err
+		}
+		if replay, ok, err := c.codingLeaseReplay(ctx, sandboxID, request.MutationRequest); ok || err != nil {
+			return replay, err
+		}
+	} else {
+		if replay, ok, err := c.mutationReplay(ctx, sandboxID, request.MutationRequest); ok || err != nil {
+			return replay, err
+		}
 	}
 	now := c.clock.Now()
 	sandbox, err := c.repository.GetSandbox(ctx, sandboxID)
@@ -57,6 +66,25 @@ func (c *Coordinator) AcceptLease(ctx context.Context, sandboxID string, request
 	}
 	event := acceptedEvent(operation, updated, request.RequestDigest, "lease-extended", now)
 	return c.repository.ReserveMutation(ctx, request.IdempotencyKey, request.RequestDigest, request.ExpectedGeneration, updated, operation, event)
+}
+
+func (c *Coordinator) codingLeaseReplay(ctx context.Context, sandboxID string, request lifecycle.MutationRequest) (repository.MutationResult, bool, error) {
+	op, err := c.repository.GetOperation(ctx, request.OperationID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return repository.MutationResult{}, false, nil
+	}
+	if err != nil {
+		return repository.MutationResult{}, false, err
+	}
+	if op.Type != lifecycle.OperationExtendLease || !op.Deadline.Equal(request.Deadline) || op.SandboxID != sandboxID ||
+		op.AttemptID != request.AttemptID || op.FencingToken != request.FencingToken || op.IdempotencyKey != request.IdempotencyKey || op.RequestDigest != request.RequestDigest {
+		return repository.MutationResult{}, true, repository.ErrIdempotencyConflict
+	}
+	current, sandbox, err := c.codingAtomic.lease.ReconcileCodingLease(ctx, op.ID)
+	if err != nil {
+		return repository.MutationResult{}, true, err
+	}
+	return repository.MutationResult{Operation: current, Sandbox: sandbox, Replayed: true}, true, nil
 }
 
 // AcceptTerminate durably records irreversible termination intent before any
@@ -175,18 +203,7 @@ func (c *Coordinator) ProcessExpiredLeases(ctx context.Context) ([]Result, error
 }
 
 func leaseExpiryTerminateRequest(sandbox lifecycle.Sandbox, lease lifecycle.Lease, now time.Time) lifecycle.TerminateRequest {
-	seed := sandbox.ProviderRevisionID + "\x00" + sandbox.ID + "\x00" + fmt.Sprintf("%d", sandbox.Generation) + "\x00" + sandbox.LeaseExpiresAt.UTC().Format(time.RFC3339Nano)
-	digest := sha256.Sum256([]byte(seed))
-	id := fmt.Sprintf("lease-expiry-%x", digest[:16])
-	requestDigest := sha256.Sum256([]byte("lease-expiry-request\x00" + seed))
-	return lifecycle.TerminateRequest{
-		MutationRequest: lifecycle.MutationRequest{
-			OperationID: id, AttemptID: id, FencingToken: lease.FencingToken,
-			IdempotencyKey: id, RequestDigest: fmt.Sprintf("sha256:%x", requestDigest[:]),
-			Deadline: now.Add(leaseExpiryOperationTimeout), ExpectedGeneration: sandbox.Generation,
-		},
-		Reason: "lease_expired",
-	}
+	return lifecycle.LeaseExpiryTermination(sandbox, lease, now)
 }
 
 func (c *Coordinator) reconcileLease(ctx context.Context, operation lifecycle.Operation, sandbox lifecycle.Sandbox) (Result, error) {

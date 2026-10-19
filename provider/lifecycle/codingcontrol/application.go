@@ -39,6 +39,13 @@ type Observer interface {
 	Observe(context.Context, codingcontrolprotocol.Request) (codingcontrolprotocol.Response, error)
 }
 
+// CleanupDispatcher accepts only the original effect and the fresh cleanup
+// authority returned by the current successful PG admission. Recovery reads
+// never call this port and do not grant permission to retry a mutation.
+type CleanupDispatcher interface {
+	DispatchCodingCleanupAuthority(context.Context, dockercontrol.CodingCreateAuthority, dockercontrol.CodingCleanupAuthority) error
+}
+
 type Clock interface{ Now() time.Time }
 
 type Expected struct {
@@ -59,6 +66,19 @@ type Coordinator struct {
 	observer   Observer
 	clock      Clock
 	expected   Expected
+	dispatcher CleanupDispatcher
+}
+
+func NewWithDispatcher(repository Repository, observer Observer, dispatcher CleanupDispatcher, clock Clock, expected Expected) (*Coordinator, error) {
+	if dispatcher == nil {
+		return nil, ErrObservation
+	}
+	c, err := New(repository, observer, clock, expected)
+	if err != nil {
+		return nil, err
+	}
+	c.dispatcher = dispatcher
+	return c, nil
 }
 
 func New(repository Repository, observer Observer, clock Clock, expected Expected) (*Coordinator, error) {
@@ -136,46 +156,90 @@ func (o ReleasedObservation) UpdatedAt() time.Time          { return o.response.
 // Begin observes outside the PG row lock. A failed/cancelled observation
 // cannot produce a value for the repository's typed commit entry point.
 func (c *Coordinator) Begin(ctx context.Context, terminationID string) (dockercontrol.CodingCleanupAuthority, error) {
+	_, cleanup, err := c.beginFresh(ctx, terminationID)
+	return cleanup, err
+}
+
+// BeginAndDispatch sends at most once, only after this call's explicit PG
+// commit acknowledgement. A lost reply leaves Cleaning for read-only Finish;
+// it never reads a stored intent as a replacement dispatch permit.
+func (c *Coordinator) BeginAndDispatch(ctx context.Context, terminationID string) error {
+	_, _, err := c.beginAndDispatch(ctx, terminationID)
+	return err
+}
+
+func (c *Coordinator) beginAndDispatch(ctx context.Context, terminationID string) (bool, CleanupDispatchResult, error) {
+	if c == nil || c.dispatcher == nil {
+		return false, CleanupDispatchResult{}, ErrObservation
+	}
+	create, cleanup, err := c.beginFresh(ctx, terminationID)
+	if err != nil {
+		return false, CleanupDispatchResult{}, err
+	}
+	request := codingcontrolprotocol.Request{Protocol: codingcontrolprotocol.ProtocolID,
+		Scope: codingcontrolprotocol.ScopeCoding, Action: codingcontrolprotocol.ActionCleanup,
+		Create: create, Cleanup: &cleanup}
+	if ctx.Err() != nil || request.Validate(c.clock.Now(), c.expected.ProviderPrincipalDigest) != nil ||
+		cleanup.CleanupOperationID != terminationID {
+		return false, CleanupDispatchResult{}, ErrObservation
+	}
+	dispatch, cancel := context.WithDeadline(ctx, cleanup.ExpiresAt)
+	defer cancel()
+	if dispatch.Err() != nil {
+		return false, CleanupDispatchResult{}, dispatch.Err()
+	}
+	err = c.dispatcher.DispatchCodingCleanupAuthority(dispatch, create, cleanup)
+	result := CleanupDispatchResult{create: create, cleanup: cleanup, acknowledged: err == nil, at: c.clock.Now()}
+	if result.Validate(create, cleanup, c.clock.Now()) != nil {
+		// A nil transport result outside the original window is not a usable
+		// acknowledgement. Preserve it conservatively as an uncertain send.
+		result.acknowledged = false
+		err = errors.Join(err, ErrObservation)
+	}
+	return true, result, err
+}
+
+func (c *Coordinator) beginFresh(ctx context.Context, terminationID string) (dockercontrol.CodingCreateAuthority, dockercontrol.CodingCleanupAuthority, error) {
 	if c == nil || ctx == nil || ctx.Err() != nil || terminationID == "" {
-		return dockercontrol.CodingCleanupAuthority{}, ErrObservation
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ErrObservation
 	}
 	binding, err := c.repository.ReadBeginBinding(ctx, terminationID)
 	if err != nil {
-		return dockercontrol.CodingCleanupAuthority{}, err
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, err
 	}
 	if binding.Cleanup != nil || !c.expected.matches(binding.Create) ||
 		binding.TerminationID != terminationID || binding.ControlRevision != 0 ||
 		binding.ControlStateDigest != "" {
-		return dockercontrol.CodingCleanupAuthority{}, ErrObservation
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ErrObservation
 	}
 	request := codingcontrolprotocol.Request{Protocol: codingcontrolprotocol.ProtocolID,
 		Scope: codingcontrolprotocol.ScopeCoding, Action: codingcontrolprotocol.ActionStatus,
 		Create: binding.Create}
 	if request.Validate(c.clock.Now(), c.expected.ProviderPrincipalDigest) != nil {
-		return dockercontrol.CodingCleanupAuthority{}, ErrObservation
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ErrObservation
 	}
 	response, err := c.observer.Observe(ctx, request)
 	if err != nil {
-		return dockercontrol.CodingCleanupAuthority{}, err
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, err
 	}
 	if ctx.Err() != nil {
-		return dockercontrol.CodingCleanupAuthority{}, ctx.Err()
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ctx.Err()
 	}
 	observation := CompletedObservation{create: binding.Create, response: response}
 	if observation.Validate(binding.Create) != nil || response.UpdatedAt.After(c.clock.Now()) {
-		return dockercontrol.CodingCleanupAuthority{}, ErrObservation
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ErrObservation
 	}
 	authority, err := c.repository.BeginWithObservation(ctx, terminationID, observation)
 	if err != nil {
-		return dockercontrol.CodingCleanupAuthority{}, err
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return dockercontrol.CodingCleanupAuthority{}, err
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, err
 	}
 	if authority.Validate(c.clock.Now()) != nil {
-		return dockercontrol.CodingCleanupAuthority{}, ErrObservation
+		return dockercontrol.CodingCreateAuthority{}, dockercontrol.CodingCleanupAuthority{}, ErrObservation
 	}
-	return authority, nil
+	return binding.Create, authority, nil
 }
 
 // Finish consumes only a sealed Released readback of the exact immutable
