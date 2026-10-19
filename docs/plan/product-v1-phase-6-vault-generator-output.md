@@ -6,6 +6,10 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
+Latest continuation: [2026-10-19 local source checkpoint and held TUF chain](#2026-10-19-local-source-checkpoint-and-held-tuf-chain).
+The source HEAD and supply observations below are dated historical records,
+not the current Git HEAD or current vulnerability-database freshness.
+
 ## Source and command scope
 
 The private Vault2.1.2 source has9090 files and39559500 bytes, identical to the
@@ -1338,3 +1342,111 @@ push, merge or release occurs. Phase6 remains5/15; Slice6 steps1/2/3/4 remain
 historical bounded E / step2 ongoing with native admission held / final topology,
 original16 and formal independent acceptance incomplete / post-acceptance
 handoff not started.15 outputs,2637 exports and ENOSPC/OOM remain unverified.
+
+## 2026-10-19 local source checkpoint and held TUF chain
+
+The user requests a local source checkpoint while the host is resource
+constrained. This continuation starts from the fixed handoff commit
+`91fe315641779e6ea640632538309d63ad1b303f` on
+`codex/product-v1-phase-6-hardening`. Independent read-only review approves
+three dependency-preserving batches: the complete coupled source/tests/tools
+and candidate metadata; design and audit history; then the current progress
+update. The first two commits are
+`9de98bb8f6af191c2318d05babde1608d1bba2ae` and
+`c3ddabae420d332b97ffb5386d031ffe04c2d7ef`; the following progress commit
+completes the local checkpoint. Git history records the new HEAD. Historical
+candidate source pins, old receipts and locks retain their original values.
+This is neither final Slice6 step4 nor a push, merge, publication or release.
+
+### Preserved implementation and validation scope
+
+The source batch includes the held source-bound v2 Controller/agent TLS and
+CRL components, Coding execution/lease/fence/observation work, dedicated
+Control storage and exact source identity, operator bootstrap/process
+observation/post-observation delivery, their command wiring, tests and local
+tools. Separate Coding candidate JSON/recipe records remain unsigned and
+not admitted; metadata is not restored OCI payloads or live supply evidence.
+No source behavior is changed during this checkpoint. `ProfileV2.Validate`
+and the production Provider v3 startup path remain fail-closed. There are still
+only broker/general issuers, with PostgreSQL using general; no old identity
+count or deployment list becomes the final live topology.
+
+Lightweight full comparisons show that all2148 Git-visible Go files match
+`race-vault-remediation-20261013/gate-go-snapshot.json`, with no additions,
+deletions or SHA256 differences. All2390 Git-visible non-document files also
+match that checkpoint's `final-files.json` by exact set and SHA256, including
+the non-Go inputs. Thus the already recorded full race/shuffle/count1 run
+with `-p=6` remains applicable in its original scope: exit0 in503.355seconds
+under the unchanged600second bound. Full vet and both Contract lock checks
+also passed on that source. None is rerun now. These are not default package
+concurrency, CI, a fresh Docker integration run or production acceptance;
+earlier timeouts and scoped integration failures remain failed evidence.
+Existing Docker/Linux records retain their own original inputs and limits.
+
+The sole writer explicitly stages only reviewed repository paths. Private
+recovery directories, migration packages, raw logs/receipts, OCI payloads,
+tool binaries and credentials stay outside these commits. The transaction
+has a separate private record, `source-commit-checkpoint-20261019-092639`.
+No new dependency, global environment, compiler, container, scanner or build
+is started. Existing mise/Docker, ordinary Go1.26.8, candidate-only exceptions,
+9bindings,64barriers, frozen-R reuse and all resource/time bounds are unchanged.
+Automation remains off; no recurring observation is restored.
+
+### Latest actual diagnostic result
+
+The independently reviewed private continuation
+`tuf-chain-resume-20261019-062739` reuses the fixed four-case TUF implementation
+and frozen root/role/target inputs. It preserves four17-file mirrors and adds
+a stronger same-boot refusal before reusing the prior limited N4 socket
+boundary proof. Its25 new tests actually pass; this is component evidence,
+not host readiness or TUF authentication. The same-boot predicate consumes
+bounded original uptime receipts under a normal UTC-clock premise and grants
+no admission by itself. A reboot or relevant tool/profile/execution-chain
+change prevents silently inheriting the old N4 observation.
+
+The last actual host sample is2026-10-19 14:53:30 Asia/Shanghai:
+
+| Original first-sample check | Observed | Result |
+| --- | --- | --- |
+| Load1 at most6 | 5.15 | Pass |
+| CPU idle at least60% | 35.65% | Fail |
+| Memory free at least30% | 31% | Pass |
+
+All nine base observation commands complete naturally. Fast Docker responses
+do not substitute for the missing stable interval. The first CPU refusal
+stops the controller; the outer recorder's exit0 only records that failure.
+No second sample, Mach auxiliary sample, interval swap conclusion or TUF case
+starts. All414 locked input files,9aliases and the four mirrors remain exact
+before/after; the original failure identity is retained without retry. The
+whole new evidence directory is sealed and independently reviewed, solely
+as evidence preservation. No ongoing host-performance conclusion is implied
+by the dated first sample, and no additional sample is taken for this commit.
+
+Timestamp812 remains a retained449-byte, unverified candidate. Matching its
+declared snapshot version166 does not authenticate that snapshot, complete
+the root chain or establish an official latest state. The intended three
+cryptographic rejection cases and one positive case have **zero actual
+starts** in this attempt. No fresh vulnerability scan, Python archive/SDK
+authentication, whole-chain90/120second benefit result,15 generated-output
+acceptance or ENOSPC/OOM repair is claimed. Earlier DB/37/19 scan results keep
+their original dates and scope; they do not establish freshness on October19.
+
+### Fixed Slice6 steps and next acceptable result
+
+| Step | Status at this checkpoint |
+| --- | --- |
+| 1. Bounded Guest E evidence | Historical acceptance only within its original scope |
+| 2. Remaining startup audit and real security boundaries | Ongoing; latest host CPU prerequisite failed, TUF four cases not started |
+| 3. Complete Profile-v2 live inventory, original16 scenarios and independent formal review | Incomplete |
+| 4. Post-acceptance documentation/commit/push handoff | Not started; these intermediate local commits are not that acceptance |
+
+Phase6 remains **5/15**. On a later manual continuation, use a new identity,
+independently review identity/inputs, and apply the original two-sample host
+and same-boot conditions. Only a full pass permits the reviewed four-case
+cryptographic run under its original per-case/parent/output bounds, followed
+by independent actual-result review. Dynamic external inputs and subsequent
+recovery/import/real metadata/37/19 scans remain separately reviewed stages.
+APK, installation/GPG helpers and complete Node supply admission retain
+their own gates; one passing component cannot replace them. Preserve every
+old failure and lock, and do not widen cache/index/evidence reuse, quotas,
+timeouts or public admission to clear this checkpoint.

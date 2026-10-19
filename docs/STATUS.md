@@ -1,5 +1,197 @@
 # Project Status
 
+Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
+
+The [2026-10-19 local source checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-local-source-checkpoint-and-held-tuf-chain)
+records three local batches: source/tests/tools/candidate records, design/audit
+history, then this current progress update. All2148 Go and2390 non-document
+files match the previously validated source set and SHA256; the503.355-second
+race `-p=6`, vet and two Contract passes are historical same-source evidence,
+not new runs. No build or full test suite is started on the constrained host.
+At the last actual sample,14:53:30 Asia/Shanghai, load5.15/free31% pass but
+CPU idle35.65% fails the original60% floor. No second sample or TUF case starts.
+The25 new same-boot tests pass only as component evidence; timestamp812 is
+still unverified. Old locks, raw evidence, public holds, quotas/deadlines and
+disabled automation remain intact. Local commits are not formal Slice6 step4
+or remote publication. Phase6 remains **5/15**; Slice6 step2 is ongoing,
+step3 is incomplete and step4 is not started.
+
+The earlier [2026-10-15 interval readiness recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-interval-readiness-recheck-keeps-native-apk-held) confirms the original DB remains fresh at that dated observation and both37/19 raw scan reports match, reused without rescanning. Three manual samples87.190/78.641seconds apart retain the same Docker daemon and all27 calls pass, but continuing large swap deltas and load28.44→20.16→16.79 fail whole-host stability. Native Alpine APK execution remains unperformed in that checkpoint; no new container execution plan is admitted. Installation/GPG helpers remain separately held. Evidence: `gpg-native-recheck-20261015-102127`. Existing mise/Docker, limits and deleted automation remain unchanged. Phase6 remains5/15, Slice6 step2 ongoing; steps3/4 remain incomplete/not started. The dated DB freshness is not current supply admission.
+
+The earlier [fresh DB and scan checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-fresh-vulnerability-db-and-scans-with-native-execution-held) restores and authenticates the complete official Trivy v2 DB layer. New scans recognize all37 Alpine proposal package/source/PURL records and all19 packages of the exact signed Wolfi carrier, with zero findings. The proposal result is metadata coverage, not installation or final GPG/Node admission. Six interval host samples retain the same Docker daemon, but swap activity continues; the final load is17.47 and the5second CPU sample fails. Native Alpine APK execution stays held. Installation and GPG helper paths require their own concrete independent review; existing RO/noexec/UID boundaries are unchanged. Earlier manifest/range/scan-precheck failures remain recorded. Private evidence: `gpg-db-native-20261015-094855`. Existing mise/Docker, quotas/deadlines, old locks/candidates and deleted automation remain unchanged. Phase6 remains5/15, Slice6 step2 ongoing;15 outputs and ENOSPC/OOM remain unverified.
+
+The earlier [Docker/readiness checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-docker-restored-native-admission-still-held)
+confirms the existing desktop-linux Docker daemon has returned: five interval
+samples retain the same daemon/platform/version, with all15 ping/version/info
+calls successful in13.14–34.17ms. Host load/CPU improve, but continuing swap
+activity prevents accepting stable whole-host readiness. The previous DB
+expired at2026-10-15T01:19:20Z; a reviewed new official metadata request fails
+at the unchanged10second TLS connection bound. No DB layer/import/new scan or
+native APK/install/GPG/container/compiler execution occurs. Original failures
+are preserved without further retry, alternate source or relaxed limits. Independent
+review also identifies an unresolved installation path under RO root/noexec
+work/tmp: skipping scripts or adding an executable writable root is not
+acceptance. Existing mise/Docker, old locks/candidates and deleted automation
+remain unchanged. Evidence: `gpg-native-readiness-20261015-093139`. Phase6
+remains5/15, Slice6 step2 ongoing;15 outputs and ENOSPC/OOM remain unverified.
+
+The earlier [Alpine GPG dependency/prescan checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-alpine-gpg-dependency-materials-and-proposal-prescan)
+restores the37 fixed-index proposed APK originals and passes their limited
+signature/control/data correspondence (36 new OS crypto checks plus exact old
+GPG evidence reuse). A full37-package/source/PURL metadata prescan reports zero
+findings with the unchanged fresh DB. This is a proposal prescan, not actual
+installed/full-image/embedded coverage or GPG/Node execution admission. Static
+ELF audit visits133 regular files/55 ELF and152 edges, retaining one SQLite
+RUNPATH as unresolved; installation/trigger/helper effects and mtab's runtime
+mount remain open. The existing Docker context still names the missing same
+socket; no container/candidate/compiler executes. Original transfer and v3
+parser failures are preserved. Existing mise/Docker, quotas/deadlines, old
+candidates/locks and deleted automation remain unchanged. Evidence:
+`gpg-alpine-closure-20261014-1006`. Phase6 remains5/15, Slice6 step2 ongoing;
+15 outputs,2637 exports and ENOSPC/OOM repair remain unverified.
+
+The earlier [Alpine GPG key/source/data checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-alpine-gpg-key-source-and-signature-data-checkpoint)
+binds the exact publisher key through official same-record pages and its fixed
+mirror recipe, restores all12 GPG source originals with matching recipe SHA512,
+and passes a reviewed9-process/2-datahash cryptographic data diagnostic using
+the existing Apple-signed OS tool via mise Python. Original APK/index signatures
+match; wrong-key/control/signature and data-only tampering reject. Full inputs
+and tools match before/after. This is not native apk compatibility, full supply
+or GPG/Node execution admission; no source/build reproduction is claimed. Host
+load falls to2.53 in one sample, but the expected Docker socket is absent and
+all three API calls fail. No container/compiler runs. Next review complete
+dependencies/ELF/helpers and fresh coverage, then actual native/candidate gates
+when the same daemon is ready. Evidence: `gpg-alpine-authority-20261014-0848`.
+Old inputs/limits and deleted automation remain intact; Phase6 remains5/15,
+Slice6 step2 ongoing, with15 outputs and ENOSPC/OOM repair still unverified.
+
+The earlier [GPG replacement-material checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-gpg-replacement-materials-and-renewed-host-pressure)
+retains an Alpine edge/aarch64 gpg2.5.22-r0 APK and the same declared commit's
+official aports mirror recipe. All12 source tokens correspond to12 SHA512
+declarations (GNU archive,10 patches,1 rules file); those12 originals are not
+yet fetched or verified. The APK contains a signature member, but signing-key
+authority, actual verification, index/dependency/source/ELF closure, fresh full
+coverage and a qualified carrier remain open. The public wolfi2.4.9-r11 bytes
+match the earlier authenticated CGR index, but lack a standalone signature;
+the exact recipe is not yet obtained or verified, and that execution-candidate
+route is stopped. No GPG,
+Node, container or compiler executes. Host load again exceeds250 in a saved
+read-only sample; a fast single Docker ping does not establish stable readiness.
+Evidence: `gpg-verifier-candidate-20261014-0704`. Old candidates/locks and all
+limits remain intact; automation remains deleted. Phase6 remains5/15, Slice6
+step2 ongoing;15 outputs and ENOSPC/OOM repair remain unverified.
+
+The earlier [APK verifier and GPG source checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-native-apk-index-verification-and-gpg-source-gaps)
+restores the five missing wolfi layers and five GPG raw packages. The fixed
+wolfi carrier has full signed-assembly correspondence,19/19 fresh APK scan
+coverage with zero findings, and an independently reviewed narrow native APKINDEX
+run: original signature passes; wrong-key and modified-index cases both reject
+with BAD signature. Isolation, input checks and exact cleanup pass. Two earlier
+runtime failures remain failures. A subsequent static31-package GPG proposal
+records file overlaps, unresolved loader/installation semantics and missing
+patch originals; its diagnostic completion is not GPG admission. Two anonymous
+queries of the exact publisher source commit/recipe return404. GPG, Node and
+compiler execution remain held; the previous Node HIGH rejection is unchanged.
+Evidence: `gpg-supply-tls-recovery-20261014-0442`. Automation remains deleted;
+Phase6 remains5/15, Slice6 step2 ongoing.
+
+The earlier [vendor-signed Node/GPG checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-vendor-signed-node-and-gpg-chain-checks)
+verifies eight new index/native signature and attestation checks for each of the
+free Node and wolfi-base candidates. The smaller Node image has28 APKs with
+zero findings, but complete161-package installed-JS coverage still reports the
+same http-cache-semantics4.2.0 HIGH; it is rejected. Node embedded coverage
+remains open. wolfi-base has five missing layers after a measured TLS handshake
+timeout, so its full static/scan and APK-verifier admission are unperformed.
+Gpgconf and five missing library APKs are now retained as unverified raw inputs;
+npth transfer also fails at the unchanged TLS connection bound, and four further
+packages are not attempted. APK/index signatures and the GPG verification chain
+remain incomplete. No candidate/container/compiler executes. Old locks and
+candidates stay intact; automation stays deleted. Evidence:
+`node-minimal-gpg-chain-20261014-0343`. Phase6 remains5/15, Slice6 step2.
+
+The earlier [Node/verifier alternative checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-node-and-verifier-alternative-candidates)
+rechecks the fixed signed carrier and finds zero vulnerabilities in75 APKs, but
+an independently reviewed supplementary scan recognizes all163 installed JS
+packages and reports one HIGH in npm's http-cache-semantics4.2.0. The full
+carrier remains rejected; upstream's dispute does not waive the current gate.
+Node26 is investigated only for the generator controller, not the locked Node22
+UI. Its18-node ELF closure and source-locator SBOM are bound, but embedded
+component coverage remains incomplete. The replacement gpg2.4.9-r12 raw APK
+and embedded recipe are available; gpgconf transfer fails at the original25s
+bound, and index/APK signatures, dependency admission and source review remain
+open. No candidate/container/compiler executes. Host samples also show continued
+swap activity. Old candidates/locks remain intact; automation stays deleted.
+Evidence: `node-tool-alternatives-20261014-0253`. Phase6 remains5/15, Slice6 step2.
+
+The earlier Node tool supply checkpoint completes static source/archive/ELF
+identity checks and a nine-package scan of the proposed OpenPGP verifier, but
+admits neither the verifier nor Node22.23.3. The verifier registry check fails
+on argon2id1.0.1's expired signing key; zero scanner findings do not replace it.
+The actual Node release signature and complete core/native/bundled/dynamic
+library vulnerability coverage remain open. Upstream OpenSSL3.5.8 additionally
+matches a newly recorded HIGH advisory. Independent review finds DTLS is not
+disabled in the saved arm64 configuration; JS API reachability is unproved,
+which does not satisfy the existing zero-HIGH gate. No candidate
+Node, compiler or container executes. The15 outputs and ENOSPC/OOM repair remain
+unverified, with quotas/deadlines unchanged and automation deleted. Evidence:
+`node-tool-supply-20261014-0207`. See the
+[static supply checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-node-tool-static-supply-checkpoint).
+
+The earlier2026-10-14 continuation prepares a reviewed three-stage cache
+diagnostic and passes29 Node host fixtures plus9 Python decoder tests; no
+container/compiler executes. Fresh Trivy DB data is recovered by validating31
+saved ranges and fetching one missing4MiB range, but candidate scans remain
+unperformed. Independent review identifies unresolved signed-release and
+complete vulnerability coverage for the actual Node22.23.3 tool. Close that
+supply boundary before constructing/reviewing the v10 controller. Final2637
+exports,15 generated outputs and ENOSPC/OOM repair remain unverified; existing
+quotas/deadlines and deleted automation are unchanged. Evidence:
+`vault-generator-staged-cache-20261014-0128`. See the
+[generator plan](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-staged-cache-preparation-execution-remains-held).
+
+Historical generator evidence follows; its runtime successes do not admit v10.
+
+The complete CE dry-run binds15 commands and offline module verification passes
+after restoring467 authenticated graph metadata records. The first bounded
+Docker attempt times out before actual generation; its input-postcheck timeout
+and exact cleanup remain recorded. The complete986-module root scan retains
+16 HIGH findings, and full UI remains blocked by an unfixed braces HIGH and
+unsupported Ember5.8. The latest v3 run times out during OCI load in90.548seconds
+without creating a container; exact cleanup passes, but the560-second wrapper
+also interrupts final input checking. A separate full-input recheck passes
+in248.239seconds; neither runtime failure is accepted. High post-failure host
+load and a read-only Docker query timeout call for a lower-load diagnostic window.
+The subsequent lower-load v4 OCI import succeeds in10.159seconds, but the
+10-package Docker dry-run hits60.063seconds; no export/generation executes.
+A v5 SIGQUIT diagnosis returns no stack at its60.029-second failure. Both
+complete original full input pre/postchecks and exact cleanup. After the user's
+manual readiness request, v6 captures17637 untruncated stack bytes and deliberately
+interrupts dry-run at55.069seconds. Its171.237-second failure completes full
+input pre/postchecking and precise cleanup; no export/enumer executes. The
+single stack shows module-index directory traversal and package-load waiting,
+not a proven complete timeout cause. The cancelled heartbeat remains off.
+The reviewed private `goindex=0` follow-up passes exact15-directive dry-run in
+15.938seconds, then fails real compiler exports with ENOSPC in76.486seconds.
+Its separate2637-package metadata comparison matches, but clean exports and
+generation remain unproved. No enumer executes; full input pre/postchecks and
+exact cleanup pass. Next independently review the bounded scratch/cache storage
+repair; do not enlarge quotas or repeat the same failure. The full158.554-second
+failed run is retained in `vault-generator-index-fallback-20261013`.
+A later v8 measurement locates1GiB /work byte exhaustion with plentiful
+inodes. The reviewed v9 DWARF-off recipe still fails in172.604seconds, now with
+475 direct ENOSPC and one compiler signal-killed error plus cgroup OOM kill.
+Dry-run6.977seconds passes; real export109.725seconds is rejected, with0 actual
+generated outputs. Complete inputs,15 old target bytes and exact cleanup pass.
+Evidence is `vault-generator-scratch-20261013-1404` and
+`vault-generator-scratch-recipe-20261013-1436`. Additional runtime attempts stop;
+next review a concrete same-run cache/stage capacity and memory plan under the
+original aggregate deadlines and final actual-export/output gates. No such
+recipe is yet approved, and no automation is restored.
+Vault15 output verification, full build and real issuance/
+command composition remain open. Phase6 stays5/15; Slice6 steps1/2/3/4 remain
+historical bounded E / ongoing / incomplete / not started. This is component
+evidence, not acceptance.
+
 The fixed first-version P2.7 plan is **24/24 complete**, and the public
 independent external-caller plan is **13/13 complete**. There are no remaining
 steps in either fixed plan.
@@ -388,6 +580,353 @@ are in the [machine handoff plan](plan/product-v1-phase-6-delivery-and-handoff.m
 The normal-push SHA comparison belongs to the handoff report after the
 checkpoint commit; no new manifest, production claim or **6/15** follows.
 
+The 2026-10-08 new-host component checkpoint adds typed v2 CRL snapshot,
+Controller policy/issuer preflight, agent/guard constructors and isolated
+PostgreSQL-purpose role decoding. The restored baseline is
+`91fe315641779e6ea640632538309d63ad1b303f`; the current patch is uncommitted.
+The user confirmed new-host single-writer ownership and separate read-only
+review. Focused and final whole-repository race/shuffle/count-one checks,
+vet and both Contract locks pass; tagged Docker socket checks remain blocked
+by their unrestored pinned fixture image. New-host validation, the repaired
+legacy-constructor downgrade and preserved failures are tracked
+in the [startup audit](audits/product-phase-6-slice-6-startup.md#2026-10-08-new-host-typed-v2-crl-component-checkpoint).
+The subsequent [command checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-08-v2-controller-and-tls-agent-command-preflight)
+adds explicit Controller v5 and TLS-agent v5/v6 config dispatch to their
+actual startup paths. Private config/receipt mount checks, public identity
+and policy preflight precede inherited key consumption. The final command
+combination passed whole-repository race/shuffle/count-one in 437.982 seconds,
+vet and both Contract locks with unchanged Go source hashes. Public Profile-v2
+and Provider v3 admission remain closed. Actual Control/Scanner business
+commands, consuming-role TLS/CRL composition, source-bound role images, the
+revised live inventory and all 16 formal scenarios remain open; Phase 6
+remains **5/15**.
+
+The 2026-10-09 [Control/Scanner checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-control-status-and-scanner-command-components)
+adds actual canonical-stdin command entry points behind the same public hold.
+Control serves only Coding status from a pre-existing ledger and now rejects
+cleanup-bound queries without the exact cleanup intent. Scanner composes
+fixed ClamD process supervision, immutable rule-manifest bytes and private
+mTLS/CRL service; Provider-side factories supply dedicated Scanner and typed
+Control status clients. This is source/component progress, not complete
+Control mutation handling, Provider v3/PG composition, current signed rules,
+source-to-image proof or positive live command admission. Phase 6 stays
+**5/15** and Slice 6 step 2 remains open. Final whole-repository race/shuffle/
+count-one passed in 625.296 seconds, followed by vet; the two Contract locks
+and Linux/arm64 command builds also pass on the unchanged production inputs.
+The baseline DNS-dependent migration test failure, fixture-only repair and
+missing pinned ClamAV integration input are recorded in the dated audit.
+
+The following 2026-10-09 [held Provider dependency checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-provider-v3-dependency-composition)
+separates Coding v3 from the old v1 Profile/daemon-driver composition. It
+adds typed v2 PG and material constructors, freezes the existing nine-owner
+PG graph in the field checker, and selects the PG policy-bound repository,
+status Coordinator and dedicated Scanner in a candidate command path. Both
+public holds precede effects; no lifecycle Application/lease sweep or
+Control Begin/Finish worker runs. Private v3 inputs reject legacy Docker and
+command-scanner overrides. This is source/component evidence, not positive
+v3 startup or real PG/Control/Scanner operation. Full mutation/runtime ports,
+images, credentials and original same-run gates remain open; Phase 6 is 5/15.
+Independent read-only review found no blocker in this scope. Final root-module
+race/shuffle/count-one passed in 496.298 seconds, with vet, both Contract locks
+and Linux/arm64 core compilation also passing. The actual PG nine-source HBA
+check failed before resource creation because the locked local PostgreSQL
+image is missing; no real PG result is claimed.
+
+The subsequent [held Coding Control executor checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-coding-control-executor)
+adds the concrete source-bound create and Completed-only cleanup path plus an
+explicit mutation config for the Control command. The original status config
+stays read-only. Creation consumes eight fixed write requests after durable
+Unknown; uncertain responses remain occupied without retry or cleanup. Both
+public admission holds remain closed. This is component progress: no Provider
+mutation client/runtime ports, live factory admission, new role image or real
+create/cleanup gate is established. Docker's `desktop-linux` socket was
+unavailable on this attempt, so current image availability could not be
+rechecked. Original authority deadlines and Phase 6 **5/15** are unchanged.
+The dated audit distinguishes final source checks from this Docker blocker.
+
+The next [Provider original-authority dispatch checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-provider-original-authority-dispatch)
+adds a dedicated typed Control mutation client and selects it in the held v3
+command. The PG atomic create coordinator supplies the original envelope;
+cleanup uses only a fresh permit from that call's explicit PG acknowledgement.
+Neither uncertain responses nor stored historical envelopes grant a retry.
+The client checks the peer before and after a bounded, non-replayed request.
+Successful sends remain ACKs, not PG Ready/release evidence. Both public holds
+remain closed and no Application/automatic lease worker starts. Atomic
+Completed-to-Ready persistence and its generic-write guard are the next
+separate implementation; remaining runtime ports and real gates stay open.
+This is Slice 6 step 2 source/component progress, with Phase 6 still **5/15**.
+Its final full race/shuffle/count-one run passed in 535.336 seconds, followed
+by vet, both Contract locks and Linux/arm64 core compilation. Independent
+review found no blocker in the eight Go files. Tagged Docker observation and
+real PG transactional checks failed because the Docker socket is absent;
+neither positive live admission nor real PG/physical acceptance is claimed.
+
+
+The subsequent [Completed-to-Ready checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-provider-completed-to-ready-cas)
+adds the typed status-only readback and atomic PG completion-history/Active/
+Ready commit. Original authority, current generation/fence/lease and exact
+Control evidence are rechecked under the row lock. Repeated identical Ready
+reads do not increment PG revision. Late/cancelled Running becomes Unknown;
+an existing Unknown remains unchanged. Generic lifecycle writers cannot
+manufacture readiness, successful creation, termination progress, events or
+lease replacements. Normal exact terminate/lease admission and direct
+Creating-to-Cleaning remain available; non-create v3 reconciliation is still
+held. Released allocation evidence survives slot reuse without authorizing
+the next allocation. Independent read-only review closed the identified
+admission/event bypasses in all 17 changed Go files. This remains Slice 6
+step 2 source/component work, with both public holds closed and Phase 6 at
+**5/15**. This final snapshot passed full race/shuffle/count-one in 514.886
+seconds, vet, both Contract locks and Linux/arm64 compilation. Tagged Docker
+observation and real PG integration failed at the absent Docker socket;
+no real Ready/cleanup/concurrency result is claimed. Next connect the existing
+typed cleanup Begin/Finish to lifecycle termination reconciliation. The dated
+audit records the checks, preserved failures and remaining real gates.
+
+
+The [typed termination checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-provider-typed-termination-reconciliation)
+connects the existing cleanup admission/dispatch and Released CAS to the held
+lifecycle coordinator. A single PG snapshot selects fresh Accepted admission,
+Running/Unknown recovery or an already-released terminal read. A private
+retirement ACK flag can only be set from the same fresh call's successful
+Control dispatch. Recovery preserves unacknowledged Running as Unknown even
+when Control is Pending/Unknown/NotFound; late ACK cannot upgrade it. Neither
+lost PG/Control replies nor historical intents trigger a second dispatch.
+Exact release after the operation deadline or cancellation now retains Unknown
+while completing observed termination and slot release; existing Unknown
+is unchanged. Public holds remain closed, no automatic worker starts, and
+lease/suspend/resume execution is still held. This remains Slice 6 step 2,
+with Phase 6 **5/15**. Independent read-only review matched all 16 changed
+Go file hashes and found no definite remaining blocker. Full race/shuffle/
+count-one passed in 430.728 seconds, along with vet, both Contract locks and
+Linux/arm64 compilation. Docker was now reachable and both real read-only
+observations passed. The initial real PG test failed because the pinned image
+was absent. After downloading only that locked platform image and passing
+the existing complete OCI descriptor/layer check, the real PG transactional
+test passed in 4.896 seconds, including exact cleanup. Control remains
+synthetic: physical termination, live TLS/CRL and complete supply/release
+acceptance remain open. The dated audit preserves both attempts and the new
+input's separate identity.
+
+The [atomic lease checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-provider-atomic-lease-completion)
+adds PG-only completion to the held Coding-v3 command. New lease admission,
+expiry, Succeeded, idempotency and both events commit together. Lock-time
+expiry/deadline checks prevent stale admission; exact replays and historical
+successful reads do not write another revision. The original allocation and
+current sandbox remain distinct from a historical success result. Older
+Accepted records can be completed only while their current admission is
+exact; superseded, cancelled, Running or Unknown historical records are not
+upgraded. No Control call, public capability, automatic worker or mutation
+window is added. Final focused race tests, the real PG transactional gate,
+vet, both Contract locks and Linux/arm64 compilation pass. The first full race
+invocation hit the unchanged security package's default ten-minute timeout;
+one full retry with serialized package scheduling (`-p=1`) passed in
+1,062.257 seconds, with no timeout extension or source change. Both results
+remain recorded and the initial timeout cause is unproven. All eight changed
+Go hashes match final independent review. Slice 6 step 2 remains in progress
+and Phase 6 remains **5/15**; the dated audit records source, PG component and
+formal-gate limits.
+
+The following [runtime preflight checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-coding-runtime-preflight)
+adds a single-snapshot, read-only PG current-state projection and explicitly
+composes an exec support checker in the held v3 dependencies. It checks the
+exact Active allocation and completed original create, desired/observed Ready,
+current generation/lease/fence and frozen Profile/policy/peer. Request validation
+and unsupported reference checks precede the read; cancellation, clock and
+expiry checks follow it. Accepted termination closes eligibility before cleanup,
+and a prospective higher fence changes no durable state. This is preflight
+only, not an Executor or exec admission; no private wire action, public
+capability or automatic worker is added. Final focused race, real PG,
+full-repository race/shuffle/count-one with `-p=1` (1,022.115 seconds), vet,
+both Contract locks and Linux/arm64 compilation pass on the same final source.
+Seven file hashes match independent review; the audit retains the reproduced
+inconsistent-state rejection and earlier failed fixtures. Physical runtime
+ports and complete Slice 6 acceptance remain open; Phase 6 remains **5/15**.
+
+The following [exec intent checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-09-held-coding-exec-intent-ledger)
+adds a separate bounded no-permit ledger and explicit unused-state initialization.
+Admission and complete-request conflict checks share the Coding lifecycle row
+lock; historical replay has no write or dispatch effect. A high requested fence
+is prospective only. The held command retains the focused recorder without an
+Executor, public operation route or worker. The private Control wire remains
+unchanged. Physical exec still requires a new atomic permit, generic-entry-point
+isolation, Unknown-before-effect receipts, cleanup quiescence and result/cancel
+closure. Final focused/real-PG checks, independent review, vet, both Contract
+locks and Linux/arm64 build pass. This full-repository race run failed on the
+unchanged phase6security package's default 600-second timeout; all other packages
+passed. The standalone security package then passed with the original seed and
+default timeout in 535.950 seconds; that does not replace the failed full
+invocation. No full-run pass is claimed for this checkpoint. Phase 6 remains
+**5/15**.
+
+The 2026-10-10 [exec namespace isolation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-exec-namespace-isolation)
+closes the previous generic-exec and reverse operation-ID gaps. The enabled
+Coding intent database now rejects all generic exec reads/writes; lifecycle
+writers and typed unchanged replays check the intent namespace under the same
+row lock. Damaged/orphan history cannot authorize reinitialization. Legacy
+non-intent databases retain their prior behavior. This remains a no-permit
+component; current-authority fencing, distinct Control receipts, quiescence,
+observe/cancel/result and public command composition remain open. The real-PG gate, independent review, vet, both Contract locks and Linux/arm64
+build pass. The full race invocation fails on a Controller TempDir cleanup
+error and the security package default timeout; the unchanged Controller
+same-seed diagnostic passes separately. That checkpoint left full validation
+unresolved, as recorded in the dated audit; Phase 6 remains
+**5/15**, Slice 6 step 2, and both public holds stay closed.
+
+The subsequent [descriptor and validation-cost repair](audits/product-phase-6-slice-6-startup.md#2026-10-10-controller-descriptor-and-validation-cost-repair)
+reproduces and fixes the Controller fixture's FD ownership defect, then removes
+repeated whole-Profile checks inside the same validated call. All public entry
+points revalidate current input; original receipt checks and rejection rules
+remain. Independent review of sixteen Go files passes. The final combined
+`go test -race -shuffle=on -count=1 ./...` passes in 625.022 seconds overall
+(security package 580.323 seconds within its unchanged 600-second default),
+as do vet, both Contract locks and Linux/arm64 compilation. Timeout headroom
+is still limited; this result does not relabel the earlier failures or prove
+future timing stability. No Docker topology gate ran in this increment.
+Current exec authority/fencing, Control Unknown-before-effect receipts,
+quiescence and observe/cancel/result recovery remain open. Phase 6 is still
+**5/15**, Slice 6 step 2; there is no public admission, commit or push.
+
+The later [held PG exec fence reservation](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-pg-exec-fence-reservation)
+adds an explicitly bootstrapped, bounded reservation document without opening
+an executor or public route. Same-row full-request/current-tuple admission
+advances only the scope and lease fences. Independent review covers thirteen
+Go files. The final real-PG component gate passes in 27.087 seconds, including
+two-pool replay, competing typed lease/terminate, missing/corrupt document
+rejection and historical reads after slot reuse. The receipt is history only;
+Control Unknown-before-effect, physical quiescence and observe/cancel/result
+recovery remain open. The first full race invocation failed when the unchanged
+lifecycle repository test process reached the Go driver's fallback deadline,
+without captured test startup output. Its focused three-run diagnostic and
+vet/locks/build pass. The full same-source race/shuffle/count=1 recheck passes
+in **355.541 seconds**, with only diagnostic verbosity added and the default
+timeout/concurrency unchanged. All 2,015 Go/module hashes remain frozen. See
+the dated audit for the distinct failed/passed invocations and unknown first
+failure cause; the successful recheck is not a claimed root-cause fix. Phase 6
+remains **5/15**, Slice 6 step 2.
+
+The [exec containment mechanism probe](audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-exec-containment-mechanism-probe)
+now reproduces the legacy cancellation counterexample on local Docker:
+successful direct-child TERM and a stopped wrapper leave a detached orphan
+writing. Two independent command/PID 1 containers show stopped/Pid=0 and a
+500 ms unchanged counter after exact SIGKILL or natural exit. The final
+reviewed probe passes in **64.466 seconds**; the earlier archive-read failure
+remains recorded. This is a locked PG process fixture, not a Coding/Profile-v2
+gate or proof that late Docker calls cannot execute. Legacy production Cancel
+is unchanged; distinct Control exec Unknown receipts are still unimplemented.
+The independently reviewed containment/resource/dispatch design must precede
+that wiring. Both public holds and formal **5/15** remain unchanged.
+
+The next [resource/shared-scratch checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-exec-resource-and-shared-scratch-checkpoint)
+implements checked resident/command limits within one slot's existing ceiling.
+Its real Docker component test passes in **23.599 seconds**, inspecting the
+actual limits and shared tmpfs type, 32 MiB data-block capacity, UID/GID/mode,
+mount flags, cross-container visibility, noexec and ENOSPC. Command replacement
+preserves scratch; full unmount/remount loses it. Exact fixture cleanup passes.
+Independent review accepts only this resource arithmetic and local mechanism
+scope. The [private exec protocol plan](plan/product-v1-phase-6-coding-exec-protocol.md)
+specifies the new-mode adoption boundary, output/acceptance ordering and durable
+Unknown/late-request/cleanup invariants. Actual Coding inputs, production
+budgets, inode/metadata bounds, daemon restart and real PG-to-Control dispatch
+remain open; no old resource/receipt bytes or public admission are changed.
+Full race/shuffle/count=1 passes in **403.955 seconds** on the frozen 2,020
+Go/module files, with default timeout/concurrency; vet and both Contract locks
+also pass. Formal Phase 6 remains **5/15**, Slice 6 step 2.
+
+The [execution template/storage candidate](audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-execution-template-and-storage-budget-candidate)
+now has a separate canonical mode, fixed candidate 1 GiB slot partition and
+512 MiB Coding storage subquota. Output staging/sealing has 192 MiB; allocation
+evidence, command evidence, double-state writing, closure and physical
+headroom each have separate 64 MiB bounds. The real scratch probe passes in
+**23.994 seconds**, proving the actual 4096-inode limit and file/directory
+ENOSPC while data space remains, followed by inode reuse and exact cleanup.
+The candidate and arithmetic have independent read-only review. The limits
+are not yet consumed by durable PG/Control admission; full Profile/receipt
+namespace, other-scope quotas and physical/runtime gates remain required.
+All 2,024 Go/module hashes remain frozen through full race/shuffle/count=1
+(**357.458 seconds**, default timeout/concurrency), vet and both Contract
+locks. The initial live-remote timeout and successful bounded retry are
+recorded separately. Phase 6 remains **5/15**, Slice 6 step 2.
+
+The subsequent [private storage namespace checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-private-storage-namespace)
+adds actual bounded file publication and restart inspection under one owner,
+with immutable evidence, single-state replacement peak and independent close
+space. Held execution template v2 binds the layout; other scopes' 512 MiB is
+explicitly unallocated and cannot be consumed. Independent review accepts this
+file-component scope. A fresh Linux/arm64 local-volume fixture passes in
+**8.388 seconds** and removes its two containers/two volumes; the earlier
+read-only-root copy setup failure is preserved, not counted as a test pass.
+PG-to-Control dispatch, execution receipt semantics, source-verified physical
+volume admission and cross-file recovery remain incomplete. The final 2,027 Go/module files pass full race/shuffle/count=1 in **553.057 seconds**
+with default timeout/concurrency, vet and both Contract locks. Both public holds
+and Phase 6 **5/15**, Slice 6 step 2 remain unchanged.
+
+The next [common Control state checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-common-control-execution-state)
+implements package-private new-protocol create/exec/retirement state on that
+file store. All admission/closure decisions share the persistent owner and
+manifest revision comparison. Unknown precedes bounded effect callbacks and
+survives return, cancellation, retirement and restart; no release API exists.
+Exact closure also advances the fence high-water mark. Independent review
+found and closed that late-fence gap and required strictly newer retirement
+generation with a distinct operation. The new typed four-volume completion
+port has only synthetic test observations: actual source-bound collection,
+complete Profile/physical-volume admission, atomic PG public acceptance/claim,
+asynchronous private dispatch, terminal/cancel/cleanup and release remain open.
+The dated audit separates component checks and preserved setup failures from
+the still-unexecuted real Coding path. All 2,033 Go/module files remain frozen
+through full race/shuffle/count=1 (**376.398 seconds**, default timeout/concurrency),
+vet and both Contract locks. The tagged Linux local-volume component passes
+separately, with synthetic observations/callbacks. Formal status remains
+**5/15**, step 2.
+
+The latest [four-volume observer checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-four-volume-completion-observer)
+adds the package-private source-bound SDK collector and retained physical
+projection recheck under receipt protocol v2. Legacy records cannot be upgraded
+or reinterpreted. Exact four-volume inventory, image descriptor chain, runtime
+limits/protections and empty-root metadata are checked before completion.
+Independent review closed response-body socket drift and additional resource
+and path-protection gaps. The real daemon check rejects a fresh empty scope
+using only 11 bounded GETs; the Linux high-UID receipt fixture still uses
+synthetic positive Docker responses. The Coding arm64 image is now downloaded,
+not executed or freshly supply/attestation/vulnerability-qualified. Positive
+four-volume workload/kernel gates, full Profile/physical namespace binding and
+PG/async-mTLS admission remain open; formal status stays **5/15**, step 2.
+The dated audit records final-source validation and private evidence.
+
+The following [Coding supply revalidation](audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-image-supply-revalidation)
+passes original descriptor/layer checks and offline signed-provenance verification,
+but its fresh arm64 Trivy report has **13 HIGH occurrences (12 distinct CVEs),
+zero CRITICAL**. No Coding container is started. A new unsigned 23-component
+CycloneDX inventory is available privately; this is not Slice 7 acceptance.
+The historical Go1.26.5 broker and Alpine OpenSSL need repair; the user has now
+approved Go1.26.9 only for the [new Coding candidate](plan/product-v1-phase-6-coding-image-candidate.md).
+Its [separate recipe/locks](../profiles/coding-shell/candidate/README.md) use clean
+91fe315 source and Alpine3.23.6. Both platform archives reproduce byte-for-byte
+and scan with **0 HIGH/CRITICAL, 1 retained zlib MEDIUM** each. Native arm64
+candidate diagnostic smoke passes in **5.077 seconds** with exact container
+cleanup; amd64 runtime and formal four-volume gates remain unexecuted. Tools
+now use mise (ordinary Go1.26.8, candidate-only Go1.26.9, Trivy0.74.0), with Docker
+image builds and no global activation. The redundant hand-extracted Go copies
+were removed after complete byte equality checks. Historical image locks and
+all 2,040 Go/module files were unchanged at that build checkpoint. The [candidate audit](audits/product-phase-6-slice-6-startup.md#2026-10-10-repaired-coding-candidate-and-managed-tools)
+records those checks, failures and limitations.
+
+The subsequent [held binding component](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-candidate-template-and-receipt-binding)
+adds source-owned candidate record identity, a distinct execution-template v3
+and internal receipt v3, preserving old templates and rejecting v1/v2 state
+without migration. Real archive/layer rechecks and bounded Docker image reads
+pass; empty four-volume scope still cannot produce completion. Historical
+scan metadata is not a fresh verdict or signature. The next
+[Profile/kernel-root component](audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-profile-mode-and-kernel-root)
+adds a mutually exclusive candidate-v3 mode to the complete Profile field chain,
+source-derived storage binding and declared eight-volume resource accounting.
+Kernel-checked Store paths verify the actual root fd and live path mount ID;
+a real ordinary Docker local volume is refused before writing a marker.
+Positive Profile/kernel tests are synthetic. Docker volume identity, exclusive
+ownership, stable hard quota, final live inventory and real four-volume
+positive/failure scenarios still precede PG/mTLS composition. Formal status
+remains **5/15**, Slice 6 step 2, both public holds closed; no publication or
+production admission follows.
+
 A separate same-run [PostgreSQL leaf component audit](audits/product-phase-6-slice-6-postgres-leaf-component-gap.md)
 records successful fixed-identity Vault signing but no PostgreSQL launch and
 no confirmed revocation of that extra leaf: the already-running diagnostic
@@ -397,7 +936,7 @@ requires the third DER-bound target and complete-CRL confirmation, with a
 pre-signing clean-binary capability check; implementation and real PG/v2
 same-run gate are still in progress, not release evidence.
 
-Updated: 2026-10-04
+Updated: 2026-10-10
 
 This document is the implementation ledger for the repository-owned MIT
 Provider Contract. It distinguishes local component evidence, Contract
@@ -2073,3 +2612,611 @@ The Provider command root intentionally marks the concrete WebSocket and
 caller-owned Gateway boundary unavailable, so explicit standalone profile
 startup still fails closed. The reference stack supplies those caller-owned
 dependencies externally for P2.5i without weakening the Provider default.
+
+
+### 2026-10-10 held Docker consumer observation and dedicated backend
+
+The [Control storage backend component](plan/product-v1-phase-6-control-storage-backend.md)
+adds a separate bounded global Docker observer and a fresh dedicated Store
+mode. It checks stopped consumers, exact volume/Control mounts, unsafe aliases
+and device authority, live root-fd facts and fixed loop geometry. A Linux
+operator-only helper prepares and seals a one-GiB ext4 image offline, with
+source inode and initial-byte binding. This does not yet prove physical admission:
+shared-VM loop/device operations await explicit scope authorization, complete
+source-inode/volume composition and real positive/failure gates. Current real
+Docker evidence covers ordinary-volume and stopped-consumer refusal only.
+The new offline image is not an attached quota backend, a release image or an
+old receipt upgrade. Public Profile/provider v3 holds and Phase 6 **5/15** remain.
+
+
+### 2026-10-11 authorized real backend diagnostic; admission remains blocked
+
+The user authorized the exact shared-VM loop7 diagnostic. Fresh census, original
+image hash/dev/inode checks and atomic attach passed. High-UID raw ext4 writes
+survived two container replacements; physical ENOSPC and ELF noexec refusal
+passed. The mounted-device O_EXCL test returned EBUSY, and the helper refused
+detach while preserving the exact backing inode. These are separate component
+facts, not Store quota or full Control acceptance.
+
+The positive Store admission test **failed**: actual mountinfo carried
+`master:5`, and sysfs exposed `/receipt.ext4` instead of the required absolute
+backing path. No Store namespace was initialized; both strict checks remain.
+The next step is independent review of a source-inode/volume observation
+composition and an actually private mount, then fresh Store positive gates.
+The high-UID Store and root-owned Docker socket are not yet one composed
+observer authority. Details and evidence boundaries are in the
+[Control storage backend plan](plan/product-v1-phase-6-control-storage-backend.md).
+
+Slice 6 step **1** retains only its historical bounded evidence; step **2**
+continues with these real diagnostic results and explicit admission blockers;
+step **3** full live inventory/original sixteen scenarios/independent acceptance
+is incomplete; step **4** has not begun. Phase 6 remains **5/15** and public
+Profile/provider v3 stay closed. No commit, push or release is authorized here.
+
+Validation for this checkpoint: mise Go1.26.8 full Darwin race/shuffle/count=1
+suite passed in **440.344 seconds**, `go vet ./...` in **7.430 seconds**, and
+Provider/Product Contract verification in **0.496 / 0.130 seconds**. The two new
+Linux integration test binaries executed in restricted arm64 Docker; their
+Linux integration-tag vet passed in **0.917 seconds**. Production Go files and
+locks were unchanged in this turn. The positive Store test remains a recorded
+FAIL; raw and mounted-refusal PASS results do not convert it to acceptance.
+
+Exact cleanup completed: owned consumers and ext4 volume removed, helper
+observed ENXIO after detach, all eight granted loop nodes were unconfigured,
+offline fsck passed, then the backing volume was removed. No run-owned
+containers or volumes remained; both new diagnostic image tags were removed.
+Retained pre-removal and fresh post-removal inventories also show no mount
+source overlapping either owned volume path or its ancestors/children. This
+relies on the coordinated sole operator and does not fence daemon-external
+writers. The unrelated existing containers and prior diagnostic utility image
+were preserved. Private commands/results, image/binary identities, both the
+executed and reviewed-follow-up cleanup scripts, and exact source delta are in
+`coding-persistent-backend-live-20261011` outside Git and the migration package.
+
+
+### 2026-10-11 source observer and private-mount follow-up
+
+A fresh independently reviewed diagnostic used local-driver
+`o=rw,nosuid,nodev,noexec,private`. The actual mount no longer contained
+`master`, and the unchanged strict kernel-root check passed. This corrects
+the earlier review's conflation of container bind propagation with the local
+driver's underlying mount options. The held Docker observer now requires
+this exact option set and still checks the live Store fd separately.
+
+The helper's new `observe` action uses a read-only backing mount and only
+read-only pinned file/loop descriptors, canonical seal and before/after
+statx/census/ioctl checks. Actual observation passed, including with an active
+filesystem consumer; wrong mount access, absent device and wrong namespace
+were refused without output. It emits diagnostic identity fields, not a
+Store capability or signed receipt. The positive Store test still fails on
+its unchanged exact backing-path check; the private-mount blocker alone is
+closed for this observed configuration. See the [backend plan](plan/product-v1-phase-6-control-storage-backend.md).
+
+Next: independently select the live source-capability/Store-root/Docker-volume
+composition. Do not turn serialized helper JSON into caller authority. ADR
+0055's existing high-UID Control plus fixed supplementary GID 0 candidate
+remains the separate Docker-socket direction, with access/denial gates pending.
+Phase 6 stays **5/15**; Slice 6 steps **1/2/3/4** remain historical bounded
+evidence / in progress / incomplete / not begun. Public Profile/provider v3
+admission stays closed, and no commit, push or release occurs.
+
+
+### 2026-10-11 live source/Store/Docker composition checkpoint
+
+The independently reviewed held component now admits one actual high-UID
+Control only after composing retained source FDs/inode and original seal,
+strict private whole-ext4 Store root, exact Docker volumes and complete current
+consumer inventories. The new source-provision.v2 mode has no legacy receipt
+upgrade; its root-owned group-readable source, exact RO loop nodes and fixed
+socket group are restricted to that candidate. Both original sysfs-path and
+Desktop representation failures remain recorded. See the
+[reviewed design](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-live-source-store-and-docker-composition)
+for the capability and timeout boundaries.
+
+The final fresh Linux/arm64 fixture passes initialization, persisted state/CAS,
+64-object allocation quota refusal, replacement-Control reopening, stopped
+receipt/backing/socket consumer refusal, cooperative helper exclusion and
+same-byte source seal inode-replacement refusal. Its exact containers, volumes
+and new image were removed; loop7 ENXIO and offline fsck passed. Logs, binaries,
+source hashes and failed attempts are outside Git in
+`control-storage-composition-20261011`, with the final run in `v4-budget-final`.
+Development stayed in mise Go1.26.8 and Docker. The worktree remains uncommitted.
+
+Next complete the held Store's physical ENOSPC/uncertain-write/recovery and
+wrong-principal denial gates, then integrate the composed lifetime with the
+source-derived Coding ledger and complete Profile/operator command admission.
+A private fixture with synthetic Profile/principal digests is not that full
+admission. The complete four-volume Coding scenarios and original sixteen-
+scenario/topology acceptance remain open. Slice 6: **1** historical bounded
+Guest E; **2** ongoing, this component passes; **3** incomplete; **4** not begun.
+Phase 6 remains **5/15** and both public holds remain closed.
+
+
+### 2026-10-11 Store fault and wrong-principal checkpoint
+
+The [held Store fault gates](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-store-fault-and-principal-gate-design)
+now have independent review and ten fresh Linux/arm64 real fixtures: actual
+pending-object Write ENOSPC, no-effect space preflight, two cancellation points,
+five process-exit points, and wrong UID/GID/missing-socket-group denial. Incomplete
+state remains preserved and refuses reopen/reinitialization; complete canonical
+state may be revalidated in a new process, without a success receipt or dispatch
+permit. Socket denial is actual connect EACCES, not a permission-mode inference.
+This does not prove power-loss durability. All exact fixture resources and the
+new diagnostic image were reclaimed; private evidence lives outside Git in
+`control-storage-fault-gates-20261011`. mise Go1.26.8/Docker remain the only
+selected development toolchain/runtime; source remains uncommitted.
+
+Next bind the composed Store lifetime to the source-derived Coding ledger and
+full Profile/operator command path, then run the four-volume physical scenarios
+and the still-open Slice6 security/topology gates. Step **1** retains historical
+bounded E; **2** continues with these Store gates passing; **3** complete live
+topology/original16 and independent acceptance remain incomplete; **4** has not
+begun. Phase6 remains **5/15**, with both public admission holds closed.
+
+The same final Go snapshot passes full race/shuffle/count=1 in 524.358 seconds,
+full vet in 8.867 seconds, Linux tagged vet and all ten real fixtures.
+
+
+### 2026-10-11 source-owned Coding ledger checkpoint
+
+The ledger now owns the composed source/Store/Docker lifetime through a private
+marked port. Ordinary-directory constructors compile only in tests; the held
+constructor checks the storage/template/daemon/endpoint/platform join before
+I/O. Failed loading retains markers, while missing state never triggers repair.
+Cancellation while draining callbacks keeps the owner locked and closed to new
+work until a later Close completes.
+
+Six fresh Linux/arm64 fixtures pass durable Unknown before an effect probe,
+replacement-process refusal of replay/Completed/exec, canceled Close and lock
+retention until drain, before/after-state interruption without dispatch, missing
+state refusal without reset, and a stopped second consumer causing an absorbing
+source-owner failure. Removing that peer does not revive the old owner; a new
+owner reopens the unchanged empty ledger. All six namespaces, loop mappings and
+the new diagnostic image were reclaimed exactly. The raw evidence and one
+preserved outer snapshot-comparison failure are outside Git in
+`control-storage-ledger-20261011`. The failure compared the replacement container's
+parent-directory mtime; independent review restricted comparison to the Store
+root/entries, with all original files retained and no scenario rerun.
+
+This is a held source-storage/ledger component using explicit fixture Profile,
+principal and policy digests plus bounded callbacks. Full source-derived
+Profile/operator and four-volume effects remain unproved. Independent review
+found the current complete Profile cannot represent the diagnostic candidate's
+RO backing, exact eight RO loop devices and different socket target, and its
+required service networks/mounts differ. Next introduce and independently review
+an exact source-access mode and operator binding without widening generic
+HostDevices/mount rules; then wire the complete command and PG/mTLS paths.
+See the [backend design](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-source-owned-execution-ledger-lifetime).
+
+Slice6 remains **1** historical bounded E, **2** in progress with this component
+passing, **3** full live topology/original16 and independent acceptance incomplete,
+**4** not begun. Phase6 stays **5/15**; public Profile/provider v3 holds, two issuers,
+frozen-R reuse and old locks stay unchanged. Development uses mise Go1.26.8 and
+Docker; no staging, commit, push or release occurred.
+
+
+Final validation for the unchanged Go snapshot passed: full
+`go test -race -shuffle=on -count=1 ./...` in **474.875 seconds**, full
+`go vet ./...` in **18.48 seconds**, the focused ledger/source-owner race tests
+in 15.317 seconds, and final Linux tagged vet in 0.516 seconds. Six real fixtures
+and independent evidence/documentation review passed within the stated scope.
+The existing 600-second full-suite runner limit was not changed. No Go byte
+changed after the real-fixture snapshot; subsequent edits only record results.
+Contract inputs, Go module/toolchain locks and AGENTS remain unchanged.
+
+
+## 2026-10-11 complete-Profile source-access permission checkpoint
+
+An independently reviewed optional source-access v1 mode now represents the
+exact source-v2 backing, eight RO loop devices, canonical Docker socket, owner
+UID/GID/groups and new Control image identity inside the complete declared
+Profile v2. A pre-seal source-intent digest breaks the backing-label/Profile/seal
+cycle; the final Profile then binds the original seal. Read-only operator review
+checks either canonical stage and never grants runtime admission. Legacy wire
+encoding and the public Profile/provider v3 holds remain unchanged.
+
+The real Docker fixture passes source Store initialization, replacement reopen,
+a create-only positive baseline, eight stopped permission/configuration
+refusals and a stopped unauthorized private-config consumer refusal followed by
+successful reopen. Exact loop/volume/container/network/image cleanup passes.
+The actual observer checks seven mounts and three internal isolated networks,
+but this is **Control-only staging**: other role supply identities are synthetic,
+and live Provider/TLS peers, CA/CRL content, service readiness and release supply
+are not proved. Two failed preparation attempts remain preserved outside Git;
+neither is counted as acceptance. Evidence: `control-profile-source-access-20261011`.
+
+Next establish separately reviewed operator admission and exact legitimate
+Provider/TLS/CA consumer identities, then connect the source-owned ledger and
+complete Control/PG/mTLS command path and four-volume effects. See the
+[permission-mode design and evidence boundary](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-complete-profile-source-access-declaration).
+
+Slice6: **1** historical bounded E accepted in its original scope; **2** ongoing,
+with this permission component passing; **3** full live topology/original16 and
+independent formal acceptance incomplete; **4** not begun. Phase6 remains5/15.
+Development remains mise Go1.26.8 and Docker. No commit, push or release.
+
+
+Final checkpoint validation passed on the unchanged Go snapshot: full
+`go test -race -shuffle=on -count=1 ./...` in **340.282 seconds**, full
+`go vet ./...` in **8.66 seconds**, both Contract lock verifiers and Linux tagged
+vet. Independent design/code/raw-evidence/documentation review accepted the
+stated held Control-only component scope. All 237 commands in the final physical
+fixture completed successfully; the two earlier failed attempts remain retained
+and excluded. No Go source changed after the final real-fixture image build.
+The original 600-second suite limit, public admission holds and Phase6 5/15
+status remain unchanged. This completes this permission component checkpoint,
+not Slice6 formal acceptance or its step4 handoff.
+
+
+## 2026-10-11 operator and consumer observation checkpoint
+
+Independent design/code review added a held operator-signature and consumer
+observation component. Admission re-derives the complete canonical Profile,
+then binds a fresh single-use challenge to actual source/root, original seal,
+Docker volume and consumer graph observations before Store initialization.
+Signatures use a separate test-key commitment, expire within120seconds and do
+not create production authority. Every subsequent Store operation rechecks the
+approved graph. The old Control-only staging branch remains unchanged.
+
+Real Docker checks passed for the Profile-derived19 diagnostic containers and
+three isolated Control/Provider networks: initialize/reopen, signature/review
+forgery and graph-drift refusals, stopped/missing consumers, extra endpoint, and
+same-name/label wrong UID/image/command/group/config/CA mount permission/source
+refusals. Legitimate replacement required a fresh signature. These are fixed
+sleep-process permission/session observations, **not real Provider/TLS identity
+or readiness**. No CA/CRL bytes or production operator credential are accepted
+by this evidence. The test pipe is not an added private-config file. One private
+harness preparation failure remains preserved and excluded from acceptance.
+
+Evidence: `control-operator-consumers-20261011`; see the
+[operator/consumer component boundary](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-operator-and-consumer-observation-component).
+Next establish the production bootstrap and real role launch/service identity,
+then the source-owned Control/PG/mTLS command path and four-volume effects.
+Slice6: **1** historical bounded E; **2** ongoing; **3** final live topology,
+original16 and independent formal acceptance incomplete; **4** not started.
+Phase6 remains **5/15**. Development uses mise Go1.26.8 and Docker, with no
+commit, push, merge or release. Public admission holds remain closed.
+
+
+Final validation on the unchanged Go snapshot passed: full
+`go test -race -shuffle=on -count=1 ./...` in **260.098 seconds**, full
+`go vet ./...` in **3.184 seconds**, both Contract lock verifiers and Linux
+tagged vet. Independent review matched all2091Go files to the frozen snapshot
+and accepted only the stated held diagnostic scope. Exact cleanup removed all
+19 remaining diagnostic containers, six volumes, three networks and the new
+image tag; all eight loop nodes were unconfigured and offline fsck passed.
+The original600-second suite limit was unchanged. No Go byte changed after the
+real fixture binary build. This is a Slice6 step2 component checkpoint, not
+formal acceptance or step4 handoff.
+
+
+## 2026-10-12 held bootstrap and actual process evidence
+
+The [bootstrap/process checkpoint](plan/product-v1-phase-6-control-operator-bootstrap.md) adds a canonical
+operator public-key declaration, independent empty-by-default executable pin,
+fixed sealed Control FD3 and an explicitly held Control config protocol.
+Eight launch declarations bind original OCI role/loader bytes. A trusted
+operator probe distinguishes actual PID1 executable/credentials/argv from
+container labels and distinguishes the loader from the role.
+
+Real Linux checks passed for sealed-FD positive/negative cases, eight OCI byte
+bindings, five direct-entry Control/TLS process-byte observations, two loader
+observations and identity/environment/mount refusals. Direct-entry observations
+are diagnostic overrides, not approved startup or service readiness. Three
+actual Provider commands still reject v2 at the core v1 startup reader; actual
+Control/TLS commands remain held. Production pin/probe delivery, operator
+challenge transport, Store dispatch and full consumer readiness remain open.
+The five private config volumes, all owned containers and three new diagnostic
+image tags were reclaimed. Failed fixture attempts and the first600-second
+full-race timeout remain evidence, never passes. See the private checkpoint
+`control-production-bootstrap-20261012` for final validation and raw logs.
+
+Next independently review the production delivery and post-observation
+challenge/signature composition. Public holds, two issuers and frozen-R rules
+are unchanged. Phase6 remains5/15; Slice6 steps1/2/3/4 are historical bounded E /
+ongoing / incomplete / not started. Development remains mise Go1.26.8 and Docker;
+no commit, push, merge or release.
+
+
+Final checkpoint validation passed on the final Go combination: full
+`go test -race -shuffle=on -count=1 -json ./...` in **582.294seconds**, full
+`go vet ./...` in **6.491seconds**, both Contract lock verifiers and Linux
+tagged vet. The first600.019-second timeout is retained as failed, not erased
+by the later pass; no timeout limit was extended. Only the opt-in test fixture
+generator changed after the real binary build (it rebinds the selected image
+into its synthetic source intent); production Go inputs and real image bytes
+were unchanged. The final whole-repository run includes that correction. This
+is held Slice6 step2 component evidence, not production acceptance or step4.
+
+
+## 2026-10-12 held process-delivery continuation
+
+The [versioned pin/probe and post-observation signature component](plan/product-v1-phase-6-control-process-delivery.md)
+adds an independent build-time public pin, the fixed image probe, real loader
+and Control PID1 observation, sealed loader-generated binding, and a one-use
+host-signature reply. The signature scope is only `held-control-process-delivery`;
+it cannot open Store or authorize the earlier diagnostic consumer graph.
+The host observes twice before signing; Control re-observes after signing.
+The selected Unix Docker endpoint remains an operator-controlled trust premise.
+
+Final source and original OCI inputs, actual positive/negative transcripts,
+required verification and exact cleanup are indexed in private checkpoint
+`control-production-delivery-20261012`; older failed attempts remain retained.
+These are dirty-source diagnostic images with a test key, not clean release
+or independent production operator acceptance. The next result is separately
+reviewed source/root/volume/full-consumer and actual service composition.
+
+Phase6 remains **5/15**. Slice6 **1** historical bounded E / **2** ongoing /
+**3** final topology, original16 and independent formal review incomplete /
+**4** not started. Public holds, issuer policy, old release/toolchain locks and
+frozen-R reuse rules remain unchanged. No Git submission or release occurred.
+
+
+## 2026-10-12 held Control source-observation continuation
+
+The [source-observation component](plan/product-v1-phase-6-control-source-observation.md) binds the same real Control process
+and retained source/root FDs to backing/filesystem volumes, fixed socket,
+eight read-only loop grants and three isolated Control networks. It introduces
+an explicit v3 target/bootstrap/startup tuple, v5 config and the distinct
+`held-control-source-observation` signature scope. Host probes compare actual
+source evidence twice before signing; Control rechecks its retained session
+behind the signature. No Store is initialized or opened.
+
+The real CLI positive passed in35.622seconds; the tagged Docker integration with
+race passed in33.869seconds. Seven actual refusal cases cover old startup,
+wrong key/signature, replay, stopped second consumer, source record inode
+replacement and deadline. Both physical drift cases carried a valid test
+signature and failed at source re-observation. Fifteen host projection cases
+plus wrong backing-volume options reject unsafe inputs. Empty-root assertions,
+original seal preservation, exact loop7 detach/ENXIO and eight-device census
+are separate private fixture evidence. These facts do not prove Store contents
+or full consumer/service readiness. Logs and prior failed attempts are retained
+in private checkpoint `control-source-process-composition-20261012`.
+
+Independent review required fixed daemon logging/resource settings and exact
+four-label checks in original OCI, selected image and container metadata; both
+repairs are applied. Image labels do not attest clean source or provenance.
+The new operator key is recorded as local development only, with no independent
+production approval. The GET-only collector does not make the mounted Docker
+socket a kernel-enforced read-only capability.
+
+The next reviewable result is production operator/Store admission composed with
+the actual Provider/TLS/CA consumer graph, retaining the public holds until its
+named gate is met. Phase6 remains **5/15**: Slice6 step1 historical bounded Guest
+E; step2 ongoing; step3 final live topology, original16 scenarios and formal
+independent review incomplete; step4 documentation/submission/push handoff not
+started. Existing two-issuer, PostgreSQL general, frozen-R, Go1.26.8/release-lock
+rules remain unchanged. Development uses mise and Docker; no Git submission.
+
+## 2026-10-12 held CA directory prerequisite
+
+The [trust-v4 component](plan/product-v1-phase-6-control-trust-observation.md) addresses the reproduced named-volume-at-PEM mismatch. It binds the two exact read-only CA directories, retained file identities and bytes to the existing source/process signature. Public and old Store admission remain held. This advances Slice6 step2 only; actual Provider/TLS consumers, production operator authority, final live topology/original 16 scenarios and formal handoff remain open. Phase6 stays **5/15**.
+
+Actual v4 positive, three signed physical drift refusals, bounded initial-input refusals, Linux reader execution and the same new binaries on legacy v3 are recorded in private `control-real-consumers-20261012`. Full race (462.510s), vet, both Contract locks and tagged Docker race passed. Exact cleanup passed after the first attempt safely refused an in-use network; the wrong-owner wrapper assertion failure is also retained. See the component document for evidence limits.
+
+
+## 2026-10-12 held Provider / Control TLS peer
+
+The [real-process peer component](plan/product-v1-phase-6-provider-tls-peer.md)
+connects one fixed Coding control edge through separate Linux role/agent test
+processes using production TLS, Unix signing, retained CA FDs and source-bound
+CRL enforcement. The selected 20-case matrix covers a real TLS1.3/mTLS POST,
+nine initial refusals and ten active-fault closures plus fresh-client refusals.
+The closures take 1.142–3.462 seconds within the unchanged 10-second bound.
+Original fixture failures are retained and excluded from negative passes.
+
+This is integration-only dirty-source component evidence with diagnostic X.509
+issuers, not actual production Provider/Control commands, Vault/controller
+issuance, operator approval, Store or full-topology admission. Public holds,
+the broker/general issuer rule, old receipts and frozen-R reuse remain intact.
+Private inputs, logs and exact resource receipts are in
+`provider-tls-peer-20261012`; see the component document for failure stages,
+verification and next work. Phase6 stays **5/15**: Slice6 step1 historical
+bounded E; step2 ongoing; step3 final live topology/original16/formal independent
+acceptance incomplete; step4 not started. No staging, commit, push or release.
+
+
+At the peer checkpoint, implementation and real component cases were recorded, but
+whole-repository code acceptance was **blocked**: three full race/shuffle/count1
+runs exited124 at the unchanged 600-second bound, including the process-local
+GOMAXPROCS=4 scheduling experiment. The phase6security package passed separately
+in492.302s; full vet, both Contract locks, Linux tagged vet/package execution
+and exact resource cleanup passed. These do not substitute for the incomplete
+full race gate. Resolve that bounded verification issue before broader command
+composition or any acceptance claim; no timeout, assertion or public hold is
+relaxed. Original failures and final source/evidence hashes are preserved in
+private `provider-tls-peer-20261012`.
+
+
+## 2026-10-12 bounded full-repository race follow-up
+
+The [verification follow-up](plan/product-v1-phase-6-provider-tls-peer.md#repository-verification-status)
+passes the complete race/shuffle/count1 suite with `-p=6` in **510.429 seconds**
+under the unchanged 600-second bound (phase6security 475.785 seconds). All 267
+packages have final outcomes. The Go/module source, tests and assertions are
+unchanged; only package scheduling differed, with no `GOMAXPROCS` override.
+The three prior timeouts remain failed evidence, not default-concurrency or CI
+passes. Independent review accepts this local gate result within that scope.
+Prior vet, Contract and Linux component results are reused on matching source;
+no new Docker execution or production acceptance is claimed. Evidence is in
+private `race-gate-diagnosis-20261012`, outside the migration package and Git.
+
+This removes the missing local full-race result as the immediate blocker.
+Phase6 remains **5/15**: Slice6 step1 retains bounded historical Guest E;
+step2 continues with production operator/Store, actual Provider/Control/Scanner
+commands and source-bound Vault/controller/agent composition; step3 final live
+topology, original16 and independent formal acceptance remain incomplete;
+step4 post-acceptance handoff is not started. Public holds and the two-issuer
+rule remain unchanged. No staging, commit, push, merge or release occurred.
+
+
+## 2026-10-13 Vault two-issuer continuation
+
+The [reviewed component and evidence boundary](plan/product-v1-phase-6-vault-two-issuer.md) fixes a reproduced
+duplicate-source/omitted-issuer acceptance in VaultClient and prepares an
+opt-in real broker/general test for Control, Scanner, broker and PostgreSQL
+client policies. PostgreSQL stays on general. The exact pinned Vault archive
+has been restored and verified, but cryptographic image signature/provenance
+is unverified; the required supply gates block starting the real service.
+Neither ordinary skipped tests nor archive verification are real two-issuer
+execution or Controller/agent/command acceptance. See the component document
+and private `vault-controller-continuation-20261013` checkpoint for final
+verification results, failed attempts and next evidence.
+
+Phase6 remains **5/15**. Slice6 step1 retains historical bounded Guest E; step2
+continues with supply resolution, actual issuer/source binding and the complete
+operator/Store/Provider/Control/Scanner/Controller/agent composition. Step3
+final live topology, original16 and independent formal acceptance remain open;
+step4 post-acceptance handoff is not started. Public holds and frozen-R reuse
+remain unchanged. No Git staging, commit, push, merge or release occurred.
+
+Final bounded verification: workloadpki tagged race/shuffle/count1, full vet,
+tagged vet and both Contract verifiers pass. The new whole-repository race
+run timed out at 600.297 seconds (exit124), with phase6security unfinished; it
+is not replaced by the historical 510.429-second result. The fresh exact-input
+Trivy scan has 6 HIGH findings (4 unique CVEs), and image signature/provenance
+remains unverified. No Vault service or real two-issuer scenario ran. Both the
+full-race and supply blockers remain open; all original failure records are
+preserved.
+
+
+## 2026-10-13 race diagnosis and Vault supply proposal
+
+The [reviewed diagnosis](plan/product-v1-phase-6-race-budget-diagnosis.md)
+identified redundant desired-topology construction inside each nine-rule HBA
+call. Fresh plans are now reused only within that call, preserving all original
+validation, per-owner checks and output bytes. New characterization and
+mutation-isolation tests passed before and after the change. The final full
+`go test -race -shuffle=on -count=1 -p=6 -json ./...` passed in **503.355 seconds**
+under the unchanged 600-second limit; all267 packages ended. Full vet and both
+Contract lock verifiers passed. All2148 Go files match the pre-run snapshot.
+This supplies the missing local full-race result for this source; previous
+timeouts remain failed evidence and single profile samples are not a stable
+performance guarantee or proof of the sole historical timeout cause.
+
+The independently reviewed [Vault supply proposal](plan/product-v1-phase-6-vault-supply-remediation.md)
+keeps image authenticity/provenance and the six HIGH findings as independent
+blockers. No Vault lock, trust root or toolchain lock changed; no new candidate
+was fetched or Vault service started. Next produce an exact candidate dossier,
+verify all supply gates, and independently review candidate-specific consumption
+before running the new two-issuer matrix and complete command composition.
+Private evidence: `race-vault-remediation-20261013`, outside Git and migration.
+
+Phase6 remains **5/15**. Slice6 steps1/2/3/4 remain historical bounded Guest E /
+startup and real-boundary work ongoing / final live topology, original16 and
+independent formal acceptance incomplete / post-acceptance handoff not started.
+Public holds, broker/general issuers, PostgreSQL general and frozen-R reuse
+remain unchanged. Development stays mise Go1.26.8 or Docker. No staging, commit,
+push, merge or release.
+
+
+## 2026-10-13 Vault 2.1.2 candidate supply result
+
+The [candidate investigation](plan/product-v1-phase-6-vault-candidate-supply.md) restores and verifies the exact new
+index, arm64 manifest, config and seven original layers, including ordered
+diff IDs and wrong-identity refusals. Its private repository-validator race
+check passed in **24.044 seconds**. Trivy0.74.0 completed the fresh full-image
+report in **1.853 seconds**, bound to the actual config and unchanged scan/DB
+bytes, but the existing vulnerability gate **fails: 4 HIGH, 0 CRITICAL**.
+The actual binary contains Go1.26.8 and x/net v0.59.0; all lower/unknown
+findings remain recorded. Image signature and build provenance also remain
+unverified. Independent review confirmed rejection, not runtime qualification.
+
+No Vault service ran. Exact new ECR Docker references were removed without
+force/prune, preserving the historical image. Failed transfers and incomplete
+Docker exports remain in private `vault-candidate-supply-20261013`; the accepted
+locks and receipts are unchanged. All2148 repository Go files match the prior
+503.355-second full-race snapshot, so that same-source evidence is reused.
+Next review a replacement/build proposal covering fixed embedded inputs and
+independent publisher/builder authority. Vault compiler selection is a separate
+decision; the existing Go1.26.9 exception remains Coding-only.
+
+Slice6 step1 retains historical bounded Guest E; step2 remains ongoing and
+blocked on these Vault supply inputs for the real issuer/command composition;
+step3 final live inventory, original16 and independent formal acceptance remain
+incomplete; step4 post-acceptance handoff is not started. Phase6 remains **5/15**.
+Broker/general, PostgreSQL general, public holds and frozen-R reuse are unchanged.
+Development uses mise/Docker. No staging, commit, push, merge or release.
+
+## 2026-10-13 Vault rebuild decision package
+
+The independently reviewed [isolated rebuild proposal](plan/product-v1-phase-6-vault-rebuild-proposal.md)
+binds the exact clean upstream tree and an unapplied three-file patch for a
+Vault-specific Go1.26.9/root x/net0.60.0 candidate. Strict object verification
+and patch applicability passed; source scripts, build and Vault execution were
+not run. UI inclusion, derived-source metadata and offline generator/package
+execution are explicit fail-closed requirements. Full build inputs and
+publisher/builder authority remain unresolved. The next decision is the
+Vault-only compiler exception; existing permission is still Coding-only.
+
+All2148 repository Go files remain bound to the prior passing full-race/vet/
+Contract snapshot; this documentation checkpoint does not rerun or extend those
+results. Phase6 remains **5/15**. Slice6 steps1/2/3/4 remain historical bounded
+Guest E / ongoing, with real Vault supply blocked / final live inventory,
+original16 and independent acceptance incomplete / post-acceptance handoff not
+started. Private evidence: `vault-rebuild-proposal-20261013`. No accepted locks,
+trust roots or receipts changed; no commit, push, publication or release.
+
+
+## 2026-10-13 approved Vault diagnostic input preparation
+
+The user confirmed the private Vault-only Go1.26.9/root x/net v0.60.0 build
+exception. The [input checkpoint](plan/product-v1-phase-6-vault-build-inputs.md) records a new
+uncommitted source copy, an actual module graph with only that x/net version
+delta, exact compiler materials, 1,852 compatible registry UI archives and
+four Git-package source correspondences. Node22 is a separately reviewed
+private UI tool delta; the dependency lock is unchanged. Source-bound download
+recovery, 15 enumer outputs and UI lifecycle conditions have read-only
+independent review; actual source/generator/UI execution has not occurred.
+
+Incomplete builder/module transfers remain failed evidence. Final runtime
+identity, Ember5.8 support, publisher/builder approval and all downstream
+candidate/runtime results remain unresolved. No accepted lock, trust root,
+ordinary repository toolchain, public Profile/provider hold or frozen-R rule
+changed. No commit, push, publication or Vault service execution occurred.
+Private evidence: `vault-rebuild-inputs-20261013`.
+
+Phase6 remains **5/15**. Slice6 step1 retains historical bounded Guest E;
+step2 is ongoing; step3 final live inventory/original16/independent acceptance
+is incomplete; step4 has not started. The next acceptable result is complete
+checked inputs and a reviewed isolated build recipe, followed by a genuinely
+new diagnostic output and scan; this checkpoint is not formal acceptance.
+
+## 2026-10-13 Vault builder material closure and rejection
+
+The [builder checkpoint](plan/product-v1-phase-6-vault-builder-admission.md)
+restores the remaining24 Go requests and three Node layers. All987 ZIP/mod
+pairs and actual offline root go mod verify pass; the exact native OCI chain,
+diff IDs and Node binary correspondence pass. The complete builder scan
+**fails with4 CRITICAL/65 HIGH**, and image signature/build-source admission
+is still unverified. No Docker import, source build or Vault service occurred.
+The conditional isolation plan preserves all gates; it is not approval to
+execute this image. Private evidence: `vault-isolated-build-20261013`.
+
+Next establish a viable independently admitted builder and frozen generator/
+pnpm store recipes. Repository Go and accepted locks are unchanged. Phase6 is
+still **5/15**: Slice6 step1 historical bounded E; step2 ongoing with builder
+admission failed; step3 final inventory/original16/independent acceptance
+incomplete; step4 not started. This is no formal Slice completion or release.
+
+## 2026-10-13 Vault builder selection and dependency gate rejection
+
+The [new builder/recipe checkpoint](plan/product-v1-phase-6-vault-builder-selection.md)
+selects an exact Chainguard arm64 carrier with eight verified signature/attestation
+checks, a signed apko/75-package source correspondence and a zero-finding full
+image scan. A separately reviewed Docker init-layer reconciliation accounts
+for the saved export without rewriting its original strict failure. Node22.23.3
+and authenticated pnpm10.34.7 are the selected private tools; builtin Node26 is
+covered by the read-only exact Node mount. The new private enumer graph closes
+all9 archive/mod checksum inputs. Historical Vault source and accepted locks
+remain unchanged.
+
+Complete material inventories now recognize all9 enumer dependencies and1852
+compatible registry packages. They report8 HIGH and51 HIGH/4 CRITICAL respectively;
+the separate admission command exits1. Four Git sources have separate bindings,
+not coverage by those scans. Generator and complete UI/Vault build execution
+remain rejected; offline transport/store probes cannot waive these findings.
+Next review scoped repair inputs, unresolved advisories and the complete offline
+graph. No Vault service or new candidate binary/image is claimed. Private evidence:
+`vault-builder-candidate-20261013`. Phase6 stays5/15; Slice6 steps1/2/3/4 remain
+historical bounded E / ongoing / incomplete / not started.
