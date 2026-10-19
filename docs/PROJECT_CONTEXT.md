@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-19
+Updated: 2026-10-20
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -35,7 +35,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-19 fixed Cosign client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
+The latest [2026-10-20 util and standard-log source closure](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
+verifies18 new fixed-version source/module files and one complete tree through
+19 successful original10second-bounded requests. Legacy util confirms
+13.root.json naming and the complete expected/got hash error. A new independently
+reviewed read-only static observation passes in1.323606seconds after36 synthetic
+tests, locating global log.SetFlags at CUE0.16.1 adt/log.go:54; verified source
+sets0 in init, consistent with D4's untimestamped final line. Eight module-identity
+byte tests pass before strict CUE decoding. Failed diagnostic/fixture/invocation
+identities and unexecuted drafts remain preserved. Static metadata uses pinned
+Go intervals within participating Mach-O sections;15988 text suffix bytes stay
+unexplained. This closes the two source-correspondence gaps, not actual13 reads,
+cryptographic mutation-versus-good causality or TUF acceptance. The conditional
+strict-four-line repair now requires the full target hash payload and concrete
+parser/refusal review before any new original-gated four-case run. All610 inputs,
+9aliases and three old sealed checkpoints remain exact. Private evidence:
+`tuf-source-gap-20261019-151705`. No Cosign/host/TUF/build/scan/container or repository
+test runs; no TUF parser/root/cache/index/reuse/limit/toolchain change or timer starts.
+TUF stays0/4, Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete,
+step4 not started. Only reviewed progress documents follow normal commit/push.
+
+The earlier [2026-10-19 fixed Cosign client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
 verifies27 source/module files and two complete updater trees in a new
 independently reviewed identity. Source explains modern14 persistence before
 Refresh, legacy's separate memory/DB and embedded12 selection, old/new root

@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-19 fixed Cosign client and error source recovery](#2026-10-19-fixed-cosign-client-and-error-source-recovery).
+Latest continuation: [2026-10-20 util and standard-log source correspondence](#2026-10-20-util-and-standard-log-source-correspondence).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1828,3 +1828,114 @@ documents change for the standing normal commit/push checkpoint. Phase6 stays
 **5/15**; Slice6 step1 is bounded historical Guest E, step2 ongoing with source
 helper and actual causality gaps, step3 final inventory/original16/formal review
 incomplete, step4 post-acceptance handoff not started.
+
+## 2026-10-20 util and standard-log source correspondence
+
+New private identity: `tuf-source-gap-20261019-151705`, from clean
+`3039aadec98427b51bb26b870cc36f3b86a070bf`. Source observations use UTC19;
+this checkpoint uses Asia/Shanghai20. Identity/input/source paths, private
+static readers and dynamic candidate decoding receive independent review before
+execution. Existing mise Python reads data only; no downloaded source, Cosign,
+Go toolchain, host/TUF gate, build, scanner, container or repository test runs.
+
+### Restored helpers and standard-log attribution
+
+All19 public credential-free requests succeed within the original10second
+whole-request/1MiB bounds, with no redirect/retry. Eighteen fixed-version
+source/module files and one complete2138-entry containerregistry tree are
+verified by complete sizes/hashes/Git blobs and strict Contents decoding.
+Raw responses and original failure records remain private outside Git.
+
+The exact [go-tuf0.7.0 util source](https://github.com/theupdateframework/go-tuf/blob/v0.7.0/util/util.go)
+confirms VersionedPath(root.json,13) produces13.root.json, and ErrWrongHash
+includes full lowercase expected/got hex values. This uses a new reviewed
+Contents input; the old failed raw/blob identities remain failed.
+
+Three containerregistry sources distinguish their own loggers from standard
+global log. Twelve Go1.26.4 runtime/ABI/linker/arm64/log files then support
+bounded static metadata reading of the exact Cosign binary; they are source
+inputs, not an installed toolchain or reproducible-build result. The final
+reader verifies122694 functions,78571 unique FD offsets,213649 PC offsets and
+192288 inline records, passing in1.323605958seconds after36 frozen synthetic
+tests. Its sole global log.SetFlags metadata candidate is CUE's adt.init.0,
+`cuelang.org/go@v0.16.1/internal/core/adt/log.go:54`, parentPC20.
+
+Fixed binary buildinfo and verified Cosign go.mod both select cuelang.org/go
+v0.16.1. Strictly decoded [CUE go.mod](https://github.com/cue-lang/cue/blob/v0.16.1/go.mod)
+confirms that module before the [CUE log source](https://github.com/cue-lang/cue/blob/v0.16.1/internal/core/adt/log.go)
+is decoded: its init imports standard log and calls log.SetFlags(0). The exact
+[Go1.26.4 wrapper](https://github.com/golang/go/blob/go1.26.4/src/log/log.go)
+delegates to std.SetFlags. This source/static correspondence explains a
+configuration consistent with D4's untimestamped final line; it is not an
+actual D4 call trace, argument observation or proof of all setter absence.
+The complete module zip h1 and whole Cosign source-to-binary reproducibility
+are not established. Eight module-identity byte tests pass before decoding.
+
+### Preserved diagnostic failures and conservative read boundary
+
+An initial reader rejects its incorrect DWARF mapping assumption. Later drafts
+are held before execution for format/fixture issues. An actual synthetic run
+fails on bytearray-versus-bytes fixture semantics; a new33-test run passes,
+then a relative-plan invocation is rejected before binary open. A new absolute
+invocation fails in0.419675875seconds on its etext/section-end assumption.
+Every failed identity remains preserved without rerun or retrospective pass.
+
+A separately reviewed narrow nlist observation passes in0.457751875seconds:
+Go's runtime.etext is15988B before the final Mach-O text section end. The
+internal-linker MinLC relation cannot be treated as that final-file equality.
+The new reader pins all five observed nlist type/section/VA values and reads
+only the Go text/metadata intervals within their participating file-backed
+section indices. Uninterpreted suffix bytes remain of unknown origin;
+CGO_ENABLED=1 is not causal proof. It does not reconstruct textsectmap or prove
+global uniqueness of same-named Mach-O sections. Its text+offset bounds are
+conservative refusal conditions, not a general external-linking theorem.
+Full pre/post binary SHA/FD identity, all function/FD/PC/CU checks, the original
+10second read window and1MiB result bounds remain. This is a private static
+diagnostic correction, with no change to product, host or TUF gates.
+
+Before CUE decoding, independent review also holds a module-space-only check
+that could miss a second TAB-separated module directive. The unexecuted draft
+is retained. Complete token collection, exactly one two-token module line
+and conservative block-comment refusal pass the8 new frozen byte cases;
+all original FD/JSON/base64/blob/readback checks remain.
+
+### Source-supported conditional repair and remaining actual gate
+
+The source chain is now complete for these two helper gaps: legacy embedded12
+selection with nil external root, versioned13 lookup, old/new root thresholds,
+exact+1, final expiry and success-only disk synchronization. Modern's partial14
+cache remains separate. The sole signed.expires mutation with identical
+signatures fits the canonical signed-object rejection mechanism, but actual13
+consumption, cryptographic mutation causality and unchanged good are unproved.
+
+The target error prediction must include both full hashes:
+expected `6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`,
+got `89798404182843a00037e10a50ba95597b4d66c78b921f90909d2ce1a620fab0`.
+It follows the downloading-target wrapper, unlike root/timestamp Update
+errors. The old short target leaf and proposal remain unchanged historical
+records; the corrected full message is a source prediction, not CLI output.
+
+Next independently review concrete strict-four-line negative parsing and
+refusal fixtures: two original-mirror constrained warnings, Error:P and the
+untimestamped final P, with identical complete case-specific payloads.
+Keep all original origin/role/UTF8/line/order/exit/no-success/target/state/input
+refusals; add full-hash and wrong-case tests. Do not use a three/four-line
+union, generic substring, root retargeting or old-D4 retroactive acceptance.
+No such parser or real four-case run is implemented in this checkpoint.
+
+A later new reviewed identity still needs fresh original dual-host/same-boot,
+supply and isolation gates, unchanged four-case order,25second children,
+90second parent and1MiB streams. Keep root13, nil external root and separate
+cache state. Negative verdicts stay provisional until the same frozen-base
+unchanged good authenticates all roles/targets and all four pass joint actual
+independent review. TUF remains **0/4**.
+
+All610 original input rows,9aliases and three old sealed checkpoints match
+complete sets/hashes/modes; old locks/evidence,9 bindings,64 barriers,
+cache/index/reuse rules, quotas/deadlines and repository Go1.26.8 remain intact.
+Only three progress documents change for the standing normal commit/push
+checkpoint, with private evidence and source retained outside Git. Timers
+remain off. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E,
+step2 ongoing with source gaps closed but actual gates pending, step3 final
+inventory/original16/formal review incomplete, step4 post-acceptance handoff
+not started. This checkpoint commit is not formal step4.

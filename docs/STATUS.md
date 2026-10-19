@@ -2,7 +2,22 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-19 client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
+The latest [2026-10-20 util/log source correspondence](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
+closes the two source gaps: util confirms13.root.json and complete hash errors;
+static inline metadata plus verified CUE0.16.1 source identifies init's global
+log.SetFlags(0). Nineteen original10second-bounded requests restore18 source/module
+files and one tree. The final private36 metadata/8 module tests pass; the static
+observation takes1.323606seconds. Failed identities and drafts stay preserved.
+Source correspondence is not D4 execution or mutation-versus-good proof; TUF
+remains0/4. The conditional four-line repair includes full expected/got hashes;
+concrete parser/refusal implementation and an original-gated new four-case run
+remain pending. All610 inputs/9aliases/three sealed checkpoints match. Evidence:
+`tuf-source-gap-20261019-151705`. No new Cosign/host/TUF/build/scan/container or
+repository tests, toolchain/limit/cache/index/reuse changes or timer starts.
+Phase6 remains **5/15**; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+Only reviewed progress documents follow the standing normal commit/push rule.
+
+The earlier [2026-10-19 client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
 verifies27 source/module files and two updater trees. The modern14 cache,
 legacy12 memory/DB bootstrap, root-rotation thresholds, success-only disk sync
 and two error emitters now have exact-version source support. Three original
