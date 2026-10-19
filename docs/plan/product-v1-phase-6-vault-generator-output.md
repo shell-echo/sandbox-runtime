@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-19 fixed Cosign roots and causality held](#2026-10-19-fixed-cosign-roots-and-causality-held).
+Latest continuation: [2026-10-19 fixed Cosign client and error source recovery](#2026-10-19-fixed-cosign-client-and-error-source-recovery).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1724,3 +1724,107 @@ change for the standing normal commit/push checkpoint. Phase6 remains **5/15**;
 Slice6 step1 keeps bounded historical Guest E, step2 continues with full
 source/actual causality held, step3 final topology/original16/formal independent
 review incomplete, step4 post-acceptance handoff not started.
+
+
+## 2026-10-19 fixed Cosign client and error source recovery
+
+New private identity: `tuf-source-recovery-20261019-133746`, from clean
+`733ffa878dc5a74bdde32a7f729bb002c7278084`. Independent identity/input review
+precedes each exact source batch and the separate Cobra candidate consumption.
+No failed source/D4 identity is rerun, and none of its original receipts is
+rewritten. Existing mise Python reads source/data only; no global environment,
+CLI/TUF/host test, compiler, scanner, container or timer is started.
+
+### Retrieved source and remaining input failures
+
+There are32 actual public credential-free HTTPS requests:29 succeed, three
+fail at the original whole-request10second deadline. Twenty-seven source/module
+files are verified, including the separately reviewed61142-byte Cobra source,
+and two complete go-tuf trees are retained. Exact known blobs match approved
+path/size/Git blob SHA1, with raw HTTP bodies, status/headers and SHA256 retained.
+Cobra Contents metadata is independently reviewed before strict LF/base64,
+roundtrip, size and blob-SHA decoding into a new private file; that does not
+relabel the earlier failed Cobra recursive-tree request.
+
+The three failures take10.012913,10.656768 and10.012695seconds respectively.
+The util raw request recordsHTTP200 but captures zero body and fails its
+10second deadline; one reviewed immutable official blob API also fails.
+Both stay failures, and no further util endpoint is tried. The exact
+VersionedPath/hash-error helper source remains missing. UI env/common/sign
+candidate sources do not locate a global standard-log flag setter. These
+are retained gaps, not a complete-source or reproducible-binary claim.
+
+Before F2, independent review holds a fetcher draft that would classify TLS
+certificate/protocol errors as continuable OSError and allow empty candidate
+content. The unexecuted draft is retained; SSL errors are changed to stop
+before OSError handling, and candidate content must be nonempty. Only after
+reviewing the corrected SHA does F2 execute. F1 has no observed SSL error;
+its actual timeout and successful TLS/blob evidence are preserved. All source
+requests retain the original1MiB cap, no authentication/redirect/retry, and
+stop the batch on non-transport integrity/status/TLS/size failures.
+
+### Source-supported cache and refusal paths
+
+The recovered exact-version sources now distinguish the two clients:
+
+| Path | Source-supported behavior | Evidence limit |
+| --- | --- | --- |
+| modern sigstore-go1.2.2 / go-tuf2.4.2 | DefaultRoot is embedded14; New uses CachePath/URLToPath(mirror), persists the input root before Refresh, then begins online root loading at version+1 via HTTP fetcher | Explains partial14 and file-URI15 warnings; not remote authentication |
+| legacy sigstore1.10.8 / go-tuf0.7.0 | MemoryLocalStore is seeded only from TUF_ROOT/tuf.db; nil external root and absent local root select embedded12; Init checks signatures while ignoring initial expiry | Source selection rule, not a new replay or crypto verdict |
+| legacy UpdateRoots | Calls VersionedPath(root.json,13), reads through FileRemoteStore, verifies old-root threshold and new self-signatures, exact+1, then final-root expiry | util helper body and actual D4 read trace remain missing |
+| legacy disk state | updateClient synchronizes memory to disk only after Update succeeds | Empty D4 LevelDB log does not prove absence of initialization or reads |
+
+See the exact [legacy client](https://github.com/sigstore/sigstore/blob/v1.10.8/pkg/tuf/client.go),
+[legacy updater](https://github.com/theupdateframework/go-tuf/blob/v0.7.0/client/client.go)
+and [modern updater](https://github.com/theupdateframework/go-tuf/blob/v2.4.2/metadata/updater/updater.go).
+The canonical signature verifier covers the whole signed object, including
+expires. The unchanged signature list and sole expiry mutation therefore
+fit the root-threshold refusal mechanism. They do not replace the unexecuted
+unchanged good comparison or prove D4 actually read13. Modern14's URL cache
+is not imported as legacy's initial root.
+
+The D4 complete error payload matches the recovered legacy Update wrapper
+chain; an Init failure would use a different wrapper, while modern failures
+are the preceding warnings. [Cobra ExecuteC](https://github.com/spf13/cobra/blob/v1.10.2/command.go)
+prints Error:P and [Cosign main](https://github.com/sigstore/cosign/blob/v3.1.3/cmd/cosign/main.go)
+prints error during command execution:P after Execute returns. This explains
+the two matching payload lines in the four-line raw stderr. Their observed
+lack of a timestamp is retained; the global flag initializer was not found
+in the selected sources and is not claimed to be closed.
+
+Root/timestamp errors pass the error-updating-mirror wrapper; target download
+has a different downloading-target wrapper. The proposal separates these
+case payloads. Only the root payload was actually observed; timestamp/target
+full messages remain predictions, and target's wrong-sha256 leaf still relies
+on the frozen expectation with the util formatter source missing. The old
+embedded trusted-root target also differs in size/hash from the frozen target;
+it cannot be treated as an already authenticated new target or an actual
+download observation.
+
+### Conditional correction and retained acceptance boundary
+
+First resolve the util source gap under independent input review and review
+the logger-attribution limit against the fixed tool's actual raw output.
+Then independently review a strict fixed-version four-line negative parser:
+two original-origin warnings, Error:P and the untimestamped final P, with
+complete identical, case-specific payloads. Preserve all original receipt,
+exit, stdout/no-success/target, state identity, full input closure and bounded
+execution checks. Keep frozen tests and add refusal fixtures for wrong lines,
+origins, payloads/cases, success artifacts, exit/flags and post-state failures.
+No broad three/four-line union, generic substring, changed trust root or
+root13-to15 retargeting is proposed. Old D4 raw may test format only; it stays
+a failed case rather than gaining retroactive acceptance.
+
+Implementation and tests are not performed here. A later new reviewed identity
+must pass fresh original dual-host/same-boot/supply/isolation gates before the
+unchanged four-case order and25second children/90second parent/1MiB bounds.
+Negative verdicts remain provisional until the same frozen-base unchanged
+good authenticates all required roles/targets and all four pass joint actual
+independent review. Current TUF result remains **0/4**.
+
+All old evidence,9 bindings,64 barriers, cache/index/reuse standards, resource
+limits, Go1.26.8 and historical locks remain unchanged. Only three progress
+documents change for the standing normal commit/push checkpoint. Phase6 stays
+**5/15**; Slice6 step1 is bounded historical Guest E, step2 ongoing with source
+helper and actual causality gaps, step3 final inventory/original16/formal review
+incomplete, step4 post-acceptance handoff not started.

@@ -2,7 +2,20 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-19 fixed Cosign static root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
+The latest [2026-10-19 client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
+verifies27 source/module files and two updater trees. The modern14 cache,
+legacy12 memory/DB bootstrap, root-rotation thresholds, success-only disk sync
+and two error emitters now have exact-version source support. Three original
+10second-deadline requests fail and are preserved; util naming/hash-format
+source and global log-flag attribution remain incomplete. D4 actual13 read
+and mutation-versus-good causality are unproved, so its0/4 is unchanged.
+The reviewed repair is conditional; no parser/fixture/root changes, host/TUF
+execution, test/build/scan or timer follows. Evidence:
+`tuf-source-recovery-20261019-133746`. Phase6 remains **5/15**; Slice6 step2
+ongoing, step3 incomplete, step4 not started. Only reviewed progress documents
+follow the standing normal commit/push checkpoint rule.
+
+The earlier [2026-10-19 fixed Cosign static root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
 identifies legacy embedded root12 and modern embedded root14; D4's cached root
 matches modern14 exactly. Initialization source calls modern then legacy, but
 complete client/updater source and an accepted unchanged good remain missing:

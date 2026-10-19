@@ -35,7 +35,24 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-19 fixed Cosign root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
+The latest [2026-10-19 fixed Cosign client/error source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-client-and-error-source-recovery)
+verifies27 source/module files and two complete updater trees in a new
+independently reviewed identity. Source explains modern14 persistence before
+Refresh, legacy's separate memory/DB and embedded12 selection, old/new root
+threshold checks, success-only disk synchronization, and Cobra/main's two
+error emissions matching D4's four lines. Three10second-deadline requests
+fail and remain recorded; util VersionedPath/hash-format source and global
+logger-flag attribution are still missing. Core paths are source-supported,
+but the complete helper chain, actual13 read and mutation-versus-good
+causality are not proved. Root/timestamp and target failures also have different
+wrappers; predicted unexecuted cases are not actual results. The conditional
+repair keeps root13, nil external root, exact case-specific error frames,
+all refusal checks and the original four-case order/bounds. No implementation,
+new host/TUF run, test/build/scan/container or timer starts. Private evidence:
+`tuf-source-recovery-20261019-133746`. Old evidence stays exact; TUF remains0/4,
+Phase6 stays5/15, Slice6 step2 ongoing, steps3/4 incomplete/not started.
+
+The earlier [2026-10-19 fixed Cosign root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
 identifies static legacy root12 and modern root14 in the exact Cosign3.1.3
 binary; D4's cached root exactly matches the modern root's5491 bytes. Exact
 initialization source calls modern first and falls back to legacy with nil
