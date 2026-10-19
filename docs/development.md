@@ -17,6 +17,38 @@ Conformance evidence, external-caller qualification, and production readiness.
 Use the Go version declared in `go.mod`. Docker is optional for ordinary unit
 tests and required for the tagged Docker integration test.
 
+For this recovered Phase 6 workspace, development tools are managed through
+mise and image builds through Docker; do not install ad hoc host toolchains.
+Use `mise exec go@1.26.8 -- ...` for ordinary repository work. The user-approved
+[new Coding candidate](plan/product-v1-phase-6-coding-image-candidate.md) and the
+separately approved [private Vault diagnostic candidate](plan/product-v1-phase-6-vault-build-inputs.md)
+may use Go1.26.9. The Vault exception also fixes root x/net at v0.60.0; it does
+not change the repository toolchain or approve Vault execution. Explicit
+`mise install` does not activate a
+global version; leave global PATH, shell config and historical image locks
+unchanged. Historical receipts may name the earlier private extraction paths;
+they are historical evidence, not current executable locations.
+
+For Conformance Runner tests (including the full suite), clear mise's injected
+`GOROOT` in the child process: the Runner intentionally resolves the build's
+own Go root and rejects an explicit override. Keep the managed Go on PATH and
+do not weaken the Runner or change shell/global configuration:
+
+```sh
+(
+  umask 022
+  mise exec go@1.26.8 -- env -u GOROOT go test -race -shuffle=on -count=1 ./...
+)
+mise exec go@1.26.8 -- env -u GOROOT go vet ./...
+```
+
+The subshell keeps the test fixture umask local. Permission-rejection tests
+deliberately create group/world-readable fixture files and must observe those
+requested modes. A private evidence wrapper may use umask 077 for its logs, but
+must set the test child to 022; inheriting 077 silently turns unsafe fixtures
+into private files and invalidates those negative cases. Keep the original
+permission checks and assertions intact, and preserve private evidence modes.
+
 Apple Container is an optional application-packaging test environment. On a
 supported Apple silicon host, run `./scripts/apple-container-smoke.sh` to build
 the repository Dockerfile and exercise the local health/create/list path with
@@ -1712,7 +1744,432 @@ implementation.
 
 ## Change and review discipline
 
+The explicit Linux `integration` tests in
+`internal/controlstorage/dedicated_backend_integration_test.go` and
+`tools/control-storage-backend/main_linux_integration_test.go` require a
+separately authorized, exact-owned loop7 fixture. They are not an automatic
+Docker setup or permission to allocate shared-VM devices. The positive Store
+admission test must remain a failure when actual mount/source checks fail;
+raw persistence, noexec, physical ENOSPC and mounted-detach refusal are separate
+diagnostics. See the [held backend plan](plan/product-v1-phase-6-control-storage-backend.md)
+for actual results, cleanup ordering and open composition requirements. The
+2026-10-11 binaries used mise Go1.26.8 and restricted Linux/arm64 Docker, without
+installing or globally activating a host toolchain. Linux execution was non-race;
+the required all-package race suite runs separately on Darwin.
+
 Keep changes scoped to one delivery slice and state its non-goals. New behavior
 requires success, rejection, cancellation, and recovery tests proportional to
 its failure modes. Changes to ownership, public protocol, reliability semantics,
 or security boundaries require an ADR and coordinated compatibility review.
+
+
+### Held Control source-access operator review
+
+Use mise Go1.26.8 or the locked Docker toolchain. The read-only tool
+`go run ./tools/control-source-review -intent` reads a canonical independent
+source-intent from stdin; omit `-intent` to review the complete canonical
+Profile after sealing. Output is `held-not-a-permit`. It does not provision,
+connect to Docker, open Store/ledger or enable provider v3. Never reuse its
+output as runtime authority or edit old seals/labels to adopt the new mode.
+
+Explicit `CONTROL_PROFILE_FIXTURE`, `CONTROL_PROFILE_METADATA`,
+`CONTROL_PROFILE_INSPECT` and `CONTROL_PROFILE_REAL` opt-ins are private test
+fixtures, not operator admission. The full-shape running fixture proves only
+Control-only staging. Permission-negative containers remain stopped, and a
+same-daemon create-only positive must first prove the configured predicate.
+Full topology must separately establish allowed Provider/TLS/CA peers and
+private input readiness. See the [mode and evidence boundary](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-complete-profile-source-access-declaration).
+
+
+### Held Control bootstrap/process evidence (2026-10-12)
+
+See [the exact bootstrap and observation boundary](plan/product-v1-phase-6-control-operator-bootstrap.md).
+The new local-role target `provider-docker-control-bootstrap-v1` uses the fixed
+FD loader and Go1.26.8. Normal builds have no operator pin and cannot bootstrap.
+Do not source that pin from the Profile or startup envelope. A dirty local
+fixture image is never a clean candidate or release input.
+
+The Linux `tools/control-process-observe` operator tool accepts only a selected
+Profile deployment and `role`/`loader` stage. Its binary must be independently
+bound to the observed image; production packaging is not implemented. Never
+install a probe by adding arbitrary writable mounts/permissions to a role.
+Bracket an explicit operator exec with full container ID, image and Docker
+PID/StartedAt, exact environment and mount observations. Its output is held
+private evidence; it does not admit a service or replace the full graph gate.
+
+
+### Versioned held Control process delivery (2026-10-12)
+
+The [v2 delivery design](plan/product-v1-phase-6-control-process-delivery.md)
+supersedes only the earlier missing pin/probe and reply-transport component.
+Use mise Go1.26.8 or Docker. The new local-role build target
+`provider-docker-control-delivery-v2` takes an independently approved private
+mode0600 public-key file as its third argument, and still refuses dirty source.
+It alone packages the fixed probe; older targets and TLS private-key FDs retain
+their protocols. Do not pass an operator private signing key to the build.
+
+`go run ./tools/control-delivery-sign <private-input.json> <new-transcript.json>`
+uses the closed `controloperator.Input` schema and an explicitly controlled local
+Unix Docker endpoint. It checks and starts one already-created held container,
+observes actual loader and role, then signs with a host-only test/operator key.
+Its receipt cannot authorize Store or service startup. Retain failed transcripts,
+which are explicitly `status=failed`, and reclaim only the exact owned resources.
+Keep all inputs, keys, OCI archives and transcripts outside Git.
+
+The opt-in tagged test is `go test -tags=integration -race -shuffle=on -count=1
+-run '^TestControlDeliveryDocker$' ./internal/controloperator`, with
+`CONTROL_DELIVERY_REAL_INPUT` and `CONTROL_DELIVERY_REAL_OUTPUT` naming a fresh
+owned container's private files. `CONTROL_DELIVERY_INPUT` and
+`CONTROL_DELIVERY_INSPECT` enable retained real-observation negative projections;
+they never upgrade fixture output to a production permit.
+
+
+The [held source-observation target](plan/product-v1-phase-6-control-source-observation.md)
+uses the same independently pinned public-key build argument and fixed probe,
+with target `provider-docker-control-source-v3`. It requires the complete
+canonical source Profile and exact volumes, read-only devices/socket, isolated
+networks, no daemon log driver and fixed runtime resource defaults. Use an
+explicit fresh private operator run; the old process-only startup, signature
+and receipt cannot stand in for source evidence. Source and root identity is
+read-only component evidence; actual Store and consumer service admission stay
+closed. Local key generation is not independent production key approval.
+
+The [trust-v4 prerequisite](plan/product-v1-phase-6-control-trust-observation.md)
+uses only two exact CA directory mounts and retained `bundle.pem` descriptors.
+Do not rewrite historical file-layout profiles or populate their empty volumes
+and call them TLS evidence. Use a new run and explicit v4 bootstrap/startup,
+config-v6 tuple and held trust signature scope. Actual negatives must distinguish
+pre-start mount rejection from signed physical drift; a test-only signer for
+physical negatives is not the independently observing operator positive.
+Linux reader tests must actually execute under Docker in addition to macOS
+race tests. Keep private evidence outside Git and reclaim only exact run-owned
+resources after all commands finish.
+
+
+### Held Provider / Control TLS peer fixture
+
+The [bounded peer component](plan/product-v1-phase-6-provider-tls-peer.md) uses
+`TestHeldPeerTLSFixture` only to generate a full field-validated private fixture
+and canonical original-byte pins. `TestHeldPeerAgentProcess` and
+`TestHeldPeerProcess` require explicit private config paths and execute only
+under the Linux integration build. A Linux test binary is built with mise
+Go1.26.8 (`GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go test -c -tags=integration
+./internal/phase6tls`) and run as the exact Profile identities in Docker.
+The fixtures contain diagnostic issuer keys and must stay outside Git in a
+private directory. Never use their hashes as operator approval or the test
+process entry points as a production startup bypass.
+
+Keep peer state failures separate from initial readiness failures. Active
+cases must establish the real connection before mutation, prove closure within
+10 seconds and show a fresh client's refusal. Record the actual refusal stage;
+CA loss may terminate the server, while an invalid CA prevents the new client
+from reaching TCP. Preserve failed fixture setup and wrapper assertions rather
+than counting them as gate success. Ordinary full race/vet, applicable Linux
+integration execution and both Contract locks remain required; no timeout or
+public admission hold is relaxed for this fixture.
+
+### Vault two-issuer source component
+
+The [Vault continuation](plan/product-v1-phase-6-vault-two-issuer.md) adds an
+integration-tagged, explicitly opted-in VaultClient component. A complete
+archive and existing Docker image at the locked index/platform are necessary
+but do not replace the required signature, provenance and vulnerability gates.
+Resolve those gates before setting the opt-in; a default skipped test is not
+real service evidence. Use mise Go1.26.8 and Docker, keeping archive, logs and
+optional public issuer output outside Git. The output file must not exist.
+
+After the independent supply decision, use the existing locked-toolchain
+environment with the three documented environment variables and run
+`go test -race -shuffle=on -count=1 -tags=integration -run
+'^TestVaultTwoIssuerSourceBindingIntegration$' -v ./internal/workloadpki`.
+Preserve the unchanged test/wrapper bounds. Do not enable unrelated older
+Vault tests as a substitute: they have different scope and inputs. This test
+does not authorize public Profile admission or production command startup.
+It checks exact run-owned cleanup; missing volume inventory is explicitly
+unproven, not a successful cleanup receipt. Never persist raw Docker inspect
+or Vault diagnostics containing the temporary dev token.
+
+
+### Bounded race diagnosis and Vault candidate changes
+
+The [race diagnosis](plan/product-v1-phase-6-race-budget-diagnosis.md) records
+a complete 503.355-second pass with the existing `-p=6` package bound and
+unchanged600-second runner. Preserve full race/shuffle/count1, all validation
+and meaningful characterization tests; do not cache authorization verdicts
+or rerun the full suite merely to obtain a green result. Before/after allocation
+profiles are diagnostic samples, not substitutes for the complete gate.
+
+The [Vault supply proposal](plan/product-v1-phase-6-vault-supply-remediation.md)
+requires exact candidate-specific code/test identities after independent supply
+review. The current two-issuer test hardcodes the historical index and arm64
+manifest; replacing its archive environment variable does not select a new
+candidate. Preserve historical locks and receipts. No candidate may execute
+before signature/provenance and fresh whole-image vulnerability gates pass.
+The separately confirmed Vault diagnostic Go1.26.9/x/net v0.60.0 exception is
+limited to private input preparation, build and scan. Ordinary repository
+work remains Go1.26.8; supply authority and runtime admission remain separate.
+
+The [builder admission checkpoint](plan/product-v1-phase-6-vault-builder-admission.md)
+records completed987/987 Go material checks and a restored exact Node OCI chain,
+but rejects that builder on4 CRITICAL/65 HIGH findings and unverified image
+signature/source authority. Do not execute it to repair its packages. A new
+candidate requires independent admission before dependency/source execution.
+The held plan retains offline frozen pnpm with compatible optional dependencies
+enabled and scripts disabled, exact generator writes, direct locked CLIs and
+full Ember output in http/web_ui. Frozen archives alone do not prove a working
+pnpm store or generator dependency graph. Keep run-owned Docker cleanup and the
+existing600-second limits; no tool activation or global installation is needed.
+
+The [selected-builder and offline recipe record](plan/product-v1-phase-6-vault-builder-selection.md)
+adds a private, signed apko carrier and verified pnpm10.34.7 tool. Mount the
+fixed Node22.23.3 over the builtin Node26 path and invoke exact tools directly;
+no global activation or automatic package-manager switch. Registry and Git
+transport mappings differ and must preserve original IDs, integrity and graph.
+Material-complete scans currently report8 HIGH for enumer and51 HIGH/4 CRITICAL
+for UI registry dependencies; do not execute their full build or count a small
+offline store probe as supply acceptance. Preserve failed observations and use
+new run IDs/locks for reviewed observer corrections. Existing600-second bounds,
+source/Contract locks and production admission requirements stay in force.
+
+
+## 2026-10-13 generator repair execution boundary
+
+The [new private generator checkpoint](plan/product-v1-phase-6-vault-dependency-remediation.md)
+uses unchanged enumer code/tests with separately derived go.mod/sum, verified
+12-module materials and an independently reviewed OpenPGP non-import scope.
+Actual original tests and the Linux ELF build pass in bounded offline Docker;
+full output scan coverage and exact resource cleanup pass. Source copies now
+share the existing executable tmpfs with test outputs to preserve atomic rename;
+files remain0644, directories0700, and the original EXDEV failure is retained.
+Ordinary repository Go1.26.8 and old locks stay fixed; private Vault tools use
+only the already approved mise/Docker inputs. The full UI's unfixed braces HIGH
+and Ember5.8 support problem remain blockers. Next bind the fixed15 generator
+outputs and a separately reviewed supported UI graph; do not execute historical
+install-tools or silently replace this derived generator with the old version.
+
+## 2026-10-13 Vault generation diagnostic boundary
+
+The [source-bound generator record](plan/product-v1-phase-6-vault-generator-output.md)
+fixes15 commands across10 CE packages. Preserve the distinct host full-CE,
+enterprise-tagged and Docker outcomes; an explicit-package dry-run cannot
+replace a failed full-root command. Retain all compiler Error/DepsErrors/
+Incomplete checks before generation and require byte-identical immediate and
+final15 outputs, plus unchanged non-target source. The original sources and
+all execution inputs remain fully hashed with exact file/directory modes.
+Only private mise/Docker inputs are used; no global environment change occurs.
+The original450/560/600-second limits and storage/network/privilege boundaries
+stay fixed. The root inventory's16 HIGH and the full UI blockers remain open;
+successful diagnostics would not admit a Vault candidate or service.
+
+The later v4 run passes OCI import but still fails the10-package60-second
+dry-run. Its full input postcheck completes, unlike earlier interrupted runs.
+The v5 same-limit SIGQUIT attempt returns no stack. The later v6 async observer
+captures17637 untruncated stack bytes after a scheduled55-second SIGQUIT; this
+is an active diagnostic failure, not a natural60-second timeout. It observes
+module-index directory traversal at one instant, without establishing the whole
+delay or a unique cause. Keep its55/59/60-second accounting, per-stream1MiB caps
+and source-preservation evidence immutable; it ran no export/enumer. Any new
+indexing or cache proposal requires independent review of the exact new inputs,
+original time/resource boundaries, command set and real export/output checks.
+The heartbeat has been deleted; do not restore it during manual continuation.
+
+The independently reviewed fixed-Go1.26.9 `goindex=0` diagnostic passes the
+original10-package dry-run with all15 exact directives, then fails real export
+writes with ENOSPC. `go list -e` exit0 is not success: retain and reject all
+Error/DepsErrors/Incomplete rows before any generator. Post-failure metadata
+matches the exact2637 package/module/selected compile-file/Imports identities;
+that cannot replace clean actual exports or15 generated outputs. The final
+free-space sample occurs after compiler cleanup, not at the failed allocation.
+Memory reaches the existing2GiB limit without an OOM kill. Review measured
+scratch/cache needs and a bounded layout before further execution; do not
+increase the1GiB /work, time or memory limits, reuse unknown cache or reinterpret
+the private undocumented index switch as a production-gate change.
+
+
+The later bounded v8 sampling establishes `/work` byte exhaustion with ample
+inodes and retained temporary/cache archives. A reviewed DWARF-off v9 candidate
+still fails, with475 direct ENOSPC and one compiler signal-killed error;
+cgroup oom2/oom_kill1 and Docker OOMKilled=true are mandatory failure evidence.
+Never equate observer completion, `-e` exit0 or matching metadata with clean
+real exports. Both new attempts preserve full inputs, old target bytes and
+exact cleanup; no enumer runs. Before another attempt, independently review a
+same-run staged-cache design for both memory and storage. All warm-up stages
+and final export must share one300-second compiler deadline within390 seconds;
+per-stage deadline resets are forbidden. Final2637 real Export checks and15
+immediate/final byte comparisons remain mandatory. Cache capacity and largest
+package memory are unproved; no new stage recipe or additional compiler/memory
+flag is approved for execution. Keep the cancelled automation off.
+
+The2026-10-14 continuation implements only a three-stage diagnostic probe and
+host decoder, preserving the shared300/390-second limits and fixed quotas.
+Independent review and29 Node/9 Python host fixtures cover closure/Export errors,
+OOM increments, natural temporary cleanup, shared deadline and partial-output
+rejection. They are not Go compilation or Docker results. The fresh official
+DB data has been recovered; candidate scans and actual Node22.23.3 signed
+release/complete vulnerability coverage remain open. Keep v10 execution held
+until those supply requirements and the concrete controller are independently
+reviewed. Full2637 exports and15 original output bytes remain mandatory for the
+separate full generation goal. See the latest generator-output plan; automation
+stays deleted.
+
+## 2026-10-14 Node tool supply hold
+
+The [Node static supply checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-node-tool-static-supply-checkpoint)
+closes source/archive/ELF byte checks and124 verifier source-map correspondences.
+Its9-package verifier scan recognizes all packages with zero findings, but the
+current registry-signature gate fails on argon2id1.0.1's expired key. Neither
+OpenPGP nor Node22.23.3 is loaded. Node release verification, complete embedded
+and dynamic library coverage remain unresolved. Independent review records an
+OpenSSL HIGH version hit; absent a proved exclusion, the zero-HIGH gate remains
+blocked. No compiler/container/enumer runs;15 outputs
+and ENOSPC/OOM repair remain unverified. Existing quotas/deadlines, Go1.26.8 and
+old locks stay fixed; automation stays deleted. Phase6 remains5/15, Slice6 step2
+ongoing, step3 incomplete and step4 not started. Private evidence:
+`node-tool-supply-20261014-0207`.
+
+## 2026-10-14 alternative tool supply checks
+
+The [alternative-candidate checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-node-and-verifier-alternative-candidates)
+reuses exact immutable signature evidence and performs fresh supply scans.
+The fixed carrier's75-package APK scan has zero findings, but the separate
+installed-JS scan recognizes163/163 packages and reports one HIGH in npm's
+http-cache-semantics4.2.0. The complete carrier is rejected; a disputed advisory
+or network-none usage is not a gate waiver. Node26's embedded coverage also
+remains open, and it is not an approved replacement for UI Node22.
+The gpg2.4.9-r12 raw package and embedded recipe are saved as unverified inputs;
+gpgconf transfer hits25s. Signatures, dependencies, source/patch review and scans
+remain prerequisites. Existing mise tools and read-only Docker queries were used;
+no candidate/container/compiler ran, no global tools were installed, and no quota
+or timeout changed. Automation stays deleted. Evidence:
+`node-tool-alternatives-20261014-0253`; Phase6 remains5/15, Slice6 step2 ongoing.
+
+## 2026-10-14 signed Node and GPG chain checkpoint
+
+The [new vendor-candidate checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-vendor-signed-node-and-gpg-chain-checks)
+verifies eight new signature/attestation checks for each fixed Node and wolfi-base
+index/native pair. Node's complete28-APK scan has zero findings, but its161-package
+installed-JS scan reports the same http-cache-semantics4.2.0 HIGH and rejects the
+candidate. Embedded Node coverage remains open. wolfi-base has five missing layers
+after a measured TLS handshake timeout; its full scan and APK-verifier execution
+are unperformed. Gpgconf and five libraries are retained as unverified raw APKs;
+npth also hits the TLS connection limit, leaving it and four unattempted packages
+missing. Index/APK signatures and the complete GPG chain remain open. Original
+failures and all old candidates/locks are retained; no candidate/container/compiler
+runs. Existing mise tools, quotas/deadlines and deleted automation remain unchanged.
+Only documentation changes; prior matching Go/race/vet/Contract evidence is reused,
+not rerun. Evidence: `node-minimal-gpg-chain-20261014-0343`. Phase6 remains5/15;
+Slice6 steps1/2/3/4 remain historical bounded E / ongoing / incomplete / not started.
+
+## 2026-10-14 native APK verifier and GPG source checkpoint
+
+The [APK/GPG supply checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-native-apk-index-verification-and-gpg-source-gaps)
+restores the five missing wolfi layers and five GPG raw packages, verifies full
+19-package signed-assembly correspondence and fresh19/19 coverage with zero
+findings, then passes a narrowly admitted native APKINDEX diagnostic: original
+signature succeeds and wrong-key/modified-index cases both return BAD signature.
+Isolation,97-input before/after checks and precise container/image cleanup pass;
+the two previous runtime failures and all raw warnings remain retained.
+The12 unsigned APK additions have signed-index/control/data hash correspondence,
+not individual APK signatures. A static31-package proposal records overlaps,
+three unresolved RPATH objects and other unimplemented installation/loader
+semantics. Five original GPG patches are missing; exact publisher commit/recipe
+anonymous queries return404. Neither static completion nor source references
+admit GPG. Complete fresh proposed-package/source coverage remains open.
+The previous Node HIGH rejection is unchanged; no GPG/Node/compiler runs.
+Existing mise/Docker, quotas/deadlines and old candidates/locks are preserved;
+automation remains deleted. Only documentation changes in Git; matching earlier
+Go/race/vet/Contract evidence is reused, not rerun. Evidence:
+`gpg-supply-tls-recovery-20261014-0442`. Phase6 remains5/15. Slice6 steps1/2/3/4
+remain historical bounded E / ongoing / incomplete / not started;15 outputs and
+ENOSPC/OOM repair are still unverified.
+
+## 2026-10-14 GPG replacement-material checkpoint
+
+The [replacement-material checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-gpg-replacement-materials-and-renewed-host-pressure)
+retains Alpine edge gpg2.5.22-r0 and its same-commit official mirror APKBUILD.
+Static12-source/SHA512 declaration pairing passes; source originals, trusted
+key, actual signatures, index and full dependency/ELF/scan/carrier admission
+remain open. The signature member is not a verification result. Public Wolfi
+gpg2.4.9-r11 matches the historical CGR index but its exact source is not yet
+obtained or verified; its execution-candidate route stops. gpgv is not used to
+bypass
+expiration/revocation policy. No GPG/Node/container/compiler runs. Host pressure
+returns (saved load252.39); a single fast Docker ping does not prove readiness.
+Next review exact authority/material collection, then close full supply before
+actual policy tests. Existing mise/Docker, limits, old evidence/locks and deleted
+automation remain unchanged. Only six repository documents change; no new
+Go/race/vet/Contract scan or runtime result is claimed. Evidence:
+`gpg-verifier-candidate-20261014-0704`. Phase6 remains5/15; Slice6 steps1/2/3/4
+remain historical bounded E / ongoing / incomplete / not started, with15 outputs
+and ENOSPC/OOM repair still unverified.
+
+## 2026-10-14 Alpine GPG key/source/data checkpoint
+
+The [new limited checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-alpine-gpg-key-source-and-signature-data-checkpoint)
+binds the exact official publisher key through same-record pages/fixed recipe,
+restores12 source originals matching SHA512 declarations, and passes9 crypto
+process plus2 datahash cases with existing Apple-signed OS OpenSSL via mise Python.
+Original APK/index match, wrong-key/tamper cases reject, full inputs/tool remain
+unchanged. These are data diagnostics; native apk, complete dependency/source/
+ELF/helper/scans, carrier admission and GPG/Node runtime remain open. No source
+signature or reproduced build is claimed. CPU load improves in one sample, but
+the Docker socket is absent and three API calls fail; no container/compiler runs.
+Next review index-bound dependency materials and complete fresh scans, then real
+native/carrier gates when the same daemon is ready. No global installation,
+quota/deadline relaxation, old input/lock mutation, commit/push or automation
+occurs. Only six documents change; previous matching Go evidence is retained,
+with no new race/vet/Contract claim. Evidence: `gpg-alpine-authority-20261014-0848`.
+Phase6 remains5/15; Slice6 steps1/2/3/4 remain historical bounded E / ongoing /
+incomplete / not started.15 outputs and ENOSPC/OOM repair remain unverified.
+
+## 2026-10-14 Alpine GPG dependency materials and proposal prescan
+
+The [limited checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-14-alpine-gpg-dependency-materials-and-proposal-prescan)
+restores the37 fixed-index proposed APK originals and passes their limited
+signature/control/data correspondence (36 new OS crypto checks plus exact old
+GPG evidence reuse). A full37-package/source/PURL metadata prescan reports zero
+findings with the unchanged fresh DB. This is a proposal prescan, not actual
+installed/full-image/embedded coverage or GPG/Node execution admission. Static
+ELF audit visits133 regular files/55 ELF and152 edges, retaining one SQLite
+RUNPATH as unresolved; installation/trigger/helper effects and mtab's runtime
+mount remain open. The existing Docker context still names the missing same
+socket; no container/candidate/compiler executes. Original transfer and v3
+parser failures are preserved. Existing mise/Docker, quotas/deadlines, old
+candidates/locks and deleted automation remain unchanged. Evidence:
+`gpg-alpine-closure-20261014-1006`. Phase6 remains5/15, Slice6 step2 ongoing;
+15 outputs,2637 exports and ENOSPC/OOM repair remain unverified.
+Only six handoff documents change; all2148 Go files retain earlier matching
+race/vet/Contract evidence, without new Go or formal runtime acceptance claims.
+Slice6 steps1/2/3/4 remain historical bounded E / ongoing / final topology and
+original16 scenarios incomplete / post-acceptance handoff not started.
+
+## 2026-10-15 Docker restored native admission still held
+
+The [bounded follow-up](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-docker-restored-native-admission-still-held)
+confirms the existing desktop-linux Docker daemon has returned: five interval
+samples retain the same daemon/platform/version, with all15 ping/version/info
+calls successful in13.14–34.17ms. Host load/CPU improve, but continuing swap
+activity prevents accepting stable whole-host readiness. The previous DB
+expired at2026-10-15T01:19:20Z; a reviewed new official metadata request fails
+at the unchanged10second TLS connection bound. No DB layer/import/new scan or
+native APK/install/GPG/container/compiler execution occurs. Original failures
+are preserved without further retry, alternate source or relaxed limits. Independent
+review also identifies an unresolved installation path under RO root/noexec
+work/tmp: skipping scripts or adding an executable writable root is not
+acceptance. Existing mise/Docker, old locks/candidates and deleted automation
+remain unchanged. Evidence: `gpg-native-readiness-20261015-093139`. Phase6
+remains5/15, Slice6 step2 ongoing;15 outputs and ENOSPC/OOM remain unverified.
+Only six handoff documents change. All2148 Go files retain earlier matching
+race/vet/Contract evidence; no new Go gates are run for this read-only/data
+checkpoint. Slice6 steps1/2/3/4 remain historical bounded E / ongoing / final
+topology and original16 scenarios incomplete / post-acceptance handoff not started.
+
+## 2026-10-15 fresh vulnerability DB and scans with native execution held
+
+Fresh official DB import and both new scans pass:37/37 Alpine proposal records and19/19 exact signed Wolfi carrier packages, including source/PURL coverage, with zero findings. These are supply data results; proposal metadata is not installed/full GPG/Node coverage. Host swap remains active and the final CPU sample fails at its unchanged5second bound; native APK execution stays held. Installation/helper execution has no newly admitted path and requires separate concrete independent review. See [the complete checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-fresh-vulnerability-db-and-scans-with-native-execution-held); private evidence is `gpg-db-native-20261015-094855`.
+
+Only six handoff documents change. Existing mise/Docker, Go1.26.8/old locks/candidates, quotas/deadlines and deleted automation remain unchanged. No Go test, container, candidate, compiler, commit or push occurs in this continuation. Phase6 remains5/15. Slice6 steps1/2/3/4 remain historical bounded E / step2 ongoing / final topology and original16 scenarios incomplete / post-acceptance handoff not started.15 outputs,2637 exports and ENOSPC/OOM repair remain unverified.
+
+## 2026-10-15 interval readiness recheck keeps native APK held
+
+Three independently reviewed interval samples confirm the same daemon and27 bounded calls pass, but continuing large swap deltas keep native APK unadmitted. The original v2 DB remains fresh, and prior37/19 raw reports match and are reused without new scans. No container/image/candidate executes, and installation/GPG helpers retain their separate review boundary. See [the measured checkpoint](plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-interval-readiness-recheck-keeps-native-apk-held), private `gpg-native-recheck-20261015-102127`. Existing mise/Docker, quotas/deadlines and deleted automation stay unchanged. Only six handoff documents change;2148 Go files retain prior matching evidence without a new Go test claim. Phase6 remains5/15; Slice6 steps1/2/3/4 remain historical bounded E / ongoing / incomplete / not started.

@@ -1,0 +1,1340 @@
+# Phase6 Vault generator output verification
+
+Date: 2026-10-13. This follows the [generator dependency remediation](product-v1-phase-6-vault-dependency-remediation.md).
+Private evidence is `vault-generator-output-20261013`, outside Git and the
+migration package. The active branch remains `codex/product-v1-phase-6-hardening`
+at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
+Phase6 remains **5/15**, with Slice6 step2 ongoing.
+
+## Source and command scope
+
+The private Vault2.1.2 source has9090 files and39559500 bytes, identical to the
+previous approved input snapshot. The Vault-only Go1.26.9/x/net0.60/Node22
+candidate changes remain confined to private inputs. Ordinary repository
+Go1.26.8, historical source and release locks are unchanged.
+
+The root contains15 enumer commands in14 source files and10 packages. A
+sixteenth literal directive in tools/tools.go invokes install-tools and has
+the tools build tag; the default CE traversal excludes it. Eleven nested
+api/sdk directives are outside this root-module scope. The unfiltered host
+CE `go generate -n -x ./...` reports exactly the fixed15 commands in9.424seconds.
+Metadata recognizes278 root packages and2826 total packages, with2637 packages
+and482 external module versions in the selected generator package closure.
+No directive or lifecycle script is executed by that dry-run.
+
+The original Makefile's enterprise-tagged package selection fails on this CE
+snapshot because cacheutil and vault/replication have only excluded CE files.
+That failure remains in the raw evidence; this checkpoint does not establish
+equivalence to the complete original Makefile preparation path.
+
+The source-bound recipe uses the prior new enumer ELF, SHA256
+`13952c5207471be30579af8534b1a9dea4486f9ab3d4bede19936dcf8b17906e`.
+Independent source review confirms its generated header uses the literal
+enumer command name, so the required result is exact byte equality with all15
+original outputs. Every target must match immediately after generation and
+again in the final source tree. All non-target contents, file/directory sets
+and declared working modes must remain unchanged. Compiler export metadata
+must contain all10 packages and reject Error, DepsErrors or Incomplete rows.
+
+## Offline inputs and unresolved findings
+
+All987 archive/mod pairs are rechecked against prior raw hashes and h1 sums.
+The first offline `go mod verify` fails because an older testify1.7.0 graph
+go.mod is absent. The repair adds467 go.mod-only graph records from existing
+private materials, each checked against the locked go.sum; it changes no
+selected version and fetches nothing. The next actual `go mod verify` passes
+in36.215seconds. The initial failure is retained.
+
+The complete root inventory scan covers exactly986 external module versions,
+excluding the root and five local replacements. It reports16 HIGH,0 CRITICAL,
+18 MEDIUM,7 LOW and2 UNKNOWN with no severity/unfixed suppression. Among the
+482 selected generator-closure versions, one MEDIUM gosnowflake finding and
+one UNKNOWN OpenPGP finding remain. Module presence is not call reachability,
+and this narrower view does not clear the complete root inventory. The
+independently reviewed permission is for isolated compiler analysis and
+generator diagnostics only. Complete Vault build, supply and service gates
+remain open; the full UI also retains its previously reported51 HIGH/
+4 CRITICAL, unfixed braces advisory and Ember5.8 support boundary.
+
+Host metadata uses the existing mise-managed Go1.26.9 installation, whose
+15045 files are checked against the official archive. No global tool activation
+or installation occurs. Actual generator execution is confined to Docker with
+the previously admitted carrier, fixed Node22.23.3 and Linux Go1.26.9.
+
+## Bounded execution and retained failures
+
+The diagnostic uses read-only inputs/root, none networking, UID501:GID20,
+no capabilities, no-new-privileges, private namespaces,2 CPUs,2GiB memory and
+128 PIDs. Only noexec tmpfs is writable: /work1GiB/65536inodes and /tmp64MiB/
+32768inodes. There is no executable output tmpfs and no Vault service or
+application init execution. Effective environment, all requested/observed
+mounts, kernel network state, privileges and cgroups are checked. The controller,
+wrapper and outer limits remain450/560/600seconds respectively.
+
+The first Docker run reaches Go1.26.9 but its full-root unfiltered dry-run
+times out in60.642seconds, before compiler exports or any enumer command.
+The container is not OOM-killed, and exact owned container/image cleanup
+succeeds. Subsequent full input verification outlasts the wrapper; the overall
+560.715-second result is a failure, not an input-integrity pass. Raw output,
+controller binding and cleanup receipts are retained.
+
+The independently reviewed second recipe carries the complete source as a
+new read-only compressed data capsule, SHA256
+`95929248e5c200c38b8c2a73e4f5740b7033fed98b1a5c735ec21a126b52815e`.
+It checks every original source byte, directory, canonical path and output size
+before exclusive creation in tmpfs. The9090-file capsule is15706116 bytes;
+original host source modes remain fixed, while working files/directories are
+normalized to0644/0700. The original source tree remains in the full execution
+input lock. Exact-set/content/mode and file-descriptor identity checks reject
+symlinks, FIFOs, added empty directories and changed modes/content. No sampled
+or cached hash substitutes for a complete check.
+
+The revised Docker recipe is configured to dry-run the fixed10 packages,
+without a directive filter. Such a result could be combined only with the host
+full-CE traversal to describe the15-command scope; it cannot retroactively
+pass the first Docker full-root command. The recipe can retain available raw
+compiler metadata after an export failure within existing output bounds;
+process termination or excessive output can prevent collection. Export was
+not executed in either Docker run. A four-worker input-hash preparation is
+interrupted after340.830seconds
+before creating any lock or container. A one-second sample shows frequent
+Python lock scheduling, which is a performance clue, not a whole-run diagnosis.
+Independent review confirms that returning to serial file-descriptor traversal
+retains all checks. A167-file diagnostic produces identical serial/parallel
+results, with differing cache conditions; it does not prove full-tree speed.
+The new v3 lock preparation actually passes in247.901seconds, binding185291
+files and21283 directories. It also completes a new full check that v1 inputs
+remain unchanged, without retroactively accepting v1.
+
+The v3 execution passes its initial exact-input checks but local OCI load
+exceeds the existing90-second command bound in90.548seconds. No container is
+created and no compiler export or generator runs. Reconciliation finds the
+exact expected native image, verifies its sole tag and absence of consumers,
+then removes it without force; subsequent image and container absence checks
+pass. Client timeout alone does not show that the OCI bytes are corrupt or
+that the daemon rejected the import. The load/performance cause remains
+unresolved. No additional bulk execution is started to obtain a green result.
+The560-second wrapper then interrupts the final complete input check; its
+observed duration is562.427seconds and the outer command returns failure in
+569.495seconds. Controller bytes still match before and after. That is not a
+successful post-input verification. A separate complete integrity check then
+passes in248.239seconds, comparing all four locked trees and29 individual
+inputs. This establishes unchanged retained inputs, not runtime acceptance.
+
+The subsequent read-only host observation records16GiB RAM,26097.12MiB used
+swap,1/5/15-minute load93.62/97.69/127.04 and3% idle CPU in the one-second
+sample. A separate Docker info query also times out at10seconds. This was
+sampled after the failed import, during the separate input check; it shows
+contemporaneous pressure, not the import's proven cause. The same OCI archive
+loaded successfully in77.779seconds in v1, whereas v3 hit its90-second limit.
+
+Next wait for a lower-load window and verify bounded read-only responsiveness
+and identity of the same daemon before another controlled attempt. Do not
+introduce a new delivery architecture merely to compensate for an unmeasured
+environment problem. If a smaller delivery or pre-positioning proposal is
+needed, independently review exact source/artifact binding, resource ownership
+and cleanup before execution. Do not
+extend90/450/560/600-second bounds, omit hashes, accept an unidentified cached
+image or disturb unrelated Docker workloads. The acceptance target remains
+all15 byte-identical outputs with clean compiler exports and exact cleanup.
+
+## Lower-load continuation and stack diagnostic
+
+On the new-machine continuation, three separated samples report load1 of
+5.33/5.64/5.68, CPU idle57/61/53 percent and same-daemon Docker info responses
+of0.771/1.084/1.249seconds. This is a lower-load observation, not a guarantee
+that host pressure remains low during subsequent commands. The reviewed v4
+run preserves the old input lock and creates a fresh private output/resource
+identity. Its OCI load succeeds in10.159seconds, but the10-package Docker
+`go generate -n -x` still times out at60.063seconds with empty output. No
+compiler export or enumer executes. The complete run fails in176.071seconds;
+exact container/image cleanup and full input pre/postchecking complete.
+The latter is supported by the reviewed controller control flow and retained
+tracebacks, not by a separate postcheck receipt. Kernel observations report no
+OOM event and ample free tmpfs blocks; they do not establish a unique cause.
+
+A separately reviewed v5 dry-only diagnostic uses SIGQUIT at the same60-second
+limit. It fails in60.029seconds, returning Go status2 but no stdout/stderr
+bytes, so it supplies no Go stack and does not explain the original timeout.
+The full run fails in271.977seconds with complete input pre/postchecking,
+all15 working target hashes/sizes/modes retained, and precise cleanup.
+Both failures remain immutable private evidence in
+`vault-generator-resume-20261013-115951`; prior checkpoints are preserved.
+
+Actual Go1.26.9 source shows module-graph/package discovery before directive
+printing, including cold module-index work despite `IgnoreImports:true`.
+This is a possible area to investigate, not a measured bottleneck. Neither
+file arguments, a directive filter nor omission of the Docker dry-run is
+accepted as a replacement gate. No cache or indexing flag has been changed.
+
+A new dry-only asynchronous observer was prepared in private checkpoint
+`vault-generator-stack-probe-20261013`. It retains bounded stdout/stderr while
+requesting SIGQUIT at55seconds, SIGKILL at59seconds if necessary, and a failure
+at the unchanged60-second deadline if close is unobserved. Signal delivery
+is an active diagnostic interruption and can never produce a passing dry-run.
+JavaScript timer scheduling can drift under load; actual durations and close
+state must be retained, with original outer limits still in force. Every
+stream is limited to1MiB of retained bytes, truncation is explicit, and
+existing-child errors must not cancel the hard-stop timers. It does not run
+exports or generators. Original185291-file input checks, the new six-file
+probe identity, source-target byte/mode checks and exact cleanup remain
+required. Host mise Node helper fixtures are component evidence only; actual
+Docker evidence from the subsequent manual continuation is recorded below.
+
+Host pressure rose again during continuation; a later sample reports load1
+13.74 and CPU idle13 percent even though Docker info returns in1.391seconds.
+No unrelated process was stopped. The user subsequently cancelled the heartbeat
+and requested a manual check after other heavy builds stopped. The heartbeat
+was deleted and remains off; old-machine automation is not restored. The acceptance target remains clean
+compiler exports and all15 actual byte-identical outputs, which remain open.
+
+## Manual recovery and actual v6 stack evidence
+
+Three separated manual samples show load1 8.762/7.739/6.528, CPU idle61/65/61
+percent and same-daemon info0.728/0.683/0.711seconds. Swap use decreases; these
+observations permit a bounded attempt but do not guarantee its success. The
+existing admitted carrier/compiler/enumer scans remain within their database
+NextUpdate of2026-10-14T01:09:18Z. This is evidence reuse under the existing
+freshness rule, not a new scan or full Vault supply acceptance.
+
+V6 loads the exact OCI archive in7.315seconds and captures the actual Go stack.
+The predetermined SIGQUIT is accepted at55.037seconds; dry-run closes at
+55.068589seconds with status2. All17637 stderr bytes are retained in both raw
+and base64 form, with no truncation; stdout is empty. The active diagnostic
+interruption is a failure and cannot be called a natural60-second timeout or
+spontaneous Go crash. The full wrapper fails in171.237seconds.
+
+At that instant, the main goroutine waits in `modload.loadFromRoots` and two
+workers are in `modindex.indexModule/importRaw` through `ReadDir/Getdents`.
+This identifies the observed stage; it does not establish the earlier elapsed
+time distribution, a particular module, virtiofs causality, a deadlock or a
+guaranteed repair. There are zero compiler-export or enumer commands. The
+9090-file source check and all15 original target hashes/sizes/0644 modes pass;
+memory peak is1163284480 bytes with no OOM event. Exact container and sole-tag
+image cleanup completes without force.
+
+The original185291-file/21283-directory inputs and new six-file probe complete
+pre/postchecking. As in v4/v5, this claim rests on the unchanged reviewed
+controller's `finally` control flow and retained original failure traceback,
+not a standalone per-phase hash receipt. All27 prepared files still match the
+immutable preparation index. Independent read-only outcome review accepts
+these limited claims. Actual evidence is `vault-generator-stack-probe-20261013`;
+manual observations are `manual-readiness-20261013-130826`.
+
+## Reviewed v7 index fallback and compiler scratch rejection
+
+An independent fixed-Go1.26.9 source review confirms that the undocumented
+`GODEBUG=goindex=0` uses the existing direct-directory scanning fallback. The
+v6 stack supports testing that hypothesis, without proving it accounts for
+all historical elapsed time. A second independent review of the concrete v7
+scripts permits one private diagnostic with the same ten dry-run targets,
+fifteen generator argv vectors, empty cache, original185291-file input lock,
+time limits,2CPU/2GiB/128PIDs, none network, RO inputs and noexec tmpfs. This
+does not change a production gate, toolchain lock or cache-reuse policy.
+
+The only Go environment change is that index flag. The actual export command
+keeps `-e -deps -export` and adds JSON observation fields for selected compile
+and embedded files, Imports, Name and Standard. Before any generator, a new
+comparator requires2637 unique package paths with exact module identities,
+recursive replacements and selected files against authenticated Linuxarm64/
+CGO0 CE metadata. Every non-unsafe package must have a nonempty regular Export
+inside the run's fresh `/work/cache`, with no indirect path. Thirteen host
+fixtures exercise accepted metadata and missing/duplicate/drifted/error/export
+rejections; these fixtures are component evidence only.
+
+The v7 OCI load passes in3.340seconds. The same ten-package dry-run exits0 in
+15.938129seconds and exactly matches all15 directives. Actual compiler export
+runs for76.485729seconds; `go list -e` exits0 but returns1741 package rows with
+Error/DepsErrors/Incomplete state. All534 direct Error rows report
+`no space left on device`, including compiler archives and assembler objects
+under `$WORK`. The unchanged error gate fails before enumer. There are895
+rows with an Export field, but no complete successful export validation.
+A separate post-failure comparison matches the2637 package/module/selected
+file/Imports metadata; it does not establish typecheck or generation success.
+No enumer command runs and outputs remain0.
+
+The full attempt fails in158.554seconds. All15 source targets retain original
+bytes/sizes/0644 modes, and non-target source checks pass. New explicit full
+input receipts pass before in26.322seconds and after in30.223seconds, including
+the original185291 files/21283 directories, new seven-file probe and original
+CE metadata bytes. The exact stopped container and its sole-tag image are
+removed without force; final absence checks pass. Wrapper/controller identities
+remain unchanged. Independent read-only outcome review confirms this failure.
+
+Memory peak reaches2147483648 bytes with448 max events, no OOM and no OOM kill.
+The post-command `/work` sample has122399 free4096-byte blocks and49973 free
+inodes; this occurs after compiler cleanup. The evidence directly establishes
+bounded compiler-scratch ENOSPC, not failure-time byte/inode peaks, the precise
+interaction with memory pressure or a full host disk. Stop repeated execution
+of the same recipe. Next measure scratch/cache occupancy and independently
+review a concrete storage/execution layout that retains the original limits,
+complete exports, exact command set and actual generated-byte comparison.
+Do not increase quotas/timeouts, import unidentified cache, omit exports or
+relabel this partial progress as all15 output verification. Private evidence:
+`vault-generator-index-fallback-20261013`; the cancelled heartbeat remains off.
+
+## Measured scratch exhaustion and rejected v9 recipe
+
+The separately reviewed v8 observer keeps all original execution gates and
+records194 bounded statfs/cgroup samples plus two bounded non-atomic metadata
+snapshots. Host and Linux observer fixtures each pass11 cases, including
+unresponsive worker finalization. The119.142-second real run fails: dry-run
+passes in10.196seconds, but export48.863seconds returns510 direct ENOSPC and
+1710 erroneous/incomplete package rows. No enumer executes. `/work` free bytes
+reach0 while at least45905 inodes remain. Near failure, cache and temporary
+allocated bytes are507559936 and497942528 in a121.173ms snapshot. Pinned Go
+source retains work archives and copied cache archives until Builder.Close;
+this measured byte exhaustion agrees with that behavior. Samples are not a
+guaranteed peak detector and directory attribution is not atomic. Memory
+reaches2GiB with max314 but no OOM/kill in v8.
+
+Independent source/design and concrete reviews then permit one v9 diagnostic
+adding only `-gcflags=all=-dwarf=false` to the private generator GOFLAGS. This
+suppresses compiler-generated DWARF while retaining real typing and exports;
+it changes cache/archive identity and is not a release-build recipe. Go and
+enumer inherit the same flag; other arguments can still affect action IDs.
+Cache starts empty, stays run-owned, and no active archive is purged, patched
+or deduplicated. The1GiB /work,64MiB /tmp,2CPU/2GiB/128PIDs and original command,
+aggregate and outer deadlines are unchanged.
+
+V9 fails in172.604seconds. Dry-run6.977seconds passes the15 directives; export
+109.725seconds returns1549 erroneous/incomplete rows. Its476 direct errors
+include475 ENOSPC and one compile signal-killed error for
+`google.golang.org/api/compute/v1`. Cgroup events record oom2/oom_kill1/max707997,
+and Docker final OOMKilled is true. The observed memory peak is2147733504
+bytes, with the configured cap still2147483648. Thus the candidate fails both
+storage and memory boundaries; it is not merely another space-only failure.
+Free bytes again reach0, with at least44726 inodes available; near-full cache
+and temporary allocations are506138624 and494759936 bytes. The1087 rows with
+Export fields are not complete accepted exports. The error gate stops before
+all15 enumer commands, leaving0 generated outputs.
+
+Both runs preserve15 old target bytes and0644 modes, all non-targets and source
+sets. They complete original185291-file/21283-directory input checks plus their
+new9-file probes before/after, and exact container/sole-tag image cleanup.
+Separate post-failure comparisons match2637 package/module/selected-file/Imports
+metadata only. Independent outcome reviews accept these bounded failure claims,
+not real export or generated-output acceptance. Private evidence is
+`vault-generator-scratch-20261013-1404` and
+`vault-generator-scratch-recipe-20261013-1436`; the heartbeat stays deleted.
+
+Further runtime attempts stop at this new combined blocker. The next design
+must consider a same-run, source-bound, initially empty cache with deterministic
+stages and normal Go temporary cleanup, while retaining one300-second aggregate
+compiler budget inside390 seconds and the final simultaneous2637 actual export
+checks plus all15 original output bytes. Complete-cache size, largest-package
+memory and total duration remain unknown. No staged cache recipe, new memory
+setting or `-l` flag is implemented or approved for execution. Neither quota
+expansion nor relaxed exports/byte comparisons are authorized. The next
+reviewable deliverable is the concrete capacity/stage/budget design.
+
+## 2026-10-14 staged-cache preparation; execution remains held
+
+The source-bound2637-package dependency graph is complete and independently
+reviewed. The proposed26-stage sequence is a design artifact, not an approved
+complete execution. Source size does not establish archive capacity or peak
+memory. A narrower v10 diagnostic has been implemented privately: three stages
+with256,426 and427-package closures, ending in the previously killed
+`google.golang.org/api/compute/v1`. It changes scheduling to `-p=1`, retains
+`-gcflags=all=-dwarf=false`, GOMAXPROCS2 and all other selected inputs, and starts
+with an empty cache. Each natural Go invocation must leave its work directory
+empty; no live temporary/archive deletion or external cache is allowed.
+
+All stages, metadata/real Export checks, observations and observer finalization
+share one300-second compiler deadline inside the original390-second total.
+The2CPU/2GiB/128PIDs,1GiB /work,64MiB /tmp and other outer limits remain fixed.
+Reject every OOM-class event increment, including after final source checking;
+record `max` pressure separately. Each stage preserves raw stdout/stderr bytes,
+hashes and completeness. The64MiB combined capture and15MiB JSON transport
+ceilings reject overflow and mark obtainable evidence partial; these are
+userspace capture/acceptance limits, not kernel memory limits. Host gzip decoding
+is bounded during decompression. No enumer command is in this diagnostic;
+`diagnosticPassed` can never substitute for final2637 exports or15 byte-identical
+generator outputs.
+
+Independent concrete review accepts the12-file probe and decoder as preparation
+only. Existing mise Node24.21.0 passes29 host control fixtures; existing mise
+Python3.13.16 passes9 bounded-decoder tests, and probe syntax passes. These use
+fixture archives and are not Linux execution or Go compilation. The future
+controller/wrapper has deliberately not been created: complete input pins,
+390-second integration, independent concrete execution review and runtime
+supply admission remain necessary.
+
+The previous Trivy DB expired at2026-10-14T01:09:18Z. Initial token TLS failure
+and a second incomplete range acquisition remain preserved. After independent
+review,31 successful ranges were revalidated and only the missing4MiB range
+retrieved once; the complete133530205-byte OCI layer matches its descriptor.
+New raw DB metadata is Version2, UpdatedAt2026-10-14T01:19:20.78149892Z and
+NextUpdate2026-10-15T01:19:20.78149865Z. Recovery/import take5.519/2.071seconds.
+This restores DB data only: no fresh candidate scan or image admission occurred.
+
+An independent supply review identified a separate unresolved boundary in the
+actually mounted official Node22.23.3 ELF. Local unsigned SHASUMS authenticate
+neither the release signer nor complete current core/native/bundled dependency
+vulnerability coverage. The carrier signature and the rejected Debian image
+report do not substitute. Before any v10 execution, verify the official signed
+release checksums with independently authenticated release keys, bind the exact
+archive/ELF and complete source-derived dependency coverage, then perform the
+required fresh scoped supply checks and review. A zero-recognized scan is never
+a zero-vulnerability pass. Do not silently replace Node or weaken coverage.
+
+Private evidence: `vault-generator-staged-cache-20261014-0128`. No container,
+compiler, enumer, Vault/UI service, commit or push ran in this checkpoint; the
+heartbeat remains deleted. ENOSPC/OOM repair and all15 generated outputs remain
+unverified. The next acceptable deliverable is the Node tool supply closure and
+fresh scoped admission, followed by a reviewed controller and one bounded
+three-stage diagnostic. Phase6 stays5/15; Slice6 step2 continues.
+
+## Validation and Slice6 ledger
+
+Repository changes in this checkpoint are documentation only. Exact comparison
+with the previous2148-Go-file503.355-second passing snapshot permits reuse of
+the prior full race, vet and both Contract checks; these are not new executions.
+Private generator checks
+are separate component evidence, not compatibility or production acceptance.
+Public ProfileV2/provider serve v3 holds, broker/general as the only issuers,
+PostgreSQL using general, and frozen-R reuse rules remain unchanged.
+
+1. Bounded Guest E: historical acceptance retained, not replayed.
+2. Startup audit and real security boundary: ongoing; source-generation
+   verification and complete Vault/UI supply remain open.
+3. Final live topology, original16 scenarios and independent formal acceptance:
+   incomplete.
+4. Post-acceptance documentation/commit/push handoff: not started.
+
+## 2026-10-14 Node tool static supply checkpoint
+
+Private checkpoint `node-tool-supply-20261014-0207` preserves the full previous
+source and evidence baseline. Official Node22.23.3 SHASUMS, detached signature,
+release key at a fixed official release-keys commit and annotated tag data are
+available. The 50,447,060-byte source archive matches its checksum row; this is
+byte consistency, not a completed cryptographic release verification.
+
+An independently reviewed static pass takes8.441seconds and inventories all32,585
+source archive members and5,866 binary archive members, hashing all29,186/4,750
+regular files respectively. The actual mounted ELF
+matches the archive member; Node/V8 distributed headers match source bytes.
+There are388 selected source markers, including a bounded four-line simdjson
+version excerpt with the entire7,643,098-byte header hash. The original4MiB
+selection-limit failure is preserved. ELF inspection records7 dynamic SONAMEs
+and no RPATH/RUNPATH. Configuration and version headers are static release
+claims, not a reproducible source-to-binary build or runtime observation.
+
+The proposed OpenPGP.js6.3.2 verifier is also not admitted. Its nine-package
+current registry-signature check fails in0.078seconds on argon2id1.0.1's key,
+which expired2025-01-29. The failed run has no complete verification output;
+do not claim all other eight packages passed. Independent review keeps that
+failure: the top-level bundle signature is not substituted after failure for
+the previously reviewed nine-package rule. No OpenPGP library is loaded.
+Separate static correspondence passes124/124 source-map bytes against fixed
+source and eight dependency archives in0.131seconds. A fresh Trivy scan takes
+0.626seconds, recognizes exactly9 packages and finds zero vulnerabilities at
+all severities. This is verifier-constituent coverage only, not Node coverage
+or execution admission; raw DB NextUpdate is2026-10-15T01:19:20.78149865Z.
+
+Node coverage still needs an authenticated release, actual embedded-component
+mapping, current core/upstream advisories including version/patch applicability,
+and fresh package/byte binding for the carrier libraries behind all7 SONAMEs.
+Do not include unmounted npm/Corepack as substitutes for the actual Node ELF,
+or call a bare-ELF scan with zero recognized packages a pass. The official
+[OpenSSL September29 advisory](https://openssl-library.org/news/secadv/20260929.txt)
+includes CVE-2026-84782 (HIGH), whose affected3.5 range includes this source's
+OpenSSL3.5.8. Independent source review finds no OPENSSL_NO_DTLS in either
+arm64 asm/no-asm configuration; build.info includes statem_dtls.c and the
+retransmission implementation retains the described unfixed state. No DTLS
+entry point was found in the733 reviewed Node src/lib code files; this is not
+proof of binary non-reachability. Record the upstream HIGH version hit with
+actual exploitability unproved, and keep the zero-HIGH admission gate blocked.
+A network-none diagnostic does not waive supply requirements.
+
+Next independently review viable Node and OpenPGP candidates under unchanged
+supply gates; retain this Node candidate and historical locks. Select a
+supply-qualified OpenPGP verification path without erasing the
+failed candidate, verify exact signed SHASUMS/tag/key validity, and finish the
+Node coverage ledger before refreshed scoped supply admission and a reviewed
+v10 controller. No new compiler/container/enumer result exists;15 outputs,
+2637 final exports and ENOSPC/OOM repair remain unverified. No quota, timeout,
+Go toolchain, historical lock, public Profile hold or frozen-R rule changes.
+Automation remains deleted; no commit or push occurs. Repository changes in
+this checkpoint are documentation only; prior matching Go/Contract evidence
+is reused, not rerun or described as newly executed.
+
+Slice6 remains: step1 historical bounded Guest E acceptance; step2 ongoing and
+execution held at the Node supply boundary; step3 final topology/original16
+scenarios incomplete; step4 formal post-acceptance handoff not started.
+Phase6 remains5/15.
+
+## 2026-10-14 Node and verifier alternative candidates
+
+Private evidence: `node-tool-alternatives-20261014-0253`. Root remains the sole
+writer; two read-only implementation_agent reviewers cover the candidate design,
+concrete bounded checks and actual results. The starting branch/HEAD remains
+`codex/product-v1-phase-6-hardening` at
+`91fe315641779e6ea640632538309d63ad1b303f`, with inherited uncommitted work
+preserved. Neither a qualified replacement nor a new generator result is claimed.
+
+The first alternative is the fixed carrier's original `nodejs-26=26.11.1-r0`
+for generator-controller diagnostics only. It does not replace the UI's Node22
+engine constraint and does not mount the rejected official Node22 ELF. Static
+inspection of the retained, reconciled image export binds18 ELF nodes (including
+Node),60 dependency edges, their exact file hashes and unique APK owners. No
+RPATH/RUNPATH is present; actual libcrypto/libssl are OpenSSL4.0.3-r6. These are
+static loader relationships, not runtime observations or complete non-ELF inputs.
+
+The original index/native signatures and SLSA/apko/SPDX verification bytes are
+rechecked against their retained hashes; no new Cosign execution is claimed.
+All13 OCI descriptors and the exact75-package signed/actual sets match. A fresh
+full-image Trivy scan completes in15.529seconds and recognizes75/75 Wolfi APK
+packages with zero findings. The unchanged DB NextUpdate is
+2026-10-15T01:19:20.78149865Z. This APK-layer result alone is insufficient for
+Node admission: it has no installed-JS result and does not separately establish
+the embedded Node/V8/llhttp/undici/native component coverage.
+
+An independently reviewed supplementary collection takes7.955seconds and binds
+all217 actual package.json files and7 Node header/debug files to original image
+bytes and unique APK owners. Of the217,163 have package name/version and54 are
+auxiliary manifests. The metadata-only rootfs scan takes0.812seconds and matches
+all163 exact FilePath/Name/Version triples. It reports **one HIGH**:
+`CVE-2026-93748` / `GHSA-ch52-4w7c-c8xp`,
+`http-cache-semantics@4.2.0`, under npm12.2.0-r2. The scanner exits0 to generate
+its report; the separate admission check correctly exits1. No fixed version is
+listed by the saved DB or current [reviewed advisory](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).
+The [upstream maintainer disputes the advisory](https://github.com/kornelski/http-cache-semantics/issues/56);
+that dispute is recorded and is not an approved exclusion. The complete carrier
+remains rejected, including use merely to bootstrap an APK verifier. This does
+not rewrite its historical APK-only scan, or permit a purpose/network waiver.
+
+The image's Node and apk-tools package SPDX files also match original hashes.
+They identify publisher recipe locators in `chainguard-dev/stereo` and Node
+source commit `364593d0631def13e3043dd84f77ebca2c767ce5`. These are statements
+inside the previously signed image, not separately signed SPDX files, an
+independently retrieved recipe, or a reproduced build. Public recipe lookup was
+unsuccessful; Node embedded component and current advisory coverage remain open.
+
+For an OpenPGP verifier, the alternative is the actual `gpg` subpackage at
+2.4.9-r12 rather than the gnupg metapackage or gpgv alone. The fixed carrier's
+repository file and three key files are byte-bound. Its live aarch64 APKINDEX
+is saved as8,060,313 bytes and statically bounded to43,333,632 expanded bytes,
+five members and122,188 records. A19-package candidate closure consists of
+eight additions and11 carrier packages; this is not authenticated APK solver
+acceptance. Index `C` denotes control metadata hash, not whole-APK SHA256.
+
+The first raw APK fetch rejects HTTP303 under its original no-redirect rule.
+Independent review then permits only one manually validated redirect to the
+observed exact CDN host/object path, without forwarding credentials or exposing
+the signed URL. Per-package transfer25s, wrapper30s and8MiB remain fixed. The
+811,162-byte gpg APK is acquired in3.556seconds (wrapper elapsed), SHA256
+`66435b649c2868277487ca357163583b69c706df6120c3446a3ac90fe3cc77b7`.
+Static inspection finds13 members, an expanded72,068-byte `.melange.yaml`,
+`.PKGINFO`, SPDX and the gpg/keyboxd ELFs. The recipe declares both GnuPG and
+FreePG patch inputs plus distribution patches; it must be authenticated and
+reviewed as that exact candidate. No recipe command or candidate binary runs.
+
+The gpgconf request first fails the exact redirect-path check because its
+control hash contains a slash. A separately reviewed request accepts only the
+observed literal path but then reaches the25s transfer bound with zero response
+bytes; worker elapsed is25.143seconds. All failures remain preserved; no timeout
+is extended and no repeated request follows. Remaining requirements include
+index/APK signature checks with tamper/wrong-key negatives, the six other new
+library materials, solver/file closure, authenticated recipe/patch review and
+fresh complete scans before any verifier execution. The raw APK and recipe do
+not close official Node release/tag signature verification.
+
+Separated host samples at03:11:48/03:12:19UTC show CPU idle15.40/43.26percent and
+same-daemon info2.297/0.964seconds, but swap-in/out increase72,410/89,792 pages.
+These samples do not establish stable readiness. No image is loaded, container
+created, candidate executed or unrelated process stopped. Automation remains
+deleted; no global environment is installed. Development tools used are the
+existing mise Python/Trivy with read-only Docker observations.
+
+Next investigate a vendor-signed free smaller Node image under a fresh exact
+digest and the same supply gates; do not assume it omits npm. Independent design
+review does not authorize a selective-file derivative to inherit an old image
+signature. Avoid a new assembly pipeline until its source/publisher authority,
+full runtime data and complete coverage can be established. The present full
+carrier failure remains an execution blocker. Preserve the gpg bytes and resolve
+the exact missing material/verification path without repeating completed work.
+Any concrete runtime plan still requires independent review and stable readiness.
+
+Repository changes are documentation only; matching Go sources and Contract
+inputs retain earlier full-race/vet/lock evidence, not newly executed tests.
+Old candidates, release locks, Go1.26.8, frozen-R reuse and public Profile holds
+remain unchanged. No commit, push or publication occurs. Compiler300/container390/
+controller450/wrapper560/outer600, load90,2CPU/2GiB/128PIDs and existing tmpfs limits
+are unchanged. Final2637 exports,15 generated outputs and ENOSPC/OOM repair remain
+unverified. Slice6 steps1/2/3/4 remain historical bounded E / ongoing / incomplete /
+post-acceptance handoff not started; formal Phase6 remains5/15.
+
+## 2026-10-14 vendor-signed Node and GPG chain checks
+
+Private evidence: `node-minimal-gpg-chain-20261014-0343`. Main remains the sole
+writer; two read-only implementation_agent reviewers review design, concrete
+scripts and actual outcomes. The previous362-file/309-directory private index,
+all2557 nonignored workspace files, branch and full HEAD match the prior sealed
+checkpoint at start. All old artifacts are preserved. The cancelled automation
+remains deleted. No global tool or candidate is installed.
+
+The free standard `cgr.dev/chainguard/node:latest` is fixed to index
+`sha256:51042bb0c3f282bc5694e8c9b3a06847ef847d566115f91dee6ad2cd88a7d26e`,
+arm64 manifest
+`sha256:f99475923192f82504a29552820f26e4bb96dbf2bfdce4569e5962cd75ac055a`,
+and config
+`sha256:9ca78e5b942477a92e39f4360d5d3ee9591bd7879e9cc8b7bc7dadb6fe8ebef8`.
+This is the smaller free standard variant, not a purchased `*-slim` product.
+The official tag catalog does not establish a free slim-only candidate; no new
+account, paid access or selective-file derivative is used.
+
+All eight new Cosign checks (index/native image signatures and SLSA v1/apko/SPDX)
+pass under the exact official GitHub issuer/workflow identity and normal
+transparency verification. The Node verification wrapper takes190.737seconds.
+Raw upstream index/native descriptors remain separate from the locally created
+single-platform OCI scan index. All13 native manifest/config/layer descriptors
+match their exact bytes; every layer diffID is verified. Three exact-digest
+blobs are reused only as bytes, without inheriting old signatures or scans.
+
+Static correspondence passes in1.013seconds:3197 rootfs entries,28 APKs,215 actual
+package.json files,161 named/versioned installed JS packages and54 auxiliary
+manifests. Actual APK DB and signed native apko/SLSA/SPDX package sets match;
+config architecture, run-as, working directory and entrypoint also match the
+signed assembly. This proves the publisher's declarative assembly statements,
+not recursive OS reproducibility. Five ordinary apko character-device entries
+are recorded as metadata under exact path/device/owner constraints; no device
+is created. Canonical paths, final directory ancestry and incremental resource
+bounds remain enforced, and metadata links are rejected.
+
+The fresh complete OCI scan recognizes28/28 Wolfi packages in1.097seconds with
+zero findings. The separate original-byte rootfs JS scan recognizes161/161 exact
+path/name/version tuples in0.082seconds and reports one HIGH,
+`CVE-2026-93748`, in npm12.2.0-r2's `http-cache-semantics@4.2.0`. Its actual
+package.json hash equals the rejected prior carrier's file. No fixed version is
+listed; the previously recorded upstream dispute is not an approved exclusion.
+The admission wrapper correctly exits1 after4.732seconds, retaining reports.
+All severities and empty ignore/configuration are preserved; DB NextUpdate is
+2026-10-15T01:19:20.78149865Z and full inputs/DB match before and after. The new
+Node image is rejected. Node embedded/native coverage also remains incomplete;
+Node26 is not a replacement for the locked Node22 UI or an execution permission.
+
+An independent authentic APK-verifier carrier is investigated at
+`cgr.dev/chainguard/wolfi-base`, index
+`sha256:256c88bb066424045021090932d50be93c8e3f2ce3586707702a401b146f3e43`,
+arm64 manifest
+`sha256:e02c7a98dc477e32e2f04ea2e827a132baace0fbeccb3781aa9c64ffc7982774`,
+config
+`sha256:e155f0caf849076e20b844e6e2633c767f3bc11836e2571c443b3ee483db83d8`.
+Its eight new signature/attestation checks pass in201.844seconds. The signed
+recipe lists19 packages including apk-tools2.14.10-r17, without Node/npm.
+Only config and six of11 layers have been acquired; a later cgr.dev blob request
+fails at the original10-second TLS connection bound. Its timing records DNS and
+TCP completion, no completed TLS handshake and no response/body; the cause
+beyond that observed phase is unknown. The88.095-second material run fails,
+leaving five layers missing. No full static correspondence, image scan, Docker
+load or APK-verifier execution is claimed. No repeated failed request follows.
+
+The separately reviewed fresh-link gpgconf diagnostic succeeds in9.755seconds
+at182609 bytes, SHA256
+`656fe831cf7e933a89d8a8c49055a2e53e4e2fb591ce3ec6493d34b65b8f616c`.
+It preserves the old25-second zero-byte failure, without proving its cause.
+Five more raw APKs (libassuan, libbz2-1, libgcrypt, libgpg-error and libksba) are
+acquired. npth-libs fails on the CDN TLS handshake at the original10-second
+connection limit; the next four packages (readline, sqlite-libs, ncurses and
+ncurses-terminfo-base) are not attempted. Each item retains25-second aggregate
+transfer/30-second worker and8MiB limits, one exact HTTPS redirect, no transferred
+authorization and no signed URL in public output. The19-package prior candidate
+closure is still not an authenticated solver result; wolfi-base would need12
+additions, seven of which now have raw bytes including retained gpg. Signatures,
+complete dependencies, GnuPG/FreePG/patch-source review, exact solver/ELF/runtime
+closure and complete scans remain prerequisites for GPG execution. The official
+Node release and annotated-tag signatures are therefore still unverified.
+
+Preparation failures are retained separately: both first token requests were
+HTTP200 JSON labeled text/plain and rejected by the initial parser; the reviewed
+fix accepts that exact type only at the token endpoint, keeping token bytes in
+memory. The initial Node blob request rejects the newly observed exact CDN
+host; a reviewed fixed-host/digest-path correction is used. The first wolfi
+material attempt times out at token TLS. The Node material wrapper then fails
+to create its receipt because the child's material JSON already has that name;
+exclusive creation prevents overwrite. A separate complete13-descriptor check
+proves acquired bytes, not success or an elapsed time for that wrapper. The
+initial static check rejects five standard character-device members; the
+reviewed metadata-only handling above preserves that failure.
+
+Next restore only the five missing wolfi blobs and five missing GPG additions
+through a reviewed bounded transport plan after the handshake problem is
+resolved; do not re-fetch intact artifacts or loop the same failure. Then verify
+full carrier supply, actual APKINDEX/APK signatures with wrong-key/tamper
+negatives, authenticated recipe/dependency and fresh-scan admission, before any
+GPG operation. The rejected Node candidate needs a distinct qualified vendor
+replacement; signatures alone and a disputed advisory do not waive its HIGH.
+No free alternative is assumed to exist, and no paid source is authorized.
+
+This turn changes documentation only in the repository. All2148 Go files and
+other non-documentation inputs retain their matching prior test evidence; no
+new Go/race/vet/Contract or Docker test is claimed. There is no compiler export,
+enumer, full Vault/UI build, candidate execution, commit, push or publication.
+Load90/compiler300/container390/controller450/wrapper560/outer600,2CPU/2GiB/
+128PIDs,/work1GiB and /tmp64MiB noexec remain unchanged. No new host/Docker
+readiness is asserted because supply admission prevents runtime work. Final2637
+exports,15 outputs and ENOSPC/OOM repair remain unverified. Slice6 steps1/2/3/4
+remain historical bounded E / ongoing / final topology and16 scenarios incomplete /
+post-acceptance handoff not started; formal Phase6 remains5/15.
+
+## 2026-10-14 native APK index verification and GPG source gaps
+
+Private evidence: `gpg-supply-tls-recovery-20261014-0442`. This is a narrow
+Slice6 step2 supply diagnostic, not a15-output run or Slice6 closure. Root
+remains the sole writer; implementation_agent reviewers independently examine
+the plans, exact scripts and raw results. Automation remains deleted.
+
+Four anonymous cgr/CDN TLS probes complete with normal TLS verification. They
+do not establish the cause of the earlier timeouts or future availability.
+Only the five missing wolfi layers are fetched (35.557seconds) and five missing
+GPG dependency APKs are restored (38.913seconds), under unchanged transfer
+bounds. The previous failures, candidates, locks and sealed checkpoint remain
+byte-identical. The fixed wolfi native manifest is
+`sha256:e02c7a98dc477e32e2f04ea2e827a132baace0fbeccb3781aa9c64ffc7982774`;
+config is `sha256:e155f0caf849076e20b844e6e2633c767f3bc11836e2571c443b3ee483db83d8`.
+
+All13 native descriptors,11 diffIDs,416 root entries and19 APK identities match
+the original signed apko/SLSA/SPDX assembly. The earlier eight exact-digest
+Cosign receipts are reused, not newly executed. Fresh Trivy coverage recognizes
+19/19 packages with zero findings in1.141seconds. DB NextUpdate remains
+2026-10-15T01:19:20.78149865Z. Complete static inspection accounts for104 regular
+files,33 ELF files,71 loader edges,54 ld.so.cache entries,13 generated non-APK
+files and four public keys. Sixteen packages declare source locators; the three
+without them (wolfi-base/baselayout/keys) contain metadata/configuration/public
+keys, not ELF. The existing authenticated declarative assembly policy applies;
+no recursive OS rebuild, standalone APK signatures or GPG admission is claimed.
+
+Three host samples show52.18/63.42/58.8% CPU idle, load1 of6.335/8.150/7.691,
+no swap-out increment and continuing swap-in. All nine same-daemon bounded
+ping/version/info responses succeed in6.7–54.3ms. These support only the light
+diagnostic, not stable readiness for compiler/build work.
+
+The first native attempt fails before start because unset Docker HostConfig.Init
+is omitted; the container remains created/Pid0. Its4.435-second outer failure
+and exact cleanup are retained. The second adds explicit --init=false and
+starts only the observation shell, but exits74 at busybox ip before any APK
+CASE (outer2.047seconds). The temporary command error was not emitted before
+cleanup, so its cause is not asserted. Static Busybox bytes are consistent with
+an absent ip applet. A reviewed third attempt uses directly observed fib_trie
+and if_inet6 with a strict parser limited to this fixed Docker-none diagnostic;
+it is not a general ip-address equivalence claim. Fixed
+[Linux loopback route construction](https://raw.githubusercontent.com/gregkh/linux/v7.0.14/net/ipv4/fib_frontend.c)
+supports host LOCAL; the initial reviewer's speculative UNICAST objection was
+withdrawn without expanding the parser. One positive and11 negative address
+fixtures pass before execution.
+
+The third native run passes in4.683seconds outer/2.005seconds attached-runtime
+measurement. Exact cases are version0/help1/original0/wrong-key1/changed-index1.
+Raw original-index output is `0 - OK`; both negative outputs are
+`-129 - BAD signature`, not UNTRUSTED. All three cases also retain a repository
+cache-missing warning; neither repository availability nor installation is
+claimed. Actual UID501:GID20, no capabilities, NoNewPrivs, read-only root and
+inputs, network-none addresses/routes/zero traffic and resource limits pass.
+All97 fixed inputs pass before/after checks. The full-ID/nonce container and
+sole-tag/descriptor image are precisely removed without force; no consumers
+remain. The raw original index, wrong-key and valid-structure one-byte tamper
+fixtures remain available. The index contains122188 package records.
+
+All12 raw GPG additions match exact signed-index P/V/A/S and the distribution's
+Q1/SHA1 compressed-control checksum, then the control's SHA256 compressed-data
+hash. They have no individual APK signature segment; locally frozen whole-file
+SHA256 values do not become publisher whole-APK signatures. Separate valid
+gzip/tar control/data tamper fixtures fail their respective bindings. The395
+APK PAX checksums match370 regular files and25 symlink targets. Unknown PAX
+fields remain rejected.
+
+A first static proposal inspection fails in0.076seconds on a loader search
+override. A reviewed diagnostic-only successor completes in0.186seconds and
+records31 declared packages,828 proposed entries,370 new regular files and68
+ELF files. It records200 default loader edges, but explicitly leaves three
+RPATH=/usr/lib objects unresolved (libhistory, libreadline and libsqlite3),
+including all their outgoing edges. ncurses overlaps the base clear/reset
+entries. The simple dependency parser also leaves glibc's !musl constraint
+uninterpreted and reports etc/mtab and usr/lib/terminfo as unresolved static
+paths. These observations are not proof of unsafe packages or real solver
+failure. All12 additions are reached from the19-package GPG dependency graph;
+gpgconf's declared self-dependency is recorded. This JSON tree retains original
+base entries on overlap and is neither an installed filesystem nor a signed
+derivative. SONAME/version-symbol, dynamic-helper/dlopen, installation/trigger
+semantics, complete31-package fresh scan and embedded/source coverage remain
+open. No GPG binary or installation script executes.
+
+The GPG recipe additionally names five local patches whose bytes are absent:
+libassun-version.patch,0010-avoid-beta-warning.patch,
+0210-dirmngr-hkp-avoid-potential-race-condition-when-some-host-die.patch,
+fix-i18n.patch and make-aes-default-for-fips.patch. SPDX locates gnupg.yaml in
+chainguard-dev/stereo at c9565b7e28626f669c1d4357026519657002181e, but two bounded
+anonymous official GitHub commit/recipe queries return404 (1.916/1.752seconds,
+TLS verification successful). This establishes present anonymous retrieval
+failure, not whether the repository is private or permanently unavailable.
+GnuPG/FreePG upstream originals and the exact applied patch sequence also remain
+unverified. Source references and zero package findings cannot replace them.
+The current GPG candidate remains held; next obtain authentic exact missing
+materials or independently review a candidate with obtainable complete sources,
+then resolve the proposed installation/ELF graph and full fresh coverage before
+release/tag verification. No paid access or new trust root is assumed.
+
+The earlier standard Node image stays rejected for http-cache-semantics4.2.0
+HIGH, with embedded coverage incomplete. This turn does not repeat that scan
+or run Node/compiler/Vault/UI. All existing quotas/deadlines are retained:
+load90/compiler300/container390/controller450/wrapper560/outer600,2CPU/2GiB/
+128PIDs, /work1GiB and /tmp64MiB noexec. Existing mise Python/Trivy and Docker
+are used without global installation. Only six repository documents change;
+all2148 Go files retain matching earlier test evidence, with no new Go/race/vet/
+Contract result claimed. No commit/push/publication occurs. Final2637 exports,
+15 generated outputs and ENOSPC/OOM repair remain unverified. Slice6 step1
+historical bounded E is retained, step2 remains ongoing, step3 full topology
+and original16 scenarios are incomplete, step4 post-acceptance handoff is not
+started; formal Phase6 remains5/15.
+
+## 2026-10-14 GPG replacement materials and renewed host pressure
+
+Private evidence: `gpg-verifier-candidate-20261014-0704`. This is a materials
+and static-correspondence checkpoint, not tool admission or15-output execution.
+The sole-writer arrangement remains human-confirmed. The existing
+implementation_agent independently reviews the bounded plans, frozen request
+scripts, raw results and final documentation; it does not write shared files.
+
+The established builder-selection policy permits authenticated declarative apko
+assembly with fixed packages, signed provenance and full fresh coverage. The
+old raw-APK patch gap does not impose recursive OS rebuilds on a whole signed
+vendor image. Two anonymous GPG-image inquiries yield HTTP403 and a10.043-second
+TLS connection timeout, respectively; neither obtains an image index. These
+failures do not prove permanent unavailability or authorize paid access. The
+public Wolfi index declares10,520,005 bytes and exceeds the fixed8MiB cap;
+curl rejects it without acquiring the body. The first GitHub query fails415
+because the shared helper used OCI Accept. A reviewed JSON-accept successor
+obtains the public Wolfi head, but does not authenticate a package recipe.
+All prior failures remain intact; no size/time limit is enlarged.
+
+The newly retained public gpg2.4.9-r11 APK is810214 bytes, SHA256
+`80314c8f7de7e09ca53db01dcb722ece2e6358f0b9cd15db0a2da482ef7872b4`.
+P/V/A/S, Q1 compressed-control SHA1 and control SHA256 datahash correspond to
+the earlier authenticated **CGR** index. This is not verification of the new
+public Wolfi index or an individual APK signature: the package has only two
+gzip members, without .SIGN. Its source still locates chainguard-dev/stereo
+at5033e0e7cbec14193af5e776dc244cd102cf3fbf. A different public main recipe
+cannot replace that exact original. [GNU's download page](https://www.gnupg.org/download/index.html)
+records2.4 end-of-life on2026-06-30; distribution backport support for this exact
+package is unknown. Independent review stops this execution-candidate route,
+retaining its bytes. [gpgv's official semantics](https://www.gnupg.org/documentation/manuals/gnupg/gpgv.html)
+omit expiration/revocation checks, so it is not directly substituted for the
+strict verification policy. No custom validity shortcut or self-authenticating
+unadmitted GPG source-build path is adopted.
+
+The new official Alpine edge/main/aarch64 inquiry fails to acquire APKINDEX at
+the unchanged TLS bound (10.264541seconds), and GitLab's exact source URL
+returns403. It does retain gpg2.5.22-r0,488130 bytes, SHA256
+`ae20333e20e2c2b5991db635ee3342d801d8e1ddcbf7c019232db58fd3e1942a`.
+Static parsing identifies three gzip members, a512-byte signature member named
+alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub, matching internal datahash,
+and11 direct dependencies: same-version dirmngr/gpgconf/keyboxd plus eight so
+dependencies. Signature presence and its filename do not establish validity or
+key authority; the package's commit declaration remains unauthenticated.
+
+A separately reviewed single GET to the [official aports mirror](https://github.com/alpinelinux/aports)
+obtains the [same fixed commit's APKBUILD](https://raw.githubusercontent.com/alpinelinux/aports/b2ea575329d2d0abb0aebe51c6a03773c493b02e/main/gnupg/APKBUILD)
+in1.948176seconds:7959 bytes, SHA256
+`fb91c0be1fea959b3edc82d1e145bd08debbc98ea82831a83838eebfbdf6a489`.
+The earlier403 is preserved. Static gnupg/2.5.22/r0 and gpg's three same-version
+dependencies agree with PKGINFO. All12 source tokens match12 unique SHA512
+declarations: GNU archive,10 patches and one rules file. There is no shell
+evaluation, no12 source-original retrieval/content verification, and no recipe
+commit signature or reproduced-build proof. The retained JSON states all
+execution/signature/source-closure admission flags false.
+
+Existing Alpine3.23.6 utility, Coding candidate and Desktop locks do not
+automatically delegate an edge signing key or new carrier. No edge package is
+mixed into a stable Alpine/Wolfi root. Next independently review the exact key
+authority and collection plan; then close actual index/APK signature positive
+and negative cases, full recursive dependency/source/ELF/helper and fresh
+vulnerability coverage, and applicable carrier signature/assembly provenance.
+Only an admitted candidate and stable host permit actual GPG good/wrong-key/
+tamper/expired/revoked cases, followed by Node supply and original15 outputs.
+
+The new read-only host sample records load252.39/110.67/59.90; top tool output
+also shows1.21% idle. One same-socket Docker ping succeeds in0.176848seconds,
+but no stable interval version/info chain is established. No unrelated process,
+container or VM is stopped, restarted or throttled. No candidate, container,
+GPG, Node, compiler or full Vault/UI executes this turn. Four bounded receipt
+programs finish in17.217046/10.160780/20.619781/4.002344seconds; their exit0
+means receipts were preserved, not that all inquiries or gates passed.
+
+Only six repository handoff documents change. Existing mise Python is used;
+no global environment is installed, no new scan/Go/race/vet/Contract result is
+claimed, and all2148 Go files retain matching prior evidence. Old candidates,
+locks and raw evidence remain intact. All quotas/deadlines remain unchanged:
+load90/compiler300/container390/controller450/wrapper560/outer600,2CPU/2GiB/
+128PIDs,/work1GiB,/tmp64MiB noexec,RO inputs/root and none network. Automation
+remains deleted; there is no commit/push/publication. Final2637 exports,15
+outputs and ENOSPC/OOM repair remain unverified. Slice6 steps1/2/3/4 remain
+historical bounded E / ongoing / final topology and original16 scenarios
+incomplete / post-acceptance handoff not started. Formal Phase6 remains5/15.
+
+## 2026-10-14 Alpine GPG key source and signature data checkpoint
+
+Private evidence: `gpg-alpine-authority-20261014-0848`. This closes limited
+publisher-key correspondence,12 original source identities and actual signature
+data diagnostics. It does not admit GPG/Node, a new carrier or15-output execution.
+Root remains the human-confirmed sole writer; implementation_agent independently
+reviews bounded plans, frozen scripts, raw outcomes and final documentation.
+
+Five fixed HTTPS requests complete in8.112630seconds: official alpine-keys
+recipe/key, official package/contents pages and a new532333-byte edge/main/aarch64
+APKINDEX. The index SHA256 is
+`707b409e234df3177af451f92f64a00424b750e4d17c6261275a38f648b928a0`.
+The800-byte alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub key SHA256 is
+`d11f6b21c61b4274e182eb888883a8ba8acdbf820dcc7a6d82a7d9fc2fd2836d`;
+its full SHA512 matches the fixed official mirror alpine-keys2.6-r0 recipe at
+b9f23becced4d7b3ccc0fa0f28530243ccd314a0, including aarch64 mapping. The
+[official package record](https://pkgs.alpinelinux.org/package/edge/main/aarch64/alpine-keys)
+has all six identity fields in one table; the contents page's exact key/package/
+branch/repository/architecture relation is in one row. An initial global-substring
+authority check is rejected before execution. Revised acquisition saves HTML
+with correspondence false; a separate strict table/row parser and independent
+raw review establish only the specified data-diagnostic publisher-key basis.
+These are same-publisher channels, not independent cryptographic roots; no
+global keyring or production operator authority changes. Prior TLS/403 failures
+remain unchanged; the new index is one request, with no retry or enlarged limit.
+
+All12 GPG original files then match the fixed b2ea575329d2d0abb0aebe51c6a03773c493b02e
+recipe SHA512 declarations in24.186408seconds. This includes10 patches, one
+rules file and the8,363,854-byte GNU2.5.22 tar within8MiB, SHA256
+`96e27b020ad26510388e06f5f07f3f70a4ed8916ee995f1b72b7a024e6d9d87e`.
+Independent review recomputes all12 original/receipt/recipe bindings. No GNU
+detached signature, recipe commit signature, patch application or reproduced
+build is claimed. The authenticated apko declarative-assembly policy remains
+unchanged; this does not add recursive OS source rebuilds.
+
+Existing mise Python invokes the existing macOS OpenSSL tool without installing
+an environment. A0.078545-second bounded identity probe passes strict Apple
+codesign and records actual LibreSSL3.3.6, com.apple.openssl and the Apple
+certificate chain. Exact tool SHA256 is
+`49db04c17e3a8c169ebc48a1149d78c165a86c04913203f46b2a14ce7f4a14fc`.
+This is an OS cryptographic data tool, not newly admitted candidate supply.
+An earlier buffered-output draft is rejected without execution; a reviewed
+streaming successor persists at most64KiB per stream, records overlimit/signal/
+timeout as failure and stops only its own child. Each command remains within5s;
+the2s reap cleanup is separately recorded, not a success extension. Received
+bytes can include one additional64KiB read block; only persisted bytes are capped.
+
+The frozen C2 data run completes in0.072955seconds:9 cryptographic process cases
+and2 SHA256 datahash cases all match. Two valid public-key parses exit0. Original
+APK/index signatures exit0 with exact `Verified OK`; APK wrong-key/control/signature
+tamper and index wrong-key/control tamper exit1 with exact `Verification Failure`.
+Original datahash matches; a data-only change rejects by datahash while reusing
+the exact already-verified control/signature. All tampered control/data/index
+fixtures remain valid gzip/tar with one content byte changed. No format failure
+substitutes for the cryptographic negative. Eighteen raw stdout/stderr streams
+remain, stderr empty; no timeout/truncation/active signal occurs. All11 inputs,
+four original sources and the tool match before/after. Independent review
+accepts actual receipts without replaying the diagnostic. The6034-record index
+binds gpg P/V/A/S/C to the exact488130-byte APK from the earlier checkpoint.
+
+The [official v2 format](https://wiki.alpinelinux.org/wiki/Apk_spec) uses
+RSA-PKCS1v1.5/SHA1 over compressed control and SHA256 compressed-data binding.
+The legacy SHA1 algorithm is recorded; no explicit prohibition was found in
+the applicable repository supply policy, and no general approval or waiver is
+inferred from this limited mathematical result. Native apk verification of this
+Alpine package remains unperformed, along with full recursive dependencies,
+ELF/helpers/installation semantics, fresh complete scans, carrier signature/
+assembly provenance, actual GPG expiration/revocation and Node release/tag checks.
+The rejected Node HIGH and incomplete embedded coverage remain open.
+
+The host's new sample shows load2.53/4.75/17.78 and current69.1% CPU idle, but
+the expected Docker socket is absent and ping/version/info all fail with curl7.
+A later metadata-only check still finds no socket. This is not a stable same-
+daemon readiness chain; no daemon switch/start/restart or unrelated process
+stop occurs. Next independently review the index-bound dependency/helper/ELF
+materials and full fresh scan plan, then actual native/carrier gates once the
+same Docker runtime is ready. No native apk, GPG, Node, container, compiler or
+full Vault/UI runs this turn.
+
+Only six repository handoff documents change; all2148 Go files and other inputs
+retain matching previous evidence. No new Go/race/vet/Contract scan or runtime
+gate is claimed. Old locks/candidates/raw failures, connect10/request25 material
+bounds and load90/compiler300/container390/controller450/wrapper560/outer600,
+2CPU/2GiB/128PIDs,/work1GiB,/tmp64MiB noexec,RO inputs/root and none network
+remain unchanged. Automation remains deleted; no commit/push/merge/publication.
+Final2637 exports,15 outputs and ENOSPC/OOM repair remain unverified. Slice6
+steps1/2/3/4 remain historical bounded E / ongoing / final topology and original16
+scenarios incomplete / post-acceptance handoff not started; Phase6 remains5/15.
+
+## 2026-10-14 Alpine GPG dependency materials and proposal prescan
+
+Private evidence: `gpg-alpine-closure-20261014-1006`; separate new checkpoint,
+with previous164 files/25 directories and all2557 worktree files verified at
+entry. Root remains the human-confirmed sole writer; implementation_agent
+independently reviews frozen plans/scripts and actual data results. No old
+checkpoint, migration inventory, candidate, lock or automation is rewritten.
+
+The exact signed-index proposal has37 records/10,697,458 compressed bytes.
+Explicit roots are gpg2.5.22-r0, optional gpg-agent2.5.22-r0 and carrier-layout
+alpine-baselayout3.7.2-r1. The agent is not a declared gpg dependency. Explicit
+/bin/sh selects priority100 busybox-binsh, retaining all four providers;
+ssl_client is included as possible install-if, not a claimed solver/install
+result. Unknown constraints/providers reject. The original parser failure on
+literal coreutils cmd:[ is preserved; only that literal syntax is corrected.
+The proposal is neither native SAT nor a final installed package inventory.
+
+The first CDN batch saves12 new APK originals in14.119395seconds, then fails
+on libassuan3.0.2-r0 with curl35 Connection reset by peer in1.154191seconds.
+Original batch b is unattempted. A reviewed fixed TUNA transport selected from
+[Alpine's official current mirror list](https://mirrors.alpinelinux.org/)
+initially stops before any APK request: the official HTML gives HTTP200 but
+exceeds the unchanged1MiB cap (curl56,1.798321seconds,zero retained body).
+Its outer1.905517second failure remains false. The independent official web
+observation is transport evidence, not saved original HTML or new key authority.
+A separately reviewed caller pins18 inputs, keeps all previous failures and
+only requests the24 still-missing originals once in12+12. Those two batches
+complete in13.771977/5.505275seconds, with all HTTP200/S/SHA receipts retained.
+All36 new originals plus old gpg are independently checked; no new index,
+versions, signing roots, proxy, redirect, retry or enlarged cap is introduced.
+
+Static v3 fails in0.142653seconds on architecture comparison and its partial
+output remains untouched. Actual signed controls have exactly four noarch
+packages (alpine-baselayout/-data, busybox-binsh, ncurses-terminfo-base), while
+repository index A is aarch64. The official abuild update_abuildrepo_index
+explains this CARCH directory/--rewrite-arch format. Reviewed v4 permits only
+those fixed P/V mappings, confirms each regular noarch payload lacks ELF magic,
+and requires exact aarch64 in the other33 controls. No raw index/control is
+modified; this is format correspondence, not native architecture proof.
+Index m is maintainer, not control packager: it is explicitly unmapped, while
+I/T/U/L/t/k and P/V/A correspondence/o/c/D/p/i/S/C are checked as applicable.
+
+The0.196689second v4 data parse binds37 packages,356 payload entries and
+25,799,680 expanded bytes. Three gzip segments, signed-index Q1 compressed
+control identity, control datahash SHA256, regular/symlink PAX checksums,
+UID/GID/mode, all control scripts/triggers and original byte CAS are retained.
+Conflicts/PAX metadata overlaps/hardlink failures are0;42 links include
+etc/mtab->proc/mounts as dangling, so complete_virtual_tree_identity is false.
+No extractall, host symlink/chown, script execution or fabricated installed DB
+occurs. Every owner entry is preserved. Source/report pins match before/after.
+
+New36 signature data processes complete in0.289436seconds with exact Verified
+OK/empty stderr, no timeout, truncation or signal; each remains5s/64KiB per
+stream. All124 source/control/tool/context pins match before/after. Old gpg's
+exact signature/control/key match the prior successful actual apk-original
+case, independently verified before reusing it; lock booleans are not proof.
+All37 limited APK v2 RSA-PKCS1v1.5/SHA1 control and SHA256-data bindings pass.
+This is mathematical OS-tool diagnosis, not native apk interoperability,
+source reproduction, full carrier supply or GPG policy/execution admission.
+
+The0.380952second static ELF data audit visits all133 regular files and55 ELF,
+records152 declared edges and version chains with0 parse failures, and retains
+one unresolved usr/lib/libsqlite3.so.3.54.0 RUNPATH=/usr/lib. Declared graph
+complete is false; musl default paths are static candidates only. VERNEED
+libraries absent from NEEDED cannot be silently ignored. Helper/dlopen strings
+are observations, not runtime coverage. Three payload scripts and control
+scripts from alpine-baselayout/busybox/pinentry remain original CAS bytes.
+Busybox applet links, pinentry's post-install pinentry-curses link, UID/GID,
+installation/trigger effects and actual GPG helper selection remain unexecuted.
+No additional language payload candidates are found in this static scope.
+
+The reviewed third-party CycloneDX proposal preserves actual P/V/origin/control
+architecture/raw SHA and37 source-aware PURLs; it honestly names its collector,
+not Trivy. Existing mise Trivy0.74.0 runs offline with the original fixed DB,
+no updates/ignore/filter, all severities/list-all, GOMAXPROCS2,300second process/
+600second outer limits and1MiB per stream. The outer program takes3.386599seconds
+including full hashes/COW DB preparation; scanner timing is in its raw receipt.
+Actual report SHA256 is
+`faf59739496e3c25a54a25d7de383cdf0c11034147ce438bfdcc5ac3848a9859`.
+It recognizes exactly37 package/source four-tuples and37 PURLs, no missing/
+extra rows, OS Alpine/edge, zero findings at every severity. Source/tool/DB and
+COW copy hashes plus DB freshness match before/after; NextUpdate is
+2026-10-15T01:19:20.78149865Z, and must be checked anew on continuation.
+The actual third-party SBOM accuracy warning remains in stderr. EOSL is omitted;
+[exact Trivy0.74.0's OS type](https://pkg.go.dev/github.com/aquasecurity/trivy@v0.74.0/pkg/fanal/types#OS)
+uses bool/omitempty, so false can be omitted; the
+[matching Alpine detector](https://github.com/aquasecurity/trivy/blob/v0.74.0/pkg/detector/ospkg/alpine/alpine.go)
+supports edge and queries its advisory stream. No JSON explicit false or final
+installed/full-image/embedded component coverage is claimed. Earlier pre-scan
+drafts are held without execution, including a corrected strict-presence
+interpretation that would have falsely rejected valid omitted-false reports.
+
+Current read-only Docker context is desktop-linux with the same expected Unix
+socket, no DOCKER_HOST/DOCKER_CONTEXT override; the socket is still absent.
+One host sample load5.76/6.06/5.04 is not a stable native readiness chain.
+No unrelated process/container/VM is stopped/restarted/throttled and no daemon
+is switched or started. Next close remaining static/helper/installation
+observations, then independently review narrow native APK verification and
+actual carrier/install/full-image/helper/expired/revoked gates when this same
+Docker runtime is ready. Node HIGH/embedded coverage remains open; only an
+admitted Node/verifier and stable runtime permit original15-output/ENOSPC/OOM
+work. The metadata prescan cannot admit those executions.
+
+Only six repository documents change; all2148 Go files retain matching earlier
+race/vet/Contract evidence, without reruns for reporting. Existing mise/Docker,
+Go1.26.8/old locks, E-only frozen-R policy and load90/compiler300/container390/
+controller450/wrapper560/outer600,2CPU/2GiB/128PIDs,/work1GiB,/tmp64MiB noexec,
+RO inputs/root and none network remain unchanged. Automation remains deleted;
+no candidate/container/compiler/full Vault/UI or GPG/Node executes, and no
+commit/push/merge/publication occurs. Phase6 remains5/15. Slice6 steps1/2/3/4
+remain historical bounded E / ongoing / final topology and original16 scenarios
+incomplete / post-acceptance handoff not started.15 outputs,2637 exports and
+ENOSPC/OOM repair remain unverified.
+
+## 2026-10-15 Docker restored native admission still held
+
+Private evidence: `gpg-native-readiness-20261015-093139`. At entry, the previous
+sealed579-file/55-directory checkpoint passes exact-set/SHA/size/600-file and
+700-directory checks. All2557 worktree files match its final map. Actual branch
+is codex/product-v1-phase-6-hardening, full HEAD
+`91fe315641779e6ea640632538309d63ad1b303f`, with263 inherited porcelain rows and
+empty staging. Root remains the user-confirmed sole writer. The previous
+reviewer is no longer live after an interrupted turn; a newly invoked read-only
+implementation_agent reviews this continuation using the unchanged configured
+role, with the same previously accepted runtime-metadata observation limit.
+No old checkpoint, migration inventory, candidate/lock or automation is changed.
+
+Five interval samples around09:33–09:40 on2026-10-15 (Asia/Shanghai) confirm
+existing Docker context desktop-linux, its same Unix endpoint and daemon ID,
+Docker29.8.2/Engine commit8af9fe3/Linux arm64. No DOCKER_HOST/DOCKER_CONTEXT
+override is present. All15 bounded ping/version/info calls succeed,13.14–34.17ms.
+Load moves8.39/5.36/3.53 to2.61/3.30/3.14; observed CPU idle moves55.41% to76.65%.
+This establishes API recovery, not complete native execution admission. Across
+four intervals vm_stat records112382 swap-in and145600 swap-out pages at16KiB
+(1,841,266,688 and2,385,510,400 bytes). Later swapouts increase; whole-host
+stability is conservatively unaccepted. memory_pressure -Q reports36% system
+memory free; that single percentage does not override interval evidence.
+No unrelated process/container/VM is stopped, throttled or restarted. No daemon
+is switched, started or restarted. The read-only container inventory sees two
+existing entries and changes neither. A whole-process comm inventory hits its
+64KiB cap and its own child is killed; its partial output is failure evidence,
+not a complete process inventory. Completed owned calls retain reap receipts.
+
+The old Trivy DB expires at2026-10-15T01:19:20.78149865Z (09:19 Asia/Shanghai).
+Yesterday's37-proposal and19-carrier zero-finding results remain historical;
+copying files or editing metadata does not renew coverage. A new DB discovery
+plan uses only the existing mise Python and reviewed bounded HTTPS helper:
+official ghcr.io anonymous repository token and trivy-db:2 manifest, connect10/
+request25,64KiB token in memory,4MiB manifest, no proxy/redirect/retry. The
+subprocess has90seconds/64KiB per stream, within600second outer containment.
+Optimized Python is explicitly refused before IO. Manifest status/header/body
+SHA, OCI kind/artifact/config/one-layer descriptors and original512MiB layer
+bound are checked before any further stage; this is data supply, not execution.
+
+The first guarded discovery fails in0.965923seconds after token HTTP200/73-byte
+response and before any manifest request. Caller/helper's legacy token grammar
+excluded RFC6750-valid plus/slash/trailing padding. The token original was not
+persisted, so its exact character is not claimed. A separately reviewed new
+caller/helper admit only the RFC6750 bounded ASCII grammar,<=4096characters,
+while still rejecting whitespace/quote/backslash and retaining all limits.
+The held draft and first failure remain untouched; a new output directory is
+used. This corrects protocol parsing without adding a trust root or credentials.
+
+The single revised discovery completes its failed outer program in11.818996
+seconds. Token HTTP200 succeeds in1.678874seconds; the fixed official manifest
+request then returns curl28 SSL connection timeout in10.026526seconds, no HTTP
+status and zero body. discovery_passed remains false. Raw stdout/stderr,
+headers and receipts are retained; no further retry after this failure, alternate source,
+longer connection budget, layer download, import, metadata modification or new
+scan follows. Native candidate admission remains false.
+
+Independent design review permits reuse of old narrow Wolfi carrier isolation,
+identity checks, exact input hashing and precise container/image cleanup only
+as a new run's reviewed design. Old one-time controllers are not replayed;
+Wolfi APKINDEX success does not prove Alpine index/APK compatibility or an
+Alpine installed root. A fresh scan of the exact authenticated carrier and
+37-proposal/source identities must precede new native Alpine verification,
+including fixed key, original index/all37 originals and valid-structure
+wrong-key/tamper negatives with exact specific errors.
+
+Installation/helper execution has an additional unresolved plan boundary:
+37 proposal records do not include apk-tools and are not native SAT/install-if
+results. Installing under the existing noexec /work with an RO container root
+can block the installed shell/busybox, postinstall/trigger and GPG/helper
+executions; non-root/zero-cap identity also cannot be silently promoted into an
+installer. This is a conflict in the currently described execution path, not
+proof that every possible compliant design is impossible. No executable writable
+root, extra privilege/mount, --no-scripts workaround or fabricated installed DB
+is introduced. Before actual installation, independently review a concrete
+path preserving the existing trust/resource boundaries and verify actual DB/
+file/owner/UID/GID/busybox links/pinentry-curses, SQLite RUNPATH, runtime mount
+and helper effects. Good/wrong-key/tamper/expired/revoked GPG cases follow only
+after that path, complete installed/carrier/embedded fresh coverage and runtime
+readiness pass. No GPG/Node/compiler/Vault/UI or native APK/container executes.
+
+Next continuation: check whole-host stability with bounded interval samples,
+then independently review a new fresh official DB supply attempt and actual
+complete-image/proposal scans. Preserve this TLS failure; do not loop it or
+infer future registry availability. Review/freeze a new Alpine native verification
+run only after all supply/runtime prerequisites pass. Keep installer/helper
+path work separate and unaccepted until its constraints are actually resolved.
+Automation remains deleted; no observation or retry is scheduled. Existing
+mise/Docker, Go1.26.8/old locks, frozen-R reuse policy and load90/compiler300/
+container390/controller450/wrapper560/outer600,2CPU/2GiB/128PIDs,RO inputs/root,
+none network,/work1GiB and/tmp64MiB noexec remain unchanged. No commit/push/
+merge/publication occurs. Only six handoff documents change; prior matching
+Go/race/vet/Contract evidence is retained, with no new Go gate claim. Phase6
+remains5/15. Slice6 steps1/2/3/4 remain historical bounded E / step2 ongoing /
+final topology and original16 scenarios incomplete / post-acceptance handoff
+not started.15 outputs,2637 exports and ENOSPC/OOM repair remain unverified.
+
+## 2026-10-15 fresh vulnerability DB and scans with native execution held
+
+Private evidence: `gpg-db-native-20261015-094855`. Entry checks confirm the
+previous122-file/13-directory checkpoint's exact set, SHA, size and permissions,
+all2557 worktree file hashes, branch codex/product-v1-phase-6-hardening and full
+HEAD `91fe315641779e6ea640632538309d63ad1b303f`. The263 inherited porcelain rows
+and empty staging are preserved. Root remains the user-confirmed sole writer;
+the existing implementation_agent provides read-only independent reviews with
+the unchanged configured role and previously accepted runtime-metadata limit.
+
+The old DB stays expired. A new reviewed transport uses the official Trivy0.74
+GCR default, `mirror.gcr.io/aquasec/trivy-db:2`; it is an official transport for
+the same publisher, not a new key/trust root or a claim of byte identity with
+GHCR. See [the fixed Trivy source](https://raw.githubusercontent.com/aquasecurity/trivy/v0.74.0/pkg/db/db.go)
+and [official DB configuration](https://trivy.dev/docs/latest/configuration/db/).
+The new raw616-byte HTTP200 manifest SHA is
+e933e44d86a54b50a1b29be576796ef1e4977d6c8c7ecf67da2399535b2a6bc2.
+The first validator fails on the standard empty config descriptor. A reviewed
+offline correction checks its exact mediaType/size2/{} bytes/base64/SHA and
+artifactType; it makes no second network request and preserves the failure.
+
+The first exact blob range returns302 and is preserved as a failed206 check.
+No automatic redirect is enabled. Its unique relative same-origin Location is
+frozen and independently reviewed before one explicit request obtains the first
+4MiB with206/exact Content-Range. The remaining31 ranges are fetched once, at
+most two in flight, under the unchanged connect10/request25second bounds and a
+narrower450second download stage. The complete133783650-byte layer SHA
+f00c72cd10fe9462c58047756db3ed2429581e88c032512ec15293ecc1076e3f
+passes in89.419seconds (outer89.511). No automatic proxy/retry/fallback occurs.
+The process-group wrapper's ESRCH race is reviewed and repaired before use.
+
+The separately reviewed import completes in3.939seconds (outer4.051), inside
+90seconds. It validates single-gzip CRC/end/no extra member, expansion bounds,
+strict tar checksums/names/type/size/zero padding, and exactly two unique regular
+files into a new private directory. trivy.db is1624571904bytes, SHA
+e149e60746d0b26ba2e92e27c96eb60d219c220a2183bb307679b8e09da681e5;
+original143-byte metadata SHA is
+670c9e2a119b98d161fa8c952dbbe25cc1fd9ecc141bcdc030b7d45e2338ffd1.
+Version2/UTC UpdatedAt<=now<NextUpdate/age<=24hours and full input/output hashes
+pass. UpdatedAt is2026-10-14T19:14:58.511503573Z and NextUpdate is
+2026-10-15T19:14:58.511503003Z (2026-10-16 03:14:58 Asia/Shanghai). DownloadedAt
+is the original year1 value; metadata is not edited to renew freshness.
+
+Two independently reviewed scans execute sequentially with the existing mise
+Trivy0.74.0, private cloned caches, offline/skip-update flags, all severities,
+empty ignore input, GOMAXPROCS2,300seconds and1MiB per process stream inside
+560/600second wrappers. Full inputs/tools/DB hashes and freshness pass before
+and after each scan. UNKNOWN/HIGH/CRITICAL gate policy is unchanged.
+
+- Alpine proposal:37/37 name/version/source-name/source-version and PURL records,
+  Alpine edge, supported EOSL interpretation, zero findings; scanner0.674656s,
+  outer6.937782s. The Third-party SBOM warning remains. This is a proposal
+  metadata prescan, not actual installed/full-image/embedded coverage.
+- Wolfi carrier: native manifest e02c7a98dc477e32e2f04ea2e827a132baace0fbeccb3781aa9c64ffc7982774,
+  scanned config e155f0caf849076e20b844e6e2633c767f3bc11836e2571c443b3ee483db83d8;
+  all19 actual installed package/source/PURL records match, zero findings;
+  scanner1.640162s, outer13.242265s. All OCI descriptors/layout/index are pinned
+  before/after. Exact prior eight signature/attestation receipts and source-bound
+  33ELF/71edge/13generated-file audit are reused; they are not new signature or
+  rebuild runs. No package.json occurs in the pinned full root/metadata.
+
+Wolfi v1 fails in1.654895seconds before scanner/output-directory creation because
+it wrongly requires an empty JS extraction directory to exist. The sealed old
+checkpoint never contained that directory. Independently reviewed v2 requires
+its absence/non-symlink and checks no package.json in both original full root
+and metadata. It writes a new output directory; the first failure remains.
+`embedded_node_coverage_complete` remains null in the original inventory. No
+final Node embedded coverage, GPG execution or installation is claimed.
+
+Six interval read-only host samples around09:50–10:13 retain desktop-linux,
+the original Unix endpoint and daemon ID, Docker29.8.2/8af9fe3/Linux arm64.
+All18 ping/version/info calls succeed in13.407–180.426ms. Initial load2.40 and
+idle76.62% do not establish stable readiness. Across five intervals swapins
+increase1312960 and swapouts1457260 pages (16KiB each). The last interval alone
+adds221501in/339584out. Final load is17.47/8.33/5.16. The final top CPU call
+hits5.002693seconds, its own child is killed/reaped, and current CPU is unknown.
+This is failed sampling evidence, not a CPU/readiness pass. No unrelated
+process/container/VM is stopped, throttled, restarted or inspected beyond the
+bounded observations; no daemon is switched/started/restarted. Native admission
+stays false. No native APK, installer, GPG, Node, container or compiler executes.
+
+Installation/GPG-helper paths are independently reviewed as a separate boundary,
+not admitted by these scans. No concrete compliant new installation topology is
+frozen here. The old RO root/noexec work/tmp/non-root zero-cap path still cannot
+be assumed to run postinstall/triggers, installed shells, pinentry or helpers.
+The37 proposals do not include apk-tools and do not prove native SAT/install-if,
+installed DB/file/owner/UID/GID semantics, busybox links, pinentry-curses, SQLite
+RUNPATH or runtime mtab. No extra privilege/executable writable root, --no-scripts,
+fabricated installed DB or acceptance claim is introduced. Independently review
+a concrete installation/helper execution plan before that work; original/wrong
+key/tamper/expired/revoked GPG cases and complete installed/embedded coverage
+remain future gates. This held path is not proof that every compliant design is
+impossible.
+
+Next: after the user resumes, recheck interval host stability and DB/scan freshness;
+freeze and independently review a new native Alpine APK-only diagnostic with the
+original index/all37 originals, fixed trusted key and valid-structure wrong-key/
+tamper negatives. Do not replay old one-time controllers or broaden that check
+into installation/helper execution. No further sampling or retry is scheduled.
+The deleted automation remains off. Existing mise/Docker, Go1.26.8/old locks,
+old candidates, two issuers, frozen-R reuse and load90/compiler300/container390/
+controller450/wrapper560/outer600,2CPU/2GiB/128PIDs,RO inputs/root,none network,
+/work1GiB and/tmp64MiB noexec remain unchanged. Only six handoff documents change;
+no Go/race/vet/Contract run is claimed for this data/doc continuation, and no
+commit/push/merge/release occurs. Phase6 remains5/15. Slice6 steps1/2/3/4 remain
+historical bounded E / step2 ongoing with fresh supply scans passed and native
+execution held / final live topology and original16 scenarios incomplete /
+post-acceptance handoff not started.15 outputs,2637 exports and ENOSPC/OOM repair
+remain unverified.
+
+## 2026-10-15 interval readiness recheck keeps native APK held
+
+Private evidence: `gpg-native-recheck-20261015-102127`. The previous381-file/
+53-directory checkpoint passes full exact-set/SHA/size/mode checks at entry;
+all2557 worktree files match its final map. Actual branch remains
+codex/product-v1-phase-6-hardening, full HEAD
+`91fe315641779e6ea640632538309d63ad1b303f`,263 inherited porcelain rows, empty
+staging. Existing human-confirmed sole writing and read-only implementation_agent
+review arrangements remain. No old material, lock or automation is rewritten.
+
+Independent review first approves only three manual bounded read-only samples,
+not native execution. Actual completion times are10:23:32,10:24:59 and10:26:18
+Asia/Shanghai, intervals87.190238 and78.641069seconds. Each uses the unchanged
+5second/64KiB per-command bound; Docker Unix HTTP keeps connect2/total3seconds.
+All27 calls exit0 and reap, with no timeout, signal or truncation. The original
+desktop-linux context/Unix endpoint/daemon ID and29.8.2/8af9fe3/Linux arm64
+remain exact. All9 ping/version/info calls pass in0.030789–0.529273seconds.
+
+Load moves28.44/22.90/14.41 to20.16/21.67/14.79 then16.79/20.44/14.95.
+Observed top CPU idle is8.19%,6.22%,33.65%. These improvements do not establish
+whole-host stability: vm_stat16KiB-page swapin/out deltas are
++872005/+909586 and+272658/+164312. Both intervals retain substantial swapout.
+Independent actual-result review confirms native_readiness_pass=false; successful
+API calls and lower final load do not override that boundary. No native APK
+run is frozen or executed, no image is loaded and no container is created.
+No unrelated process/container/VM is stopped, throttled or restarted; no Docker
+daemon switch/start/restart occurs. All tracked owned sampling processes reap;
+no complete whole-host process inventory is claimed. No further sample is scheduled.
+
+At10:26:49, the unchanged original DB metadata SHA670c9e2a119b98d161fa8c952dbbe25cc1fd9ecc141bcdc030b7d45e2338ffd1
+passes Version2/UTC UpdatedAt<=now<NextUpdate/age<=24h (age25911.256seconds).
+NextUpdate remains2026-10-15T19:14:58.511503003Z (Oct16 03:14:58 Asia/Shanghai).
+The37-proposal raw report SHA0a63870ad450a1d5fc1eedc7e98571202d0cce9c8c44c45415d0bd701609f967
+and19-Wolfi raw report SHA6ead85b71f90ef4a3bc52bff883c67a66692c876bc2052d60cee7d9598d7e1c5
+match. Their actual37/19 package counts and zero findings are reused as the
+same-byte supply evidence, not new scans, installed GPG/Node coverage or native
+execution admission. The complete original checkpoint is read-only; metadata
+is not edited, and no fresh DB acquisition/import/scanner/build runs.
+
+Next manual continuation must recheck host intervals and actual DB/scan freshness.
+Only after stability and supply prerequisites pass should a new native APK-only
+run be frozen and independently reviewed: exact original Alpine index/all37 APKs,
+fixed key, valid-structure wrong-key/tamper negatives, full inputs pre/post and
+precise owned cleanup under original limits. Old one-time controllers remain
+read-only references. Installation and GPG-helper execution need their own
+concrete reviewed path; scans or eventual APK verification cannot admit them.
+No privilege, quota, executable writable root, timeout or evidence gate changes.
+Existing mise/Docker, Go1.26.8/old locks/candidates, two issuers, frozen-R rules,
+load90/compiler300/container390/controller450/wrapper560/outer600,2CPU/2GiB/
+128PIDs,none network,RO root/inputs,/work1GiB and/tmp64MiB noexec remain unchanged.
+Automation remains deleted; no new task or recurring observation is created.
+Only six handoff documents change. No Go source/test/Contract, staging, commit,
+push, merge or release occurs. Phase6 remains5/15; Slice6 steps1/2/3/4 remain
+historical bounded E / step2 ongoing with native admission held / final topology,
+original16 and formal independent acceptance incomplete / post-acceptance
+handoff not started.15 outputs,2637 exports and ENOSPC/OOM remain unverified.

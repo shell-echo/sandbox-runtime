@@ -1014,6 +1014,88 @@ v3 serve refuses startup before material, PostgreSQL or Docker side effects.
 That fail-closed hold does not retire historical Provider v2 compatibility or
 make the incomplete v2 fragment executable evidence.
 
+The 2026-10-08 independently reviewed command checkpoint selects private
+`sandbox-runtime.certificate-controller-config.v5` for typed Profile-v2;
+`sandbox-runtime.workload-tls-agent-config.v5` selects ordinary v2 TLS and
+`.v6` selects the existing PostgreSQL-purpose signer. Each new version
+requires the separately pinned canonical peer-source document. Old command
+versions retain their v1 Profile and purpose meanings; the command never
+falls back after v2 rejection. Public Profile/source, exact policy/key-ID,
+listener, UID/GID/group and bounded timing checks precede private key FD
+reads; actual private/public key matching remains required after reading.
+The existing broker/general partition and general PostgreSQL issuer remain
+unchanged. The final Profile-v2 admission hold remains in place.
+
+Each new Control/Scanner role declares its own read-only 4 MiB private config
+volume containing only `profile.json` and `peer-crl-role.json`; each of its
+dedicated TLS agents declares its own volume with `profile.json` and
+`peer-crl-sources.json`. The target remains `/run/phase6/config`, and storage
+IDs are the exact deployment name plus `-private-config`. Command config
+continues to arrive on canonical stdin. These declarations do not prove real
+file owner/mode, mount read-only state or logical byte use. The v2 controller
+ledger check retains the old three controller and reviewed egress ledger
+allocations and adds only the exact declared Control receipt volume; any
+same, parent/child target or storage alias in any mount kind is rejected.
+This command checkpoint does not admit the provisional static roster or
+complete the Control/Scanner business commands, source-to-image gate or
+original 16-scenario acceptance.
+
+The 2026-10-09 independently reviewed source composition keeps that public
+hold and the two broker/general issuers. The Scanner additionally declares
+one exact private tmpfs at `/run/phase6-scanner`, 256 MiB, owned by its fixed
+UID/GID with runtime mode `0700`. It holds only the command-generated config,
+Unix socket and scan scratch; it is included in the v2 peak budget. Same or
+parent/child mounts by another principal, aliases, different size/kind and
+read-only variants are refused. Actual tmpfs type, capacity, read-only root,
+network policy and resource limits still require the real topology gate.
+
+`provider-artifact-scanner` accepts only canonical bounded stdin config v1,
+with complete Profile/environment/principal pins, external CRL mapping/role
+pins, exact signer and numeric listener, ClamAV supply-input digest, and
+canonical whole rule-manifest bytes pinned by the Profile. The actual fixed
+config digest must match that manifest before child startup. It fixes the
+absolute executable `/usr/sbin/clamd`, Unix-only socket, private temporary
+directory, one scan thread, official-only database loading, no automatic
+reload or scan cache, and explicit size/time/error limits. Configuration
+options follow the [ClamAV 1.4.6 sample](https://raw.githubusercontent.com/Cisco-Talos/clamav/clamav-1.4.6/etc/clamd.conf.sample).
+The adapter's context/deadline remains required: `MaxScanTime` is not a
+universal cancellation guarantee. The 4 GiB/2 CPU/64 PID and single-operation
+limits stay fixed. A ClamD PING proves liveness only; image supply provenance,
+official rule signatures/current-check receipt and exact loaded rule set
+remain independent cold-start gates. The manifest's engine digest denotes
+the locked ClamAV supply input, not the composite image that contains it.
+Exact per-file version constraints do not establish cross-Profile rollback
+protection. No new operator signing key or self-certified freshness is added.
+
+`provider-docker-control` currently selects only the explicit status-config
+v1 entry. It opens the existing fixed `coding-receipts.json` under the bound
+receipt volume, holds its exclusive ledger lock, and exposes only Coding
+status on the exact coding edge. Missing ledger/lock or mismatched bindings
+fail; this command cannot initialize a namespace, run a Docker callback or
+open Browser/Desktop mutation routes. Full Control must later own this same
+ledger rather than start a competing status process. The dedicated v2 status
+Observer implements the existing typed Coordinator port. The subsequent
+2026-10-09 checkpoint selects it with `NewCodingLifecycleRepositoryWithPolicy`
+and the dedicated Scanner client in a separate held Coding-v3 dependency
+path. Both Profile-v2 validation and the serve guard remain closed before
+material/PG/private-client effects. This is candidate source selection, not
+positive startup. The typed PG path shares only admitted field and runtime
+primitives with v1, checks the unchanged nine-owner PG networks/edges/HBA
+recipe, and retains the separate PG-purpose signer, own-leaf guard and
+peer-CRL source/role pins. PostgreSQL remains on general; no issuer or evidence
+reuse rule changes. The private startup config contains exact Control/Scanner
+addresses and canonical bounded receipt-binding JSON; the profile binds its
+plan/template/owner, and legacy daemon/scanner overrides are refused.
+
+No lifecycle Application is constructed in that path: its existing lease
+sweep can reserve a termination before a v3 physical executor exists. The
+candidate only constructs the typed Coordinator and never automatically
+calls Begin/Finish, initializes a namespace, or turns NotFound into absence.
+Even after dependencies were available, serving still explicitly rejects
+until Control mutations and daemon-free lifecycle/exec/terminal/artifact
+ports are composed and independently gated. The current constructor owns
+client cancellation and cleanup, not PG or signer lifetime.
+
 The subsequent bounded-coding-allocation decision
 `S6-Coding-allocation-v2-bounded-plan-reviewed-20261005` selects **two**
 fixed allocation slots for the current local qualification candidate only.
@@ -4154,3 +4236,937 @@ absence. Its test TLS verification hook is not the production CRL guard.
 Production Control/Scanner commands, source-bound images, fixed-source
 CRL bootstrap/poll/drain, real daemon actions and the final 16-scenario gate
 remain required before the hold may be reviewed. Phase 6 stays **5/15**.
+
+### Held Coding Control executor continuation, 2026-10-09
+
+The restored-source candidate now connects the previously reviewed physical
+mechanism to a concrete Control executor. It does not change the original
+authority, wire receipt, two-issuer graph, evidence reuse or admission rules.
+`ProfileV2.Validate` remains the first public-constructor check. The fixed
+Unix path comes only from that Profile; the operator endpoint scope and
+daemon/environment identities must equal the whole existing ledger binding.
+Opening a command never initializes, migrates or rebinds missing/old state.
+Daemon Info remains an observation, not authentication or a late-effect fence.
+
+The explicit Coding mutation command config carries bounded exact OCI
+descriptor and seccomp bytes. Both startup and per-effect planning verify
+them against the frozen template. The old status config rejects mutation
+inputs. No request may supply Docker options, resource names, archive paths,
+runtime IDs or override images. Before the first write, the executor checks
+the exact namespace, original daemon and actually available selected image.
+It never pulls or builds an image. Descriptor metadata alone is insufficient.
+
+One serialized create sequence first persists Unknown, then consumes exactly
+three local volume creates, one never-started prep carrier create, one fixed
+two-header archive PUT to `/`, a non-force prep removal, one readonly runtime
+create and its start. The entire body/query comes from the frozen plan.
+The separate write transport uses fixed API 1.55 over Unix, no proxy, redirect
+or request replay, fresh connections and a five-second per-request ceiling.
+Each step is consumed before sending. Responses must have the expected
+status, bounded complete framing and valid identifiers/labels; any uncertain
+send or response prevents another step. A complete bounded chunked JSON
+response is allowed; empty mutation responses require explicit zero length.
+
+The GET-only observer remains separate. It checks full stopped container
+policy, never-started timestamps and actual empty root ownership after prep,
+then whole-effect carrier removal before readonly/NoCopy runtime creation.
+Only the runtime starts. A final same-process full observation and durable
+private proof precede Completed. Whole-effect missing observations are
+sequencing checks, not terminal absence or quiescence claims. Cleanup reuses
+the already reviewed sealed-Completed preflight, durable exact intent,
+single-use deletion and two inventories before the Released proof/CAS.
+Historical Unknown and already consumed cleanup intents are not replayed.
+The original authority window is unchanged; real completion within that
+window remains to be measured with the correct supplied inputs.
+
+The command still cannot pass the public Profile hold. Provider mutation
+dispatch/runtime ports, source-bound role images, live TLS/CRL and physical
+scenarios remain separate work. See the dated startup audit for independent
+review, new-host source validation and the actual Docker availability result.
+This is Slice 6 step 2 source progress, not step 3 acceptance or step 4 handoff.
+
+### Held Provider original-authority dispatch continuation, 2026-10-09
+
+The Provider candidate now selects a dedicated typed create/cleanup client
+on the existing Profile-bound Control TLS/CRL edge. Its factory cannot bypass
+the public Profile hold. There is no exported generic HTTP request port,
+Docker endpoint or legacy Driver fallback. The existing atomic first-permit
+coordinator passes the exact persisted create authority; it does not re-sign
+an envelope, inspect a backend ID or publish Ready from an acknowledgement.
+
+Cleanup admission observes Completed outside PG and rechecks the exact
+original effect and current termination under the existing single row lock.
+Only that call's explicit successful commit returns the pair for a single
+send. No extra post-commit read is needed to recover the original create:
+the original already rechecked by the transaction is retained in the same
+call. An ambiguous commit, cancelled call or invalid/expired result sends
+nothing. A send failure never turns historical ReadFinishBinding into another
+permit. The existing separate Finish observation/CAS remains the sole route
+from an exact Released readback to PG release.
+
+Requests retain original expiry and caller cancellation, with the configured
+one-to-thirty-second bound. Poll/Ready checks surround each exchange, and
+owned-lifetime cancellation aborts it. POST has no replay body, keep-alive or
+redirect follow; response compression is disabled rather than hidden from
+validation. The server explicitly frames canonical bounded JSON with its
+exact Content-Length. Wrong action/authority, truncated, chunked, encoded,
+duplicate or uncertain responses fail closed. Only Completed/Released are
+ACKs; create receipt time must also be inside its original authority window.
+
+The actual held command constructs the PG original-create coordinator and
+the cleanup coordinator with this fixed client. Its legacy Create/Inspect
+methods reject, and it creates no lifecycle Application or automatic lease
+worker. This does not yet provide atomic create readiness. The reviewed
+follow-on must persist the Completed authority/revision/state/proof binding
+alongside Creating-to-Active and Provisioning-to-Ready in the same PG row
+transaction. It must also forbid generic writers from manufacturing Ready
+or successful creation, preserve historical OutcomeUnknown, and retain
+normal terminate generation/fence/lease admission plus the existing direct
+Creating-to-Cleaning route. That extension and its adversarial tests are
+separate unfinished work; no new state field or migration is introduced here.
+Exec/terminal/artifact protocols, source-bound images and real same-run gates
+remain open. No Provider Contract or two-issuer boundary is changed.
+
+
+### Held Provider Completed-to-Ready continuation, 2026-10-09
+
+The held v3 command now composes a focused create readback with the same
+source-bound Control client and PG authority. It has no mutation permit or
+redispatch path. It observes Completed outside PG, then rechecks the exact
+original create, frozen slot spec, current generation/fence, unexpired lease
+and absence of a successor operation under the existing control-state row
+lock. One transaction updates the private completion history, Creating to
+Active, Provisioning to Ready, operation/idempotency outcome and events.
+Control receipt time must be within the original create authority window;
+reading that immutable receipt later does not extend mutation authority.
+
+The optional private `create_completions` map is keyed by allocation, with
+exact original-authority, Control revision/state, completion/evidence digest
+and receipt time. It survives release and slot reuse, bounded by retained
+original-create history. An exact already-committed readback aborts before
+the SQL UPDATE and returns the current tuple without a revision increment.
+A differing receipt cannot rewrite that history. No database schema
+migration, automatic state upgrade or public Contract field is introduced.
+An atomic-marker Active/Succeeded row without its required proof fails
+closed. Legacy marker state cannot import this new atomic evidence.
+
+A still-valid Running operation may succeed in the same Ready transaction.
+If its deadline has passed or cancellation is recorded, it becomes
+OutcomeUnknown while observed Ready is persisted. Historical OutcomeUnknown
+is not rewritten into success. The generic lifecycle repository cannot
+publish either Ready or successful create: it reconstructs only permitted
+changes from the previous complete projection, then compares sandbox,
+lease, fence, operations, idempotency and events. Normal exact terminate
+admission and Active lease admission remain possible. Their deterministic
+event IDs and request digests must match. A lease-expired event additionally
+requires a truly expired stored lease and the complete shared deterministic
+expiry request, preserving the existing five-minute internal deadline.
+Non-create reconciliation remains held; accepted lease renewal is not
+claimed as completed execution.
+
+Already-released allocations retain the same projection protection; their
+proof cannot be borrowed by a new allocation in a reused slot. The direct
+Creating-to-Active-to-Cleaning transaction remains valid without publishing
+Ready or inventing Ready history. If Ready was published first, cleanup
+must match that completion/evidence/time and cannot regress its Control
+revision/state binding. These checks do not change the existing Released
+observation/PG release gate, physical Unknown policy, two-issuer graph,
+authority deadlines or frozen-R evidence reuse rules.
+
+Independent read-only review required full-projection protection and exact
+admission evidence after identifying bare termination and forged event
+paths. Those counterexamples were reproduced and closed; final review
+matched all 17 changed Go file hashes. Source tests and a synthetic-observer
+PG harness do not establish live TLS/CRL or physical acceptance. Remaining
+runtime ports, supplied role images and real same-run scenarios remain open.
+Both public admission holds remain closed; Phase 6 stays **5/15**, Slice 6
+step 2 in progress. See the dated startup audit for executed validation.
+
+
+### Held typed termination reconciliation, 2026-10-09
+
+The candidate lifecycle coordinator now routes Coding termination through a
+focused typed port before its generic terminal shortcut. This includes
+retained Succeeded and OutcomeUnknown; separate GetOperation/GetSandbox
+reads cannot substitute for the port's current tuple. The PG adapter reads
+marker, identity and lifecycle documents in one SELECT/MVCC snapshot, without
+a write lock or revision change. It checks the configured plan/policy/spec,
+unique original allocation, operation/idempotency, generation/fence/lease
+and exact live retirement or frozen released projection. Reused slots are
+resolved by original allocation and sandbox, not their current occupant.
+This read grants no permit, and the later existing CAS still rechecks under
+the row lock.
+
+Accepted with a current Creating/Active allocation may call the existing
+Completed observation and fresh admission/dispatch path. Only that same
+call's explicit successful PG admission can reach the dispatcher. The locked
+calling standard requires an uncertain terminate dispatch to remain
+OutcomeUnknown. To preserve that across process loss and competing Finish,
+the existing private retirement has an optional `dispatch_acknowledged`
+flag, default false. Only a private typed result constructed after this fresh
+call's fixed Control dispatcher returns nil can set it true under the same
+row lock, checking exact original/cleanup/retirement/current operation.
+A send error instead records Running-to-Unknown and its deterministic event.
+This is transport-result bookkeeping, not a new permit or release proof.
+
+Recovery first uses the row CAS to retain unacknowledged Running as Unknown,
+then only calls Finish: observe exact Released and run the existing release
+CAS. This also covers a process lost before ACK persistence when Control is
+Pending/Unknown/NotFound. A concurrent live sender may conservatively lose
+to this Unknown transition; its late ACK must not upgrade the attempt. If
+ACK was already committed first, recovery makes no write. An ACK commit's
+reply may be lost without discarding the previously known Control response;
+the durable true flag can still support a later exact Released result.
+An uncommitted ACK cannot. Both no-op cases and released read recovery avoid
+an extra PG revision. Legacy markers reject the ACK flag; the legacy raw
+snapshot path remains separate, and every atomic-v3 release requires it.
+
+Running succeeds only with that durable ACK, a live operation deadline, no
+recorded cancellation and the independent exact Released observation. An
+unacknowledged release becomes Unknown in the same release CAS even if it
+wins before recovery/error recording. Unknown is never upgraded, including
+after release. No ACK record alone changes observed termination or frees a
+slot. Pending, Unknown, NotFound, lost replies and expired intents
+cannot manufacture terminal absence or renew a cleanup permit. After a
+call, the same snapshot reader returns what PG currently holds while
+preserving the original error; cancellation can prevent that read and leaves
+recovery for a later explicit call. The dispatch flag records that the
+transport was invoked, including a lost reply, not completion evidence.
+Already-released Succeeded/Unknown with its matching terminated projection
+returns read-only without a Control request or PG UPDATE. The immutable old
+create envelope and existing frozen lifecycle history remain the read
+anchor; no new release-history map or database migration is introduced.
+
+Independent design review identified a pre-existing late-result issue:
+the release helper called SucceedOperation for any Running termination,
+even after its deadline or recorded cancellation. The corrected same-row
+release CAS uses OutcomeUnknown for those cases, then records observed
+termination and frees the slot on the exact historical Released evidence.
+An existing Unknown is preserved byte-for-byte. Helper transitions work on
+copies until all operation/idempotency/events and state checks succeed;
+event collisions cannot leave partial in-process state. The typed PG entry
+also checks the final combined marker/identity/lifecycle state before commit.
+These are conservative result semantics, not extended cleanup authority.
+
+The actual held command composes this termination port and the prior create
+readback. Lease completion and suspend/resume still return the explicit v3
+hold; no legacy driver, Application or automatic lease worker is enabled.
+Both public admission holds, the two-issuer graph and evidence reuse rules
+remain unchanged. Component routing, concurrency and lost-return fixtures
+are not production Control TLS/CRL, physical deletion or actual COMMIT packet
+loss evidence. Final independent read-only review matched all 16 changed
+Go file hashes and found no definite remaining blocker against the locked
+calling standard. Phase 6 remains **5/15**, Slice 6 step 2 in progress;
+see the dated startup audit for executed validation and real-gate limits.
+
+
+### Held atomic lease completion, 2026-10-09
+
+Lease extension is a PG-only effect: admission already updates the persisted
+expiry. The Coding repository constructed with the v3 policy therefore
+handles ExtendLease through a dedicated same-row transaction. It applies the
+real lifecycle admission, verifies the unchanged generic Coding admission
+barrier, then completes operation/idempotency and appends the deterministic
+success event before the one commit. The locked lease response requires HTTP
+202 and an extend_lease operation; its schema permits Succeeded. This removes
+the new-admission gap in which a later same-fence lease or termination could
+supersede Accepted before completion.
+
+The callback checks the operation deadline and previous lease expiry again
+under the row lock. Exact generation, fence, Active/Ready original allocation,
+frozen create completion and canonical admission event remain mandatory.
+Replay rechecks the incoming operation authority rather than trusting only
+the generic state's narrower idempotency comparison; it makes no UPDATE or
+revision increment. The typed coordinator validates a lease POST before
+its early replay lookup, checks the retained operation type and deadline,
+then obtains the result through the PG lease port. Expired POSTs are rejected;
+historical reconciliation does not re-admit them. Event collisions must roll
+back the entire admission and completion. Legacy constructors and non-lease mutations retain their original
+guarded behavior. Generic writers cannot manufacture lease completion.
+
+A focused PG lease port is explicitly composed in the held v3 command and
+routes before generic terminal shortcuts. It can complete an older Accepted
+record only when that record still has the exact current generation/fence,
+lease, sandbox update time and latest admission event. The DB effect is
+already known, so a later read records its success without renewing expiry,
+even if the operation deadline or lease has elapsed. Superseded or unsupported
+historical states are rejected without change; this does not claim all old
+Accepted/Running/Unknown/cancelled history has been resolved.
+
+Successful historical reads validate the original allocation, create
+completion, operation and exact idempotency. Retained events must match;
+finite event retention is handled only when the missing history is before
+the retained window. If both events were pruned but the retained floor has
+the same timestamp as success, ordering cannot be proven and the read fails
+closed. Unsupported old states and this equal-time pruning case remain
+explicit recovery limitations. A historical Succeeded lease is not authority for work
+in the sandbox's current generation, lease or slot occupant. No Control or
+Docker method is involved in lease completion or replay. Expiry still uses
+the existing exact termination path; no automatic expiry worker starts.
+
+Both public holds, the two-issuer boundary, original effect windows and
+frozen-R reuse rules are unchanged. PG/component evidence does not establish
+physical absence, production TLS/CRL, complete supply or full Profile-v2
+acceptance. Phase 6 stays **5/15**, Slice 6 step 2 remains open. See the dated
+startup audit for the independent review and executed checks.
+
+### Held Coding runtime preflight, 2026-10-09
+
+The daemon-free runtime continuation first adds an explicitly read-only
+current-state port. Existing exec, Terminal and artifact interfaces are
+reusable, but their legacy adapters require the local Docker driver. The
+current Control wire remains closed to create/cleanup/status. Neither an
+original create authority nor a successful current-state SELECT authorizes
+another physical operation. In particular, the legacy exec vertical's separate
+sandbox read and exec-document reservation cannot supply Coding atomic
+admission against termination, lease changes and allocation reuse.
+
+The policy-bound PG repository reads its marker, allocation state and lifecycle
+ledger in one SELECT. It checks the frozen plan, slot specs, atomic mode and
+policy; a unique live Active allocation; the original create and independently
+committed completion; desired and observed Ready at the current generation;
+matching sandbox/lease/fencing state; and current expiry. Accepted termination
+already closes this projection even before cleanup changes Active to Cleaning.
+An original create must be Succeeded or OutcomeUnknown, not a contradictory
+unfinished operation alongside Ready. A legitimate historical Unknown or
+expired original create envelope does not erase independently proven current
+Ready, and the read never renews that original envelope.
+
+The returned internal snapshot contains only lifecycle values, frozen
+Profile/policy/Provider-principal digests and observation time. It contains no
+original Control authority, allocation/slot token, backend target or credentials,
+and is not added to a public DTO or private wire message. One focused
+ExecPreflight implements only SupportChecker. It validates the request before
+reading, retains the unsupported environment/secret/stdin-reference boundary,
+preserves the caller's shorter deadline, then rechecks cancellation, clock,
+request expiry, current lease, exact generation and minimum current fence.
+A higher prospective fence is a read-time eligibility check only: it writes no
+high-water mark and reserves no exec. A concurrent mutation after the SELECT
+can invalidate this answer; no dispatch is allowed to consume it as a permit.
+
+The held command explicitly constructs this preflight dependency, but it does
+not construct an exec Vertical or lifecycle Application, advertise a runtime
+capability or start an automatic worker. Physical exec still requires same-row
+durable admission over current Coding and exec state, a distinct closed Control
+operation authority, Unknown-before-effect receipts, cleanup quiescence and
+bounded observation/cancellation/result retention. Terminal and confined output
+transfer likewise remain separate runtime work. No physical action, image,
+network, issuer, private protocol or evidence-reuse rule is changed here.
+
+### Held Coding exec intent ledger, 2026-10-09
+
+The next increment records a complete exec request under the same Provider PG
+row lock as the atomic Coding marker, allocation history and lifecycle state.
+It is explicitly a **no-permit intent**, not a public Accepted operation or a
+reservation of runtime capacity, fencing authority or execution. The held
+command retains only a focused ExecIntentRecorder; it constructs neither the
+legacy exec repository/Vertical nor an Executor or automatic recovery worker.
+The create/cleanup/status Control wire is unchanged. No original create
+capability, old envelope or successful preflight can be consumed as exec
+permission.
+
+An optional persistent Coding marker mode locks the separate intent document.
+Explicit initialization requires the previously independently bootstrapped
+atomic marker, empty allocation and lifecycle history, and no existing generic
+exec or intent document. In particular, an Accepted create that has not yet
+reserved a slot prevents initialization. The constructor and command do not
+initialize or upgrade state. Same-mode initialization recovery is a validated
+read-only no-op, including after use; it cannot repair a missing intent ledger.
+Present JSON null is corrupt rather than an absent document. Old readers reject
+the new marker field instead of silently interpreting it as an older mode.
+
+New intent admission rechecks Active, both Ready states, the exact original
+create/completion, generation, lease expiry and current fence while holding the
+row lock. It freezes the entire supported exec Request, a separately computed
+canonical internal-payload digest, allocation ID, complete immutable create
+completion binding and the sampled RuntimeSnapshot. That snapshot includes the
+Provider revision, tenant, generation, lease, fence, Profile/policy/peer and
+time; it does not contain the global PG row revision. The internal digest is
+not the locked RFC8785 wire-body digest or a replacement for authenticated
+Contract admission. Unsupported environment/secret/stdin references remain
+closed. The caller must already have authenticated and bound the Contract
+request before using this internal port.
+
+Exact replay checks every request field and the retained allocation/completion
+binding. The original create must remain Succeeded or OutcomeUnknown with its
+observation time no later than the intent snapshot; unfinished or later-created
+completion history is rejected, while a legitimate historical Unknown remains
+unchanged. It returns only the original operation ID, internal digest, recording
+time and replay flag, without UPDATE or revision increment. It may read an old
+record after lease changes, termination, release and reuse of the physical slot;
+none of those reads authorize work in the new occupant. POSTs still require a
+live request deadline; no separate expired-history read API is added here.
+Conflicting operation IDs/idempotency keys within this ledger and new intent IDs
+already held by lifecycle operations are rejected. Request bytes are limited to
+256 KiB, retained records to 256, and the whole intent document to 8 MiB. No GC
+is implemented: capacity exhaustion rejects new records without forgetting
+conflict history. These private held limits are not advertised Contract quotas.
+
+The requested fence may be prospectively higher than the current lease fence,
+but this record does not advance the lifecycle high-water mark. The existing
+lease and termination paths remain free to supersede its read-time eligibility.
+A future physical exec design must perform another same-row current-authority
+CAS, close cross-document ID and generic-exec entry-point bypasses, and issue a
+new distinct bounded Control permit. The generic ExecRepository remains
+unchanged and cannot read this separate intent document; current isolation
+rests on the held composition not using that repository. A future public route
+must not connect its legacy ReserveExecution/Start sequence or promote one of
+these history receipts into a permit. Control Unknown-before-effect receipts,
+allocation-scoped cleanup quiescence, observation/cancellation and bounded
+result retention remain separate required work before physical execution.
+
+The independently reviewed design and PG component tests do not activate a
+protocol or physical authority. Both public holds, two issuers, frozen-R rules
+and formal Slice 6 ordering remain unchanged. See the dated startup audit for
+executed validation, review findings and remaining real-gate limits.
+
+
+### Held Coding exec namespace isolation, 2026-10-10
+
+The previous checkpoint's composition-only isolation is now enforced inside
+the PG adapter for explicitly enabled `coding-exec-intents-v1` databases.
+All generic ExecRepository reads use one statement snapshot that includes the
+Coding mode and intent document; every generic exec mutation checks that mode
+under the existing `control_state FOR UPDATE` lock before its callback. Reads,
+reserve/attach/cancel/result writes and recovery-list entry points reject the
+mode. No executor or public route is connected by this change.
+
+All generic lifecycle mutations and Coding marker/slot/lifecycle transactions
+load the same namespace guard after obtaining that row lock. Validation runs
+before the callback, including callbacks that return successful read-only
+rollback sentinels, and again on the candidate marker/slots/lifecycle before
+UPDATE. Retained intent operation IDs cannot be reused by create, terminate,
+lease or any other lifecycle writer. The original intent transaction checks
+all historical IDs against lifecycle and rejects any coexisting legacy exec
+document, including during initialization recovery and historical replay.
+Conflicting writes roll back without a document or revision change; methods
+that return mutation results discard those results on any transaction error.
+
+Only the existing explicit unused-state initializer may enable the intent
+mode, and only its dedicated transaction may append intents. Generic mutators
+cannot change intent documents, clear/change an enabled marker, or initialize
+over orphan intent history. Missing/corrupt intent or slot state, malformed
+marker, present JSON null, or any legacy exec document fails closed. An absent
+lifecycle document is legal only in the original unused bootstrap state with
+empty intents and no allocation, original-create, completion or retirement
+history. Existing databases with neither intent mode nor an intent document
+retain their earlier generic exec behavior; they are not upgraded in place.
+
+The generic namespace guard has no frozen runtime plan. It verifies canonical
+bounded storage, full-request digest/ID consistency, marker/slot/lifecycle
+self-consistency and operation-ID separation, not fresh physical authorization.
+The existing plan/spec/completion checks remain mandatory in intent admission.
+Other historical Coding read APIs are not converted into mutation permits, and
+this change does not claim all read APIs reject damaged intent state.
+
+The requested fence remains prospective. Physical exec still requires a new
+current-authority CAS, a distinct bounded Control authority, Unknown persisted
+before effects, and allocation-scoped exec/cleanup serialization. A drained
+Control callback does not prove a detached command or a late Docker effect is
+quiescent. Observation, cancellation, result limits/retention, restart behavior
+and cleanup/release must close together before public execution. Neither a
+stored intent nor an original create envelope may substitute for that design.
+Both public holds, the two-issuer decision, frozen-R reuse and formal Slice 6
+acceptance order remain unchanged.
+
+### Held Coding PG exec fence reservation, 2026-10-10
+
+A separate, explicitly initialized `coding-exec-fences-v1` mode now records
+bounded PG fence reservations alongside the unchanged no-permit intent mode.
+Initialization is allowed only on an independently bootstrapped, completely
+unused atomic Coding state: no allocation, original/completion, retirement,
+lifecycle or intent history. It is never called by construction/startup and
+cannot upgrade populated intent databases. Initialization recovery validates
+the existing document without rewriting or repairing it. The document is
+canonical, limited to 256 records and 8 MiB; generic mutators cannot write it.
+
+`ReserveCodingExecFence` locks the existing singleton row before reading the
+marker, slots, lifecycle, intent, legacy-exec and fence documents. The complete
+request must exactly match an existing intent, remain within its deadline,
+and still refer to an Active/Ready, unretired allocation with valid original
+and completion bindings. The current sandbox/lease/profile/policy/principal
+tuple must equal the intent's frozen tuple; only observation time advances.
+A lease update, another fence advance or termination therefore requires a
+fresh intent with new operation/idempotency IDs before a first reservation.
+
+The dedicated transaction appends the immutable record and changes exactly
+the selected lifecycle scope's high-water fence and its lease's fence token,
+in one revision. It creates no lifecycle operation/event and changes no slot,
+sandbox, lease expiry or idempotency record. The record binds the existing full
+request digest, allocation, original authority digest, completion and pre-bump
+runtime snapshot; the post-bump fence pair follows deterministically from the
+intent's target token. It does not store separate before/after byte snapshots.
+The generic readiness barrier still rejects direct bare-fence changes. Both
+pre-state and resulting state retain the original authority/readiness checks.
+
+Every relevant generic writer checks the enabled fence document before its
+callback and again against candidate state; the handwritten intent transaction
+checks it under the same row lock too. Missing/null/noncanonical/orphan or
+mixed legacy documents fail closed, and no later lifecycle/slot write may erase
+retained fence floors. The runtime and termination preflight readers include
+execution-mode documents in their single MVCC statement. Existing databases
+without this mode keep their earlier behavior and are not silently upgraded.
+
+`ExecFenceReceipt` proves only a historical PG reservation. No private Control
+transport or runtime Executor consumes it. Same-request replay returns the
+original receipt without updating revision, time or fences. The separate
+`ReadCodingExecFence` validates retained bindings and reads history even after
+the original request deadline, allowing a caller to inspect a possibly committed
+reservation after an uncertain reply. Commit/context errors return no receipt;
+reconstruction never turns persisted state into a dispatch permit. Termination
+or lease updates at/above the current floor remain legal because no physical
+exec or cleanup hold was created. Original create OutcomeUnknown+Ready recovery
+still has the existing restriction that a later raised fence can make repeated
+create reconciliation reject; physical recovery is not completed here.
+
+The independently reviewed reservation is one prerequisite only. Actual exec
+still needs a fresh current CAS plus a distinct bounded Control authority,
+Unknown persisted before effects, allocation-scoped dispatch/cleanup
+serialization, and proof that commands and descendants have stopped before
+release. A drained callback does not prove Docker quiescence. Observation,
+cancellation and bounded result retention/restart behavior must close that
+complete boundary before public wiring. The public v2/v3 holds, two issuers,
+frozen-R evidence rules and formal Slice 6 acceptance order remain unchanged.
+
+### Coding exec containment mechanism evidence, 2026-10-10
+
+Before implementing the distinct Control exec Unknown record, independent
+review identified an unsatisfied premise in the legacy Docker exec canceller:
+it sends TERM to the direct PID from a workload-writable PID file and then
+uses the wrapping exec's `Running=false` as cancellation confirmation. That
+observation does not cover detached descendants. It must not be adopted as
+the v3 execution/cleanup quiescence proof. The existing legacy implementation
+is unchanged by this checkpoint; this is an identified limitation, not a
+claim that its cancellation behavior has been repaired.
+
+The opt-in `TestCodingExecContainmentRealDaemon` reproduces the shell algorithm
+with a source-built Linux/arm64 helper that forks into new sessions twice,
+orphans a writer under namespace PID 1, and closes inherited output streams.
+The direct child is still alive when its PID file is checked and TERM succeeds.
+The wrapper then stops with exit 143 while the orphan's counter keeps advancing.
+Closing an exec stream, callback drain, direct-child exit and a process-group
+signal therefore cannot stand for the required descendant-stop boundary.
+
+Two separate fresh containers test a possible containment mechanism: the
+command is namespace PID 1, with private PID/IPC namespaces, no network, no
+capabilities, a read-only root, no-new-privileges, fixed seccomp, bounded
+resources and numeric UID/GID. Exact SIGKILL and natural PID 1 exit are both
+observed with stopped/Pid=0/expected exit status, followed by an unchanged
+counter in a finite 500 ms window. This is local mechanism evidence, not a
+proof of late-mutation quiescence or a selected production architecture. A
+per-command container would change the currently frozen Coding resource set,
+image/mount binding, accounting and cleanup protocol; that design still needs
+independent review and appropriate source-bound real gates before adoption.
+
+The fixture uses only an already-cached, digest-locked PostgreSQL image with
+its entrypoint overridden. Cached OCI index/selected manifest/config/layers
+are verified before mutation; the helper is an offline Go 1.26.8 build and is
+never inserted into a product candidate. Its root-owned helper/parent and
+high-UID private state are checked on a unique named volume. The image's sole
+declared data volume is explicitly covered, so no anonymous volume is accepted.
+The explicit local Unix socket is checked before/after new connections and
+before owned mutations/cleanup. A changed inode or uncertain write response
+retains the run-labelled resources without automatic retry; every helper
+self-expires after 90 seconds. These are fixture safeguards, not an independent
+operator signature, authenticated production endpoint, or hostile-host proof.
+
+No new Control authority, receipt schema, protocol action or PG dispatch claim
+is implemented here. The next complete boundary still needs a fresh PG CAS
+that durably holds possible execution before dispatch, distinct Control Unknown
+before effects in the same allocation-level transaction/serialization domain
+as cleanup, and observation/cancellation/output-retention/restart handling.
+Unknown/possible execution cannot be released merely because local callbacks
+drained or an old fence receipt can be read. Both public holds remain closed.
+
+### Coding execution resource and handoff direction, 2026-10-10
+
+The independently reviewed [private exec protocol plan](../plan/product-v1-phase-6-coding-exec-protocol.md)
+selects a constrained direction for further implementation: resident plus one
+possible isolated command, sharing a fourth whole allocation-scoped tmpfs
+scratch volume. This preserves the existing sandbox's shared `/tmp` behavior.
+It requires a new complete source-bound resource/template/Profile and receipt
+mode in an empty namespace; it does not extend legacy Plan v1, template-v2 or
+populated receipt ledgers. The public v2/v3 holds remain closed.
+
+The new `codingidentity.ExecutionResources` component validates nonzero
+resident/command limits whose sum, plus the fixed scratch data-block reserve,
+fits within one slot ceiling. It rejects a second full-limit runtime, missing
+scratch accounting and overflow/over-limit inputs. `BindCeiling` compares the
+old numerical ceiling only and grants no physical authority. The resource
+digest changes with the partition. The real Docker component test consumes
+the proposed limits and verifies shared tmpfs type, data capacity, permission,
+flags, visibility, noexec, ENOSPC and replacement continuity. Full unmount
+loses the scratch data. This PG-image fixture does not verify a Coding
+candidate, realistic load, inode/metadata accounting or daemon restart.
+
+The selected handoff direction places complete output-byte/object reservations,
+the possible-exec claim and public acceptance in one PG transaction. Only
+pre-acceptance exhaustion can return 429. Control independently checks frozen
+hard caps and original `Completed` create bindings in the same durable
+allocation gate as cleanup. It commits Unknown before Docker effects. A
+post-acceptance rejection requires a durable closed-before-effect tombstone
+before known-failed projection or PG release; uncertain closure holds capacity.
+Allocation closure rejects late tickets; an earlier Unknown must be resolved
+or held. Missing containers, expired output and callback drain cannot release
+it. Termination and command cleanup retain full resource/claim identity.
+
+This is reviewed implementation direction, not a completed dispatch protocol.
+Concrete production resource/storage/metadata caps and closure headroom,
+source-bound new inputs, fresh PG claim consumption, async Control actions,
+cancel/result/restart/late-effect behavior and the complete cleanup gate
+remain required. A 32 MiB tmpfs data limit is not an inode or whole-host memory
+bound. No existing receipt is rewritten, no old one-use authority is reused,
+and no formal Slice 6 acceptance or release is added.
+
+### Coding execution template and storage candidate, 2026-10-10
+
+The new `CodingExecutionTemplate` freezes a separately encoded prospective
+resource mode; it is not a change to `CodingRuntimeTemplateV2`, Plan v1 or
+receipt-v2. Image/index/platform/config/manifest, resident command, environment,
+data mounts and UID/GID slots retain their locked source checks. The new mode
+adds scratch per slot, private PID/IPC, no init/restart, disabled Docker logging
+and fixed private shared memory. Old/new decoding and Plan binding cannot
+interchange the modes. The candidate still lacks complete Profile/receipt
+namespace adoption and has no production dispatcher.
+
+The candidate slot ceiling is 1 GiB, 1000 milliCPU and 64 PIDs: resident
+128 MiB/100/16, command 832 MiB/900/48, shared scratch data 32 MiB and separate
+metadata allowance 32 MiB. `ExecutionScratch.BindResources` adds the metadata
+check to the earlier data-only arithmetic. Scratch uses exactly 4096 inodes
+and derives fixed local-tmpfs options from the numeric UID/GID. These are
+candidate limits, not proof of realistic resident/Terminal/command capacity
+or a kernel memory upper bound. The real updated local test proves inode
+exhaustion for files/directories and reuse while data blocks remain free.
+
+Control's 1 GiB storage declaration covers browser/coding/desktop scopes.
+Coding therefore receives only a candidate 512 MiB child partition: output
+including atomic copies 192 MiB, allocation evidence 64 MiB, execution evidence
+64 MiB, double-state writing 64 MiB, dedicated closure 64 MiB and independent
+physical/transient margin 64 MiB. The other scopes still need an explicit
+complete-Profile allocation. The maximum six full double-stream captures does
+not change the 8 MiB per-stream Contract/default. Smaller captures remain
+bounded by bytes, file count and retained records, including tombstones.
+
+`ExecutionStorage` is pure arithmetic. It cannot mint a ticket, reclaim Unknown
+or replace the future durable PG and physical Control limits. Each internal
+request is charged by actual canonical size (cap 2 MiB), with a 32 KiB record
+envelope; whole-state encoding must fit the reservation and 32 MiB single-state
+limit. Count caps of 32 allocation/64 execution records do not promise that
+all maximum-sized requests fit. Output files are rounded to 64 KiB and two
+copies; a future physical observer must verify allocation units and all 1024
+possible storage objects, including evidence, directories, temporary and lock
+files, before permitting any effect. Old populated namespaces cannot inherit
+this budget. Independent review accepts this finite candidate/component scope;
+public holds, two issuers, evidence reuse and formal Slice 6 order are unchanged.
+
+### 2026-10-10 private storage namespace prerequisite
+
+The held execution-template candidate advances explicitly to v2 to include
+`controlstorage.Layout`; previous v1 candidate bytes are not silently upgraded.
+The layout contains the fixed Coding 512 MiB budget and an unallocated, closed
+512 MiB remainder. The current Browser/Desktop Control consumers do not exist,
+so this decision grants no capacity to those scopes and is not a complete
+Profile. Source digests are acyclic: the layout has no template/Profile digest;
+the later namespace binding carries all three source values plus a fresh
+storage ID/namespace, Control principal and owner UID/GID.
+
+The new private file component exclusively initializes an empty root with a
+permanent durable marker and lifetime flock, pins root/lock identity, and
+uses descriptor-relative no-follow I/O. Reopen and publication verify exact
+canonical metadata, file hashes, permissions/identity and all root objects.
+Class/individual/count limits include observed allocated blocks, 64 KiB
+rounding and transient state/manifest peaks. The only replaceable object is
+one same-ID state; immutable evidence never overwrites an unexpected entrant.
+Closure space is independent of exhausted output. There is no deletion or
+capacity release, and no execution authority is derived from opaque bytes.
+
+Errors after writing begins poison the owner and retain residue. Object and
+manifest updates are separately synchronized, not a two-file atomic commit;
+an intermediate crash leaves reopening closed. A consistent later reopen
+grants no dispatch ticket. Future composition must keep this hold or obtain a
+separate recovery review, not reset the namespace. A caller's empty callback
+and a valid digest string do not prove physical volume identity, complete
+Profile validity, or exclusion of same-UID bypass writers. Actual mount/source
+and subject isolation gates remain necessary before Control/PG dispatch.
+The [startup audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-private-storage-namespace)
+records independent review and Darwin/Linux file-component evidence. No old
+receipt, admission hold, issuer, frozen-R rule or formal acceptance changes.
+
+### 2026-10-10 held common Control receipt authority
+
+The separately versioned, package-private execution state now consumes the
+private namespace for create/exec/retirement under the same owner and durable
+state comparison. Unknown is committed before an effect callback; exact claim
+closure raises the fence high-water mark, while strictly newer retirement
+closes allocation admission. Unknown and in-flight callbacks prevent cleanup;
+callback return/drain/expiry/reopen never release occupancy. All reservations
+are reconstructed from canonical retained records. Interrupted object/manifest
+publication remains a closed hold with no repair or inferred no-effect.
+
+Completion uses a new typed four-volume observation and exact current-state
+revision/digest after successful same-process create return. Its real physical
+collector and complete Profile/namespace source validation remain absent;
+synthetic observations are limited to component tests. No old completion,
+readable PG history, caller-provided success flag or callback return authorizes
+the new physical topology. The local exact-claim tombstone is not a sealed
+cross-service closure receipt. Atomic PG acceptance/claim, asynchronous mTLS
+dispatch, physical execution/termination/quiescence and PG release CAS still
+require their full chain and independent gates. See the [dated audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-held-common-control-execution-state).
+
+### 2026-10-10 held four-volume completion observer
+
+The next held component supplies a separate four-volume read-only observer.
+It does not cast the new template into the old three-volume Plan. A constructor
+pins the admitted socket identity/policy across dialing and complete bounded
+response reads. API 1.55 allows only exact inspections, full binding-scoped
+lists and four root archives; archive authority exists only after the exact
+resident and image checks. No Docker mutation, exec, unfiltered list, arbitrary
+archive or old once-only operator authority is exposed.
+
+Completion retains safe initial/final daemon, inventory and runtime projections,
+verified raw OCI descriptor documents and strict empty-root metadata/digests in
+the same canonical state record. Receipt protocol
+`sandbox-runtime.coding-isolated-receipts.v2` requires rechecking these values
+on reopen. Old v1 candidate state is rejected; only fresh empty namespaces can
+initialize v2. There is no in-place upgrade or retroactive physical proof.
+The policy rejects secondary resource overrides and locks the observed Linux
+masked/read-only path lists; changed daemon defaults require a separately
+reviewed compatibility decision, not automatic state repair.
+
+The read-only collector can establish Docker configuration and empty archive
+roots. It cannot prove kernel tmpfs flags/capacity/inodes/noexec, physical
+receipt-volume exclusivity, complete Profile admission, or a positive real
+Coding execution. Current positive SDK tests are synthetic. The real empty
+scope and high-UID Linux file checks are component evidence only. The downloaded
+locked arm64 Coding image still needs fresh supply/attestation/vulnerability
+validation before use. The [dated audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-held-four-volume-completion-observer)
+records independent review and the remaining source/PG/mTLS gates. Both public
+holds, issuer count and evidence-reuse rules remain unchanged.
+
+### 2026-10-10 Coding image input failure and proposed remedy
+
+The restored old Coding index passes fresh original archive and signed
+provenance checks; a new arm64 scan nevertheless reports 13 HIGH occurrences.
+A static image lock is not vulnerability admission, and an attestation pass
+cannot erase that failed prerequisite. The new four-volume positive gate is
+held with no Coding execution. Historical source/manifest/publication and
+receipts remain unchanged; the new point-in-time SBOM is unsigned inventory.
+
+The [bounded candidate proposal](../plan/product-v1-phase-6-coding-image-candidate.md)
+is pending, not an accepted replacement. It limits new work to repaired Coding
+base/broker inputs, a clean source and separate candidate identity. New Go
+advisories also affect the explicitly pinned 1.26.8, so only a candidate-specific
+1.26.9 exception is proposed for the user's decision; no global pin change is
+authorized. The actual base lock, candidate trust/admission protocol and new
+template/Profile/receipt binding still need independent review and new affected
+runtime evidence. No vulnerability exception or broader evidence reuse is
+introduced. See the [supply audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-coding-image-supply-revalidation).
+
+### 2026-10-10 approved Coding candidate repair and diagnostic boundary
+
+The user approved Go1.26.9 for the new Coding candidate only, then required
+mise/Docker-managed development environments. Ordinary repository Go1.26.8,
+historical publication locks and both public holds remain unchanged. The
+separate candidate recipe locks clean 91fe315 source and Alpine3.23.6 exact
+index/platform/layer inputs; it does not update `profiles/coding-shell/image`.
+
+Both candidate architectures have repeatable identical OCI archive bytes,
+verified descriptors/diffIDs and actual OS/Go reports with zero HIGH/CRITICAL.
+Each report retains one unignored zlib MEDIUM (CVE-2026-85091, fix 1.3.2-r1).
+The unsigned local build records/SBOMs are not signatures or production
+vulnerability admission. Independent review permits the bounded native arm64
+diagnostic smoke; its raw execution, kernel noexec rejection, actual PTY and
+exact container cleanup pass. Its tmpfs mounts and diagnostic limits do not
+prove the four-volume protocol, its resource split, native amd64 execution or
+the complete Profile. See the [candidate audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-repaired-coding-candidate-and-managed-tools).
+
+The existing Coding templates still bind the historical publication. New
+candidate trust/admission, template/receipt/Profile binding and the affected
+real four-volume gates require a separate concrete independent review. No
+candidate gains production admission merely from a matching digest, a clean
+HIGH/CRITICAL scan or this diagnostic; no old signature, receipt or frozen-R
+qualification is inherited.
+
+### 2026-10-10 held Coding candidate identity and receipt v3
+
+Independent design review accepts a bounded component binding for the repaired
+unsigned Coding candidate. A source-owned identity locks the original recipe,
+clean broker source, toolchain/base/output and historical build/scan records;
+it is not a published signature, live vulnerability verdict or operator seal.
+The recipe stays distinct from the clean broker tree. The separate
+`CodingCandidateExecutionTemplate` protocol v3 preserves the resource, slot,
+four-volume and security policy. Its local OCI manifest identity does not
+inherit the historical registry publication or old template-v2 admission.
+
+The held package-private common ledger requires receipt protocol v3 and binds
+the complete candidate record through its template/binding digest. Old v1/v2
+namespaces fail reopen and cannot be implicitly reinitialized or migrated.
+The observer keeps its socket pin, bounded read-only SDK routes, original
+descriptor verification and retained physical rechecks. The local manifest's
+image descriptor may omit its platform only when Docker OS/architecture,
+original config and container selected-manifest platform separately match;
+conflicting optional platform metadata still fails closed.
+
+This is not complete Profile adoption. The current full Profile still owns an
+old Coding template field, and a syntactically valid storage `ProfileDigest`
+does not replace it. Complete topology/principal/resource binding and physical
+namespace exclusivity must be reviewed and proved before admission, followed
+by new four-volume runtime scenarios and the planned PG/mTLS composition.
+Both public holds, two issuers, production/publication scope and frozen-R
+reuse policy are unchanged. See the [concrete design](../plan/product-v1-phase-6-coding-image-candidate.md#reviewed-held-binding-component-2026-10-10)
+and [dated audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-candidate-template-and-receipt-binding).
+
+
+### 2026-10-10 held candidate Profile mode and kernel-root boundary
+
+Independent review accepts a new explicit candidate-v3 alternative inside the
+complete held Profile v2 field chain. Historical Coding template/budget and new
+mode are mutually exclusive; the complete network, principal, TLS/CRL, Control,
+Scanner, storage and PG validation chain remains mandatory. The new arithmetic
+counts eight Coding volumes, both running-capable roles per slot and stopped
+preparation carriers, preserving scratch/metadata and receipt headroom. The
+remaining 512 MiB of Control storage stays unallocated with no other-scope writer.
+Storage Binding is derived from the final complete Profile digest and owner
+identity, never from a caller-selected digest. Public admission remains closed.
+
+A separate Store path checks Linux facts on its own pinned root fd and live
+pathname, with a bounded mountinfo read and direct statx mount-ID comparison.
+It permits only a private whole persistent filesystem root with required flags
+and bounded observed geometry; it cannot be satisfied by a successful callback.
+Mount ID is an opening-session anchor, while stable root/filesystem/source facts
+are retained and rechecked. Old file-only manifests are neither upgraded nor
+allowed to remove kernel mode. The review found and closed the same-inode,
+different-mount pathname gap before final validation.
+
+Kernel observations are not proof of Docker identity, sole external ownership,
+immutable hard quota or absence of host writers. A true source-bound volume and
+sole-consumer collector, dedicated capacity backend, final live inventory and
+positive/failure four-volume scenarios remain prerequisites. The actual Linux
+ordinary-volume refusal is negative component evidence only. Browser/Desktop
+dynamic volume prefixes are not represented by the current slot schema; no
+completeness is inferred from the old static count. Both public holds, two
+issuers, old candidate/publication locks and frozen-R reuse rules remain intact.
+See the [design](../plan/product-v1-phase-6-coding-image-candidate.md#held-complete-field-candidate-mode-and-kernel-root-2026-10-10)
+and [dated audit](../audits/product-phase-6-slice-6-startup.md#2026-10-10-held-coding-profile-mode-and-kernel-root).
+
+
+### 2026-10-10 held Docker consumer observation and dedicated backend
+
+The [Control storage backend component](../plan/product-v1-phase-6-control-storage-backend.md)
+adds a separate bounded global Docker observer and a fresh dedicated Store
+mode. It checks stopped consumers, exact volume/Control mounts, unsafe aliases
+and device authority, live root-fd facts and fixed loop geometry. A Linux
+operator-only helper prepares and seals a one-GiB ext4 image offline, with
+source inode and initial-byte binding. This does not yet prove physical admission:
+shared-VM loop/device operations await explicit scope authorization, complete
+source-inode/volume composition and real positive/failure gates. Current real
+Docker evidence covers ordinary-volume and stopped-consumer refusal only.
+The new offline image is not an attached quota backend, a release image or an
+old receipt upgrade. Public Profile/provider v3 holds and Phase 6 **5/15** remain.
+
+
+### 2026-10-11 held live source/Store/Docker composition
+
+Independent review selects a separate fresh source-provision.v2 mode for the
+[Control backend component](../plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-live-source-store-and-docker-composition).
+Only its exact high-UID 57010:57011 Control candidate holds a root-owned,
+group-readable source volume RO, the eight explicitly bounded loop nodes RO,
+and the already selected supplementary GID 0 for its exact Docker socket.
+Root-owned source directory/files use 0750/0640 and GID 57011; legacy private
+0700/0600 receipts remain unmodified. Read-only socket mounting is substantial
+daemon authority, not a GET-only kernel permission. Control and the trusted
+operator/daemon remain inside that trust boundary.
+
+The source session retains actual read-only FDs and a shared ceremony lock,
+checks the canonical original seal, name/FD inode and mount identities, image
+allocation, complete bounded loop mapping and the Store root's device. Stable
+source identity and an actual Docker-volume/daemon/endpoint binding are persisted
+in a new Store manifest mode. No caller-decoded observation or successful
+callback constructs this live source session. Other known source/socket/device
+consumers, including stopped ones, fail admission. The operator helper's exact
+exclusive attach/detach and the existing strict whole-root checks remain.
+
+The private composed constructor and every operation apply complete bracketed
+observations with a shared ten-second request deadline, retain uncertain state
+after possible writes, and keep the raw Store private. The daemon-normalized
+socket source is an explicit expected value, never discovered as a fallback.
+The narrowly observed Desktop list/inspect representation for nonowned macOS
+binds must preserve all other fields, raw safety checks and inventory digests.
+Neither this local mechanism nor advisory locks fence future daemon calls or
+trusted host writers. The full source Profile, operator deployment identity,
+wrong-principal denial, physical failure/recovery and Coding dispatch gates
+remain open; public Profile/provider holds, two issuers, frozen-R rules and
+Phase 6 **5/15** remain unchanged.
+
+
+### 2026-10-11 source-access permission mode review
+
+The complete held Profile v2 has an independently reviewed, optional
+source-access v1 declaration. Only the exact candidate-v3 Control may use the
+specified RO backing, loop0–7 RO device mappings, root:57011 source0750/0640,
+UID57010/GID57011+group0 and canonical RO daemon socket target. No generic
+HostDevices permission is opened. A standalone pre-seal intent binds the backing
+label; the unchanged original seal then enters the full Profile digest. The
+operator review output is descriptive and has no production runtime consumer.
+
+The new Docker observer branch is held Control-only staging. Full declared
+TLS/CRL/PG/network checks are retained, but actual Provider/TLS peers and input
+content readiness require later independently reviewed admission. Exact input
+consumer census includes stopped objects. A RO Docker socket remains a trusted
+operator/daemon authority, not an API restriction. Public Profile/provider v3
+holds, two issuers and frozen-R evidence reuse are unchanged. See the
+[source-access design](../plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-complete-profile-source-access-declaration).
+
+### 2026-10-11 held operator/consumer observation review
+
+A separate reviewed component now re-derives the Control consumer boundary from
+canonical complete Profile bytes and binds a one-shot, short-lived operator
+observation to live source/root, original seal, volume and Docker graph facts.
+The review JSON remains descriptive. Only the two internal CAs used by Control,
+the three scoped Provider endpoints and its unique TLS socket consumer are
+included; each diagnostic principal's projected grants are exact, and unrelated
+mounts/networks are refused. Full running/stopped census and actual identity
+checks remain mandatory. The old Control-only staging mode is unchanged.
+
+The initial implementation deliberately recognizes fixed diagnostic carriers,
+not production service commands. Its independent binary key commitment and
+bounded one-shot test pipe introduce no production credential file, public
+admission, dispatch permission or new CA registry. Raw source FDs are probed
+before signing and Store initialization; the signed graph is checked again at
+open and every Store operation. Failed authorization releases owned resources
+without writing Store markers. The existing source-v2 manifest does not claim a
+new persistent operator mode. Production operator identity/bootstrap and actual
+Provider/TLS/CA/CRL readiness remain separate reviewed gates. See the
+[component design](../plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-operator-and-consumer-observation-component).
+
+
+### 2026-10-12 held bootstrap/process component review
+
+The [bootstrap design](../plan/product-v1-phase-6-control-operator-bootstrap.md)
+separates the Profile public-key declaration from an independently provisioned
+executable pin. Its fixed sealed FD3 carries public verification bytes only;
+the existing TLS-agent private FD table is unchanged. Normal pinless builds
+and the new Control bootstrap config stay closed before Store or dispatch.
+Production pin/probe provisioning and the post-observation signature transport
+are not accepted by this component.
+
+Original OCI byte correspondence and bounded PID1 byte/credential observations
+are separate from launch authority and service readiness. The explicit
+operator Docker exec probe never expands the runtime GET-only collector. It
+exists only in reviewed local diagnostic images so far. No public hold, issuer,
+frozen-R standard or complete consumer permission graph is relaxed.
+
+
+### 2026-10-12 held process-delivery review
+
+The [v2 delivery component](../plan/product-v1-phase-6-control-process-delivery.md)
+has a separate startup target, signature domain and fixed FD4/FD5 handoff.
+Its independent executable public pin, original role/loader/probe OCI bytes,
+actual PID1 observations and bounded post-observation signature establish held
+process-delivery evidence only. They do not issue a Store/full-consumer permit
+or reuse the diagnostic `Open` session. The operator-controlled local Docker
+endpoint remains an explicit trust assumption. All grants precede this ceremony;
+the signature cannot retroactively authorize sockets, devices or source mounts.
+Production key governance, source-owned Store and actual full-service composition
+remain separately reviewed work. Public holds, two issuers and frozen-R rules
+are unchanged.
