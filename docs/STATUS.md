@@ -2,7 +2,21 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
+The latest [2026-10-19 host pass and TUF diagnostic](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
+passes the original dual-host gate during20:45:13/20:46:18 Asia/Shanghai:
+load2.01/1.85, top idle88.18%/77.96%, free38%/42%, both Mach checks and
+65.717408seconds with105 swapin pages/zero swapout. Only TUF `bad-root13`
+starts; CLI exit1 has four stderr lines rather than the parser's expected
+three. That case fails the diagnostic, the other three do not start and the
+accepted result is0/4. An unverified cached root v14 also leaves mutation-v13
+causality unproved; error wording alone is not a cryptographic negative pass.
+Next review the fixed CLI bootstrap/update paths and the strict parser/case
+proposal before new execution. All610 inputs/9aliases/four mirrors remain
+exact. No implementation change, retry, scan/build or timer occurs. Evidence:
+`tuf-chain-resume-20261019-124329`. Phase6 stays **5/15**; Slice6 step2 ongoing,
+step3 incomplete, step4 not started. Progress follows the stage commit/push rule.
+
+The earlier [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
 passes both base CPU/load/memory samples but fails original interval paging.
 At19:57:03/19:58:09 Asia/Shanghai, load is1.02/1.36, top idle82.61%/87.99%
 and memory free33%/33%. Over65.723560seconds, swapin+4112 pages (64.25MiB)

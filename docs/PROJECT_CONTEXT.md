@@ -35,7 +35,23 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
+The latest [2026-10-19 host pass and held TUF root attribution](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
+passes the original dual-host gate in its actual20:45:13/20:46:18 Asia/Shanghai
+window: load2.01/1.85, top idle88.18%/77.96%, free38%/42%, both Mach checks,
+and65.717408seconds with105 swapin pages (1.640625MiB) and zero swapout.
+The existing TUF batch then starts only `bad-root13`. Its CLI naturally exits1,
+but four actual stderr lines fail the parser's strict three-line expectation;
+the case is not accepted and the remaining three do not start (0/4 accepted).
+The cache also contains unverified root v14 while the mutation targets v13;
+the rejection's causal link to that mutation is unproved. Do not clear this
+by only accepting another error format. Next independently review the fixed
+tool's bootstrap/update paths, mutation causality and any strict parser/case
+correction before another identity. All610 inputs/9aliases/four mirrors remain
+exact; old evidence is preserved, no implementation or limit changes and no
+retry or timer follows. Private evidence: `tuf-chain-resume-20261019-124329`.
+Phase6 remains5/15, Slice6 step2 ongoing, steps3/4 incomplete/not started.
+
+The earlier [2026-10-19 two-sample recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-two-sample-recheck-refuses-interval-paging)
 uses a new independently reviewed identity and the unchanged implementation.
 At19:57:03/19:58:09 Asia/Shanghai, both base samples pass load, top CPU idle and
 memory floors; the first Mach observer also passes. Over65.723560seconds,

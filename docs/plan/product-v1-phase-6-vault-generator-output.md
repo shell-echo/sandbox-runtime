@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-19 two-sample recheck refuses interval paging](#2026-10-19-two-sample-recheck-refuses-interval-paging).
+Latest continuation: [2026-10-19 host gate passes, TUF root attribution held](#2026-10-19-host-gate-passes-tuf-root-attribution-held).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1528,3 +1528,97 @@ new identity/input review and a complete original dual-host and same-boot pass
 before the reviewed four cryptographic cases. Subsequent external recovery,
 real metadata and37/19 scans remain separately reviewed. No gate, resource
 quota, timeout, cache/index rule or evidence-reuse standard is relaxed.
+
+## 2026-10-19 host gate passes, TUF root attribution held
+
+New private identity: `tuf-chain-resume-20261019-124329`, with the workspace
+starting clean at`36e81a705b336033d3a2258baaec4e839e148a7d`. Independent
+review approves only this exclusive identity once, with the same controller,
+runner, host source lock and original resource/time boundaries. All512 previous
+input rows remain;98 additional rows are96 same-byte source/host/mirror copies,
+the path-rebound manifest and the previous input lock. The610-file table,
+9 tool aliases and four17-file mirrors are fully checked. No previous failed
+host/controller output is a runtime input. The frozen25 guard tests are reused
+only for the unchanged source; no test or implementation is modified or rerun.
+
+The original host gate actually passes in this bounded window:
+
+| Observation | First sample | Second sample |
+| --- | --- | --- |
+| Time, Asia/Shanghai | 20:45:13 | 20:46:18 |
+| Load1 | 2.01 | 1.85 |
+| Top CPU idle | 88.18% | 77.96% |
+| Mach idle, display value | 89.61039% | 70.987039% |
+| Memory free | 38% | 42% |
+| Swapin pages | 262161297 | 262161402 |
+| Swapout pages | 287017966 | 287017966 |
+
+The monotonic interval is65.717408167seconds. Swapin+105 16KiB pages is
+1.640625MiB, below the original32pages/second limit (about2102.957 pages);
+swapout is zero. Both base/Mach/source/SDK and same-daemon checks pass without
+changing a threshold. HOST600 exits0 in67.450473seconds and the controller
+immediately starts the separately bounded TUF parent. Original age120 checks
+pass during that execution; later report readback is not a new readiness grant.
+Same-boot checks retain only the normal UTC-clock/old N4 limited-socket scope.
+No ongoing-performance or production-readiness conclusion follows.
+
+### First actual TUF case and two distinct unresolved checks
+
+Only `bad-root13` starts, under the original pinned Cosign3.1.3, deny-network
+profile, empty private state and unchanged argv/environment. Its one mutation
+changes `13.root.json`'s signed expiry while preserving original signatures.
+The CLI naturally exits1 in0.795449seconds; stdout is empty, stderr1232bytes,
+no active signal, timeout or truncation, and the process is reaped. Actual
+stderr contains four lines: the two known modern-client file-URI warnings,
+then `Error: P` and an untimestamped `error during command execution: P`.
+Both complete payloads are identical and contain the expected signature-
+threshold error text. The frozen parser instead requires three lines and a
+timestamp on its final line, so it fails first with
+`exact expected warning/error line count`. The subsequent no-success/target
+assertions in the case body are not reached; no case acceptance is recorded.
+
+Independent raw-state review also finds one cached, unverified `root.json`
+with signed version14, JSON-equal to the frozen mirror's `14.root.json`
+(its serialized bytes differ). The modern warnings request `15.root.json`,
+whereas the selected mutation is in13. This does not by itself identify the
+modern versus legacy root consumption path or prove that13 was never read.
+It does mean existing evidence does not establish that the13 mutation caused
+the threshold refusal. The unchanged good case was not run, so failure of the
+unmodified frozen chain has not been excluded. Treating this as only a logging
+format problem would leave an unproved security negative.
+
+The parent's original sequential stop-on-failure rule prevents the timestamp,
+target and good cases from starting. The90second parent exits1 naturally in
+1.311914seconds; the controller exits1 with post_error null. **One case starts,
+zero cases are accepted; the four-case result is0/4.** Captured partial cache
+metadata and a later observation of no trusted-root target cannot substitute
+for the skipped assertions or an authenticated positive. Timestamp812, the
+frozen target chain, Python archive/SDK and downstream supply remain unqualified.
+
+### Preservation and next reviewed result
+
+All610 input rows match before/after/current,9aliases and four17-file mirrors
+remain exact, and the old204-file/19-directory checkpoint/index/seal is unchanged.
+All28 bounded original receipts are natural, without flags, with their children
+reaped. The actual attempt leaves the four Git start/post-run raw outputs equal;
+only the subsequent three progress documents change under the standing
+commit/push direction. No failed identity, old metadata, receipt or manifest
+is overwritten; no additional sample, test, scanner/build/container/compiler,
+external input, credential change or timer is introduced. Mise/Docker, ordinary
+Go1.26.8, two issuers, public holds, quotas/deadlines and reuse rules remain.
+
+Next independently review a read-only investigation of the pinned CLI's actual
+bootstrap root and modern/legacy cache/update paths, then establish mutation
+causality relative to the unchanged good input. Any parser proposal must be
+separately reviewed with real-format and refusal fixtures, retaining the
+strict warning origin, complete matching error payload, specific refusal,
+exit/no-success/target/state/closure and original bounds. Do not automatically
+accept four lines, override the trusted initial root, relabel this failed
+case or run a new identity on the strength of an error substring. No parser,
+fixture, case order or trust-root change is made in this checkpoint.
+
+Phase6 remains **5/15**. Slice6 step1 retains its bounded historical Guest E
+acceptance; step2 continues with this actual host pass and an unaccepted TUF
+diagnostic; step3 complete live inventory/original16/formal independent review
+is incomplete; step4 post-acceptance handoff has not started. This progress
+commit/push is an intermediate checkpoint, not formal Slice acceptance.
