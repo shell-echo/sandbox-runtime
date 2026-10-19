@@ -7,6 +7,20 @@ device, or implementation session. It summarizes the system, engineering
 constraints, verified maturity, and evidence boundary; it does not override
 the Provider Contract, architecture, accepted ADRs, or reproducible evidence.
 
+## Stage checkpoint workflow
+
+User direction, 2026-10-19: after each completed small stage with repository
+changes, check tracked and untracked files for omissions, commit the coherent
+reviewed changes and normally push the current implementation branch. This is
+standing authorization for those stage commits and pushes; do not wait for a
+separate request each time or accumulate several finished stages locally.
+Verify the full local HEAD, upstream reference and live remote SHA after each
+push. If authentication, divergence or another failure blocks the push, retain
+the local commits and report the exact unsynchronized state; never force-push.
+No-change stages need no empty commit. Keep private evidence outside Git and
+preserve the existing validation/review gates. Intermediate checkpoints do not
+constitute formal Slice acceptance, merge, release or publication authority.
+
 ## Active Phase 6 delivery and machine handoff
 
 The [delivery priorities and handoff plan](plan/product-v1-phase-6-delivery-and-handoff.md)
