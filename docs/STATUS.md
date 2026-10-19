@@ -2,7 +2,19 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-19 host pass and TUF diagnostic](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
+The latest [2026-10-19 fixed Cosign static root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
+identifies legacy embedded root12 and modern embedded root14; D4's cached root
+matches modern14 exactly. Initialization source calls modern then legacy, but
+complete client/updater source and an accepted unchanged good remain missing:
+D4 root13 consumption and mutation/refusal causality are unproved. Three
+original10second source requests fail, are preserved, and network stops.
+Independent review covers the static observation and conditional repair plan;
+no implementation, new host/TUF run, test/build/scan or timer follows. Private
+evidence: `tuf-bootstrap-readonly-20261019-130227`. TUF remains0/4, Phase6 **5/15**;
+Slice6 step2 ongoing, step3 incomplete, step4 not started. Progress documents
+follow the standing stage commit/push rule.
+
+The earlier [2026-10-19 host pass and TUF diagnostic](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
 passes the original dual-host gate during20:45:13/20:46:18 Asia/Shanghai:
 load2.01/1.85, top idle88.18%/77.96%, free38%/42%, both Mach checks and
 65.717408seconds with105 swapin pages/zero swapout. Only TUF `bad-root13`

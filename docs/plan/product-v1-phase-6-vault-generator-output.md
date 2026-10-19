@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-19 host gate passes, TUF root attribution held](#2026-10-19-host-gate-passes-tuf-root-attribution-held).
+Latest continuation: [2026-10-19 fixed Cosign roots and causality held](#2026-10-19-fixed-cosign-roots-and-causality-held).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1622,3 +1622,105 @@ acceptance; step2 continues with this actual host pass and an unaccepted TUF
 diagnostic; step3 complete live inventory/original16/formal independent review
 is incomplete; step4 post-acceptance handoff has not started. This progress
 commit/push is an intermediate checkpoint, not formal Slice acceptance.
+
+
+## 2026-10-19 fixed Cosign roots and causality held
+
+Private read-only identity: `tuf-bootstrap-readonly-20261019-130227`, starting
+from clean`acfcdeac1731d55888c7294987293db8b3729cae`. The new checkpoint does
+not execute Cosign, TUF cases, host sampling, tests, a compiler, scanner or
+container. Independent review precedes the static plan, each exact official
+source-input batch and the FS observation hypotheses. Existing mise Python
+only reads files/binary data; local mise Go source is a layout reference,
+not an executed or newly installed environment. Timers stay off.
+
+### Exact tool, entry source and separate embedded roots
+
+The fixed139618946-byte Cosign3.1.3 retains SHA256
+`5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76`.
+Its embedded build info names sigstore1.10.8, sigstore-go1.2.2, legacy
+go-tuf0.7.0 and go-tuf/v2 2.4.2, matching the retrieved exact-tag Cosign go.mod.
+Its recorded build Go1.26.4 describes that artifact; ordinary repository
+Go1.26.8 and all historical locks remain unchanged. Build info is not proof
+of an independently reproducible build.
+
+Three complete official tag trees and five source/module blobs are retrieved
+with public credential-free HTTPS and checked against exact Git blob SHA1
+and size, with retained SHA256. The authenticated
+[initialize entry](https://github.com/sigstore/cosign/blob/v3.1.3/cmd/cosign/cli/initialize/init.go)
+leaves rootFileBytes nil without`--root`, tries modern signing config and
+live trusted root first, and calls legacy.Initialize with that nil external
+root if the modern result remains nil. Its two warnings are separate from
+legacy's subsequent failure. The
+[later TUF helper](https://github.com/sigstore/cosign/blob/v3.1.3/pkg/cosign/tuf.go)
+can read CachePath/URLToPath(mirror)/root.json for subsequent operations;
+that helper is not initialize's bootstrap entry.
+
+A reviewed static Mach-O/FS mapping checks file-backed VM ranges, exact
+variable/table references, slice bounds, all14 records including directories,
+file paths, content ranges and the exact compiler checksum. All11 embedded
+file blobs also match official tag-tree path/size/Git blob SHA1. Three root
+files are extracted without executing the artifact:
+
+| Static module file | Signed version | Bytes including LF | SHA256 |
+| --- | --- | --- | --- |
+| legacy sigstore repository/root.json | 12 | 5414 | `874bcce852d0eb8346bcc7fc1816fddd9cb4a8664ba6a43c1101834cea6ba2a4` |
+| modern sigstore-go repository/root.json | 14 | 5491 | `a0dfcc5d51c1ce4a66b541a3fff0afa97225ccc40456b21140bb2e2f113122e2` |
+| modern staging_root.json | 13 | 4220 | `f0a8b825e7e504c36d2f4bac2c97b7a78b2abb152f3fd3b017496c20e031468e` |
+
+D4's cached URL-directory root equals the modern14 file byte for byte.
+The staging13 is a different file from the production mirror's13.root.json.
+These are static module-storage associations, not proof of which file D4
+consumed, authenticated or rejected. Local Go1.26.8 layout against the
+artifact's Go1.26.4 remains a bounded self-consistency hypothesis, not a
+whole-ABI claim. The first observer's plain SHA256-prefix assumption fails
+and stays recorded as failure. Exact local compiler source instead defines
+size-dependent toolchain checksums; separately reviewed V2 passes those
+checks plus all original structural and independent blob checks. This
+corrects a new observation hypothesis; no host/TUF guard is changed.
+
+### Causality still held and conditional correction
+
+D4 also has a separate tuf.db directory. Its sealed000001.log is0 bytes;
+a no-write read cannot establish legacy initialization or a root13 read.
+Complete good/bad-root13 mirror comparison confirms only13.root.json changes,
+with signed.expires the sole JSON difference and signatures unchanged.
+Signature-key-ID overlap is metadata evidence only, not cryptographic
+verification. Cached modern14 cannot establish that legacy starts at14;
+legacy's static12 makes a12-to13 rotation candidate consistent. Actual
+legacy selection/update stages and mutation/refusal causality remain unproved.
+The unchanged good was never run, so an unrelated broken base is not excluded.
+
+The legacy client raw request fails at10.008622seconds; one separately reviewed
+immutable official blob API request fails at10.008472seconds; a previously
+unattempted legacy root-file request fails at10.010188seconds. Each triggers
+the original whole-request10second deadline with zero body, is retained as
+failure, and is not relabelled by later static extraction. Network stops after
+the third failure; no endpoint loop or additional unattempted request follows.
+Complete legacy/modern client and updater source remains missing. Historical
+web summaries are historical design evidence, not newly authenticated source.
+
+The independently reviewed proposal remains conditional: first complete the
+exact client/updater/error-emission source chain; then review a strict fixed-
+version four-line negative frame and refusal fixtures. Preserve both warning
+origins, complete equal error payloads and the specific case refusal, natural
+exit, no-success/target, state identity, full input closure and all existing
+bounds. Do not accept error substrings or a broad three/four-line union,
+replace the initial root or automatically retarget root13 to15. Wrong lines,
+foreign origin, unmatched payload, wrong-case refusal, success target/output,
+exit/flag/post-identity failures and a broken good must remain refusals.
+
+Only a new reviewed identity with fresh original dual-host/supply/isolation
+admission may execute the unchanged four-case order and25/90second limits.
+Negative acceptance remains provisional until the same frozen-base unchanged
+good fully authenticates and the entire four-case result passes independent
+actual review. No fifth case, order change, cache/index/reuse change, third
+executor, larger quota or longer timeout is proposed. No implementation or
+refusal tests are executed in this checkpoint; old D4 stays **0/4**.
+
+D4's229-file/26-directory checkpoint, its index/seal, the frozen input rows
+and all earlier failure records are preserved. Only three progress documents
+change for the standing normal commit/push checkpoint. Phase6 remains **5/15**;
+Slice6 step1 keeps bounded historical Guest E, step2 continues with full
+source/actual causality held, step3 final topology/original16/formal independent
+review incomplete, step4 post-acceptance handoff not started.

@@ -35,7 +35,25 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-19 host pass and held TUF root attribution](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
+The latest [2026-10-19 fixed Cosign root investigation](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-fixed-cosign-roots-and-causality-held)
+identifies static legacy root12 and modern root14 in the exact Cosign3.1.3
+binary; D4's cached root exactly matches the modern root's5491 bytes. Exact
+initialization source calls modern first and falls back to legacy with nil
+external root. These distinct paths do not make cached14 proof of a legacy14
+bootstrap, and do not establish that D4 read13 or rejected its mutation.
+Three official source requests fail at the unchanged10second deadline;
+network stops and complete client/updater source remains missing. A strictly
+reviewed local FS observer maps all11 embedded file blobs to official tag
+objects; its earlier failed plain-hash hypothesis is preserved. This is static
+storage evidence, not actual TUF execution or acceptance. The conditional
+repair proposal first requires complete source review, then strict error-frame
+and refusal tests and a new original-gated four-case run including unchanged
+good. No parser, fixture, root, old cache/evidence, quota or timeout changes.
+Private evidence: `tuf-bootstrap-readonly-20261019-130227`. No new host sample,
+CLI/test/build/scan/container or timer starts; TUF stays0/4 and Phase6 stays5/15,
+Slice6 step2 ongoing, steps3/4 incomplete/not started.
+
+The earlier [2026-10-19 host pass and held TUF root attribution](plan/product-v1-phase-6-vault-generator-output.md#2026-10-19-host-gate-passes-tuf-root-attribution-held)
 passes the original dual-host gate in its actual20:45:13/20:46:18 Asia/Shanghai
 window: load2.01/1.85, top idle88.18%/77.96%, free38%/42%, both Mach checks,
 and65.717408seconds with105 swapin pages (1.640625MiB) and zero swapout.
