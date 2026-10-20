@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-20 dual-host paging recheck](#2026-10-20-dual-host-recheck-rejects-both-paging-deltas).
+Latest continuation: [2026-10-20 frozen TUF four-case pass](#2026-10-20-frozen-top-tuf-four-case-chain-passes).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2226,3 +2226,85 @@ target joint causal review; unfrozen dynamic inputs still need stage review.
 Private raw evidence stays outside Git. Phase6 remains **5/15**; Slice6 step1
 historical bounded Guest E, step2 ongoing, step3 final inventory/original16/
 formal review incomplete, step4 post-acceptance handoff not started.
+
+## 2026-10-20 frozen top TUF four-case chain passes
+
+New private identity `tuf-fourcase-resume-20261020-232404` receives independent
+identity/complete-input/expiry review before its one actual execution. The
+1031-file lock SHA256 is
+`48a5cd6f64a81af0e77ba7026ba4ea33269cbf2fde23185dabe4b8196ac2b9bf`.
+All928 prior rows and9aliases remain;103 new rows,98 byte/mode-identical
+copies and the same17-module/13-host/68-mirror scope follow the reviewed
+preparation. All18 origin inputs,11 targets, four17-file variants and the
+import closure match; controller, host lock and runtime behavior are unchanged.
+No old failed output, cache or host admission is copied. The frozen four-role
+metadata passes its actual pre/post expiry checks, without claiming latest.
+
+Actual host samples on2026-10-20, Asia/Shanghai:
+
+| Measurement | 23:26:44 | 23:27:50 |
+| --- | --- | --- |
+| load1 | 4.37 | 2.65 |
+| top CPU idle | 81.57% | 80.31% |
+| memory-pressure free | 42% | 41% |
+| Mach idle display | 91.053678%, passes | 89.669007%, passes |
+| swapin cumulative16KiB pages | 282058136 | 282059389 |
+| swapout cumulative16KiB pages | 309264430 | 309264430 |
+
+The original host gate passes in this actual window:65.846674375seconds,
+swapin+1253 pages (19.578125MiB), below32*gap=2107.09358pages, and swapout0.
+The bound remains **32 pages/second**, each16KiB (512KiB/second), unchanged.
+Both base/Mach samples, original deadlines/freshness/SDK/source/same-boot and
+daemon checks pass. Six Docker ping/version/info calls take12.205–30.190ms
+on the fixed daemon. Host outer600 naturally exits0 in67.738222167seconds;
+the chain starts about1.62seconds after the last base sample. This dated window
+does not grant continuing host readiness to later stages.
+
+Actual frozen case order and results:
+
+| Case | Mutation | CLI exit | CLI seconds |
+| --- | --- | --- | --- |
+| bad-root13 | signed.expires only; signatures retained | 1, expected refusal | 0.094406083 |
+| bad-timestamp | signed.version812→813 only; signatures retained | 1, expected refusal | 0.058061125 |
+| bad-target | trusted_root.json offset0 xor1 only | 1, expected refusal | 0.087567083 |
+| good | all17 delivered files unchanged | 0, accepted top chain | 0.087503625 |
+
+All four actual captures meet original25second/1MiB limits and exact argv;
+parent90 naturally exits0 in1.723590250seconds. Each negative has empty stdout,
+no Root status or trusted target, two exact case-URI warnings followed by two
+identical full error payloads; target expected/got64hex values match actual
+good/bad bytes. Good has only the two known warnings, reports root15,
+snapshot166, targets14 and timestamp812 without errors, and caches all11 target
+files with exact original bytes/hash/size/mode. Four new caches start empty,
+parents have distinct stable inodes, full post-state trees match records and
+all post_errors are empty. All31 bounded captures are natural/reaped without
+signal/truncation/timeout; controller host/batch flags are true, exit0,
+post_error=null. All1031 before/after/current rows,9aliases and four mirrors match.
+
+Independent actual joint review accepts **4/4 only for this new frozen top
+metadata/target chain**. Same-base unchanged-good success and single-file
+variants support bounded refusal attribution. Raw parser fields remain
+format-only/provisional; acceptance is recorded separately, not rewritten into
+old receipts. Modern root14 partial artifacts in all four states are not
+authority. This is not syscall evidence of reading13.root, official-latest,
+inherited rollback/delegated-role, Python-archive/SDK/native/operator or product
+acceptance. Old failed runs retain their original0/4 and are never retried or
+reclassified. Eight old sealed checkpoints retain1241 files excluding indices,
+115 directories and exact index/seal bytes.
+
+Runtime/tool/dependency/fixture bytes are unchanged;96parser/18adapter component
+coverage is reused by impact,17historical baseline tests stay separate, and
+no unit/Go/Contract/build/scan/container is rerun. Original9 bindings,
+64 barriers,402 files/33 components, all limits/quotas/guard/cache/index/reuse,
+Go1.26.8 and old release locks remain. Existing mise Python3.13.16 `-B`, fixed
+Cosign and sandbox are used without global installs or unrelated-process
+intervention. No new external material or timer starts. Only three reviewed
+progress documents follow normal commit/push; private raw evidence stays outside Git.
+
+Next independently review the concrete use of these authenticated targets and
+source provenance for existing Python archive/SDK candidate records. Their actual
+signature/byte correspondence, new identities, freshness/supply/host/isolation
+and downstream reviews remain required; this4/4 does not inherit those gates.
+Phase6 remains **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoing,
+step3 final inventory/original16/formal review incomplete, step4 post-acceptance
+handoff not started.

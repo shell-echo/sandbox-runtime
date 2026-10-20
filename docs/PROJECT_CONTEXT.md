@@ -35,7 +35,28 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
+The latest [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
+passes the original dual-host gate and independently accepts **4/4** only for
+this new identity's frozen top metadata/target chain. At23:26:44/23:27:50
+Asia/Shanghai, load4.37/2.65, top idle81.57%/80.31%, free42%/41% and both Mach
+checks pass;65.846674seconds has1253 swapin pages (19.578125MiB) and zero
+swapout. The unchanged fixed Cosign then naturally rejects root13, timestamp
+and target mutations, while the same-base unchanged good authenticates all
+four top roles and11 cached target files. Joint review binds exact variants,
+empty isolated caches, strict complete error frames, actual bytes/receipts
+and post-state. All31 bounded captures are natural/reaped;1031 input rows and
+eight old sealed checkpoints remain exact. Evidence:
+`tuf-fourcase-resume-20261020-232404`. Old failures are not reclassified;
+raw provisional parser fields remain unchanged, and modern partial root14
+files are not authority. This does not prove syscall reads of13, official latest,
+inherited rollback/delegation, Python archive/SDK/native or product acceptance.
+Next independently review concrete authenticated-target use and provenance for
+existing archive/SDK candidate records with all downstream gates intact. Three
+reviewed progress documents follow normal commit/push; no implementation,
+limit/cache/index/reuse changes, build/scan/new material or timer follows.
+Phase6 remains5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
 uses a new independently reviewed identity with928 complete inputs, preserving
 all825 prior rows/9aliases and unchanged approved source. At09:43:52/09:44:58
 Asia/Shanghai, load4.41/4.86, top idle64.82%/60.38% and memory-pressure free31%/

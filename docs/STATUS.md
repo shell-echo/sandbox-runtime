@@ -2,7 +2,24 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
+The latest [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
+passes the original host gate at23:26:44/23:27:50 Asia/Shanghai: both base/Mach
+samples pass,65.846674seconds has1253 swapin pages and zero swapout. Fixed
+Cosign actually executes all four cases; independent joint review accepts
+**4/4 only for this new frozen top chain**. Three exact mutations are rejected;
+unchanged good authenticates four roles and all11 target bytes. All31 bounded
+captures are natural/reaped,1031 complete input rows match before/after/current,
+and eight old sealed checkpoints remain intact. Evidence:
+`tuf-fourcase-resume-20261020-232404`. Old0/4 failures stay failed; strict parser
+fields and modern partial root14 files do not become standalone authority.
+No syscall-read13, official-latest/rollback/delegation, archive/SDK/native or
+product acceptance is claimed. Next independently review downstream concrete
+target consumption and candidate provenance with existing gates unchanged.
+Only three reviewed progress documents follow normal commit/push; no source,
+limit/cache/index/reuse change, new material, build/scan or timer starts.
+Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
 reviews a new928-input identity with all825 prior rows/9aliases and approved
 implementation unchanged. At09:43:52/09:44:58 Asia/Shanghai, both base CPU/load/
 memory-pressure samples and first Mach pass. Over65.930274seconds, swapin rises
