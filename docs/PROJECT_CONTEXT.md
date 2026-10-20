@@ -35,7 +35,25 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
+The latest [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
+uses a new independently reviewed identity with928 complete inputs, preserving
+all825 prior rows/9aliases and unchanged approved source. At09:43:52/09:44:58
+Asia/Shanghai, load4.41/4.86, top idle64.82%/60.38% and memory-pressure free31%/
+31% pass, with first Mach76.902174%. Over65.930274seconds, swapin increases71339
+16KiB pages (1114.671875MiB), above32pages/second, and swapout increases95336
+pages (1489.625MiB), above zero. Both original paging predicates fail; second
+Mach and TUF never start. All25 bounded receipts are natural/reaped without
+signal/truncation/timeout; wrapper exit0 is not readiness. All928 before/after/
+current input rows and seven old sealed checkpoints remain exact. Role expiry
+is still future as a time check only. Evidence: `tuf-fourcase-resume-20261020-094023`.
+The failed identity is retained without retry; no gate/limit/tool/cache/index/
+reuse changes, build/scan/new material or timer follows. Three reviewed progress
+documents follow normal commit/push. A new independently reviewed identity must
+pass the complete original dual gate before four-case unchanged-good joint
+review. TUF stays0/4, Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
 uses a separately reviewed new identity with825 complete inputs, retaining all722
 prior rows/9aliases and the unchanged approved implementation. Final role
 expiries remain future as a time check only. At09:29:40/09:30:46 Asia/Shanghai,

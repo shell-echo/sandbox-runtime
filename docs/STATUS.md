@@ -2,7 +2,21 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
+The latest [2026-10-20 dual-host paging recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-both-paging-deltas)
+reviews a new928-input identity with all825 prior rows/9aliases and approved
+implementation unchanged. At09:43:52/09:44:58 Asia/Shanghai, both base CPU/load/
+memory-pressure samples and first Mach pass. Over65.930274seconds, swapin rises
+71339 16KiB pages (1114.671875MiB), exceeding32pages/second, and swapout rises
+95336 pages (1489.625MiB), exceeding zero. The second guard correctly rejects;
+second Mach/readiness/TUF are unstarted, still0/4. All25 bounded captures are
+natural/reaped, with928 input rows exact before/after/current and seven old
+sealed checkpoints preserved. Future role expiry is time-only. Evidence:
+`tuf-fourcase-resume-20261020-094023`. No retry, gate/limit/cache/index/reuse/
+toolchain change, new material, build/scan or timer starts. Three reviewed
+progress documents follow normal commit/push. Phase6 stays **5/15**; Slice6
+step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
 independently reviews a new identity with825 full inputs; prior722 rows/9aliases,
 approved source and four mirrors remain unchanged. At09:29:40/09:30:46
 Asia/Shanghai, load3.47/3.01, top idle79.37%/75.52% and free40%/33% pass;
