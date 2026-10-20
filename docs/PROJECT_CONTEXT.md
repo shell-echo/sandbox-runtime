@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -35,7 +35,26 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
+The latest [2026-10-21 Python/SDK authentication prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
+confirms the retained Python candidate metadata/bundles, the authenticated good
+TUF target, all 27 selected compiler/ABI inputs and the complete 264-file,
+5-directory Python header tree. Two separately reviewed source-only batches
+each verify 7/8 fixed source files. The same missing Cosign attestation entry
+times out at the original 10-second boundary through raw and immutable blob
+paths; both failures remain, with no identity retry or further endpoint loop.
+Independent review accepts 14 source files and the conditional target-use
+analysis, while actual Python verification remains **HELD**: helper/library
+behavior cannot prove the missing entry's real wiring. Python archive bytes
+and the exact original signed Apple SDK package remain absent from the inspected
+recovery materials. No host sampling, Cosign verification, build or scan starts.
+Evidence: `python-sdk-auth-20261020-235600`. Next close that exact source edge,
+then independently review complete execution inputs, strict provenance/refusal
+checks and fresh original host readiness. Existing TUF 4/4 remains limited to
+its frozen top chain. Three progress documents follow normal commit/push;
+private evidence, original limits/guards/reuse rules and disabled timers stay.
+Phase6 remains 5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
 passes the original dual-host gate and independently accepts **4/4** only for
 this new identity's frozen top metadata/target chain. At23:26:44/23:27:50
 Asia/Shanghai, load4.37/2.65, top idle81.57%/80.31%, free42%/41% and both Mach

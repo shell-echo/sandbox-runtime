@@ -2308,3 +2308,71 @@ and downstream reviews remain required; this4/4 does not inherit those gates.
 Phase6 remains **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoing,
 step3 final inventory/original16/formal review incomplete, step4 post-acceptance
 handoff not started.
+
+## 2026-10-21 Python SDK authentication prerequisites held
+
+Private checkpoint `python-sdk-auth-20261020-235600` starts on October 20 and
+closes on October 21, Asia/Shanghai. It inventories the retained normal and
+stripped Python 3.13.16+20261003 Darwin arm64 candidates and index-0 SLSA v1
+bundles. These are metadata and unverified proof bytes; neither archive is
+present in the inspected recovery tree. Current hashes, sizes and modes match
+all 27 selected compiler/ABI inputs, all 264 Python headers and all 5 header
+directories, with the SDK alias unchanged. The exact original signed Apple
+CLT/SDK installer still lacks a qualified locator, size, digest and payload.
+Receipt/BOM observations do not close its source authentication.
+
+Independent review approves two distinct source-only retrieval identities with
+the unchanged fixed fetcher and existing mise Python 3.13.16 `-B`. Each request
+has its original whole 10-second/1MiB boundary, each parent 90 seconds/1MiB,
+with no credentials, proxy, redirect following or retry. Each batch verifies
+7/8 source files against the retained complete upstream Git trees; parents
+naturally exit 1 in 18.194320 and 18.175151 seconds, without timeout, active
+signal, truncation or unreaped child. The missing Cosign 3.1.3
+`cmd/cosign/cli/verify/verify_blob_attestation.go` request fails twice: the raw
+path takes 10.012599 seconds and the separately reviewed immutable blob API
+path 10.012831 seconds, both with zero body bytes. Those leaf deadlines are
+failures despite natural parent completion. Both original identities and
+partial responses remain; no further endpoint request is made this stage.
+
+Independent source/result review accepts the 14 successful fixed source files.
+The fixed CLI spells the digest algorithm flag `--digestAlg`. Its command
+constructs the expected verification options, but the actual attestation
+`Exec` source is still absent. The recovered trusted-material helper reads an
+explicit root locally and returns before default TUF fallback; the recovered
+Cosign/sigstore-go libraries conditionally configure and enforce certificate,
+CT, transparency-log, time, digest and identity policies. Their presence alone
+does not establish how the missing entry uses them, parses bundles or handles
+network fallback. The source-supported plan therefore remains **HELD before
+actual Cosign verification**.
+
+The proposed explicit root is only the accepted good target's 6787-byte
+`trusted_root.json`, SHA256
+`6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`,
+bound to the separate frozen-chain 4/4 acceptance. Modern partial root14 files
+and old default caches are not authority. Frozen role expiries are still in
+the future at this observation; future consumption must recheck freshness and
+all inputs. Strict future policy must retain issuer and exact workflow identity,
+SCT/tlog/time checks, each expected digest's unique matching build subject,
+workflow/ref/source-commit provenance and negative cases. Library digest
+membership among 896 subjects does not prove a unique expected subject.
+Even a future digest-only verification would authenticate the statement binding,
+not archive presence, installed-byte correspondence, SDK provenance or ABI.
+
+All 1031 prior input rows, 9 aliases and 11 sealed checkpoints (1734 files
+excluding their indices, 166 directories) remain exact. The analysis input lock
+is explicitly not a complete future execution lock. Original 9 binding positions,
+64 barriers, old 402 files/33 components, guard/cache/index/evidence-reuse,
+time/resource bounds and Go1.26.8 remain. No new host sampling, Cosign/TUF case,
+archive download/extraction, SDK execution, native build, scan, container or
+timer starts. Existing 96 parser/18 adapter component results are unaffected;
+no tests are rerun for this documentation/source-data stage. Only three reviewed
+progress documents follow normal commit/push; private sources/raw failures stay
+outside Git.
+
+Next close the exact missing entry with a separately reviewed source path and
+new identity, then review the concrete verifier/post-policy/refusal design and
+complete execution inputs before fresh original dual-host admission. Archive
+delivery/Location and original SDK package/payload correspondence remain
+separate reviewed stages. Phase6 stays **5/15**; Slice6 step1 historical bounded
+Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
+step4 post-acceptance handoff not started.

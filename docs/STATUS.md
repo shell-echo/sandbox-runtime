@@ -2,7 +2,24 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
+The latest [2026-10-21 Python/SDK prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
+independently accepts 14 exact fixed-version source files and a conditional
+authenticated-target-use analysis. Two source-only batches each finish 7/8;
+the same missing Cosign attestation entry times out at the unchanged 10-second
+limit through two official paths. Failures are retained without identity retry
+or further endpoint requests. Actual verification remains **HELD** until that
+entry and complete execution inputs are source-bound and independently reviewed.
+All 27 selected compiler/ABI inputs and 264 Python headers/5 directories match;
+retained bundles remain unverified, Python archives and the original signed
+Apple SDK installer are absent from the inspected recovery materials. The
+accepted good TUF target is pinned to its limited frozen-chain acceptance.
+No host sample, Cosign/Python/SDK verification, build or scan starts. Evidence:
+`python-sdk-auth-20261020-235600`. All 1031 old input rows, 9 aliases and 11
+sealed checkpoints remain exact. Only three progress documents change and
+follow normal commit/push; private evidence and disabled timers are preserved.
+Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 frozen TUF four-case pass](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-frozen-top-tuf-four-case-chain-passes)
 passes the original host gate at23:26:44/23:27:50 Asia/Shanghai: both base/Mach
 samples pass,65.846674seconds has1253 swapin pages and zero swapout. Fixed
 Cosign actually executes all four cases; independent joint review accepts
