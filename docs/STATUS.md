@@ -2,7 +2,22 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 util/log source correspondence](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
+The latest [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
+implements exact fixed-version warning/error frames and full target hash errors,
+with strict bounded natural receipts and no negative stdout. New private caller
+glue observes no-success facts before parsing and preserves target/post/good
+authentication checks. Independent component verification passes96 repository
+and18 adapter/unaffected tests, plus17 isolated historical baseline tests.
+Old D4 raw is a format fixture only; its failure and TUF0/4 remain unchanged.
+No new host/TUF case or execution lock is created; original fresh source/input,
+host/supply/isolation gates and four-case unchanged-good joint review remain
+required. All610 inputs/9aliases/four old checkpoints match. Evidence:
+`tuf-fourline-policy-20261020-083751`. Three tool files and three progress
+documents follow normal commit/push; private evidence remains outside Git,
+limits/Go1.26.8/cache/index/reuse rules and disabled timers remain unchanged.
+Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 util/log source correspondence](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
 closes the two source gaps: util confirms13.root.json and complete hash errors;
 static inline metadata plus verified CUE0.16.1 source identifies init's global
 log.SetFlags(0). Nineteen original10second-bounded requests restore18 source/module

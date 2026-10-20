@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-20 util and standard-log source correspondence](#2026-10-20-util-and-standard-log-source-correspondence).
+Latest continuation: [2026-10-20 strict four-line capture policy](#2026-10-20-strict-four-line-capture-policy).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -1939,3 +1939,86 @@ remain off. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E,
 step2 ongoing with source gaps closed but actual gates pending, step3 final
 inventory/original16/formal review incomplete, step4 post-acceptance handoff
 not started. This checkpoint commit is not formal step4.
+
+## 2026-10-20 strict four-line capture policy
+
+New private identity: `tuf-fourline-policy-20261020-083751`, from clean
+`0a86d7e57add4650e2f9e6b7c8aefcbc358af9c9`. Design/input review precedes
+implementation, then a second concrete implementation/caller/test review
+precedes one component-test driver. Existing mise Python3.13.16 reads data
+and runs synthetic tests only; no network, Cosign, host/TUF gate, Go/Docker,
+build, scan, global environment or timer change occurs.
+
+### Implementation and preserved caller checks
+
+The new repository [capture policy](../../tools/tuf-diagnostic-policy/README.md)
+is pure Python with no CLI/process/network/filesystem behavior. Each negative
+requires exactly two distinct full modern warnings, Error:P and the
+untimestamped final error-during-command-execution:P. Both complete payloads
+must equal the fixed case-specific expectation. The target payload includes
+both full lowercase64-hex expected/got values from the prior source checkpoint.
+Warning roles, their different wrappers, exact original mirror plus15.root.json
+and file transport reason are fixed; good retains exactly two warnings only.
+No trimming, URL normalization, substring/three-line/timestamp alternative,
+partial hash or arbitrary caller-supplied error template is accepted.
+
+The capture checker requires a closed13-field receipt, precise integer/bool
+types, reviewed seven-argument invocation, natural expected exit, reaping,
+original25seconds/1MiB, finite nonnegative elapsed, full received/stored/actual
+byte equality, no signal/truncation/timeout, and empty negative stdout. Its
+result explicitly remains format-only and unauthenticated; it cannot bind the
+producer, prove signatures or supply a case/batch pass by itself.
+
+New private copied policy/caller versions preserve all seven non-frame policy
+function bodies, CASES/TOOL/target locks, fullinput/expiry/current-host checks,
+good's full Root status/roles/target bytes, post identity/tree bounds and
+sequential failure-stop. No-success stdout/Root-status/target-lstat facts are
+recorded before parsing, including unknown errors; a broken target symlink is
+present and refused. Parser failure still preserves facts, while any parser
+or post error keeps the case false. The new runner is an unexecuted template:
+no actual execution lock, claim, fixture mirror or cache is created here.
+
+### Actual component results and retained evidence boundary
+
+All three isolated child suites pass naturally under25seconds/1MiB, with
+unchanged25-file implementation rows before and after:
+
+| Suite | Actual test count | Captured elapsed seconds | Meaning |
+| --- | ---: | ---: | --- |
+| repository | 96 | 0.044517041 | Independent literal frames, complete hash, URI, receipt and output refusals |
+| baseline | 17 | 0.043199209 | Exact old source/test copies in new isolated paths; historical baseline only |
+| adapter | 18 | 0.075657375 | Nine new caller checks plus nine unaffected frozen regressions against new policy |
+
+The old three-line positive examples remain historical baseline tests; they
+are explicitly refused by the new parser and do not count as its correctness
+proof. New fixtures reject altered warning role/source/wrapper/URL/version,
+wrong line counts/order/duplicates/extra text, CRLF/missing-LF/invalid-UTF8/NUL,
+wrong/unequal case payloads, omitted/truncated/changed/uppercase/swapped hashes,
+signal/timeout/truncation, false numeric types/counts/limits/argv and nonempty
+negative stdout. Caller tests exercise target presence, broken symlink,
+unknown lstat, parse-failure facts, post failure and original sequence stop.
+
+The exact old D4 raw stderr is consumed read-only as a source-bound **format
+fixture only** and matches the new four-line function. No old receipt is
+accepted as a new capture, no old case is reclassified and no failure identity
+is rerun. The original failed run and actual TUF result stay **0/4**.
+
+All610 original rows/9aliases and four sealed checkpoints627 files/55
+directories outside their indices remain exact. Old failed receipts, recovery
+sources, migration material,9 bindings,64 barriers,402 files/33 components and
+cache/index/reuse standards are retained. Repository changes are three pure
+tool files plus three progress documents, reviewed before normal commit/push;
+raw/private adapter material remains outside Git. No Go/Provider/Contract
+behavior changes, full Go rerun, larger allocation or extended deadline occurs.
+
+Next review a new real execution identity and complete input lock binding
+these exact code bytes, dynamic metadata freshness and supply evidence. Only
+fresh original dual-host/same-boot/supply/isolation gates permit the original
+four-case order,25second children/90second parent/1MiB execution. Keep root13,
+nil external root and separate cache state; any failure preserves and stops.
+Negatives remain provisional until the same frozen-base unchanged good
+authenticates all roles/targets and all four pass joint actual review. No such
+new run is admitted or performed here, and actual13 reads/mutation causality
+remain unproved. Timers remain off. Phase6 stays **5/15**; Slice6 step1 historical
+bounded Guest E, step2 ongoing, step3 final inventory/original16/formal review
+incomplete, step4 post-acceptance handoff not started.

@@ -35,7 +35,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 util and standard-log source closure](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
+The latest [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
+adds a reusable pure-Python fixed-Cosign3.1.3 parser and independent synthetic
+tests in tools/tuf-diagnostic-policy. It exactly matches both distinct warnings,
+case-specific full duplicated payloads and complete target expected/got hashes;
+strict natural receipt, original25second/1MiB bounds and empty negative stdout
+are required. New private caller glue records target/no-success facts before
+parsing, rejects broken symlinks/unknown errors and retains all good/post/input
+checks. Independently reviewed component suites pass96 repository tests and18
+adapter/unaffected regression tests;17 unchanged old tests pass separately as a
+historical baseline. D4 raw matches only as a format fixture, without changing
+its failed result. No actual execution lock, host sample or Cosign/TUF case is
+started. Fresh source-bound execution inputs, original host/supply/isolation
+gates and unchanged-good joint causal review still precede any TUF acceptance.
+All610 inputs/9aliases/four old sealed checkpoints are preserved. Evidence:
+`tuf-fourline-policy-20261020-083751`. Only three tool files and three progress
+documents follow normal commit/push; private data stays outside Git, original
+limits/toolchain/cache/index/reuse rules and disabled timers remain unchanged.
+TUF stays0/4, Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-20 util and standard-log source closure](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-util-and-standard-log-source-correspondence)
 verifies18 new fixed-version source/module files and one complete tree through
 19 successful original10second-bounded requests. Legacy util confirms
 13.root.json naming and the complete expected/got hash error. A new independently
