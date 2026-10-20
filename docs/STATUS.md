@@ -2,7 +2,25 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
+The latest [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
+independently reviews a new identity with825 full inputs; prior722 rows/9aliases,
+approved source and four mirrors remain unchanged. At09:29:40/09:30:46
+Asia/Shanghai, load3.47/3.01, top idle79.37%/75.52% and free40%/33% pass;
+the first Mach observation also passes. The65.817397second interval has6131
+swapin pages (95.796875MiB), exceeding32pages/second, with zero swapout.
+The second guard therefore rejects before Mach; no TUF case starts, still0/4.
+All25 bounded receipts are natural/reaped without signal/truncation/timeout;
+wrapper exit0 does not grant readiness. All825 input rows match before/after/
+current and six old sealed checkpoints stay exact. Role freshness is time-only,
+not cryptographic acceptance. Evidence: `tuf-fourcase-resume-20261020-092705`.
+The failed identity is retained without retry; original complete dual readiness
+and four-case unchanged-good joint review still precede TUF acceptance.
+Three reviewed progress documents follow normal commit/push. No gate/limit/
+cache/index/reuse/toolchain change, new external material, build/scan or timer
+starts. Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
 uses a new independently reviewed identity and722 full inputs, retaining all610
 old rows/9aliases/four mirrors and the unchanged approved implementation. Role
 expiries remain future as a time check only. At08:58:05 Asia/Shanghai, load3.60

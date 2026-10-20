@@ -35,7 +35,25 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
+The latest [2026-10-20 dual-host interval recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-dual-host-recheck-rejects-interval-swapin)
+uses a separately reviewed new identity with825 complete inputs, retaining all722
+prior rows/9aliases and the unchanged approved implementation. Final role
+expiries remain future as a time check only. At09:29:40/09:30:46 Asia/Shanghai,
+load3.47/3.01, top idle79.37%/75.52% and free40%/33% pass both base samples;
+first Mach idle84.791252% also passes. Over65.817397seconds, swapin rises6131
+16KiB pages (95.796875MiB), exceeding the original32pages/second bound;
+swapout stays zero. The second guard stops before its Mach check and no TUF
+case starts. All25 bounded receipts naturally finish/reap without signal,
+truncation or timeout; wrapper exit0 is not readiness. All825 before/after/
+current rows match, and six old sealed checkpoints remain exact. Evidence:
+`tuf-fourcase-resume-20261020-092705`. This failed identity is not retried.
+Next a new independently reviewed identity must pass the complete original
+dual gate before the frozen four-case batch and joint causal review. Only three
+progress documents follow normal commit/push; no gate/limit/tool/cache/index/
+reuse changes, external material, build/scan or timer follows. TUF stays0/4,
+Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
 independently reviews a new true execution identity with722 complete inputs,
 preserving all610 old rows/9aliases and four17-file mirrors. The approved
 four-line implementation is unchanged; final role expiries are still future,

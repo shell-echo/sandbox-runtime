@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-20 source-bound host recheck](#2026-10-20-source-bound-host-recheck-stops-before-tuf).
+Latest continuation: [2026-10-20 dual-host interval recheck](#2026-10-20-dual-host-recheck-rejects-interval-swapin).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2092,3 +2092,74 @@ all11-target authentication and actual joint causal review. Dynamic inputs,
 if introduced, need their own stage review. Phase6 stays **5/15**; Slice6 step1
 historical bounded Guest E, step2 ongoing, step3 final inventory/original16/
 formal review incomplete, step4 post-acceptance handoff not started.
+
+## 2026-10-20 dual-host recheck rejects interval swapin
+
+New private identity `tuf-fourcase-resume-20261020-092705` receives independent
+identity/complete-input/expiry review before one original dual-host attempt.
+Its825-file lock SHA256 is
+`1d06c46a5ee608a9c119393b23515699a0d02f9dd7726c9be11075f2d6269a4b`.
+All722 prior rows, including the original610, and9aliases remain unchanged.
+The103 new rows bind99 owned C inputs and four source/preparation references;
+98 exact copies comprise17 modules including the unchanged v3 controller,
+13 host sources/lock and68 mirror files. New manifest changes only owned
+mirror/URI and three path_rebind provenance values. All18 original sources,
+11 target declarations and four17-file variants match their frozen bytes.
+No old failed output, host admission or cache is copied. The unchanged-source
+96 parser/18 adapter tests are reused;17 historical baseline tests stay separate.
+No test or tool implementation is changed or rerun.
+
+Frozen root15/timestamp812/snapshot166/targets14 remain before their original
+2026-11-20/2026-10-26/2036-10-04/2036-05-09 expiries at actual pre/post checks.
+This is a time check, not signature authentication or official-latest proof.
+No new external input, DB, image or native/scanner admission is introduced.
+The complete import closure, fixed tools, sandbox profile and same-boot refusal
+are independently checked. Original host5/70/90/600, gap65/age120,
+load6/topidle60/free30/Mach/paging/daemon and TUF25/90/1MiB/GOMAXPROCS2
+bounds remain unchanged. Any unfrozen dynamic input still needs stage review.
+
+Actual base samples, Asia/Shanghai on2026-10-20:
+
+| Measurement | 09:29:40 | 09:30:46 |
+| --- | --- | --- |
+| load1 | 3.47 | 3.01 |
+| top CPU idle | 79.37% | 75.52% |
+| memory free | 40% | 33% |
+| Mach idle display | 84.791252%, passes | not reached |
+| swapin cumulative16KiB pages | 262287091 | 262293222 |
+| swapout cumulative16KiB pages | 287207766 | 287207766 |
+
+Both base samples pass scalar floors, and the first Mach observation passes.
+The base monotonic interval is65.817397042seconds; swapin increases6131 pages
+(95.796875MiB), exceeding the original32*gap=2106.156705pages limit, while
+swapout remains zero. The second guard naturally exits1 in0.819408875seconds
+with `interval paging bounds`, before its Mach observation. This identifies
+the failed interval predicate, not any process responsible or later readiness.
+The first guard naturally exits0 in1.827086375seconds. All six Docker
+ping/version/info calls pass in15.237–58.874ms with the same fixed daemon;
+fast Docker and both CPU scalars do not override interval paging.
+
+All25 bounded receipts (18 leaves, six outer/negative captures and one Mach)
+are natural/reaped, within original time/byte bounds, without signal,
+truncation or timeout. The host wrapper naturally exits0 in66.666006458seconds,
+but summary readiness is false; controller correctly refuses `host runner result`,
+exits1 and records post_error=null. No host-readiness, second Mach, parent90,
+case claim, chain-runs/cache or TUF case is produced. **Zero cases start and
+TUF remains0/4**; the failed identity is preserved without retry. Dynamic raw
+results and the stopping path receive independent read-only review.
+
+All825 complete input rows match before/after/current;9aliases and four mirrors
+remain exact. All six earlier sealed checkpoints retain846 files excluding
+their indices,77 directories and exact index/seal bytes. Prior failures,
+9 bindings,64 barriers, old402 files/33 components and cache/index/reuse rules
+are retained. No allocation/deadline/guard relaxation, Go1.26.8/release-lock
+change, global install, unrelated-process intervention, build/scan/container
+or new timer occurs. This run uses existing mise Python3.13.16 `-B`.
+
+Only three reviewed progress documents follow the standing normal commit/push
+workflow; private raw evidence stays outside Git. Next a separately reviewed
+new identity must pass the complete original dual gate before the same frozen
+four TUF cases and unchanged-good all-role/all11-target joint causal review.
+Timers remain off. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E,
+step2 ongoing, step3 final inventory/original16/formal review incomplete,
+step4 post-acceptance handoff not started.
