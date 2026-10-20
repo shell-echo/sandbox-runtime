@@ -35,7 +35,25 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
+The latest [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
+independently reviews a new true execution identity with722 complete inputs,
+preserving all610 old rows/9aliases and four17-file mirrors. The approved
+four-line implementation is unchanged; final role expiries are still future,
+which is only a time check. At08:58:05 Asia/Shanghai, load3.60 and free40% pass,
+but top idle46.22% fails the original60% floor. The first guard stops before
+Mach, the second sample or any TUF case; no paging interval is measured.
+All13 bounded receipts naturally finish without signal/truncation/timeout and
+are reaped; host wrapper exit0 does not override its false readiness result.
+All722 before/after/current inputs match; five old sealed checkpoints remain
+exact. Evidence: `tuf-fourcase-resume-20261020-085244`. The failed identity is
+retained without retry. Next use a separately reviewed new identity and the
+original dual gate before the frozen four-case batch and joint causal review.
+Only three progress documents follow normal commit/push; no tool/limit/supply/
+cache/index/reuse changes, new external material, build/scan or timer follows.
+TUF stays0/4, Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
 adds a reusable pure-Python fixed-Cosign3.1.3 parser and independent synthetic
 tests in tools/tuf-diagnostic-policy. It exactly matches both distinct warnings,
 case-specific full duplicated payloads and complete target expected/got hashes;

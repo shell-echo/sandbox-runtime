@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-20 strict four-line capture policy](#2026-10-20-strict-four-line-capture-policy).
+Latest continuation: [2026-10-20 source-bound host recheck](#2026-10-20-source-bound-host-recheck-stops-before-tuf).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2022,3 +2022,73 @@ new run is admitted or performed here, and actual13 reads/mutation causality
 remain unproved. Timers remain off. Phase6 stays **5/15**; Slice6 step1 historical
 bounded Guest E, step2 ongoing, step3 final inventory/original16/formal review
 incomplete, step4 post-acceptance handoff not started.
+
+## 2026-10-20 source-bound host recheck stops before TUF
+
+New private identity `tuf-fourcase-resume-20261020-085244` receives independent
+read-only identity/input/freshness review before one original host attempt.
+The722-file lock SHA256 is
+`e7a1bcc9d6b8103042f281263eaa9fcbb77baed1c65ddf9f6091b5481ba11f92`.
+All610 old rows and9aliases remain;112 new rows bind the owned copied sources,
+mirrors and external source/evidence references. The97 byte/mode-identical
+copies comprise16 modules,13 host sources/lock and68 mirror files. The four
+case trees each have17 files, validated against all18 original sources and
+11 target declarations; manifest changes are owned mirror/URI paths and
+path_rebind provenance only. The controller changes only the invoked runner
+filename to the already reviewed v3; no tool implementation changes here.
+New claims, output and cache are exclusive; no old run state is copied.
+
+A source-only preparation draft fails before creating the execution directory
+because a historical resumed fixture's relative inventory entry is absent.
+Its script and failure record are preserved. A new preparation script loads
+the exact old-lock-bound original SOURCE module and its actual inventory,
+checks the complete18-input closure, regenerates variants in memory and
+compares every old/new mirror byte. It does not rerun a failed host/TUF
+identity or rewrite an old inventory. The final independent review confirms
+the complete import closure, all722 physical rows, aliases, copied host lock,
+exclusive identity, manifest path-only diff and original bounds.
+
+The same frozen root15/timestamp812/snapshot166/targets14 have future expiry
+at pre-execution and post checks:2026-11-20T13:58:18Z,
+2026-10-26T01:39:45Z,2036-10-04T08:51:19Z and2036-05-09T09:00:52Z respectively.
+This is a time check, not cryptographic authentication or official-latest
+admission. No new external input is fetched; native APK/image/DB/scanner
+admission is outside this run. Existing fixed-tool, deny-network and same-boot
+refusal checks remain; the old proof never supplies current host readiness.
+
+The original first base sample completes at2026-10-20T00:58:05.009927Z
+(08:58:05 Asia/Shanghai). Uptime load1 **3.60** and memory free **40%** pass,
+but top CPU idle **46.22%** fails the original60% floor. The first90-second
+guard naturally exits1 in1.246702083seconds with `stable sample bounds`.
+Mach, second sample and host-first/readiness are not reached. There is no
+dual-sample interval or paging-delta conclusion and no process attribution.
+The three Docker ping/version/info calls complete in25.795/18.549/27.364ms,
+retaining the exact daemon/version; that single window does not grant admission.
+
+All13 bounded receipts (nine leaves and four outer/negative captures) are
+natural, reaped and within their original time/byte bounds, without signal,
+truncation or timeout. The host wrapper exits0 in1.349223625seconds but its
+summary explicitly says readiness=false; controller correctly rejects
+`host runner result`, naturally exits1 and records post_error=null. No
+parent90, case claim, chain-runs/cache or TUF case starts: **0/4**, unchanged.
+The actual raw result and absent stages receive independent read-only review;
+the failure identity is retained without retry.
+
+All722 input rows match before/after/current;9aliases and four mirrors stay
+exact. Five old sealed checkpoints retain all679 files excluding five indices,
+59 directories and exact indices/external seals. The original9 bindings,
+64 barriers, old402 files/33 components and all failed evidence remain intact.
+Frozen96 parser and18 adapter/unaffected tests are reused within unchanged
+source scope;17 old baseline tests remain separate. No unit/Go/race/vet/Contract
+rerun, build, scan or container is started, and no Go1.26.8/release lock,
+cache/index/reuse/guard/timeout/quota change occurs. Existing mise Python3.13.16
+`-B` supplies this run without a global install. Timers remain off.
+
+Only three reviewed progress documents follow the standing normal commit/push
+workflow, with private raw evidence outside Git. Next use a separately reviewed
+new identity; original complete dual readiness must pass before unchanged TUF
+four cases, and negative acceptance still requires same-base good all-role/
+all11-target authentication and actual joint causal review. Dynamic inputs,
+if introduced, need their own stage review. Phase6 stays **5/15**; Slice6 step1
+historical bounded Guest E, step2 ongoing, step3 final inventory/original16/
+formal review incomplete, step4 post-acceptance handoff not started.

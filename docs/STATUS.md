@@ -2,7 +2,23 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
+The latest [2026-10-20 source-bound host recheck](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-source-bound-host-recheck-stops-before-tuf)
+uses a new independently reviewed identity and722 full inputs, retaining all610
+old rows/9aliases/four mirrors and the unchanged approved implementation. Role
+expiries remain future as a time check only. At08:58:05 Asia/Shanghai, load3.60
+and free40% pass but top idle46.22%<60% rejects the first guard. No Mach check,
+second sample, paging interval or TUF case starts. All13 bounded receipts are
+natural/reaped without signal/truncation/timeout; the host wrapper's exit0 is
+not a readiness pass. All722 input rows match before/after/current, and five
+old sealed checkpoints remain exact. Evidence: `tuf-fourcase-resume-20261020-085244`.
+Retain the failed identity without retry; original dual readiness and actual
+four-case unchanged-good joint review still precede TUF acceptance. No new
+external material, build/scan, gate/limit/cache/index/reuse/toolchain change or
+timer starts. Three reviewed progress documents follow normal commit/push.
+TUF stays0/4, Phase6 **5/15**; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-20 strict four-line capture policy](plan/product-v1-phase-6-vault-generator-output.md#2026-10-20-strict-four-line-capture-policy)
 implements exact fixed-version warning/error frames and full target hash errors,
 with strict bounded natural receipts and no negative stdout. New private caller
 glue observes no-success facts before parsing and preserves target/post/good
