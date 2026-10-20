@@ -2376,3 +2376,96 @@ delivery/Location and original SDK package/payload correspondence remain
 separate reviewed stages. Phase6 stays **5/15**; Slice6 step1 historical bounded
 Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
 step4 post-acceptance handoff not started.
+
+## 2026-10-21 Cosign attestation source restored
+
+Private identity `cosign-attestation-entry-20261021-002703` receives independent
+path/identity/input review before a single official GitHub Contents request for
+Cosign3.1.3's missing `verify_blob_attestation.go`. HTTP200 returns19801 raw JSON
+bytes in1.335761seconds. Strict canonical base64,13636-byte decoded length and
+Git blob SHA1 `7528d8f51589460e2d1cd2d4268869f12083e096` all match the retained
+complete upstream tree; decoded SHA256 is
+`d303646061f4ce6144c8ad1ed205f177ce005b1857dbaae57d2a521c69fed9eb`.
+The90-second/1MiB parent naturally exits0 in1.380138seconds. Old raw/blob
+10-second failures remain unchanged and their identities are never retried.
+
+Independent review then limits a second source-data identity to six exact
+Cosign3.1.3/sigstore-go1.2.2 loader, predicate and output files. All six HTTP200
+requests pass their original10-second/1MiB bounds in0.656722–0.851968seconds;
+the parent naturally exits0 in4.657720seconds. All Git blob/size/SHA256 checks
+and complete pre/post input checks pass, without signal, truncation, timeout or
+unreaped child. An unexecuted draft is retained: review located `checkNewBundle`
+in an already recovered file and removed two unnecessary candidate requests.
+No downloaded source is executed.
+
+Full-design review additionally identifies the actual DSSE wrapper, its default
+options and Statement codec. Three more source files are recovered under separate
+input/path reviews. The two-item wrapper/codec batch retains a raw wrapper
+timeout at10.013602seconds/0bytes while the codec succeeds in0.895514seconds;
+its parent naturally exits1 in10.945447seconds. A new reviewed Contents identity
+recovers that same5683-byte wrapper in1.116473seconds (parent1.153552seconds),
+and the3245-byte default-options file succeeds in1.177713seconds
+(parent1.215309seconds). These successes do not change the failed raw identity.
+Across this checkpoint,10 new source files are verified from11 requests, with
+one failure retained. No deadline is raised. The selected no-option wrapper
+stores and returns the envelope bytes without IO. The fixed object predicate is
+expected to use the Statement protojson path; actual Go parsing remains untested
+and a failed protojson parse makes the legacy string fallback reject that object.
+Serialization can normalize JSON. Post-policy
+must check the original159656-byte DSSE payload and semantic fields, rather
+than assuming remarshal bytes are identical or that source shape proves Go
+parsing success. The two retained bundle files have identical bytes and share
+one signed statement; two future positives check different digests without
+claiming independent publisher runs.
+
+The actual selected entry is now source-supported. It constructs keyless
+identity checks, loads explicit trusted material locally, checks/loads the new
+bundle, uses `WithArtifactDigest` with claims enabled, invokes the certificate/
+SCT/tlog/time/digest/identity verifier, then checks the literal predicate URI.
+The bundle loader uses local file reads and format validation; malformed input
+plus explicit root refuses before legacy clients. Success logs `Verified OK`
+to the UI stderr stream; it does not return a verified statement JSON. Strict
+post-policy must therefore bind its parsed original DSSE bytes to the actual
+successful receipt and the same complete input identities.
+
+Independent review accepts the complete verification design as a design
+checkpoint. It fixes six single-input refusals (digest,
+identity, issuer, predicate, DSSE signature mutation and missing tlog) followed
+by normal/stripped positives. DSSE mutation may first fail Rekor binding and is
+not an isolated signature/SCT claim. Exact full errors, unchanged-good joint
+review, unique expected subject names and workflow/ref/source-commit policy
+remain required. Literal predicate URI, fixed issuer/workflow identity, explicit
+claims and non-ignore flags, minimal child environment, exclusive state and
+the unchanged deny-network profile avoid default trust/cache inheritance.
+The original25-second/1MiB leaf and90-second total budget both apply; the total
+deadline wins even though eight leaf maxima would sum to200seconds. Any active
+signal, truncation, timeout or missing case fails the batch. Fresh original
+dual-host admission, same daemon/boot and the120-second age bound still apply.
+Negative exit1 alone never passes: finite complete source-supported error frames
+must be frozen before execution, and unknown errors refuse. Original96/18 test
+results do not validate this future controller or its new refusal fixtures.
+The later error-frame input closure must also include the retained fixed CUE
+log-flag source or equivalent fixed-binary evidence. Its prior static attribution
+is not itself a new P2 runtime observation.
+
+This is source recovery and verification design only. Controller/post-policy
+implementation, meaningful refusal tests, strict output frames, new run identity
+and its complete concrete execution inputs require independent review before
+actual P2. No host sample or Cosign case starts. Existing good6787-byte root
+and its limited frozen TUF4/4 remain source-bound; freshness must be rechecked.
+Neither digest-only proof nor source availability recovers archives, identifies
+the historical installed variant, authenticates the original Apple SDK payload
+or proves ABI/native90/120-second performance. Those gates remain separate.
+
+All1061 input rows,9aliases and12 sealed checkpoints (1820 files excluding their
+indices,170 directories) remain exact; current27 selected SDK/ABI inputs and
+264headers/5directories also match. No original guard/9binding/64barrier,
+402file/33component, cache/index/reuse, quota, timeout, Go1.26.8 or release lock
+changes occur. No build, scan, container, global installation, unrelated-process
+intervention or timer starts. Runtime/fixtures/dependencies are unchanged, so
+existing96parser/18adapter component evidence is reused by impact; no tests are
+rerun or represented as current full-suite validation. Three reviewed progress
+documents follow normal commit/push; private source/raw evidence stays outside
+Git. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoing,
+step3 final inventory/original16/formal review incomplete, step4 post-acceptance
+handoff not started.

@@ -35,7 +35,26 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 Python/SDK authentication prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
+The latest [2026-10-21 Cosign attestation source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
+restores the exact missing Cosign3.1.3 entry through one independently reviewed
+official Contents request in 1.335761 seconds, within the original10-second
+boundary. Nine direct loader/predicate/wrapper/default/output dependencies also
+pass exact Git-blob checks; one intervening raw10-second failure remains and a
+separately reviewed new Contents identity recovers that file. Source review
+connects explicit local
+root, keyless identity, new-bundle digest verification and predicate checking;
+malformed new bundles with an explicit root fail before legacy clients.
+Independent design review accepts eight cases, strict original-bundle provenance
+checks, deny-network isolation and the unchanged25-second leaf/90-second total
+budget. It is a design checkpoint; actual P2 remains held pending implementation,
+refusal tests, a separately reviewed new identity/full execution inputs and fresh
+original dual-host readiness. No host/Cosign case, archive/SDK recovery, native
+build or scan starts. Evidence: `cosign-attestation-entry-20261021-002703`.
+Old failures,1061 input rows/9aliases and12 sealed checkpoints remain exact.
+Three progress documents follow normal commit/push; timers remain off.
+Phase6 remains5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Python/SDK authentication prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
 confirms the retained Python candidate metadata/bundles, the authenticated good
 TUF target, all 27 selected compiler/ABI inputs and the complete 264-file,
 5-directory Python header tree. Two separately reviewed source-only batches

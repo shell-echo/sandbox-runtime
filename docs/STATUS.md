@@ -2,7 +2,25 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 Python/SDK prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
+The latest [2026-10-21 Cosign entry recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
+closes the missing source edge: the exact13636-byte entry is recovered through
+one new reviewed Contents identity in1.335761seconds; nine direct dependencies
+also match their fixed Git blobs. One intervening raw10-second failure is kept;
+its separately reviewed new Contents identity succeeds within the original
+bound. The source
+path now connects local explicit root, keyless identity, digest/predicate checks
+and refusal before legacy fallback. Independent review accepts an eight-case design that
+retains25-second leaf/90-second total bounds, full source/input/provenance checks
+and original fresh dual-host readiness. Design/source recovery is distinct from
+implementation or actual verification: P2 remains unstarted pending strict
+controller/refusal tests and new complete execution-input review. Evidence:
+`cosign-attestation-entry-20261021-002703`. The prior10-second failures remain;
+1061 input rows/9aliases and12 sealed checkpoints are exact. Only three progress
+documents change and follow normal commit/push. No host/Cosign/archive/SDK/native
+build/scan or timer starts. Phase6 stays **5/15**; Slice6 step2 ongoing,
+step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Python/SDK prerequisite review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-python-sdk-authentication-prerequisites-held)
 independently accepts 14 exact fixed-version source files and a conditional
 authenticated-target-use analysis. Two source-only batches each finish 7/8;
 the same missing Cosign attestation entry times out at the unchanged 10-second
