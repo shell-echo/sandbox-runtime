@@ -2530,3 +2530,59 @@ Go/Contract suite is represented as rerun. Reviewed source/tests/docs follow
 normal commit/push; private evidence stays outside Git. Phase6 stays **5/15**;
 Slice6 step1 historical bounded Guest E, step2 ongoing, step3 final inventory/
 original16/formal review incomplete, step4 post-acceptance handoff not started.
+
+## 2026-10-21 PBS source closure and observation review
+
+Private checkpoint: `pbs-source-closure-20261021-092647`.
+[Process and cwd observation plan](product-v1-phase-6-pbs-process-observation.md).
+A new independently reviewed source-only identity restores all three missing
+sigstore-go v1.2.2 files: certificate summary, extensions and tlog entry. Their
+2646/11081/18333 decoded bytes match the official fixed Git blobs and retained
+complete tree. Whole requests naturally finish in0.781880/0.979875/1.100053
+seconds within the original10-second/1MiB limits. The unchanged90-second source
+parent finishes naturally in2.941195seconds; all1520 inputs match before/after.
+Independent actual review verifies1539 complete result-input rows, raw HTTP200
+responses, strict base64 and exact Git/SHA256 bytes. No failed identity is retried.
+Five tree/request/module records previously preserved indirectly in sealed
+materials now also have explicit direct input rows; old manifests remain intact.
+
+The source supplies first-URI SAN, raw V1/full-DER V2 issuer and first Rekor-v1
+DSSE signature extraction edges. The original canonicalized entry has one
+signature equal to the original DSSE signature. These are static correspondences;
+actual Go parsing, mutation rejection order, full stderr and unchanged-good
+crypto acceptance are unexecuted. The eight candidate frames are unchanged;
+old metadata flags and the prior16-file prepared identity are not rewritten.
+
+Independent design review accepts the CWD route conditionally for a later
+separately reviewed implementation: component-wise no-follow directory FD
+anchors, non-inherited FD_CLOEXEC, exclusive single-threaded fchdir, inherited
+kernel cwd vnode and absolute paths. Exact owner/mode/inode/parent checks plus
+nlink/mtime/ctime and a complete empty tree must reject transient writes and
+substitution. Logs are prepared off that chain before the baseline. This does
+not change the user's shell cwd or establish filesystem confinement.
+
+Native group observation remains **HELD**. Local SDK declarations concern
+private interfaces and do not establish actual native image/ABI, coherent
+complete enumeration, zombie visibility or PID/session/escape races. Equal
+snapshots, EOF, direct-child reap and killpg0 are insufficient. Current capture
+waits/reaps before group_check, so future lifecycle work must preserve the
+leader with WNOWAIT before any census and reap. The outer must also retain its
+batch leader through ownership-safe closure. Before-reap observation cannot be
+moved outside leaf25 to pass, nor can whole90 justify a longer leaf. Native
+source/coherence and the earlier hard-stop path remain unproved. Next review a
+new bounded official-source/ABI/coherence evidence plan; do not load libproc,
+run a census or admit P2 from this design acceptance. Local SDK metadata is not
+authentication of the missing signed SDK installer or Python archives.
+
+No host sampler, native API, Cosign case, build, scan or container starts. All14
+old sealed trees (2038 files excluding indices,197directories), old raw failures,
+9aliases, existing SDK alias and9binding/64barrier/402file/33component rules stay.
+Original25/90/120-second,1MiB, resource, supply, network and evidence-reuse gates
+are unchanged. The8 Python source/test files match the prior49-test state;
+only documentation changes, so those component results are reused by impact
+without rerunning them or the Go/Contract suites. Five reviewed documentation
+files follow normal commit/push; private source, HTTP and design evidence stay
+outside Git, no global environment is installed and timers remain off. This is
+an intermediate checkpoint: Phase6 stays **5/15**; Slice6 step1 historical bounded
+Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
+step4 post-acceptance handoff not started.

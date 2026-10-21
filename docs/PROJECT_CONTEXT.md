@@ -35,7 +35,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
+The latest [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
+restores all three missing fixed sigstore-go v1.2.2 sources through one new
+independently reviewed identity. Exact blob/size checks pass in0.781880/0.979875/
+1.100053seconds under unchanged10-second request bounds; source-only joint
+review accepts original HTTP bytes and1539 input rows. Static URI/issuer/Rekor
+edges are now available; actual stderr/crypto acceptance remains unproved.
+The [process/cwd plan](plan/product-v1-phase-6-pbs-process-observation.md) selects
+held component-wise directory FDs for CWD, conditionally accepted for later
+implementation/refusal tests. Native group observation remains **HELD**:
+coherent enumeration, provenance/ABI/zombies/races/no-escape and the current
+premature-reap calling chain are unresolved. No native call, host/Cosign case,
+build or scan starts. Evidence: `pbs-source-closure-20261021-092647`.
+Next independently review bounded official-source/ABI/coherence evidence
+collection; do not treat local SDK declarations or equal snapshots as proof.
+The old prepared identity stays unexecuted,14 sealed checkpoints remain intact,
+and unchanged Python code reuses its49 component tests without a rerun.
+Reviewed documentation follows normal commit/push; private materials stay
+outside Git, original limits remain, and timers stay off. Phase6 remains5/15;
+Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
 implement original-bundle provenance postchecks, finite complete error frames,
 full input/inode guards and bounded eight-case orchestration. The final managed
 Python component suite passes49 tests; a separately reviewed metadata-only read

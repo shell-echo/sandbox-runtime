@@ -49,12 +49,16 @@ review with both unchanged good cases.
 
 `der_metadata.py` only reads bounded certificate extension bytes. It does not
 check signatures, CA, certificate validity, SCT, revocation or Sigstore summary
-semantics. Its SAN/issuer strings are candidate frame inputs. At this checkpoint
-the retained source graph still lacks the concrete certificate-summary and
-Rekor-entry extraction edges. All eight frames are conditional candidates,
-and real execution is **HELD** until those edges, the private outer/guards,
-complete new inputs and current metadata are independently closed. Do not
-replace an unknown real error with a candidate or relax an assertion to run.
+semantics. Its SAN/issuer strings are candidate frame inputs. The subsequent
+[source/observation checkpoint](../../docs/plan/product-v1-phase-6-pbs-process-observation.md)
+recovers and independently reviews the three concrete certificate-summary,
+extension and Rekor-entry sources. This supplies static branch correspondence;
+all eight frames remain conditional candidates. Real execution is **HELD**
+pending the concrete private outer/guards/native census, working-directory
+binding, complete new inputs and current metadata. The current capture reaps
+before group inspection; the proposed before-reap lifecycle needs implementation
+and independent verification. Do not replace an unknown real error with a
+candidate or relax an assertion to run.
 
 Synthetic tests and an unexecuted prepared identity are component evidence
 only. No host/Cosign cases, archive/SDK recovery, native build or scan follow

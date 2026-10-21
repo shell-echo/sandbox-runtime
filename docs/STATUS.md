@@ -2,7 +2,22 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
+The latest [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
+independently accepts all3 fixed missing source files and their raw HTTP/blob
+proofs. Requests finish in0.781880/0.979875/1.100053seconds within the original10s
+limits; parent naturally finishes in2.941195seconds and1520 input rows remain
+exact before/after. This is source-only acceptance, not actual eight-case P2.
+The [observation plan](plan/product-v1-phase-6-pbs-process-observation.md) has a
+conditional CWD design; native group census remains **HELD**, requiring official
+provenance/ABI/coherence and a corrected before-reap supervision chain.
+No native API, host/Cosign case, build or scan starts; old prepared inputs and
+failures remain unchanged. Evidence: `pbs-source-closure-20261021-092647`.
+Four progress/readme updates and one new plan follow normal commit/push;
+private evidence stays outside Git, unchanged code reuses49 component tests,
+original gates stay and timers stay off. Phase6 stays **5/15**; Slice6 step2
+ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
 add strict original-bundle post-policy, complete candidate frames, no-follow
 full-input guards and bounded sequential orchestration with refusal tests.
 The final component suite passes49 tests. A separately reviewed0.079128-second
