@@ -358,7 +358,8 @@ func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
 
 // Track adds a connection only after its actual TLS handshake passed the
 // configured VerifyConnection callback. It rechecks the current complete CRL
-// before admitting the connection to the bounded drain registry.
+// and source availability under the same lock before admitting the connection
+// to the bounded drain registry; a prior handshake cannot undo a failed pull.
 func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) error {
 	if g == nil || connection == nil || state.Version != tls.VersionTLS13 || len(state.VerifiedChains) != 1 ||
 		len(state.VerifiedChains[0]) < 2 || len(state.PeerCertificates) < 1 ||
@@ -370,7 +371,7 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 	defer g.mu.Unlock()
 	now := g.now().UTC()
 	_, alreadyTracked := g.active[connection]
-	if g.failed || g.current.Number() == nil || now.Before(g.lastNow) ||
+	if g.failed || g.unavailable || g.current.Number() == nil || now.Before(g.lastNow) ||
 		!now.Before(g.collectedAt.Add(g.maxStaleness)) || !now.Before(g.nextUpdate) ||
 		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) ||
 		g.current.CheckPeer(leaf.Raw, issuer.Raw, now) != nil {

@@ -12,6 +12,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"errors"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -466,6 +467,17 @@ func TestPeerCRLGuardRealTLSHandshakeAdmission(t *testing.T) {
 			if revoked && (!errors.Is(serverErr, workloadpki.ErrPeerRevoked) || f.client.calls.Load() != 1) {
 				t.Fatalf("revoked verified TLS peer admitted: client=%v server=%v calls=%d", clientErr, serverErr, f.client.calls.Load())
 			}
+			if !revoked {
+				// A successful TLS handshake can precede a source-loss poll and
+				// reach connection registration only after that poll has drained.
+				f.client.err = workloadpki.ErrUnavailable
+				if err := f.guard.Poll(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) || f.guard.Ready() {
+					t.Fatalf("source loss after real TLS handshake retained readiness: %v", err)
+				}
+				if err := f.guard.Track(serverPipe, server.ConnectionState()); !errors.Is(err, ErrPeerCRLUnavailable) {
+					t.Fatalf("late real TLS connection admitted after source loss: %v", err)
+				}
+			}
 		})
 	}
 }
@@ -535,6 +547,61 @@ func TestPeerCRLGuardPollDrainsRevokedAndUnavailableConnections(t *testing.T) {
 				t.Fatalf("tracked connections retained after drain: %d", active)
 			}
 		})
+	}
+}
+
+func TestPeerCRLGuardRejectsLateTrackAfterSourceLoss(t *testing.T) {
+	f := newGuardFixture(t)
+	f.client.response = f.response(t, 1, false, "fixed-source")
+	if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil || !f.guard.Ready() {
+		t.Fatalf("initial verified peer unavailable: %v", err)
+	}
+	local, remote := net.Pipe()
+	defer local.Close()
+	defer remote.Close()
+	if err := f.guard.Track(local, f.state); err != nil {
+		t.Fatal(err)
+	}
+	f.client.err = workloadpki.ErrUnavailable
+	if err := f.guard.Poll(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) || f.guard.Ready() {
+		t.Fatalf("source loss did not fail closed: %v", err)
+	}
+	_ = remote.SetReadDeadline(time.Now().Add(time.Second))
+	var one [1]byte
+	if _, err := remote.Read(one[:]); !errors.Is(err, io.EOF) {
+		t.Fatalf("source loss did not close the existing connection: %v", err)
+	}
+	late, latePeer := net.Pipe()
+	defer late.Close()
+	defer latePeer.Close()
+	if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+		t.Fatalf("late registration reused old CRL after source loss: %v", err)
+	}
+	f.guard.mu.Lock()
+	active := len(f.guard.active)
+	f.guard.mu.Unlock()
+	if active != 0 || f.client.calls.Load() != 2 {
+		t.Fatalf("late registration changed authority state: active=%d pulls=%d", active, f.client.calls.Load())
+	}
+	// The caller closes a refused connection; recovery must not resurrect it.
+	_ = late.Close()
+	f.client.err = nil
+	f.client.response = f.response(t, 2, false, "fixed-source")
+	if err := f.guard.Bootstrap(t.Context()); err != nil || !f.guard.Ready() || f.client.calls.Load() != 3 {
+		t.Fatalf("fresh post-loss pull did not restore readiness: %v", err)
+	}
+	recovered, recoveredPeer := net.Pipe()
+	defer recovered.Close()
+	defer recoveredPeer.Close()
+	if err := f.guard.Track(recovered, f.state); err != nil {
+		t.Fatalf("fresh authority did not admit a new connection: %v", err)
+	}
+	f.guard.mu.Lock()
+	active = len(f.guard.active)
+	_, tracked := f.guard.active[recovered]
+	f.guard.mu.Unlock()
+	if active != 1 || !tracked {
+		t.Fatalf("recovery revived a refused connection: active=%d recovered=%v", active, tracked)
 	}
 }
 

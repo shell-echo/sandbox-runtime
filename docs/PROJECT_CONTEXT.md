@@ -46,22 +46,23 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 management-authority evidence paths](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-evidence-paths)
-complete a reviewed read-only acquisition assessment. The known3960-path
-basename search yields only three preceding content-seal files, not an
-authenticated endpoint/effective-policy package; it does not prove global
-absence. Official policy export/applied-settings routes are identified, with
-HTTP/gRPC/upgrade and host-socket coverage limits kept distinct from local
-runtime evidence. Next require the existing operator's independently
-established identity, exact endpoint/daemon binding, effective policy, ingress
-and bypass inventory, and same-interval enforcement evidence. No private
-settings, credentials, MDM data or daemon API is read. Complete3981-row input
-preservation retains all previous rows and aliases. Evidence:
-`docker-authority-evidence-paths-20261021-225140`. Only three progress documents
-change; no Go/Contract rerun is claimed. Linux/native/P2 remain **HELD**,
-guards/limits/reuse rules remain and timers stay off. Phase6 stays **5/15**:
-Slice6 step1 historical bounded E, step2 ongoing, step3 incomplete, formal
-step4 not started. Stage Git sync is checked separately.
+The latest [2026-10-21 CRL source-loss connection admission](audits/product-phase-6-slice-6-startup.md#2026-10-21-crl-source-loss-connection-admission)
+closes a source-level TLS/CRL gap independent of Docker authority: a peer
+whose handshake preceded source loss could register afterward using old CRL
+evidence. Track now rejects unavailable state under its registration mutex.
+Old-code regressions fail; fixed focused race and a real-TLS component pass.
+The new full race/shuffle/count1 run completes all267 packages in564.207446s
+under600s; full vet passes in53.924708s. Source/locks match, mise Go1.26.8,
+-p2/GOMAXPROCS2 and test umask022 remain. A prior offline module-lookup failure
+is preserved; normal official Go dependency restoration does not change the
+final verifier's offline recipe or sealed caches. Evidence:
+`slice6-crl-late-track-20261021-232634`. No real Vault/Guest/three-Provider,
+Docker or final-topology gate follows. The earlier
+[management-authority gap](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-evidence-paths)
+and Linux/native/P2 holds remain. Phase6 stays **5/15**: Slice6 step1
+historical bounded E, step2 ongoing, step3 incomplete, formal step4 not started.
+Original guards/limits/reuse rules stay; timers remain off. Stage Git sync is
+checked separately.
 
 The earlier [2026-10-21 real Docker metadata screen](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
 completes one reviewed read-only `/info` then `/version` identity. Both return

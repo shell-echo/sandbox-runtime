@@ -4,6 +4,8 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
+Latest independent source checkpoint: [CRL source-loss connection admission](#2026-10-21-crl-source-loss-connection-admission).
+
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
 nonblocking, polled descriptor under one absolute 30-second startup deadline.
@@ -10753,3 +10755,63 @@ Only six handoff documents change. Existing mise/Docker, Go1.26.8/old locks/cand
 ## 2026-10-15 interval readiness recheck keeps native APK held
 
 Three independently reviewed interval samples confirm the same daemon and27 bounded calls pass, but continuing large swap deltas keep native APK unadmitted. The original v2 DB remains fresh, and prior37/19 raw reports match and are reused without new scans. No container/image/candidate executes, and installation/GPG helpers retain their separate review boundary. See [the measured checkpoint](../plan/product-v1-phase-6-vault-generator-output.md#2026-10-15-interval-readiness-recheck-keeps-native-apk-held), private `gpg-native-recheck-20261015-102127`. Existing mise/Docker, quotas/deadlines and deleted automation stay unchanged. Only six handoff documents change;2148 Go files retain prior matching evidence without a new Go test claim. Phase6 remains5/15; Slice6 steps1/2/3/4 remain historical bounded E / ongoing / incomplete / not started.
+
+## 2026-10-21 CRL source-loss connection admission
+
+This closes a source-level connection-registration gap within the existing
+TLS/CRL row of the fixed step2 ledger; that row and Phase6 remain open.
+Independent review selects this work because it does not depend on Docker
+management authority, candidate images, native observation or the held SDK/TUF
+execution route. Private evidence: `slice6-crl-late-track-20261021-232634`.
+
+The real outbound transport checks the peer during TLS handshake and calls
+`PeerCRLGuard.Track` afterward. A source-loss pull between those operations
+marks the guard unavailable, stops its evidence timer and drains existing
+connections. Track previously ignored unavailable and could register the
+late connection using the still-unexpired old CRL. It now checks availability
+under the same mutex as registration. No new state machine or authority is
+introduced; a successful fresh pull remains the only recovery route.
+
+The test-only regression on unchanged production source fails in both the
+synthetic verified-state case and the real TLS-handshake good-peer case:
+late Track incorrectly returns nil. That identity naturally exits1 in
+16.640260seconds; its raw failure is preserved, not rerun or reclassified.
+After the fix, focused race/shuffle/count1 tests for phase6tls and
+connectiondrain pass in6.470469seconds. They verify existing-pipe EOF,
+rejection without registration or an implicit pull, and successful explicit
+CRL-number2 bootstrap before admitting a new connection. Existing real TLS
+good/revoked assertions remain, with source-loss late registration added.
+This is test-PKI/real-TLS component evidence, not a live Vault, Guest or three-
+Provider process result.
+
+The first whole-repository attempt naturally exits1 in307.404116seconds:
+this stage's additional GOPROXY=off setting prevents missing locked module
+lookups. Independent review permits standard development-only restoration
+through the official Go proxy and sumdb, with private/checksum exceptions
+removed, GOENV/GOWORK disabled and module versions read-only. The original
+failure remains. A new identity completes all267 package outcomes for
+`go test -race -shuffle=on -count=1 ./...` in564.207446seconds under the
+unchanged600-second parent. Full `go vet ./...` passes in53.924708seconds.
+Both use mise Go1.26.8, cleared GOROOT, child umask022, GOMAXPROCS2 and -p2;
+source hashes and go.mod/go.sum remain unchanged throughout. No global tools
+or configuration are installed/changed. Ordinary developer caches are used;
+sealed caches and the final admission verifier's fixed offline recipe are
+not altered. No old source checkpoint is represented as this new full pass.
+
+The implementation is only the Track condition and its explanatory comment,
+plus regressions. No Provider DTO, Contract, Docker driver or lifecycle code
+changes; no Docker tagged integration or full-topology result is claimed.
+Existing images and receipts do not inherit this source fix: affected runtime
+candidates and real scenarios still need their eventual source-bound checks.
+No candidate rebuild, host admission, daemon operation, native observer or
+release occurs here. Original guards, quota/time bounds and evidence-reuse
+rules stay; timers remain off. Reviewed source/tests and progress documents
+follow normal commit/push, with actual synchronization checked separately.
+
+Phase6 remains5/15. Slice6 step1 is historical bounded Guest E only; step2
+continues with this component gap closed, real revocation/source-loss/
+replacement and remaining startup rows open; step3 full live Profile-v2,
+original16 scenarios and independent acceptance are incomplete; formal step4
+has not started. Docker management authority and both held execution routes
+remain held. Continue the existing startup ledger on its own dependencies;
+this component success is no new runtime admission.
