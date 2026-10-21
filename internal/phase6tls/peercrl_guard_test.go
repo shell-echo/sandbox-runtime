@@ -605,6 +605,94 @@ func TestPeerCRLGuardRejectsLateTrackAfterSourceLoss(t *testing.T) {
 	}
 }
 
+func TestPeerCRLGuardLatchesClockRollbackAtAdmission(t *testing.T) {
+	for _, entry := range []string{"Track", "Ready"} {
+		t.Run(entry, func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil {
+				t.Fatal(err)
+			}
+			var peers []net.Conn
+			for _, advance := range []time.Duration{0, 2 * time.Second} {
+				*f.clock = f.now.Add(advance)
+				local, peer := net.Pipe()
+				t.Cleanup(func() { _ = local.Close(); _ = peer.Close() })
+				if err := f.guard.Track(local, f.state); err != nil {
+					t.Fatalf("valid connection before rollback refused: %v", err)
+				}
+				peers = append(peers, peer)
+			}
+			*f.clock = f.now.Add(time.Second)
+			late, latePeer := net.Pipe()
+			t.Cleanup(func() { _ = late.Close(); _ = latePeer.Close() })
+			f.guard.mu.Lock()
+			beforeExpirySequence := f.guard.expirySequence
+			f.guard.mu.Unlock()
+			if entry == "Track" {
+				if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+					t.Errorf("rollback registration did not fail closed: %v", err)
+				}
+			} else if f.guard.Ready() {
+				t.Error("rollback readiness did not fail closed")
+			}
+			// Restore the clock before asking Ready, so that Ready cannot mask
+			// whether the original admission path itself latched the failure.
+			*f.clock = f.now.Add(2 * time.Second)
+			f.guard.mu.Lock()
+			failed, active := f.guard.failed, len(f.guard.active)
+			expirySequence := f.guard.expirySequence
+			f.guard.mu.Unlock()
+			if !failed || active != 0 || expirySequence <= beforeExpirySequence {
+				t.Errorf("rollback did not latch and drain: failed=%v active=%d expiry=%d->%d", failed, active, beforeExpirySequence, expirySequence)
+			}
+			for _, peer := range peers {
+				_ = peer.SetReadDeadline(time.Now().Add(time.Second))
+				var one [1]byte
+				if n, err := peer.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
+					t.Errorf("rollback retained existing connection: n=%d err=%v", n, err)
+				}
+			}
+			if f.guard.Ready() {
+				t.Error("clock recovery restored failed guard readiness")
+			}
+			if err := f.guard.Bootstrap(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) {
+				t.Errorf("fresh pull revived clock-failed guard: %v", err)
+			}
+			if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+				t.Errorf("clock recovery admitted a new connection: %v", err)
+			}
+			if calls := f.client.calls.Load(); calls != 1 {
+				t.Errorf("failed guard contacted authority again: %d pulls", calls)
+			}
+		})
+	}
+}
+
+func TestPeerCRLGuardAdmissionAcceptsNondecreasingClock(t *testing.T) {
+	for _, advance := range []time.Duration{0, 2 * time.Second} {
+		t.Run(advance.String(), func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil {
+				t.Fatal(err)
+			}
+			*f.clock = f.now.Add(advance)
+			local, peer := net.Pipe()
+			t.Cleanup(func() { _ = local.Close(); _ = peer.Close() })
+			if err := f.guard.Track(local, f.state); err != nil || !f.guard.Ready() {
+				t.Fatalf("nondecreasing clock rejected: %v", err)
+			}
+			f.guard.mu.Lock()
+			failed, active := f.guard.failed, len(f.guard.active)
+			f.guard.mu.Unlock()
+			if failed || active != 1 || f.client.calls.Load() != 1 {
+				t.Fatalf("normal admission changed authority: failed=%v active=%d pulls=%d", failed, active, f.client.calls.Load())
+			}
+		})
+	}
+}
+
 func TestPeerCRLBudgetRespectsDeclaredDrain(t *testing.T) {
 	budget, err := derivePeerCRLBudget(30*time.Second, 10*time.Second, 3*time.Second)
 	if err != nil || budget.timeout != 2*time.Second || budget.interval != 2*time.Second ||

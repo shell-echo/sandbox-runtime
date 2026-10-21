@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest independent source checkpoint: [CRL source-loss connection admission](#2026-10-21-crl-source-loss-connection-admission).
+Latest independent source checkpoint: [Admission clock rollback](#2026-10-22-admission-clock-rollback).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -10815,3 +10815,76 @@ original16 scenarios and independent acceptance are incomplete; formal step4
 has not started. Docker management authority and both held execution routes
 remain held. Continue the existing startup ledger on its own dependencies;
 this component success is no new runtime admission.
+
+
+## 2026-10-22 admission clock rollback
+
+Status: source-level component passed; Slice6 step2 remains open. This selects
+the existing complete-mTLS/CRL ledger row without depending on the held Docker
+management-authority evidence or changing its requirements.
+
+The actual outbound transport invokes Track after TLS VerifyConnection and
+CheckHandshake; inbound PeerConnState asks Ready before Track. Previously,
+Track's `now < lastNow` returned an error without retaining the failure, so a
+restored clock could reuse the old CRL and register another connection. Ready
+retained failure but left the existing registry and sockets open without a
+subsequent Poll or explicit Close; the expiry callback skips a failed guard. Both contradict ADR0055's clock-rollback fail-closed and
+active/hijacked-connection drain requirements.
+
+At either entry's first observed rollback, the original admission mutex now
+latches failed before releasing it. The existing Close runs after unlocking,
+invalidates the expiry timer/sequence and drains using the original total
+close budget. Concurrent admissions see failed; Close/Forget can reacquire
+the mutex without a held-lock close. Restoring the clock or pulling again does
+not revive this failed live guard. No new timer, worker pool, authority,
+state machine, protocol or compatibility branch is introduced. Ordinary
+source-loss recovery remains unchanged.
+
+The new deterministic regressions use two previously registered net.Pipe
+connections, advance the watermark by two seconds, then roll back by one
+second through Track-only or Ready-only. They require actual EOF on both old
+peers, no registry entries, expiry-sequence advancement and no recovery or new
+authority pull after the clock is restored. Separate same-time/forward-time
+controls still admit a valid connection. The original source-loss/recovery,
+real-TLS and revocation tests remain.
+
+| This stage's identity | Actual result | Actual seconds / original bound |
+| --- | --- | --- |
+| repro-v1, original production source plus new tests | Natural exit1; both entry regressions fail, preserved as expected old-code evidence | 6.127135 / 90 |
+| focused-v1, phase6tls and connectiondrain race/shuffle/count1 | Natural exit0 | 6.222765 / 90 |
+| root-race-v1, full race/shuffle/count1 | Natural exit0, 229 ok + 38 no-test = 267 final package outcomes | 420.862909 / 600 |
+| vet-v1, full vet | Natural exit0, both streams empty | 3.627552 / 600 |
+
+All owned commands reaped naturally without active signals, capture failure,
+truncation or timeout. Go1.26.8 remains selected through existing mise;
+GOTOOLCHAIN=local, GOROOT unset, -mod=readonly, -p2/GOMAXPROCS2 and the test
+child's umask022 remain. Ordinary official Go proxy/sumdb and developer caches
+are the preceding stage's reviewed recipe; frozen diagnostic caches and the
+final verifier's offline recipe are unchanged. No global installation,
+configuration, credentials, go.mod/go.sum or AGENTS change occurs. The tested
+two Go files and locks remain byte-identical through subsequent progress-doc
+updates. Full Go checks are newly run, not inherited from the previous commit.
+
+Only two Go files and PROJECT_CONTEXT/STATUS/this audit change. There is no
+Provider DTO/wire/Contract or Docker driver/sandbox-lifecycle change; named
+Contract-lock CLI and tagged Docker integration are not triggered or claimed.
+This test PKI and real pipe EOF evidence is a component result, not live Vault,
+Guest revoke/CRL-loss/replacement, three isolated Provider commands, network/
+UID/GID enforcement or the final topology/original16 gate. Old images and
+receipts cannot inherit this changed source without their affected source-bound
+candidate and real gates. The fixed five-row ledger remains open.
+
+Evidence: private `slice6-crl-track-clock-20261022-074336` outside Git; old
+`slice6-crl-late-track-20261021-232634` and original failures are preserved.
+Reviewed source and progress docs follow normal commit/push with full
+local/upstream/live SHA checks; this paragraph is not a claim of completed
+Git synchronization. No force push, release or merge is authorized here.
+
+Slice6 step1 retains historical bounded Guest E without replay; step2
+continues with this source gap closed; step3 complete live Profile-v2 inventory,
+original16 and independent formal acceptance are incomplete; formal step4
+has not started. Phase6 remains **5/15**. Docker authority/Linux/native/P2 and
+public ProfileV2/provider-v3 holds remain. Broker/general only, PostgreSQL
+using general, old locks, guard/reuse rules, quotas and timeouts stay fixed.
+Timers remain off. Continue another independently reviewed existing startup
+audit item; held runtime routes still require their original authority proof.

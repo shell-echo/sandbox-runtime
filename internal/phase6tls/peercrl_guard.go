@@ -368,10 +368,19 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 	}
 	leaf, issuer := state.VerifiedChains[0][0], state.VerifiedChains[0][1]
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	now := g.now().UTC()
+	if !g.failed && now.Before(g.lastNow) {
+		// Latch before releasing the admission lock, then close outside it:
+		// closing a tracked socket can call Forget and take the same lock.
+		g.failed = true
+		g.mu.Unlock()
+		g.Close()
+		return ErrPeerCRLUnavailable
+	}
+	defer g.mu.Unlock()
+
 	_, alreadyTracked := g.active[connection]
-	if g.failed || g.unavailable || g.current.Number() == nil || now.Before(g.lastNow) ||
+	if g.failed || g.unavailable || g.current.Number() == nil ||
 		!now.Before(g.collectedAt.Add(g.maxStaleness)) || !now.Before(g.nextUpdate) ||
 		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) ||
 		g.current.CheckPeer(leaf.Raw, issuer.Raw, now) != nil {
@@ -547,10 +556,16 @@ func (g *PeerCRLGuard) Ready() bool {
 		return false
 	}
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	now := g.now().UTC()
-	if g.failed || g.unavailable || g.collectedAt.IsZero() || now.Before(g.lastNow) {
-		g.failed = g.failed || now.Before(g.lastNow)
+	if !g.failed && now.Before(g.lastNow) {
+		g.failed = true
+		g.mu.Unlock()
+		g.Close()
+		return false
+	}
+	defer g.mu.Unlock()
+
+	if g.failed || g.unavailable || g.collectedAt.IsZero() {
 		return false
 	}
 	ready := now.Before(g.collectedAt.Add(g.maxStaleness)) && now.Before(g.nextUpdate)

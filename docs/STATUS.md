@@ -1,8 +1,28 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [CRL source-loss connection admission](audits/product-phase-6-slice-6-startup.md#2026-10-21-crl-source-loss-connection-admission).
+Latest Phase6 step2 checkpoint: [Admission clock rollback](audits/product-phase-6-slice-6-startup.md#2026-10-22-admission-clock-rollback).
 
-The latest [2026-10-21 CRL source-loss connection admission](audits/product-phase-6-slice-6-startup.md#2026-10-21-crl-source-loss-connection-admission)
+The latest [2026-10-22 admission clock rollback](audits/product-phase-6-slice-6-startup.md#2026-10-22-admission-clock-rollback)
+closes another source-level mTLS/CRL gap independent of Docker management
+authority. Track previously rejected a backwards clock without latching the
+failure, while Ready latched it without draining existing connections. Both
+now latch under the admission mutex and reuse the existing Close after
+unlocking, stopping the expiry timer and draining under the original budget.
+Old-source regressions fail for both entry points; fixed focused race passes,
+including unchanged/forward-clock controls. This stage's full race/shuffle/
+count1 passes all 267 packages in 420.862909 seconds under 600 seconds, and
+full vet passes in 3.627552 seconds. The two Go files and existing locks match
+the tested snapshot. Development remains mise Go1.26.8 with -p2/GOMAXPROCS2
+and test umask022. Evidence: `slice6-crl-track-clock-20261022-074336`.
+These are component checks, not live Vault/Guest/three-Provider or final
+16-scenario acceptance; old candidates do not inherit the changed source.
+Docker authority and Linux/native/P2 remain HELD. Phase6 stays **5/15**:
+Slice6 step1 historical bounded E, step2 ongoing, step3 incomplete, formal
+step4 not started. Original guards, quotas, deadlines, issuer policy, public
+holds and evidence-reuse rules remain; timers stay off. Stage Git sync is
+verified separately.
+
+The earlier [2026-10-21 CRL source-loss connection admission](audits/product-phase-6-slice-6-startup.md#2026-10-21-crl-source-loss-connection-admission)
 closes a source-level TLS/CRL gap independent of Docker authority: a peer
 whose handshake preceded source loss could register afterward using old CRL
 evidence. Track now rejects unavailable state under its registration mutex.
