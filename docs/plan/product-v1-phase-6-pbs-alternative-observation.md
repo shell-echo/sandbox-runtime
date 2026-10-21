@@ -5,6 +5,10 @@ Date: 2026-10-21. Status: independently reviewed design candidate only;
 [process/cwd observation plan](product-v1-phase-6-pbs-process-observation.md).
 Phase6 remains **5/15**, Slice6 step2 ongoing. This is not formal step4.
 
+Current continuation: [bounded mock harness checkpoint](#2026-10-21-bounded-mock-harness-checkpoint).
+The earlier unavailable17-case result below remains historical and failed;
+the new mock result does not qualify a real endpoint or replacement executor.
+
 ## Decision and current evidence
 
 Keep the fixed Darwin diagnostic held. Its current capture reaps the child
@@ -141,3 +145,66 @@ timeouts, cache/index and evidence-reuse rules stay unchanged. Slice6 step1's
 historical bounded Guest evidence is unchanged; step2 continues, step3's final
 topology/original16 scenarios and independent acceptance remain incomplete,
 and formal step4 has not started.
+
+## 2026-10-21 bounded mock harness checkpoint
+
+Private checkpoint: `metadata-unit-budget-20261021-100906`. The previous181-file/
+4-directory sealed tree is freshly checked in full. Previous reports and
+failed identities are preserved; no old manifest is regenerated to clear a
+failure. An input-preparation helper initially compared whole stat results,
+including access time; its failure is retained. The corrected preparation
+uses the existing identity fields and the prior sealed graph's expected pin,
+with no change to the actual binding standard.
+
+The new private harness streams every complete input twice, retaining exact
+bytes/EOF, device/inode, UID/GID, mode, modification/change times and real
+parent-chain checks. Its raw-byte loader executes only the checked private
+modules. The original nine focused inputs, reader and17-case suite remain
+exact. Timer and handler preparation uses existing builtin modules; the first
+time sample immediately arms the remaining10-second budget before subsequent
+imports/definitions. Capture reserves its existing2-second cleanup and a
+0.25-second closure margin from that same budget; insufficient time prevents
+spawn. Known-handle deadline exceptions enter the unchanged capture cleanup.
+A missing receipt or interrupted Popen does not prove ownership or reap.
+Neither cleanup after a deadline nor a late marker can make an overrun pass.
+
+One revised identity fails during `unittest.mock` → `asyncio` → `ssl` import:
+replacing `socket.socket` with a function breaks `SSLSocket` inheritance.
+The child naturally exits1 in0.971716958seconds, within its7.427096292-second
+capture allowance, with1578-byte raw stderr, no output, no timeout/truncation/
+active signal and a recorded reap. It supplies no25-case test results or
+complete postcheck. This is a new concrete code failure, not proof about the
+older unexplained9.38-second delay. The failed identity is not repeated.
+
+The final class-shaped guard denies construction in `__new__` before the base
+constructor, preserving the interface required by `ssl`. It is installed
+before the mock module loads. It covers `socket.socket`, including the tested
+Unix/Internet constructors; it is not a general OS, `_socket` or `socketpair`
+sandbox. Frozen source review and the mock scope remain necessary.
+
+| New identity | Test result | Complete input rows before/after | Final marker before flush | Captured child time |
+| --- | --- | ---: | ---: | ---: |
+| v4 refusal | 27/27 | 35 | 0.452756s | 0.271438s |
+| v4 frozen original suite | 17/17 | 53 | 0.379147s | 0.197998s |
+
+Both have raw complete streams, capture natural0/owned reap/no flags,
+RESULT/SUMMARY, seven phase records and outer natural0. The original nine
+rows remain exact in both full checks. Each retains whole-parent10 seconds
+and64KiB per stream; marker timestamps precede their final flush, whose success
+also requires natural process exit. Refusal cases cover input/parent drift,
+symlinks/FIFO/EOF, module substitution, count/result failures, missing PID,
+time/stream boundaries and capture cleanup models. The models use no third
+process or real signal. No general process-containment or native-ABI proof
+follows. Measured phase costs cannot explain the old run under other conditions.
+
+No real `/info` or `/version` request runs. Next independently review a new
+complete metadata identity, fresh socket/daemon inputs and exact output root.
+Do not call the old reader's main entry with a path that writes into its now
+sealed checkpoint; new source copies need explicit new location/identity
+bindings. Preserve3-second request/64KiB wire/8KiB header bounds, redacted
+projection limitations and all existing authority/host/runtime gates.
+Darwin native and new Linux executor qualification remain held. Product code
+and prior49 component coverage are unchanged, with no Go/Contract rerun.
+Timers remain off; original9 bindings,64 barriers,402 old files,33 components,
+quotas, timeouts and cache/index/reuse rules remain. Phase6 stays5/15,
+Slice6 step2 ongoing, step3 incomplete, formal step4 not started.

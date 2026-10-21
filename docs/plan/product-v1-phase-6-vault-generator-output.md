@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-21 alternative observation assessment](#2026-10-21-alternative-observation-assessment).
+Latest continuation: [2026-10-21 metadata mock checkpoint](#2026-10-21-metadata-mock-checkpoint).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2784,3 +2784,28 @@ admission, native observer, container, build, scan or real verifier starts.
 Original9 bindings,64 barriers,402 old files,33 components, guards, quotas,
 timeouts and cache/index/reuse rules remain. Timers stay off. Phase6 remains
 5/15; Slice6 step2 ongoing, step3 incomplete, formal step4 not started.
+
+## 2026-10-21 metadata mock checkpoint
+
+The [bounded mock harness checkpoint](product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-bounded-mock-harness-checkpoint)
+passes27 refusal cases and the unchanged17 original mock cases under separate
+new reviewed identities, with35/53 complete input rows exact before/after and
+all nine original rows preserved. Final pre-flush markers are0.452756/
+0.379147seconds; both processes naturally exit0 under the unchanged10-second/
+64KiB parent capture policy. Capture/cleanup/closure share that budget.
+An intervening import failure is retained: a function replacing socket.socket
+breaks ssl inheritance before any25-case result. Its class-shaped replacement
+refuses constructors while preserving subclass shape; this only fences the
+socket.socket interface, not arbitrary kernel networking. Old9.38-second
+latency remains unattributed. No failed identity is retried or reclassified.
+
+Private evidence: `metadata-unit-budget-20261021-100906`, retaining the previous
+181-file/4-directory sealed checkpoint and all old evidence. These are mock
+components, not a real metadata/authority/P2 result. Next review a new actual
+metadata identity and output root; never write into the sealed old reader
+checkpoint. No host admission, native observer, container, build or scan runs.
+Product code, old locks,9 bindings,64 barriers,402/33 evidence and resource/
+time/cache/index/reuse gates remain unchanged. Existing49 component coverage
+is reused only by impact; no Go/Contract rerun is claimed. Timers stay off.
+Phase6 remains5/15; Slice6 step2 ongoing, step3 incomplete, formal step4 not
+started. Current commit/push status is verified and reported separately.

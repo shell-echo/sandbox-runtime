@@ -2,7 +2,24 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 alternative observation assessment](plan/product-v1-phase-6-pbs-alternative-observation.md)
+The latest [2026-10-21 metadata mock checkpoint](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-bounded-mock-harness-checkpoint)
+passes27 harness refusals and the unchanged17 original mock cases through new
+reviewed identities, with complete35/53-row pre/post checks retaining the
+original nine exact inputs. Both runs naturally exit0 under the same10-second
+parent/64KiB bounds; final pre-flush markers are0.452756/0.379147seconds.
+A class-shaped socket guard fixes an intervening `ssl` import failure, whose
+raw failed identity remains unchanged. The earlier9.38-second delay is still
+unexplained; these new timings do not attribute its cause. Evidence:
+`metadata-unit-budget-20261021-100906`. This is private mock component evidence
+only: no real daemon request, host admission, native observer, P2, build or
+scan runs. A new complete metadata execution identity and actual inputs still
+require review; never run a reader that writes into a sealed checkpoint.
+Product code/old locks are unchanged; no Go/Contract rerun is claimed. Timers
+stay off. Phase6 remains **5/15**, Slice6 step2 ongoing, step3 incomplete,
+formal step4 not started. Stage Git synchronization is recorded separately;
+these component results do not establish that local commits reached the remote.
+
+The earlier [2026-10-21 alternative observation assessment](plan/product-v1-phase-6-pbs-alternative-observation.md)
 rejects a direct Darwin-to-Docker substitution. A separately qualified Linux
 prevention design is conditional only: daemon-side process injection, subsequent
 exec, network rejection and full timing/identity proofs remain open. The new
