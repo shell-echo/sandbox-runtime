@@ -245,3 +245,62 @@ preparation failure remain recorded. All16 old sealed trees,1690 initial rows,
 versions change. No libproc observer/group API, host gate, Cosign case, build,
 scan, container or global installation runs. Timers stay off and original
 budgets, supply/cache/index/reuse rules remain. This is Slice6 step2, not step4.
+
+## 2026-10-21 XNU immutable discovery held
+
+Private checkpoint: `xnu-immutable-discovery-20261021-123142`. Independently
+reviewed source-only discovery preserves the prior platform metadata target
+`xnu-13432.1.9`; this stage does not recapture or authenticate the running kernel.
+
+The [official XNU repository](https://api.github.com/repos/apple-oss-distributions/xnu)
+returns its own owner/URLs and default branch `main` in5.595381333seconds.
+The [named tag-prefix query](https://api.github.com/repos/apple-oss-distributions/xnu/git/matching-refs/tags/xnu-13432.)
+returns the complete empty array in1.898287750seconds without pagination.
+The source-only parent naturally exits0 in22.137423083seconds under90seconds,
+with1969 full inputs exact before/after. This bounded prefix result does not
+prove absence from all official channels.
+
+After actual-input review, the [main ref](https://api.github.com/repos/apple-oss-distributions/xnu/git/ref/heads/main)
+returns commit `f6217f891ac0bb64f3d375211650a4c1ff8ca1ea` in3.979094166seconds;
+parent naturally exits0 in4.123652125seconds with1997 inputs exact. A separately
+reviewed immutable Contents query for `config/MasterVersion` returns404 in
+4.014177792seconds: complete127-byte body and1141-byte headers are retained,
+no decoded source is produced, parent naturally exits1 in4.187303333seconds,
+and2010 inputs remain exact. This failed identity is not rerun. A404 alone is
+not version-mismatch evidence or proof that no official source exists.
+
+The separately reviewed [actual commit object](https://api.github.com/repos/apple-oss-distributions/xnu/git/commits/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea)
+returns200 in1.188105209seconds. Its unsigned API message names
+`xnu-12377.1.9`; it points to root tree
+`7cb04f5def354255785e3cb0e06d496dc918ebea`. Parent naturally exits0 in
+1.255732208seconds with2036 exact inputs. The message is nominal metadata,
+not cryptographic version authentication and not current13432 source.
+
+The [actual nonrecursive root tree](https://api.github.com/repos/apple-oss-distributions/xnu/git/trees/7cb04f5def354255785e3cb0e06d496dc918ebea)
+returns200 in2.937365208seconds with4749-byte body,1340-byte headers,
+`truncated:false` and all21 entries checked. Parent naturally exits0 in
+3.023432208seconds with2049 inputs exact. `config` is a tree with SHA
+`13260f6a35e496d864ed1135ab0bf92185bed68a`; no child pointer is followed.
+The root does not establish whether `MasterVersion` exists inside it or why
+the Contents route failed. API objects are not recomputed Git-object proofs.
+
+All six HTTP calls retain the original10-second whole-request/1MiB combined
+header/body bounds, raw bytes and failure records. No retry, redirect,
+authentication or automatic follow occurs. Full input checks sit outside
+source-only capture timing and do not close P2 leaf25/whole90/host-age120
+budgets. Three new private-reader suites pass31,26 and16 tests under their
+original10-second parents (7.104490875,0.752199750,0.103549417seconds); these
+are73 metadata-tool checks, not product or formal acceptance.
+
+Independent result review accepts bounded discovery only. Exact current
+source recovery, provenance/ABI, coherent census, zombies, no-escape and
+before-reap supervision remain **HELD**. Next require an authenticated exact
+current-platform source pointer; do not substitute12377 or repeat the404.
+No native observer/group API, host admission, P2, build, scan, container or
+global installation runs. All17 old sealed checkpoints,1954 initial rows,
+9 bindings,64 barriers,402 files,33 components and existing guards remain.
+Prior16 sealed-tree checks are retained; the latest prior tree is freshly
+checked in full here. Only four current-document rows receive explicit version
+overlays. Product Python code stays at its earlier49-test state, without a
+rerun; no Go/Contract rerun is claimed. Original time/resource/supply/cache/
+index/reuse boundaries remain and timers stay off. This is Slice6 step2.

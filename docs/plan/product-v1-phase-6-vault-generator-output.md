@@ -2698,3 +2698,56 @@ off. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoi
 step3 final inventory/original16/formal review incomplete, step4 post-acceptance
 handoff not started. Next establish the exact official source/platform link
 before independently reviewing recovery and semantics.
+
+## 2026-10-21 XNU immutable discovery held
+
+Private checkpoint: `xnu-immutable-discovery-20261021-123142`.
+The [process-observation evidence](product-v1-phase-6-pbs-process-observation.md#2026-10-21-xnu-immutable-discovery-held)
+records independently reviewed literal URLs, full raw responses, actual
+pointers and complete input checks. This source-only stage does not produce
+an exact13432 source, native observer, ABI acceptance or real P2 result.
+
+Six bounded official requests yield five200 responses and one404. Repository
+metadata reports `main`; the named `xnu-13432.` tag-prefix response is exactly
+`[]`. The actual main commit is
+`f6217f891ac0bb64f3d375211650a4c1ff8ca1ea`. Its unsigned API message names
+XNU12377.1.9, which is only a nominal discovery clue and cannot substitute for
+the current13432.1.9 target. The immutable Contents request for
+`config/MasterVersion` fails404 with complete127-byte body/1141-byte headers.
+No source is decoded; its failed identity and all prior failures remain.
+A separately reviewed commit pointer leads to a complete, nonrecursive root
+tree with21 entries, including a `config` subtree. No child is followed;
+the root neither explains the404 nor authenticates the running kernel/ABI.
+These checked routes do not prove global official-source absence.
+
+The five staged parents naturally finish in22.137423083/4.123652125/
+4.187303333/1.255732208/3.023432208seconds under the original90-second cap;
+the404 parent exits1 and the other four exit0. Before/after complete input
+counts are1969/1997/2010/2036/2049 respectively. No timeout, signal or
+truncation occurs. Every individual HTTP request remains under10seconds and
+1MiB combined headers/body, without retry, redirect, authentication or
+automatic follow. Input hashing occurs outside source-capture timing; these
+results do not close the P2 leaf25/whole90/host-age120 budgets.
+
+The new private reader suites pass31+26+16=73 tests. This is component
+evidence for metadata tooling only. The unchanged8 product Python files
+retain their prior49-test evidence by impact; no Go, Contract, integration,
+real host admission or product suite is represented as rerun. All17 prior
+sealed checkpoints and1954 initial input rows remain preserved. The latest
+prior tree is freshly fully checked; the earlier16 full-tree checks are
+retained without a redundant rerun. Explicit overlays version only the four
+current progress documents; old manifests, receipts and raw failures remain
+unchanged. Private materials stay outside Git.
+
+Independent result review accepts this bounded investigation; current exact
+source/provenance/ABI, coherent census, zombies, no-escape, before-reap
+supervision and P2 remain **HELD**. Next require an authenticated exact
+current-platform source pointer before independently reviewing recovery and
+semantics. No native API/group observer, host gate, archive/SDK recovery,
+build, scan, container or global environment installation starts. Original
+9 bindings,64 barriers,402 files,33 components, guard/resource/time/supply/
+cache/index/reuse rules remain; timers stay off. Four reviewed progress
+documents follow normal commit/push. Phase6 remains **5/15**: Slice6 step1
+historical bounded Guest E accepted within its scope, step2 ongoing, step3
+final inventory/original16/formal review incomplete, step4 post-acceptance
+handoff not started. This checkpoint is not formal step4.

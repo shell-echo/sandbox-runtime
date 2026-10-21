@@ -2,7 +2,26 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
+The latest [2026-10-21 immutable XNU discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-xnu-immutable-discovery-held)
+accepts official metadata only. The named `xnu-13432.` tag-prefix query is
+empty; the observed `main` commit's unsigned API message names XNU12377.1.9,
+which cannot substitute for the target13432.1.9. Six requests produce five200
+responses and one complete404 for immutable `config/MasterVersion`; no source
+is decoded. The complete nonrecursive root tree has21 entries and an unvisited
+`config` subtree; it neither resolves that404 nor authenticates current ABI.
+These routes do not establish global source absence. Actual dynamic pointers
+are independently reviewed;10-second/1MiB request limits remain unchanged.
+The new31+26+16 private reader tests pass, without product/formal acceptance.
+Exact source, native census/ABI and P2 remain **HELD**; no host admission,
+native call, build, scan or container starts. Evidence:
+`xnu-immutable-discovery-20261021-123142`;17 old sealed checkpoints and1954
+initial inputs remain preserved with explicit current-document overlays.
+Only four progress documents change; unchanged product tests are reused by
+impact, and no Go/Contract rerun is claimed. Normal reviewed commit/push,
+original guards/budgets and disabled timers remain. Phase6 stays **5/15**;
+Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
 accepts four bounded official metadata responses, not exact current-platform
 source provenance. Apple's HTML loads an embedded release catalog; its complete
 script lacks macOS27.0.1/26A434/XNU13432.1.9 literals. Separately retrieved

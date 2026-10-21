@@ -46,7 +46,33 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
+The latest [2026-10-21 immutable XNU discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-xnu-immutable-discovery-held)
+accepts bounded official metadata, while exact current-platform source remains
+**HELD**. The official XNU repository reports `main`; the named
+`tags/xnu-13432.` prefix query returns an empty array. Its actual main commit
+`f6217f891ac0bb64f3d375211650a4c1ff8ca1ea` has an unsigned API message naming
+`xnu-12377.1.9`, not the target `13432.1.9`. This is a discovery clue, not
+cryptographic version authentication or permission to substitute older source.
+Six separately staged requests yield five200 responses and one complete404:
+the immutable `config/MasterVersion` Contents request fails; no source is
+decoded. The later complete, nonrecursive root tree has21 entries, including
+a `config` tree. No child is followed; its contents do not explain the404.
+These bounded routes do not prove absence across all official channels.
+All requests retain the original10-second/1MiB bounds; all dynamic pointers
+are frozen and independently reviewed. New private reader tests pass31+26+16
+cases; these73 checks are metadata-tool component evidence only. Existing
+product code/tests are unchanged; no Go or Contract suite is represented as
+rerun. Evidence: `xnu-immutable-discovery-20261021-123142`, preserving17 prior
+sealed checkpoints and1954 initial input rows; current-document versions are
+explicitly overlaid. Native provenance/ABI, coherent census, zombies,
+no-escape, before-reap supervision and real P2 remain **HELD**. Next require an
+authenticated exact current-platform source pointer before recovery and
+semantic work. No host admission, native observer, build, scan or container
+runs. Four reviewed progress documents follow normal commit/push; private
+evidence stays outside Git, original guards/budgets remain and timers stay off.
+Phase6 stays5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
 independently accepts bounded official metadata reads, while exact current-platform
 XNU provenance remains **HELD**. Fresh platform metadata still records
 macOS27.0.1/26A434, Darwin27.0.0, arm64 and `xnu-13432.1.9~1`.
