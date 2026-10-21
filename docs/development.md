@@ -12,6 +12,17 @@ Contract, security, deployment, or compatibility change must pass its own
 named gates and must preserve the distinction between component evidence,
 Conformance evidence, external-caller qualification, and production readiness.
 
+## Prelaunch changes
+
+The user's2026-10-21 direction removes the need to preserve compatibility with
+historical code before launch. Use one current implementation that satisfies
+functionality, performance and completeness; do not keep redundant legacy
+branches or adapters solely for old revisions. Preserve original evidence and
+apply the existing security, trust, independent-review and validation rules.
+Changes to locked Contracts or named gates still follow their defined review
+and validation process. This policy does not make an old receipt qualify a
+new implementation.
+
 ## Toolchain and commands
 
 Use the Go version declared in `go.mod`. Docker is optional for ordinary unit

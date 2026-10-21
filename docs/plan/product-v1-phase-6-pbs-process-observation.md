@@ -148,8 +148,53 @@ substitution/rename/deletion/transient-create-delete/writes. Missing
 evidence must cause refusal. Existing49 component tests cover unchanged code
 only; they do not qualify this native observer or future lifecycle changes.
 
-Next is a separately reviewed bounded, read-only source/provenance/ABI evidence
-plan. This document does not authorize a native call, real host gate, new P2
+The exact-platform evidence stage below implements only source discovery from
+the separately reviewed bounded read-only plan. It does not authorize a native call, real host gate, new P2
 execution, build, scan, profile change or timer. Concrete implementation and
 fresh dynamic-input/original-host review still precede any actual eight-case
 run and its independent joint acceptance.
+
+## 2026-10-21 exact-platform source evidence
+
+Private checkpoint `pbs-native-api-evidence-20261021-095856` preserves all15 prior
+sealed trees (2141 files excluding indices,201 directories) and1552 old direct
+input rows. Initial review holds an unexecuted metadata draft because private
+modules import before runtime byte pins. The revised wrapper pins imports
+first, rejects unpinned bytecode and uses the reviewed minimal `env -i` outer
+environment; the child is standard-library-only. These private readers are
+source/metadata tools, not changes to the P2 controller or its timing domains.
+
+The single platform read naturally exits0 in0.093354542seconds under10s/1MiB,
+with1568 full inputs exact before/after. It records macOS27.0.1, build26A434,
+arm64, Darwin27.0.0 and `root:xnu-13432.1.9~1/RELEASE_ARM64_T8132`.
+`xnu-13432.1.9` is only the resulting official-source tag candidate. Neither
+uname/plist metadata nor the existing SDK27 headers authenticate the running
+kernel or actual dyld image and ABI.
+
+An independently reviewed source-discovery identity requests
+`apple-oss-distributions/xnu` Contents for `bsd/kern/proc_info.c` at that exact
+tag. It returns HTTP404 in0.715243750seconds, stopping the four-file batch after
+one request. `bsd/sys/proc_info.h`, `libsyscall/wrappers/libproc/libproc.c` and
+`bsd/kern/kern_proc.c` are not requested. The90-second parent naturally exits1
+in0.914159084seconds, with1580 full rows exact before/after.
+
+A separately reviewed new identity asks a distinct metadata question: whether
+`/git/trees/xnu-13432.1.9` resolves in the same official repository. This also
+returns404 in2.123505792seconds; parent naturally exits1 in3.123951708seconds,
+with1591 full rows exact before/after. It does not retry the failed file URL,
+change source version or enumerate fallback endpoints. Both captures retain
+raw stdout/receipts and HTTP status/headers, without signal, truncation or
+timeout. The existing reader rejects non200 before reading the response body:
+the stored0-byte bodies are not complete error responses (advertised135/110
+bytes), and no error-message text is inferred.
+
+The checked routes are unavailable for this exact label at those request
+times. This does not establish global absence from Apple release channels or
+prove any libproc locking, zombies, return/errno semantics or ABI layout.
+No source is decoded or accepted. Beyond the fixed `os.uname` metadata read,
+no libproc observer is explicitly loaded or process-group enumeration API called. The
+candidate remains held for source/platform correspondence, complete coherent
+membership, no-escape and before-reap budget evidence. Next independently
+review an official publication/platform mapping path; do not silently substitute
+another XNU version or rely on equal observed PID lists. Original9 bindings,
+64 barriers, guards, resource/timeout limits and all old evidence remain.

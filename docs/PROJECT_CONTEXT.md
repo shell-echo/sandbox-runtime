@@ -21,6 +21,17 @@ No-change stages need no empty commit. Keep private evidence outside Git and
 preserve the existing validation/review gates. Intermediate checkpoints do not
 constitute formal Slice acceptance, merge, release or publication authority.
 
+## Prelaunch implementation policy
+
+User direction, 2026-10-21: this project has not launched. Do not retain old
+implementations, fallback branches or adapters solely to preserve compatibility
+with historical code. Prefer one coherent current implementation, judged by
+functionality, performance, completeness and maintainability; remove redundant
+paths within the affected change. This does not discard original evidence or
+waive security, trust, review or validation requirements. Current locked
+Contracts and named gates remain authoritative until changed through their
+applicable review and validation process.
+
 ## Active Phase 6 delivery and machine handoff
 
 The [delivery priorities and handoff plan](plan/product-v1-phase-6-delivery-and-handoff.md)
@@ -35,7 +46,26 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
+The latest [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
+independently reviews a new bounded metadata/source-only identity. The platform
+read naturally finishes in0.093355seconds: macOS27.0.1/26A434, arm64,
+Darwin27.0.0, kernel label `xnu-13432.1.9~1`. The first exact-tag Apple Contents
+request returns404 in0.715244seconds; the other3 files are not requested.
+A separately reviewed, distinct root-tree lookup returns404 in2.123506seconds.
+Both failures are retained without retry or version substitution. These two
+routes do not establish absence from all official channels. Their response
+headers/status are retained; the unchanged reader rejects before reading error
+bodies, so the0-byte files are not complete error text. Native provenance/ABI,
+zombie visibility and coherent complete enumeration remain **HELD**. No libproc
+observer or process-group enumeration API runs; the fixed `os.uname` metadata
+read does not qualify either. No host gate, P2, build or scan starts. Evidence:
+`pbs-native-api-evidence-20261021-095856`. All15 prior sealed trees and1552
+previous input rows remain intact; original limits/guards and disabled timers
+stay. Next independently identify an official source/platform correspondence
+path before semantic analysis or observer implementation. Phase6 stays5/15;
+Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
 restores all three missing fixed sigstore-go v1.2.2 sources through one new
 independently reviewed identity. Exact blob/size checks pass in0.781880/0.979875/
 1.100053seconds under unchanged10-second request bounds; source-only joint

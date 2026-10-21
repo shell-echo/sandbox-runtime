@@ -2586,3 +2586,59 @@ outside Git, no global environment is installed and timers remain off. This is
 an intermediate checkpoint: Phase6 stays **5/15**; Slice6 step1 historical bounded
 Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
 step4 post-acceptance handoff not started.
+
+## 2026-10-21 native API source discovery held
+
+Private checkpoint: `pbs-native-api-evidence-20261021-095856`.
+The [process-observation plan](product-v1-phase-6-pbs-process-observation.md#2026-10-21-exact-platform-source-evidence)
+records the bounded official-source/ABI/coherence investigation. Independent
+review holds the first unexecuted reader draft for importing private modules
+before runtime byte pins. The corrected wrapper pins them before import and
+rejects unpinned bytecode; its child uses only the standard library. The exact
+minimal `env -i` outer environment and new identity are reviewed before launch.
+No old failed identity is rerun, and the held draft remains unexecuted.
+
+The metadata-only child naturally exits0 in0.093354542seconds under10s/1MiB,
+with1568 complete inputs exact before/after. Its frozen plist/uname record
+identifies macOS27.0.1/26A434, arm64, Darwin27.0.0 and
+`xnu-13432.1.9~1`. The suffix-free XNU label is a source-tag candidate, not
+authentication of the actual running kernel/library or ABI.
+
+Dynamic source-discovery inputs are independently reviewed before one new
+four-file Apple official GitHub Contents batch. The first exact-label
+`bsd/kern/proc_info.c` request returns404 in0.715243750seconds under the original
+10-second/1MiB request bound. The batch stops; the header, libproc wrapper and
+kernel iteration files are not requested. Its90-second parent naturally exits1
+in0.914159084seconds, stdout168/stderr0, with1580 full inputs exact before/after.
+A distinct separately reviewed tag-resolution identity then asks only whether
+the official root tree `xnu-13432.1.9` resolves. It returns404 in2.123505792seconds;
+parent naturally exits1 in3.123951708seconds, stdout176/stderr0, with1591 full
+inputs exact before/after. There is no retry, source substitution or endpoint
+loop. Raw receipts/status/headers are retained and all leaders reaped without
+signal, timeout or truncation. The unchanged reader rejects before reading
+non200 bodies: saved0-byte files are not the complete135/110-byte advertised
+error responses. No body text or global official-publication absence is inferred.
+
+The official-source route has not closed. No source is decoded/accepted.
+Only the fixed `os.uname` platform read runs; no libproc observer is explicitly
+loaded or process-group enumeration API called. ABI, actual image correspondence, complete
+coherent enumeration, zombie visibility, PID/session/no-escape and before-reap
+supervision evidence remain **HELD**. Next independently inspect an official
+publication/platform correspondence path; do not borrow another version's
+semantics to approve this machine. No host gate, Cosign case, P2, archive/SDK
+recovery, build, scan, container or global tool installation occurs.
+
+All15 prior sealed trees (2141 files excluding indices,201 directories),1552
+old direct inputs/9aliases, SDK alias and9binding/64barrier/402file/33component
+rules remain intact. Only explicitly versioned current documentation rows
+change in the final checkpoint graph; old graphs/receipts stay byte-exact.
+Original time/resource, supply, cache/index/evidence-reuse and network gates
+remain. The8 Python files still match the49-test component state; no component,
+Go or Contract suite is represented as rerun. Reviewed documentation follows
+normal commit/push; private materials stay outside Git and timers remain off.
+The user's prelaunch direction is recorded in project context/development:
+avoid redundant historical-code compatibility paths, while keeping current
+trust, review, Contract and evidence requirements. This is an intermediate
+checkpoint, not Slice6 step4. Phase6 stays **5/15**; step1 historical bounded
+Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
+step4 post-acceptance handoff not started.

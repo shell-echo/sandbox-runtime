@@ -2,7 +2,25 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
+The latest [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
+records macOS27.0.1/26A434, arm64, Darwin27.0.0 and `xnu-13432.1.9~1` through
+an independently reviewed0.093355-second metadata read. Two separately reviewed
+official GitHub routes fail404: first exact-tag source0.715244seconds, then
+distinct tag-root metadata2.123506seconds; the remaining3 source requests never
+start. Failures are retained without retry, substitution or relaxed limits.
+The error bodies are not captured by the unchanged reader; status/headers alone
+do not prove global official-source absence. Native ABI/provenance/zombies/
+coherent census remain **HELD**. Only the fixed `os.uname` platform read runs;
+no libproc observer or process-group enumeration API, host gate, P2, build or
+scan runs. Evidence: `pbs-native-api-evidence-20261021-095856`. All15 old sealed trees
+and1552 prior inputs remain exact. This documentation checkpoint also records
+the user's prelaunch policy: no redundant historical-code compatibility paths;
+existing trust, Contract, review and evidence gates still apply. Private
+evidence stays outside Git, unchanged tests are reused by impact and timers
+stay off. Phase6 remains **5/15**; Slice6 step2 ongoing, step3 incomplete,
+step4 not started.
+
+The earlier [2026-10-21 PBS source closure and observation review](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-pbs-source-closure-and-observation-review)
 independently accepts all3 fixed missing source files and their raw HTTP/blob
 proofs. Requests finish in0.781880/0.979875/1.100053seconds within the original10s
 limits; parent naturally finishes in2.941195seconds and1520 input rows remain
