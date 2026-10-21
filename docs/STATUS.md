@@ -2,7 +2,22 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 Cosign entry recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
+The latest [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
+add strict original-bundle post-policy, complete candidate frames, no-follow
+full-input guards and bounded sequential orchestration with refusal tests.
+The final component suite passes49 tests. A separately reviewed0.079128-second
+metadata-only read binds the retained certificate's SAN/issuer candidates;
+neither it nor synthetic tests prove signatures or real eight-case acceptance.
+The new prepared identity is **HELD**, pending three fixed-source edges and
+concrete reviewed outer/host/boot/network/supply/group-census implementation.
+No host/Cosign case, archive/SDK recovery, build or scan starts. Evidence:
+`pbs-controller-20261021-082537`. All13 sealed checkpoints,1137 old rows/9aliases
+and original limits are preserved; failures are not reclassified. Nine new
+component/test/readme files and three progress documents follow normal
+commit/push; private evidence stays outside Git and timers stay off.
+Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Cosign entry recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
 closes the missing source edge: the exact13636-byte entry is recovered through
 one new reviewed Contents identity in1.335761seconds; nine direct dependencies
 also match their fixed Git blobs. One intervening raw10-second failure is kept;

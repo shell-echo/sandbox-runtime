@@ -2469,3 +2469,64 @@ documents follow normal commit/push; private source/raw evidence stays outside
 Git. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoing,
 step3 final inventory/original16/formal review incomplete, step4 post-acceptance
 handoff not started.
+
+## 2026-10-21 strict PBS diagnostic components
+
+Private checkpoint: `pbs-controller-20261021-082537`. Nine files in
+`tools/pbs-attestation-diagnostic` implement strict original-bundle provenance
+postchecks, deterministic single-change variants, complete candidate error
+frames, no-follow full-file/EOF/inode checks and bounded eight-case controller
+components. All896 subjects are processed; selected digest/name and complete
+workflow/source/invocation fields must match. CLI text is not the signed
+statement, and two selected digests share one publisher statement.
+
+The final managed Python suite passes49 synthetic/component tests, with a
+natural1.048647-second parent capture. Earlier
+36-test and48-test results retain their measured source states; an intervening
+45-test run has one error from a symlink-open exception-type mismatch and stays
+failed. The implementation now normalizes that refusal, without weakening the
+assertion. Independent review also finds direct-child reap insufficient for
+process-tree closure. A failing batch now preserves its report and terminates
+its owned group; a real inherited-mode synthetic fixture verifies this path.
+Success requires a concrete source-bound current group census and refuses
+unknown/residual members. The native observer/race-handling implementation is
+still a separately reviewed prerequisite; mocks do not establish it.
+
+A separately reviewed new metadata-only identity naturally reads both original
+bundle files in0.079128seconds under its10-second/1MiB child boundary; wrapper
+elapsed is0.090569seconds, measured separately. It binds certificate DER
+SHA256 `d522acb7449a9df10fa7de091d41d3b446eac4cf66e659db9ce04051b160d6e4`
+(1926bytes), the expected workflow SAN and GitHub OIDC issuer. This is static
+metadata only, not certificate/signature/TUF/P2 acceptance or Sigstore Summary
+equivalence. Both inputs have the same original bytes. Unexecuted wrapper
+drafts and preparation-helper failures remain preserved.
+
+Independent review covers the component code, refusal results, candidate frames
+and complete static input graph. The new unexecuted identity
+`p2-prepared-20261021-controller-01` freezes16 files for eight cases but remains
+explicitly **HELD**, without an execution entrypoint, review or run claim.
+The source graph still needs fixed
+Sigstore `pkg/fulcio/certificate/{summarize,extensions}.go` and
+`pkg/tlog/entry.go` to close actual field/error branches, plus a concrete
+reviewed private outer and original host/boot/network/supply/group observer.
+Leaves currently inherit caller cwd; the concrete outer must bind an exclusive
+private cwd, since minimal environment alone is not cwd isolation.
+Dynamic inputs, current role expiry and full execution review must precede
+fresh original dual-host admission. No host sampler or Cosign case starts.
+Original25-second/1MiB leaves,90-second entire batch,120-second host-age bound
+and no-signal/truncation/timeout acceptance remain. Unknown complete errors
+refuse; actual results still require unchanged-good joint independent review.
+
+All13 prior sealed trees (1924files excluding indices,177directories),1137 old
+input rows/9aliases,27 compiler/ABI inputs and264headers/5directories remain
+exact. Four old SDK paths retain their already locked `MacOSX.sdk` alias;
+the new static graph records canonical byte targets and that existing alias
+separately, without editing old manifests or allowing symlink-parent reads.
+No 9binding/64barrier,402file/33component, cache/index/reuse, quota, timeout,
+Go1.26.8 or release-lock change occurs. No archive/SDK recovery, native build,
+scan, container, unrelated-process intervention, global install or timer starts.
+Prior96/18 TUF tests remain unaffected by these separate components; no whole
+Go/Contract suite is represented as rerun. Reviewed source/tests/docs follow
+normal commit/push; private evidence stays outside Git. Phase6 stays **5/15**;
+Slice6 step1 historical bounded Guest E, step2 ongoing, step3 final inventory/
+original16/formal review incomplete, step4 post-acceptance handoff not started.

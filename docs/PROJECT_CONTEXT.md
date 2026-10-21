@@ -35,7 +35,23 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 Cosign attestation source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
+The latest [2026-10-21 strict PBS diagnostic components](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-strict-pbs-diagnostic-components)
+implement original-bundle provenance postchecks, finite complete error frames,
+full input/inode guards and bounded eight-case orchestration. The final managed
+Python component suite passes49 tests; a separately reviewed metadata-only read
+finishes naturally in0.079128seconds, binding the1926-byte certificate's SAN and
+OIDC issuer as candidates. This does not authenticate a signature or prove
+Sigstore's field selection. Real P2 remains **HELD**: three fixed Sigstore source
+edges and a concrete independently reviewed outer/guard/group-census observer
+still need closure. A prepared identity carries eight frozen case inputs and
+an explicit non-runnable hold; no host/Cosign case starts. Evidence:
+`pbs-controller-20261021-082537`. All13 prior sealed trees and1137 old input
+rows/9aliases remain exact; old failures stay failed. New components and three
+progress documents follow normal commit/push; private evidence stays outside
+Git, original budgets/guards/reuse rules remain, and timers stay off.
+Phase6 remains5/15; Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 Cosign attestation source recovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-cosign-attestation-source-restored)
 restores the exact missing Cosign3.1.3 entry through one independently reviewed
 official Contents request in 1.335761 seconds, within the original10-second
 boundary. Nine direct loader/predicate/wrapper/default/output dependencies also
