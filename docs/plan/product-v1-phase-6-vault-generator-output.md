@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-20 frozen TUF four-case pass](#2026-10-20-frozen-top-tuf-four-case-chain-passes).
+Latest continuation: [2026-10-21 alternative observation assessment](#2026-10-21-alternative-observation-assessment).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2751,3 +2751,36 @@ documents follow normal commit/push. Phase6 remains **5/15**: Slice6 step1
 historical bounded Guest E accepted within its scope, step2 ongoing, step3
 final inventory/original16/formal review incomplete, step4 post-acceptance
 handoff not started. This checkpoint is not formal step4.
+
+## 2026-10-21 alternative observation assessment
+
+The [new feasibility plan](product-v1-phase-6-pbs-alternative-observation.md)
+records the reviewed alternative to the held Darwin observer. Plain Docker
+substitution is rejected; a new Linux execution target remains conditional,
+with authenticated inputs, daemon-side injection, executable surface, network,
+natural closure and leaf25/whole90/host-age120 proofs still missing. No actual
+replacement, privilege expansion or global configuration change is approved.
+
+Private checkpoint `pbs-linux-observation-feasibility-20261021-152922` retains
+18 prior sealed checkpoints and2379 initial direct input rows. The latest
+prior tree is freshly checked in full; older full-check records remain
+historical. A narrow metadata-only probe is reviewed in design, with a strict
+projection that supplies no endpoint authentication or management exclusivity.
+It is not executed: its17-case mock test identity fails the original10-second
+whole-parent boundary. Capture has0.619251583seconds left, reports
+0.625471042seconds elapsed, no child exit/reap result and no output; outer
+elapsed and missing complete postcheck prevent acceptance. This supplies zero
+passing test results. Logs/failure are preserved; no failed identity is retried.
+There is no actual observation of current daemon authorization state.
+
+Independent result review accepts this intermediate design/failure checkpoint
+only. The metadata instrument, Darwin native route and new Linux runtime all
+remain **HELD**. Existing product Python components are unchanged and reuse
+only their covered49-test evidence; no Go/Contract rerun is claimed. Next close
+the instrument's actual test/budget evidence with a new independently reviewed
+identity, then screen management authority; separately qualify the chosen
+route's complete trust/isolation/budget prerequisites before real P2. No host
+admission, native observer, container, build, scan or real verifier starts.
+Original9 bindings,64 barriers,402 old files,33 components, guards, quotas,
+timeouts and cache/index/reuse rules remain. Timers stay off. Phase6 remains
+5/15; Slice6 step2 ongoing, step3 incomplete, formal step4 not started.

@@ -2,7 +2,22 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 immutable XNU discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-xnu-immutable-discovery-held)
+The latest [2026-10-21 alternative observation assessment](plan/product-v1-phase-6-pbs-alternative-observation.md)
+rejects a direct Darwin-to-Docker substitution. A separately qualified Linux
+prevention design is conditional only: daemon-side process injection, subsequent
+exec, network rejection and full timing/identity proofs remain open. The new
+private metadata probe is not executed. Its independently reviewed17-case mock
+identity fails the original10-second parent, returning no test results or
+complete post-input receipt; it is not retried or counted as passing. The
+metadata screen and both real executor routes remain **HELD**. Evidence:
+`pbs-linux-observation-feasibility-20261021-152922`. All old evidence and guards
+remain; unchanged product component evidence is reused, with no Go/Contract
+rerun. Reviewed design/progress documents follow normal commit/push; no native
+observer, host admission, container, build, scan or real P2 starts. Timers stay
+off. Phase6 stays **5/15**; Slice6 step2 ongoing, step3 incomplete, formal step4
+not started.
+
+The earlier [2026-10-21 immutable XNU discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-xnu-immutable-discovery-held)
 accepts official metadata only. The named `xnu-13432.` tag-prefix query is
 empty; the observed `main` commit's unsigned API message names XNU12377.1.9,
 which cannot substitute for the target13432.1.9. Six requests produce five200

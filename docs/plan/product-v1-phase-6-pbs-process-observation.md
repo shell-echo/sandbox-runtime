@@ -304,3 +304,16 @@ checked in full here. Only four current-document rows receive explicit version
 overlays. Product Python code stays at its earlier49-test state, without a
 rerun; no Go/Contract rerun is claimed. Original time/resource/supply/cache/
 index/reuse boundaries remain and timers stay off. This is Slice6 step2.
+
+## 2026-10-21 alternative observation assessment
+
+The [alternative feasibility assessment](product-v1-phase-6-pbs-alternative-observation.md)
+rejects a direct platform substitution and records a conditional Linux-only
+construction, with management injection, subsequent exec, network and complete
+budget/identity obligations still open. Neither route is admitted. A new
+private metadata probe's17-case mock identity fails its original10-second
+parent without test results or a complete post-input receipt; no real daemon
+query is made. Preserve that failure and require a new reviewed identity for
+any later attempt. Existing runtime code and49-test evidence are unchanged.
+No native/host/container/build/scan/P2 work starts; original guards, quotas and
+budgets remain, timers stay off and Phase6 stays5/15, Slice6 step2 ongoing.
