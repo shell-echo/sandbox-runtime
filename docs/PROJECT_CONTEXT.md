@@ -46,7 +46,23 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 real Docker metadata screen](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
+The latest [2026-10-21 management-authority frontier](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-frontier)
+accepts only eight path-primitive fixture tests and one bounded metadata
+observation, not management authority or executor qualification. A revised
+retained-directory-FD reader closes the unexecuted draft's ancestor-symlink
+window. Complete3576-row preservation checks retain old aliases and evidence.
+The canonical socket's metadata, an unresolved system alias and a missing
+local policy parent do not prove ACLs, endpoint identity or exclusive Docker
+API callers. No configuration body or daemon API is read; no shared setting,
+credential or permission changes. The next positive prerequisite is a concrete
+independently controlled-endpoint evidence package; repeated metadata cannot
+supply it. Linux/native/P2 remain **HELD**, original guards/limits/reuse rules
+stay, and timers remain off. Evidence: `docker-management-authority-20261021-215131`.
+Only three progress documents change; no Go/Contract rerun is claimed.
+Phase6 stays **5/15**: Slice6 step1 historical bounded E, step2 ongoing,
+step3 incomplete, formal step4 not started. Stage Git sync is checked separately.
+
+The earlier [2026-10-21 real Docker metadata screen](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
 completes one reviewed read-only `/info` then `/version` identity. Both return
 complete HTTP200 in0.043382/0.004288seconds under the unchanged3-second request,
 64KiB wire and8KiB header bounds. All2875 input rows and old aliases match

@@ -5,7 +5,7 @@ Date: 2026-10-21. Status: independently reviewed design candidate only;
 [process/cwd observation plan](product-v1-phase-6-pbs-process-observation.md).
 Phase6 remains **5/15**, Slice6 step2 ongoing. This is not formal step4.
 
-Current continuation: [real Docker metadata screen](#2026-10-21-real-docker-metadata-screen).
+Current continuation: [management-authority frontier](#2026-10-21-management-authority-frontier).
 The earlier unavailable17-case result below remains historical and failed;
 the new mock result does not qualify a real endpoint or replacement executor.
 
@@ -280,3 +280,89 @@ remain. Four progress documents follow normal reviewed commit/push; private
 evidence stays outside Git. Timers remain off. Phase6 stays5/15; Slice6 step1
 retains historical bounded E, step2 ongoing, step3's final live topology and
 original16/independent acceptance incomplete, formal step4 not started.
+
+## 2026-10-21 management-authority frontier
+
+Private checkpoint: `docker-management-authority-20261021-215131`. This is a
+bounded source and path-metadata assessment, not executor qualification. The
+previous normal push synchronizes713c1b6 before this stage; this stage's own
+commit/push state must be checked separately. No additional Product acceptance
+matrix, operator authority, daemon or runtime is introduced.
+
+Independent source review confirms that the existing frozen-client and daemon
+identity components require an independently authenticated deployment scope.
+`internal/controloperator/dial.go` explicitly distinguishes a checked endpoint
+path from authentication; `internal/dockercontrol/coding_daemon_observation.go`
+projects identity/environment digests and does not prove exclusive callers.
+ADR0055's daemon-identity ruling retains both limitations. A fixture digest,
+project single-writer statement, label, advisory lock or repeated snapshot
+cannot supply the missing authority.
+
+A three-path instrument reads **metadata only**, not Docker configuration
+bodies, credentials, policies or the daemon API. Its first unexecuted draft is
+held because full-path lstat can follow an ancestor replaced by a symlink.
+The reviewed revision retains the root and each parent directory FD, checks
+one relative component without following links, opens only directories with
+O_DIRECTORY/O_NOFOLLOW and compares fstat. Unsupported primitives refuse;
+there is no string-path fallback. Existing bytes and the unexecuted draft are
+retained. Eight private fixture cases pass in0.064234seconds under the original
+10-second/64KiB owned capture; the real metadata capture naturally exits0 in
+0.015795seconds under the same limits, without signal/truncation/timeout.
+
+| Exact observation | Result and limit |
+| --- | --- |
+| Existing canonical user Docker socket | Socket metadata UID501/GID20/mode0755, with retained parent identities; no ACL read or connection attempted |
+| System socket alias path | Stops at the `/var` ancestor symlink without following it; final socket existence/target is unresolved |
+| Documented local admin-settings path | The `com.docker.docker` parent directory is missing; no file body is read, and no conclusion about cloud/MDM policy follows |
+
+Complete3576-row inputs, original nine aliases and SDK alias match before and
+after the observation under the unchanged90-second preservation check. The
+eight tests cover unreadable final-file metadata, link handling, missing paths,
+replacement before open, retained-FD behavior after pathname replacement,
+unsupported primitives and malformed paths. They are instrument evidence only.
+FD-capability observations and equality at two points do not establish atomic
+live namespace, continuous noninterference or exclusive management. No claim
+that the socket mode alone allows or denies another principal follows.
+
+The [Docker authorization documentation](https://docs.docker.com/engine/extend/plugins_authorization/)
+describes request-level daemon policy and notes that HTTP-upgrade authorization
+is checked at the initial request. A future concrete construction must cover
+its complete management channels rather than merely recognize a plugin name.
+[Desktop ECI socket restrictions](https://docs.docker.com/desktop/enterprise/hardened-desktop/enhanced-container-isolation/config/)
+apply to containers mounting that socket; they are not evidence that another
+host client cannot inject a process. The [local admin-settings mechanism](https://docs.docker.com/desktop/enterprise/hardened-desktop/settings-management/configure-json-file/)
+also has effective-policy prerequisites; a file, version or boolean is not an
+observed runtime authorization decision. These mutable official documents are
+design discovery, not authenticated exact platform or runtime inputs.
+
+**Decision: management authority/injection control remains HELD.** The current
+materials do not bind the same-case daemon to a separately established trusted
+operator and an enforced policy across all management entrances. Existing code
+has no authority grant that closes that gap. Reading more private settings or
+repeating Info/Version/path snapshots cannot turn this negative screen into
+positive admission. Neither a read-only socket mount nor network=none closes
+this obligation. No config, permissions, credentials or shared Desktop setting
+is changed; no new daemon, paid service, container, host gate, build, scan,
+native observer or P2 starts.
+
+Next require a **concrete pre-existing controlled-endpoint evidence package**,
+if one is available: an independently established operator/daemon identity,
+source-bound effective access policy, complete endpoint/bypass inventory and
+same-interval positive/negative enforcement evidence. It must address daemon
+exec and equivalent insertion paths, not merely verifier fork/clone, and fit
+the original two-executor,2CPU/2GiB/128PIDs,25-second leaf/90-second total and
+original host/input checks. The actual package and execution plan require
+independent review; this list is not a new boolean approval API or an
+implementation specification. Until such material exists, this optional Linux
+route stays held. A new environment or shared daemon change is a separate
+concrete decision, not authorized by a successful metadata screen. Unaffected
+work in the existing Slice6 startup ledger can proceed on its own evidence;
+this hold does not justify another open-ended tooling project.
+
+Product code and locks remain unchanged; no Go/Contract suite is represented
+as rerun. Original9 bindings,64 barriers,402 old files,33 components, all older
+failures, quotas, timeouts and cache/index/reuse rules remain. Three reviewed
+progress documents follow normal commit/push; private evidence stays outside
+Git. Timers remain off. Phase6 stays5/15: Slice6 step1 historical bounded E,
+step2 ongoing with this authority gap open, step3 full live topology/original16
+and independent acceptance incomplete, formal step4 not started.
