@@ -1,22 +1,23 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [management-authority frontier](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-frontier).
+Latest Phase6 step2 checkpoint: [management-authority evidence paths](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-evidence-paths).
 
-The latest [2026-10-21 management-authority frontier](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-frontier)
-accepts only eight path-primitive fixture tests and one bounded metadata
-observation, not management authority or executor qualification. A revised
-retained-directory-FD reader closes the unexecuted draft's ancestor-symlink
-window. Complete3576-row preservation checks retain old aliases and evidence.
-The canonical socket's metadata, an unresolved system alias and a missing
-local policy parent do not prove ACLs, endpoint identity or exclusive Docker
-API callers. No configuration body or daemon API is read; no shared setting,
-credential or permission changes. The next positive prerequisite is a concrete
-independently controlled-endpoint evidence package; repeated metadata cannot
-supply it. Linux/native/P2 remain **HELD**, original guards/limits/reuse rules
-stay, and timers remain off. Evidence: `docker-management-authority-20261021-215131`.
-Only three progress documents change; no Go/Contract rerun is claimed.
-Phase6 stays **5/15**: Slice6 step1 historical bounded E, step2 ongoing,
-step3 incomplete, formal step4 not started. Stage Git sync is checked separately.
+The latest [2026-10-21 management-authority evidence paths](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-management-authority-evidence-paths)
+complete a reviewed read-only acquisition assessment. The known3960-path
+basename search yields only three preceding content-seal files, not an
+authenticated endpoint/effective-policy package; it does not prove global
+absence. Official policy export/applied-settings routes are identified, with
+HTTP/gRPC/upgrade and host-socket coverage limits kept distinct from local
+runtime evidence. Next require the existing operator's independently
+established identity, exact endpoint/daemon binding, effective policy, ingress
+and bypass inventory, and same-interval enforcement evidence. No private
+settings, credentials, MDM data or daemon API is read. Complete3981-row input
+preservation retains all previous rows and aliases. Evidence:
+`docker-authority-evidence-paths-20261021-225140`. Only three progress documents
+change; no Go/Contract rerun is claimed. Linux/native/P2 remain **HELD**,
+guards/limits/reuse rules remain and timers stay off. Phase6 stays **5/15**:
+Slice6 step1 historical bounded E, step2 ongoing, step3 incomplete, formal
+step4 not started. Stage Git sync is checked separately.
 
 The earlier [2026-10-21 real Docker metadata screen](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
 completes one reviewed read-only `/info` then `/version` identity. Both return

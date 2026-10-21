@@ -5,7 +5,7 @@ Date: 2026-10-21. Status: independently reviewed design candidate only;
 [process/cwd observation plan](product-v1-phase-6-pbs-process-observation.md).
 Phase6 remains **5/15**, Slice6 step2 ongoing. This is not formal step4.
 
-Current continuation: [management-authority frontier](#2026-10-21-management-authority-frontier).
+Current continuation: [management-authority evidence paths](#2026-10-21-management-authority-evidence-paths).
 The earlier unavailable17-case result below remains historical and failed;
 the new mock result does not qualify a real endpoint or replacement executor.
 
@@ -366,3 +366,72 @@ progress documents follow normal commit/push; private evidence stays outside
 Git. Timers remain off. Phase6 stays5/15: Slice6 step1 historical bounded E,
 step2 ongoing with this authority gap open, step3 full live topology/original16
 and independent acceptance incomplete, formal step4 not started.
+
+## 2026-10-21 management-authority evidence paths
+
+Private checkpoint: `docker-authority-evidence-paths-20261021-225140`.
+Independent review accepts this read-only acquisition assessment, not an
+authority grant or executor qualification. The previous6680d724 checkpoint is
+synchronized before this stage; this stage's Git result is checked separately.
+Its complete122-file/2-directory sealed tree matches. New3981-row preservation
+retains all3960 previous rows, nine aliases and SDK alias unchanged, naturally
+exiting0 in1.519243seconds under90seconds. A fresh seven-query local Git
+identity confirms clean6680d724/upstream6680d724,0/0 ahead/behind, without a
+new live-remote or runtime claim.
+
+`controloperator/dial.go` explicitly separates socket checks from authentication;
+`dockercontrol/coding_daemon_observation.go` requires an externally authenticated
+deployment scope. `control_source_session.go` derives its local scope from
+Profile bytes and a fixed socket target, which is binding data, not independent
+authentication. `coding_unix_observer.go` and ADR0055 retain this distinction.
+
+The recorded authority/policy/bootstrap/scope basename search covers only3960
+known input-graph paths. Its three hits are previous management-authority
+content seals. **This index provides no authenticated endpoint/effective-policy
+package**; it does not prove global absence of a package or control. No private
+configuration body, credential, MDM data or administrative console is read.
+
+| Obligation | Existing operator's acquisition path | Missing evidence |
+| --- | --- | --- |
+| Identity | Independent trust source and signed non-secret deployment record identifying exact daemon/endpoint and validity interval | Approved trust source and corresponding package; a new session-generated key or fixture cannot supply either |
+| Effective policy | Source/revision, protected ownership, application context and sanitized applied-settings projection | Actual enforcement, not intended configuration or plugin membership |
+| Coverage | Inventory of applicable local sockets, remote transports, proxies, VM/runtime administration and equivalent insertion paths within the unchanged trusted daemon/operator boundary | Complete same-daemon ingress and bypass coverage |
+| Continuous control | Independently attributable allow/deny and bypass-failure evidence bound to run, target, policy revision and interval | Same-interval control; historical logs, equal snapshots and project single-writer statements are insufficient |
+
+Official documentation checked on2026-10-21 provides mutable discovery only,
+not authenticated exact-runtime source or local enforcement evidence:
+
+- [Protected daemon access](https://docs.docker.com/engine/security/protect-access/)
+  describes Unix/SSH/TLS options. Authentication still needs separate
+  authorization and deployment binding; no transport or credential is changed.
+- [Engine authorization](https://docs.docker.com/engine/extend/plugins_authorization/)
+  covers HTTP, excludes native and upgraded gRPC, and checks HTTP-upgrade
+  authorization initially rather than throughout streaming. Availability and
+  closure of these paths need exact selected-runtime and policy evidence.
+- [Settings Management](https://docs.docker.com/desktop/enterprise/hardened-desktop/settings-management/)
+  documents precedence and applied settings. The
+  [existing-policy export and verification path](https://docs.docker.com/desktop/enterprise/hardened-desktop/settings-management/configure-admin-console/)
+  can inform authorized, sanitized operator delivery. No login, export,
+  restart, purchase or `settings-store.json` read occurs here.
+- [Local admin settings](https://docs.docker.com/desktop/enterprise/hardened-desktop/settings-management/configure-json-file/)
+  need actual application and locking; missing local settings do not rule out
+  higher-priority policy. [ECI socket restrictions](https://docs.docker.com/desktop/enterprise/hardened-desktop/enhanced-container-isolation/config/)
+  govern containers mounting the socket, not exclusion of other host callers.
+
+**Authority and optional Linux/native/P2 qualification remain HELD.** Next
+obtain the actual authenticated package from the existing endpoint's authorized
+operator, then independently review its source/target/time bindings and the
+concrete enforcement execution plan. This is an evidence acquisition checklist,
+not a new authority API or Product acceptance matrix. New environments, shared
+daemon changes and paid services remain separate decisions. Repeated metadata
+or another observer cannot replace this package. Unaffected original Slice6
+startup work remains separately actionable on its own evidence.
+
+No daemon request, Docker CLI, host gate, native observer, container, build or
+scan runs. Only three progress documents change; no Go/Contract rerun is
+claimed. Original9 bindings,64 barriers,402 files,33 components, failures,
+guards and reuse/cache/index rules remain. Limits remain two executors,
+2CPU/2GiB/128PIDs,25-second leaf,90-second total and120-second host age.
+Reviewed documents follow normal commit/push; private evidence stays outside
+Git and timers stay off. Phase6 remains5/15: Slice6 step1 historical bounded E,
+step2 ongoing, step3 incomplete, formal step4 not started.
