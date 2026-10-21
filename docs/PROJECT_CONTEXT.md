@@ -46,7 +46,28 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
+The latest [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
+independently accepts bounded official metadata reads, while exact current-platform
+XNU provenance remains **HELD**. Fresh platform metadata still records
+macOS27.0.1/26A434, Darwin27.0.0, arm64 and `xnu-13432.1.9~1`.
+Apple's release HTML points to a script containing its release catalog; the
+complete script has no current version/build/XNU literal. Two separately
+retrieved official distribution tag pages contain166 unique tags without a
+macos27 tag. These observations do not establish absence from every official
+channel; macOS26/XNU12377 records cannot substitute for this platform.
+All four HTTP reads return200 within the original10-second request bounds;
+source-only parents naturally finish in3.045703/8.712990seconds. Private reader
+tests pass27 plus11 focused cases; these are not product/runtime acceptance.
+No exact source, native observer, host gate, P2, build or scan is admitted.
+Evidence: `xnu-release-mapping-20261021-103210`, preserving16 old sealed trees
+and1690 initial input rows, with explicit current-document version overlays.
+Next obtain an independently authenticated exact official source/platform
+correspondence before recovery and semantic/ABI work. Four reviewed progress
+documents follow normal commit/push; private materials stay outside Git,
+original guards/limits remain and timers stay off. Phase6 stays5/15;
+Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
 independently reviews a new bounded metadata/source-only identity. The platform
 read naturally finishes in0.093355seconds: macOS27.0.1/26A434, arm64,
 Darwin27.0.0, kernel label `xnu-13432.1.9~1`. The first exact-tag Apple Contents

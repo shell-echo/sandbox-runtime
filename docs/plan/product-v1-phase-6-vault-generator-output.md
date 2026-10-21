@@ -2642,3 +2642,59 @@ trust, review, Contract and evidence requirements. This is an intermediate
 checkpoint, not Slice6 step4. Phase6 stays **5/15**; step1 historical bounded
 Guest E, step2 ongoing, step3 final inventory/original16/formal review incomplete,
 step4 post-acceptance handoff not started.
+
+## 2026-10-21 Apple release mapping gap
+
+Private checkpoint: `xnu-release-mapping-20261021-103210`.
+The [process-observation plan](product-v1-phase-6-pbs-process-observation.md#2026-10-21-apple-release-mapping-gap)
+records independently reviewed source-only identities and actual responses.
+Fresh platform metadata naturally finishes in0.108581834seconds under10s/1MiB,
+with1705 complete inputs exact before/after: macOS27.0.1/26A434, Darwin27.0.0,
+arm64, `xnu-13432.1.9~1`. This does not authenticate runtime image provenance/ABI.
+
+One reviewed batch reads Apple's official release HTML and official
+`distribution-macOS` tag page1: HTTP200,10947/50136 body bytes,
+1.545086541/1.430195333seconds, parent natural0 in3.045702542seconds and1732
+inputs exact before/after. The HTML is a loading shell with an exact script
+asset; page1 has100 tags and an explicit next/last page2 link. Dynamic input
+review authorizes only those two followups. They return200: complete script
+916699 bytes in6.283076291seconds and page2 33978 bytes/66 tags in2.323428958
+seconds; parent natural0 in8.712989666seconds with1763 inputs exact before/after.
+Every request retains complete raw headers/body within the unchanged10-second,
+1MiB combined response boundary. Captures are reaped without signal, timeout
+or truncation. Input hashing is outside source-only capture timing, not evidence
+that the P2 leaf25/whole90/host-age120 execution budgets have closed.
+
+The script is inspected as UTF8 data, never evaluated/imported. Its module1
+release catalog is consumed by module172 through an embedded dependency;
+the `releases.json` string is not treated as an authorized HTTP endpoint.
+No current `macOS 27`, `27.0.1`, `26A434` or `13432.1.9` literal occurs. Historical
+macOS26/XNU12377 entries do not establish this machine's XNU13432 correspondence.
+The two separately retrieved pages contain166 unique tags without macos27;
+page2 has no next link. Different capture times prevent an atomic-listing claim,
+and these routes do not prove nonpublication across all official channels.
+
+Independent actual-result review accepts this limited mapping investigation.
+Exact source recovery remains **HELD** for an authenticated current-platform
+official source pointer. Native provenance/ABI, zombies, coherent census,
+no-escape and before-reap supervision also remain unresolved. No host sampler,
+native observer/group API, P2/Cosign case, archive/SDK recovery, build, scan,
+container or global environment installation starts. The old404 source/tag
+identities are not retried, and no alternative version is substituted.
+
+The private reader's27 tests pass under10seconds, followed by11 focused
+followup-policy tests under10seconds; the latter capture naturally finishes in
+0.167895791seconds. These are component checks of private metadata tools, not
+product acceptance. Unexecuted held drafts, the offline preparation failure and
+all old evidence remain. All16 sealed trees (2277 files excluding indices,
+208 directories),1690 initial direct rows/9aliases and SDK alias are retained;
+only authorized current-document versions are explicitly overlaid. The existing
+8 product Python files remain at their49-test state without a rerun. No Go or
+Contract suite is represented as rerun for this documentation-only checkpoint.
+All9 bindings,64 barriers,402 files,33 components, original resource/time,
+supply/cache/index/reuse and network gates remain. Four reviewed progress files
+follow normal commit/push; private materials stay outside Git and timers stay
+off. Phase6 stays **5/15**; Slice6 step1 historical bounded Guest E, step2 ongoing,
+step3 final inventory/original16/formal review incomplete, step4 post-acceptance
+handoff not started. Next establish the exact official source/platform link
+before independently reviewing recovery and semantics.

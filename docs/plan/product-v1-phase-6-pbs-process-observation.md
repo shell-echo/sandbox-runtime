@@ -198,3 +198,50 @@ membership, no-escape and before-reap budget evidence. Next independently
 review an official publication/platform mapping path; do not silently substitute
 another XNU version or rely on equal observed PID lists. Original9 bindings,
 64 barriers, guards, resource/timeout limits and all old evidence remain.
+
+## 2026-10-21 Apple release mapping gap
+
+Private checkpoint `xnu-release-mapping-20261021-103210` independently reviews
+new source-only identities. A fresh platform capture naturally exits0 in
+0.108581834seconds with1705 complete inputs exact before/after; the recorded
+platform remains macOS27.0.1/26A434, Darwin27.0.0, arm64 and
+`xnu-13432.1.9~1`. This is metadata, not authentication of the kernel or ABI.
+
+The [Apple release page](https://opensource.apple.com/releases/) returns a
+10947-byte loading shell in1.545086541seconds. The official distribution's
+[first tag page](https://api.github.com/repos/apple-oss-distributions/distribution-macOS/tags?per_page=100&page=1)
+returns100 entries in1.430195333seconds and an explicit next/last page2 link.
+The90-second parent naturally exits0 in3.045702542seconds;1732 full inputs stay
+exact before/after. Neither shell text nor page1 alone proves source absence.
+
+After separate review of these actual inputs, the exact
+[script named by the page](https://opensource.apple.com/scripts/main.built.6a507df9.js)
+returns916699 bytes in6.283076291seconds, and the exact
+[next tag page](https://api.github.com/repositories/413590264/tags?per_page=100&page=2)
+returns66 entries/33978 bytes in2.323428958seconds. Parent naturally exits0 in
+8.712989666seconds with1763 full inputs exact before/after. All four requests
+return200 with complete raw headers/bodies, within10seconds and1MiB combined
+header/body each; no retry, redirect, authentication or script execution occurs.
+
+Nonexecuting static inspection binds module1's embedded catalog to module172's
+`../../data/unlocalized/releases.json` dependency. The complete script has no
+`macOS 27`, `27.0.1`, `26A434` or `13432.1.9` literal. Its observed macOS26.0
+and26.5 entries name XNU12377.1.9 and12377.121.6 respectively; neither is used
+as current-platform source. Both tag pages total166 unique names without
+macos27. Page2 has only prev/first links, but the pages were retrieved at
+different times; this is not an atomic listing or proof about all Apple channels.
+
+Independent result review accepts only this bounded discovery result. Exact
+source/platform correspondence remains unavailable from the checked materials;
+source recovery, native provenance/ABI, complete coherent census, zombies,
+no-escape and before-reap supervision remain **HELD**. Do not substitute an older
+version or launch native/P2 work. Next require an authenticated exact official
+source pointer and separately review its immutable recovery inputs.
+
+Private reader tests pass27 transport/JSON cases plus11 focused followup-policy
+cases; no product acceptance follows. Held reader drafts and an offline analysis
+preparation failure remain recorded. All16 old sealed trees,1690 initial rows,
+9 bindings,64 barriers and existing guards remain; only explicit current-doc
+versions change. No libproc observer/group API, host gate, Cosign case, build,
+scan, container or global installation runs. Timers stay off and original
+budgets, supply/cache/index/reuse rules remain. This is Slice6 step2, not step4.

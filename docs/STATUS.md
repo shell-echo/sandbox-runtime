@@ -2,7 +2,23 @@
 
 Latest Phase6 step2 checkpoint: [Vault generator output verification](plan/product-v1-phase-6-vault-generator-output.md).
 
-The latest [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
+The latest [2026-10-21 Apple release mapping check](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-apple-release-mapping-gap)
+accepts four bounded official metadata responses, not exact current-platform
+source provenance. Apple's HTML loads an embedded release catalog; its complete
+script lacks macOS27.0.1/26A434/XNU13432.1.9 literals. Separately retrieved
+distribution tag pages contain166 unique tags without macos27. This does not
+prove global official-source absence; macOS26/XNU12377 cannot substitute.
+Source-only parents naturally exit0 in3.045703/8.712990seconds, with complete
+raw headers/bodies and1732/1763 full inputs exact before/after. The private
+reader's27 plus11 focused tests pass. Exact source recovery, native/ABI/census
+and P2 remain **HELD**; no host gate, build or scan starts. Evidence:
+`xnu-release-mapping-20261021-103210`;16 prior sealed trees and1690 initial
+rows remain preserved, with current document versions explicitly overlaid.
+Four reviewed progress documents follow normal commit/push. Old failures,
+guards, budgets and disabled timers remain. Phase6 stays **5/15**;
+Slice6 step2 ongoing, step3 incomplete, step4 not started.
+
+The earlier [2026-10-21 native API source discovery](plan/product-v1-phase-6-vault-generator-output.md#2026-10-21-native-api-source-discovery-held)
 records macOS27.0.1/26A434, arm64, Darwin27.0.0 and `xnu-13432.1.9~1` through
 an independently reviewed0.093355-second metadata read. Two separately reviewed
 official GitHub routes fail404: first exact-tag source0.715244seconds, then
