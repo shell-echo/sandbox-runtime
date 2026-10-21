@@ -46,7 +46,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-21 metadata mock checkpoint](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-bounded-mock-harness-checkpoint)
+The latest [2026-10-21 real Docker metadata screen](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
+completes one reviewed read-only `/info` then `/version` identity. Both return
+complete HTTP200 in0.043382/0.004288seconds under the unchanged3-second request,
+64KiB wire and8KiB header bounds. All2875 input rows and old aliases match
+before/after; the final pre-flush marker is1.950375seconds with outer natural0
+under the original90-second parent. The actual Authorization value is **null**,
+kept distinct from missing, empty and nonempty; it proves neither endpoint
+identity nor management exclusivity. Raw HTTP is not retained and cannot be
+independently reparsed. New26 execution-binding mocks pass; the earlier shell
+redirection failure remains recorded, with no results attributed to that identity.
+Evidence: `docker-metadata-readonly-20261021-191746`. The old reader bytes are
+unchanged in a new bound location and both output roots are outside sealed
+checkpoints. No Docker CLI, credential access, host admission, container,
+build, scan, native observer or P2 runs. Next independently establish a concrete
+management-authority/injection-control evidence path before any executor
+qualification. Product code, old locks and all existing guards remain; no
+Go/Contract rerun is claimed. Timers stay off. Phase6 remains **5/15**:
+Slice6 step1 historical bounded E only, step2 ongoing, step3 incomplete,
+formal step4 not started. Stage Git synchronization is checked separately.
+
+The earlier [2026-10-21 metadata mock checkpoint](plan/product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-bounded-mock-harness-checkpoint)
 passes27 harness refusals and the unchanged17 original mock cases through new
 reviewed identities, with complete35/53-row pre/post checks retaining the
 original nine exact inputs. Both runs naturally exit0 under the same10-second

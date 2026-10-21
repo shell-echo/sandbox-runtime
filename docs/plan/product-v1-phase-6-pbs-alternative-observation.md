@@ -5,7 +5,7 @@ Date: 2026-10-21. Status: independently reviewed design candidate only;
 [process/cwd observation plan](product-v1-phase-6-pbs-process-observation.md).
 Phase6 remains **5/15**, Slice6 step2 ongoing. This is not formal step4.
 
-Current continuation: [bounded mock harness checkpoint](#2026-10-21-bounded-mock-harness-checkpoint).
+Current continuation: [real Docker metadata screen](#2026-10-21-real-docker-metadata-screen).
 The earlier unavailable17-case result below remains historical and failed;
 the new mock result does not qualify a real endpoint or replacement executor.
 
@@ -208,3 +208,75 @@ and prior49 component coverage are unchanged, with no Go/Contract rerun.
 Timers remain off; original9 bindings,64 barriers,402 old files,33 components,
 quotas, timeouts and cache/index/reuse rules remain. Phase6 stays5/15,
 Slice6 step2 ongoing, step3 incomplete, formal step4 not started.
+
+## 2026-10-21 real Docker metadata screen
+
+Private checkpoint: `docker-metadata-readonly-20261021-191746`. Independent
+review accepts a new complete2875-row identity: all previous2832 rows remain
+verbatim, with43 new source, seal, preparation and actual mock-evidence rows.
+The old282-file/7-directory checkpoint's complete external inventory and seal
+are checked before preparation. No old manifest or sealed directory is written.
+
+The original reader is copied byte-for-byte to the fresh private `reader-run`
+directory; its explicit new `__file__` derives a new `daemon-metadata-v1` output.
+The parent has its own separate `real-stage-v1` capture root. Both must be
+absent initially; root ownership,0700 permissions and real parent identities,
+the copied source, socket inode/metadata and helper bindings are checked.
+The new wrapper loads only exact checked private bytes, reusing the reviewed
+streaming primitives and capture rather than the old path-import wrapper.
+
+A new26-case execution-binding mock suite passes, with complete25-row pre/post
+checks retaining the original nine inputs, natural captured/outer0 and a
+0.177062-second pre-flush marker under the unchanged10-second/64KiB bounds.
+It covers source/root/output drift, preexisting outputs, unknown ownership,
+time/stream refusal and joint output consistency. The old27/17 suites are not
+rerun for reporting. One earlier shell launch fails on a misspelled stderr
+parent path and supplies no test result; its empty stdout, exit1 and error
+record remain. A separately reviewed v2 plan and new outer streams execute
+once; no failed plan is rerun or reclassified.
+
+Only the child invokes the original reader. Its per-request3-second alarms
+cannot cancel the parent's single early90-second deadline. Capture, the
+existing2-second cleanup and0.25-second closure reserve share that same budget.
+All2875 complete input rows, nine old aliases, SDK alias, root and socket
+bindings are checked before/after within it. Three generated JSON files are
+checked separately for exact set, private modes and consistency with the full
+captured stdout/stderr; generated outputs are not invented pre-inputs.
+
+| Actual request | HTTP / EOF | Seconds | Complete wire bytes |
+| --- | --- | ---: | ---: |
+| `/info` | 200 / complete | 0.043382041 | 10182 |
+| `/version` | 200 / complete | 0.004287875 | 1132 |
+
+Both preserve3-second/64KiB wire/8KiB header limits. The child naturally exits0
+and is reaped in0.090972seconds without timeout, truncation or signal; capture
+has86.402912seconds from the same remaining parent budget. Final marker time
+is1.950375seconds **before its flush**; outer natural0 and empty stderr jointly
+confirm this bounded identity. No exact full-process wall time is claimed.
+The version projection matches the fixed expected Linux/arm64 metadata.
+
+Actual `/info` Authorization is **null**, not missing, empty or nonempty.
+Its policy meaning and exclusive management access remain unknown. Projection
+flags for management exclusivity and independent endpoint authentication stay
+false. Only whitelisted projection and counts/hashes are saved: raw HTTP is
+not retained, so independent raw reparse and raw-response authentication are
+not proved. Fixed socket/parent identity does not close the connect-time race,
+and printable metadata is not a general secret detector for a malicious peer.
+
+This closes the narrow real metadata-instrument observation only. It does not
+qualify the proposed Linux executor or Darwin native route, prove management
+exclusivity, prevent daemon-side exec injection, authenticate the endpoint,
+prove executable/network isolation, or admit P2. Next independently select a
+concrete trusted management-authority/injection-control evidence path; the
+observed null cannot substitute for it. No daemon configuration, permission,
+credential or shared runtime setting is changed. There is no Docker CLI,
+container, host admission, native/P2, build, scan or SDK/archive recovery.
+
+Product code and old locks remain unchanged. Prior unaffected49 component
+coverage and the frozen original17 reader cases are reused by actual impact
+and byte equality, without a new Go/race/vet/Contract claim. Original9 bindings,
+64 barriers,402 old files,33 components, resource/time/cache/index/reuse gates
+remain. Four progress documents follow normal reviewed commit/push; private
+evidence stays outside Git. Timers remain off. Phase6 stays5/15; Slice6 step1
+retains historical bounded E, step2 ongoing, step3's final live topology and
+original16/independent acceptance incomplete, formal step4 not started.

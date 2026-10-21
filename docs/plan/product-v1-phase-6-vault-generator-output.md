@@ -6,7 +6,7 @@ migration package. The active branch remains `codex/product-v1-phase-6-hardening
 at `91fe315641779e6ea640632538309d63ad1b303f`; inherited changes are preserved.
 Phase6 remains **5/15**, with Slice6 step2 ongoing.
 
-Latest continuation: [2026-10-21 metadata mock checkpoint](#2026-10-21-metadata-mock-checkpoint).
+Latest continuation: [2026-10-21 real Docker metadata screen](#2026-10-21-real-docker-metadata-screen).
 The source HEAD and supply observations below are dated historical records,
 not the current Git HEAD or current vulnerability-database freshness.
 
@@ -2809,3 +2809,32 @@ time/cache/index/reuse gates remain unchanged. Existing49 component coverage
 is reused only by impact; no Go/Contract rerun is claimed. Timers stay off.
 Phase6 remains5/15; Slice6 step2 ongoing, step3 incomplete, formal step4 not
 started. Current commit/push status is verified and reported separately.
+
+## 2026-10-21 real Docker metadata screen
+
+The [real read-only metadata checkpoint](product-v1-phase-6-pbs-alternative-observation.md#2026-10-21-real-docker-metadata-screen)
+completes one new reviewed `/info`→`/version` identity: complete200/EOF responses
+in0.043382041/0.004287875seconds,10182/1132 wire bytes, under unchanged3-second/
+64KiB wire/8KiB header bounds. All2875 input rows and old aliases match before/
+after. Captured child natural0/reap/no flags, complete generated/captured-output
+consistency and outer natural0 accompany a1.950375-second pre-flush marker
+under the original90-second parent. The old reader is byte-identical in a
+new bound location; both fresh output roots are outside sealed checkpoints.
+New26 binding/refusal mocks pass under original10s/64KiB with25 exact rows;
+the prior shell redirection failure is preserved without a test result.
+
+Private evidence: `docker-metadata-readonly-20261021-191746`. Actual
+Authorization is **null**, distinct from missing, empty and nonempty. This
+is redacted instrument evidence only: raw HTTP is unavailable for independent
+reparse; endpoint authentication, connect race, exclusive management access
+and daemon-side injection control remain unproved. Next independently review
+a concrete trusted authority/injection-control evidence path before qualifying
+an executor. No Docker CLI, credential/configuration change, host admission,
+container, native/P2, build, scan or archive/SDK recovery follows.
+
+Product code/old locks and original guards,9 bindings,64 barriers,402/33 evidence,
+quotas/time/cache/index/reuse rules remain. Unaffected component evidence is
+reused by impact and reader byte equality; no Go/Contract rerun is claimed.
+Reviewed progress documents follow normal commit/push, with actual Git status
+reported separately. Timers stay off. Phase6 remains5/15: Slice6 step1 historical
+bounded E only, step2 ongoing, step3 incomplete, formal step4 not started.
