@@ -46,7 +46,30 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture)
+The latest [targeted CPU profile](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-cpu-profile)
+completes one reviewed diagnostic in 75.914772s under the unchanged shared
+90s. The exact Go test naturally exits 0 in 71.236237s with all 16 test passes
+and one package PASS; both local pprof commands naturally pass. A fresh root
+is strictly 02700 while producing and changes through its held FD to 0700
+only after natural Go success and complete JSON verification; both held files
+tighten to 0600 with unchanged bytes. Seven ACL checks, final exact two files
+and all 73 direct/3 helper/2 module plus 2166 source-lock/74 tool-source checks
+pass. No third-name refusal is observed; bounded observations do not prove
+that no transient ever existed. The new combined 41 refusal tests pass; the
+first optimized-interpreter startup timeout remains FAILED evidence.
+Evidence: `slice6-v2-copy-cpu-20261022-072553`. CPU samples cover 52.38s with
+32.09 sampled CPU seconds. Race helpers lead flat rows; Profile.Validate has
+8.70s/27.11% cumulative cost in this sample. Cumulative paths overlap and
+cannot be added. This neither proves the old full-race timeout cause nor a
+latency improvement; the earlier full gate stays FAILED and is not rerun.
+Next independently examine repeated validation within BindSlice6DesiredNetworkPlan,
+keeping separate input/output snapshots and fresh validation at every public
+entry. No product code, old lock, cache/index or reuse policy changed. This
+remains a private diagnostic under the stated nonhostile same-UID premise,
+not production authority. Phase6 stays **5/15**, Slice6 step2 ongoing, step3
+incomplete, formal step4 not started; timers stay off. Git sync is separate.
+
+The earlier [private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture)
 passes the directory configuration prerequisite in 0.060627 seconds, after
 independent design and implementation/input review. A fresh owner-only root
 changes through the same FD from 0700 to 02700 and back to 0700, retaining its

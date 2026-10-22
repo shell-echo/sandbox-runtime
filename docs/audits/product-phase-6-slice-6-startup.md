@@ -11370,3 +11370,87 @@ incomplete; formal postacceptance step4 not started. Docker authority,
 Linux/native/P2 and public ProfileV2/provider-v3 holds, broker/general only,
 PostgreSQL general, nine bindings, 64 barriers and evidence-reuse rules remain.
 Development stays mise/Docker and timers stay off.
+
+
+## 2026-10-22 targeted CPU profile
+
+One fresh reviewed diagnostic now completes the previously blocked CPU
+observation path. This is component evidence, not a full-race or runtime
+release gate; Phase6 remains **5/15** and the earlier full gate stays FAILED.
+Private evidence: `slice6-v2-copy-cpu-20261022-072553`.
+
+Independent design and final implementation/test/full-input reviews preserve
+the original exact target, 15 child names, managed Go1.26.8, race/shuffle/count1,
+umask022, GOMAXPROCS2/-p2, module/cache/index recipe and default profiling rate.
+The fresh artifact root is exactly 02700, with rwx0700/current UID/GID and a
+held directory FD/path/ancestry binding. Producing allows only the original
+two names, with not-yet-generated files permitted as before; final collection
+requires both. Every third name, including the old umask probe, still rejects.
+Per-name modes 0644/0755, expected GID, regular type, nlink1, stable identity
+and the original observed 1MiB profile/16MiB binary thresholds are checked.
+Fixed Go selects CopyFile before the umask probe for this directory mode.
+CopyFile lacks destination O_NOFOLLOW and can add temporary I/O/space; this
+is only a private diagnostic with no hostile same-UID writer assumed, not
+production authority, exclusive control or resistance to that attack model.
+There is no quota or time extension, and observed thresholds are not kernel
+file quotas. Go concurrency settings are not a kernel CPU-quota claim.
+
+The first offline identity executes 41 methods with 40 passes and one ERROR:
+its optimized-interpreter refusal child exceeds the original two-second
+limit. It naturally exits 2; the specific waiting/import cause is unknown.
+Original code, input and raw failure remain. The reviewed new bootstrap
+rejects the same invalid flags before additional imports, removing the later
+duplicate check. A new identity executes all 41 methods successfully in
+5.616076s under unchanged 30s/1MiB bounds, with no timeout/truncation/signal.
+Coverage includes a binary larger than 1MiB within the original 16MiB cap,
+oversize and mode/GID/ACL/link/replacement/byte/deadline refusals, and preventing
+permission changes or analysis after natural-command/complete-JSON failure.
+The immutable prior root/capture primitives are reused, not rewritten.
+
+The actual shared batch passes in **75.914772167s** under 90s, including new
+root preparation, seven ACL checks, Go, complete final binding/permissions
+and two pprof commands. Go naturally exits 0/reaped in 71.236237166s with
+69 complete JSON events, all 16 test run/pass pairs and one package PASS.
+The top test reports 52.41s and the package 55.156s. Only then does the same
+root FD tighten 02700 to 0700, preserving device/inode/UID/GID while recording
+actual mode/ctime changes. Original full file pins and bytes survive the root
+transition; the held file FDs then tighten to 0600 and freeze full pins.
+The profile is 52,787B and binary 16,370,002B. Seven raw ACL observations
+naturally pass under two seconds/64KiB each, with FD/path/stat checks, no
+stderr, no extra ACL rows or `+` ACL marker; `@` is extended-attribute metadata.
+No artifact-refusal event is observed. Non-atomic, bounded observation cannot
+prove that no transient ever existed. Final collection is exactly two files.
+
+Flat pprof naturally exits 0 in 4.064807417s and cumulative pprof in
+0.409137542s; each stdout is 52,595B, stderr empty, with no timeout/truncation/
+active signal. Frozen artifact bytes and identity checks pass before and
+after each. All 73 direct, three helper, two module, 2166 source-lock and
+74 tool-source inputs match afterward; the source checkout remains clean at
+ae6bdfd476dc5c396e4f264fef3a30b40a8d73ce with the same recorded upstream.
+Original bounded pre/postchecks remain separate from the diagnostic batch.
+
+Both reports cover 52.38s and 32.09 sampled CPU seconds. Leading flat nodes
+include `__tsan_read` 6.30s/19.63%, `racecall` 2.66s/8.29% and `runtime.madvise`
+1.93s/6.01%. Application cumulative paths include `testCompleteV2Fields`
+10.86s/33.84%, `BuildSlice6FinalExternalProfileTarget` 9.15s/28.51%,
+`Profile.Validate` 8.70s/27.11% and `BindSlice6DesiredNetworkPlan` 7.37s/22.97%.
+JSON Marshal and regexp MatchString appear at 4.67s/14.55% and 3.96s/12.34%
+cumulative. These paths overlap and cannot be added. This samples the test
+process, not controller/build/startup waiting or whole-host use; it proves
+neither a paging cause, latency gain nor the old 600s full-race timeout cause.
+Keep race detection and all existing assertions and bounds.
+
+Next independently audit same-call repeated validation in
+`BindSlice6DesiredNetworkPlan`. Source shows direct input validation followed
+by public verifiers that revalidate that unchanged draft; its rewritten bound
+profile is a separate snapshot. Any later equivalent optimization must keep
+both snapshot boundaries and fresh validation at every public entry. No
+product Go, Contract, old lock, cache/index recipe or reuse rule changed here,
+and no full Go/vet/Contract rerun is claimed. Only the three progress documents
+are checkpointed; normal commit/push and full local/upstream/live SHA checks
+are separate from diagnostic acceptance. Private raw evidence stays outside
+Git. Slice6 step1 historical bounded E is unchanged; step2 ongoing; step3 full
+live inventory/original16/formal review incomplete; formal step4 not started.
+Docker authority/Linux/native/P2, public ProfileV2/provider-v3, two issuers,
+PostgreSQL general, nine bindings, 64 barriers and reuse holds remain. No live
+Vault/Guest/three-Provider/final16 gate or release runs; timers stay off.

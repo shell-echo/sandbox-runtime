@@ -1,6 +1,29 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture).
+Latest Phase6 step2 checkpoint: [Targeted CPU profile](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-cpu-profile).
+
+One independently reviewed exact-test diagnostic passes in **75.914772s**
+under the unchanged shared 90s. Go naturally exits 0 in 71.236237s, all 16
+test run/pass pairs and one package PASS are complete, and both local pprof
+commands pass naturally. Runtime names stay restricted to the original two;
+only after verified success does the held 02700 root tighten to 0700 and
+the two held files to 0600, preserving bytes. Seven ACL checks and all
+73 direct/3 helper/2 module plus 2166 source-lock/74 tool-source inputs pass.
+The combined 41 refusal tests pass; the separate first startup-timeout
+failure is preserved. No third-name refusal is observed, with the original
+non-atomic observation limits intact. Sample duration is 52.38s with 32.09
+sampled CPU seconds: race helpers lead flat cost, while Profile.Validate has
+8.70s/27.11% cumulative cost. Cumulative paths overlap; this is not a wall-time
+breakdown, improvement claim or explanation of the historical full-race
+timeout. The full gate remains FAILED, without another whole-suite run.
+Next independently audit same-call repeated validation in BindSlice6DesiredNetworkPlan,
+preserving distinct snapshots and public-entry validation. No product code,
+locks, cache/index or reuse rules changed. Phase6 stays **5/15**, Slice6 step2
+ongoing, step3 incomplete, formal step4 not started; timers stay off. Normal
+checkpoint Git synchronization is checked separately.
+
+The earlier [private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture)
+passed its filesystem prerequisite without running Go:
 
 One independently reviewed private filesystem fixture passes in 0.060627s.
 The new root retains FD/path/device/inode/UID/GID while changing
