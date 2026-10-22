@@ -11454,3 +11454,82 @@ live inventory/original16/formal review incomplete; formal step4 not started.
 Docker authority/Linux/native/P2, public ProfileV2/provider-v3, two issuers,
 PostgreSQL general, nine bindings, 64 barriers and reuse holds remain. No live
 Vault/Guest/three-Provider/final16 gate or release runs; timers stay off.
+
+
+## 2026-10-22 network-plan same-call validation
+
+This is an **unaccepted interim source checkpoint**: focused component tests and
+full vet pass, but the required full race run fails its original 600s limit.
+Phase6 remains **5/15**, with Slice6 step2 open. Private original evidence stays
+outside Git under `slice6-network-plan-validation-once-20261022-083637`.
+
+Independent design and final implementation/input review preserve distinct
+input/output snapshots in BindSlice6DesiredNetworkPlan. The unchanged draft
+receives full Profile.Validate followed by the same eight domain checks. After
+the original copy-on-write network/address/digest transformation, the rewritten
+bound profile receives a fresh full Profile.Validate and all eight output
+checks. Existing private verifiers replace only redundant public-wrapper
+validation on these same unchanged snapshots. Three new private helpers share
+the unchanged trust-edge, external-service and edge-address checks; the last
+still checks both edges and networks. All public entries validate every call.
+The successful path goes from 18 top-level full Profile validations to 2; no
+validation token, cross-call cache or weaker acceptance path is introduced.
+Concurrent caller mutation remains unsupported, not a newly claimed safety.
+
+New/extended assertions compare the complete JSON input before and after both
+success and failure; reentry tests reject digest drift and rehashed unsafe
+profiles, then accept the original profile again. A separate counterexample
+passes input validation and every public preflight, then loses a reciprocal
+Vault/network association when canonical networks replace the draft. The
+rewritten profile's full validation fails, and the actual binder must return
+an empty Profile/error while preserving its complete input.
+
+Identical benchmark source and race/3x/count3 settings run before and after the
+three production-file changes. Median ns/op is 1,927,685,514 to 307,982,097
+(-84.02%), B/op 138,828,117 to 19,394,877 (-86.03%), allocs/op 185,257 to 41,114
+(-77.81%). These three-sample synthetic results describe this benchmark only;
+B/op is not peak resident memory, and command elapsed times also include build/
+cache/context differences. No historical timeout cause or general latency
+guarantee follows. The baseline/fixed commands naturally finish in52.562468/
+12.472355s under the unchanged90s, with no truncation or active signal.
+
+The first focused identity is FAILED at90.103202s/90, actively terminated and
+reaped without truncation. Its nine top-level/23 child passes and bare PASS
+lack package completion; they are not a passing command. A separately reviewed
+new informative identity adds JSON receive-time/offset/EOF/reap observations
+to the same nine tests and assertions under the same90s/1MiB limits. All18
+offline parser/timeline refusal tests pass. The actual command naturally exits0
+in14.860998s with133 complete JSON records,32 test run/pass pairs and one
+package PASS. Forty-one bounded read events link exactly33766 stdout/0 stderr
+bytes to both EOFs and reap. Receive times are upper bounds, not emission/CPU
+measurements or an explanation of the first failure; that failure remains.
+
+After independent acceptance of this same-source component predecessor, one
+new full `go test -race -shuffle=on -count=1 ./...` identity hits the original
+600s boundary: actual600.672669s, exit-9, active termination/owned leader reap,
+no truncation,8592 stdout bytes/0 stderr. The111 completed package outcomes
+(87 ok,24 without tests) do not establish full success or identify the
+unfinished test. No failed identity is repeated and no deadline is extended.
+The same fixed source's full `go vet ./...` naturally passes in27.874392s.
+Complete pre/post source/Git checks and the subsequent2167-input check pass.
+Existing mise Go1.26.8, GOMAXPROCS2/-p2, test umask022, module/cache/index recipe
+and actual Contract lock bytes remain unchanged. No Provider wire/API/DTO or
+driver/lifecycle change requires new Contract/Docker integration evidence here.
+
+Next independently narrow the unfinished full-suite work from present package
+receipts and a bounded informative observation; do not blindly repeat a whole
+suite. The separate close-error/partial-drain source gap remains open. Old
+failures and sealed evidence stay original, and old runtime candidates do not
+inherit this source change. Three production files, three test/benchmark files
+and these three progress documents form the reviewed interim Git checkpoint;
+normal commit/push and full local/upstream/live SHA equality are checked
+separately. Private raw evidence is not committed.
+
+Slice6 fixed steps remain:1 historical bounded Guest E unchanged;2 ongoing;
+3 full live Profile-v2 inventory/original16/independent formal acceptance
+incomplete;4 formal postacceptance handoff not started. Docker authority,
+Linux/native/P2, public ProfileV2/provider-v3, broker/general-only, PostgreSQL
+general, nine bindings/64 barriers, old locks and reuse rules remain. No live
+Docker/Vault/Guest/three-Provider/final16 or release gate runs. No global
+development installation, quota increase or unrelated process intervention
+occurs; development stays mise/Docker and timers remain off.

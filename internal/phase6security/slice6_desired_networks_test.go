@@ -1,7 +1,10 @@
 package phase6security
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/netip"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -113,15 +116,25 @@ func TestSlice6DraftNetworkBindingRecomputesCanonicalAddresses(t *testing.T) {
 	if err := VerifySlice6DesiredIngressPolicy(draft); err != nil {
 		t.Fatalf("reviewed ingress policy and closed fixture diverged: %v", err)
 	}
-	originalNetwork := draft.Networks[0].IPv4Subnet
+	original, err := json.Marshal(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bound, err := BindSlice6DesiredNetworkPlan(draft)
 	if err != nil {
 		t.Fatalf("valid closed draft could not bind reviewed network plan: %v", err)
 	}
+	after, err := json.Marshal(draft)
+	if err != nil || !bytes.Equal(original, after) {
+		t.Fatal("binding changed the complete input profile")
+	}
+	if err := bound.Validate(); err != nil {
+		t.Fatalf("bound output is not structurally valid: %v", err)
+	}
 	if err := VerifySlice6DesiredNetworks(bound); err != nil || VerifySlice6DesiredIngress(bound) != nil ||
 		VerifySlice6DesiredEdgeAddresses(bound) != nil ||
 		bound.ProfileDigest != bound.Digest() ||
-		draft.Networks[0].IPv4Subnet != originalNetwork || draft.ProfileDigest != draft.Digest() {
+		draft.ProfileDigest != draft.Digest() {
 		t.Fatalf("bound profile drifted or mutated the draft: %v", err)
 	}
 	for _, edge := range bound.TrustEdges {
@@ -341,5 +354,67 @@ func TestSlice6TLSIdentityCannotBeReissuedWithBroaderSANOrLifetime(t *testing.T)
 				t.Fatal("self-consistent expanded TLS identity was admitted")
 			}
 		})
+	}
+}
+
+// An internally valid draft can carry an external-network association that the
+// canonical plan drops. Its input validation cannot authorize that new output.
+func TestSlice6NetworkBindingRevalidatesRewrittenOutput(t *testing.T) {
+	draft, err := BindSlice6DesiredNetworkPlan(validProfile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft.Networks = slices.Clone(draft.Networks)
+	networkIndex := slices.IndexFunc(draft.Networks, func(n Network) bool { return n.Name == "network-certificate-controller" })
+	if networkIndex < 0 || draft.Networks[networkIndex].Kind != "role_internal" ||
+		len(draft.Networks[networkIndex].Principals) != 1 || len(draft.Networks[networkIndex].ExternalServices) != 0 {
+		t.Fatal("counterexample requires the isolated controller network")
+	}
+	draft.Networks[networkIndex].ExternalServices = []string{"vault"}
+	draft.External = slices.Clone(draft.External)
+	vaultIndex := slices.IndexFunc(draft.External, func(e ExternalService) bool { return e.Name == "vault" })
+	if vaultIndex < 0 || len(draft.External[vaultIndex].Networks) != 0 {
+		t.Fatal("counterexample requires an unassociated Vault")
+	}
+	draft.External[vaultIndex].Networks = []string{draft.Networks[networkIndex].Name}
+	draft.External[vaultIndex].IdentityDigest = draft.External[vaultIndex].Digest()
+	draft.TrustEdges = slices.Clone(draft.TrustEdges)
+	for index := range draft.TrustEdges {
+		if draft.TrustEdges[index].To == "vault" {
+			draft.TrustEdges[index].ExternalIdentityDigest = draft.External[vaultIndex].IdentityDigest
+		}
+	}
+	draft.ProfileDigest = draft.Digest()
+	if err := draft.Validate(); err != nil {
+		t.Fatalf("input counterexample is not structurally valid: %v", err)
+	}
+	for _, verify := range []func(Profile) error{
+		VerifySlice6DesiredNetworkGraph, VerifySlice6DesiredPrincipalIDs, VerifySlice6DesiredTrustEdges,
+		VerifySlice6DesiredExternalServices, VerifySlice6DesiredEgressPolicies, VerifySlice6DesiredTrustAnchors,
+		VerifySlice6DesiredTLSIdentities, VerifySlice6DesiredIngressPolicy,
+	} {
+		if err := verify(draft); err != nil {
+			t.Fatalf("counterexample failed an input preflight: %v", err)
+		}
+	}
+	original, err := json.Marshal(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every address is already planned. This replacement changes only the
+	// reciprocal network association, then recomputes the whole-profile digest.
+	rewritten := draft
+	rewritten.Networks = Slice6DesiredNetworks()
+	rewritten.ProfileDigest = rewritten.Digest()
+	if rewritten.Validate() == nil {
+		t.Fatal("loss of the reciprocal external network was accepted")
+	}
+	bound, bindErr := BindSlice6DesiredNetworkPlan(draft)
+	if bindErr == nil || !reflect.DeepEqual(bound, Profile{}) {
+		t.Fatal("invalid rewritten output did not return an empty profile and error")
+	}
+	after, err := json.Marshal(draft)
+	if err != nil || !bytes.Equal(original, after) {
+		t.Fatal("rejected binding mutated the complete input")
 	}
 }

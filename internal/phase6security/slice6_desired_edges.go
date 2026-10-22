@@ -109,6 +109,12 @@ func VerifySlice6DesiredTrustEdges(profile Profile) error {
 	if profile.Validate() != nil {
 		return errSlice6DesiredInventory
 	}
+	return verifySlice6DesiredTrustEdgesValidated(profile)
+}
+
+// verifySlice6DesiredTrustEdgesValidated requires successful Profile.Validate
+// on this same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredTrustEdgesValidated(profile Profile) error {
 	wanted := slice6DesiredTrustEdges()
 	if len(profile.TrustEdges) != len(wanted) {
 		return errSlice6DesiredInventory
@@ -158,7 +164,16 @@ func slice6PlannedLocalTarget(edge TrustEdge) (string, error) {
 // choice: every reviewed numeric local target must be the preplanned address
 // of its declared recipient, not merely an arbitrary address in its subnet.
 func VerifySlice6DesiredEdgeAddresses(profile Profile) error {
-	if VerifySlice6DesiredTrustEdges(profile) != nil || VerifySlice6DesiredNetworks(profile) != nil {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredEdgeAddressesValidated(profile)
+}
+
+// verifySlice6DesiredEdgeAddressesValidated requires successful Profile.Validate
+// on this same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredEdgeAddressesValidated(profile Profile) error {
+	if verifySlice6DesiredTrustEdgesValidated(profile) != nil || verifySlice6DesiredNetworksValidated(profile) != nil {
 		return errSlice6DesiredInventory
 	}
 	for _, edge := range profile.TrustEdges {

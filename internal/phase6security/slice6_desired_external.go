@@ -52,7 +52,16 @@ func Slice6DesiredExternalServiceSkeletons() []ExternalService {
 // silently substitutes an external identity, name, SAN or allowed inbound edge.
 // It does not attest that the pinned image, certificate or server was observed.
 func VerifySlice6DesiredExternalServices(profile Profile) error {
-	if profile.Validate() != nil || len(profile.External) != len(slice6DesiredExternalServices) {
+	if profile.Validate() != nil {
+		return errSlice6DesiredInventory
+	}
+	return verifySlice6DesiredExternalServicesValidated(profile)
+}
+
+// verifySlice6DesiredExternalServicesValidated requires successful Profile.Validate
+// on this same unchanged profile in this call; it does not cache validation.
+func verifySlice6DesiredExternalServicesValidated(profile Profile) error {
+	if len(profile.External) != len(slice6DesiredExternalServices) {
 		return errSlice6DesiredInventory
 	}
 	ingress := make(map[string][]string, len(slice6DesiredExternalServices))

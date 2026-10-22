@@ -10,11 +10,11 @@ import (
 // It checks the full reviewed trust-edge inventory; the full gate must still
 // independently observe every live endpoint and handshake after launch.
 func BindSlice6DesiredNetworkPlan(draft Profile) (Profile, error) {
-	if draft.Validate() != nil || VerifySlice6DesiredNetworkGraph(draft) != nil ||
-		VerifySlice6DesiredPrincipalIDs(draft) != nil || VerifySlice6DesiredTrustEdges(draft) != nil ||
-		VerifySlice6DesiredExternalServices(draft) != nil || VerifySlice6DesiredEgressPolicies(draft) != nil ||
-		VerifySlice6DesiredTrustAnchors(draft) != nil || VerifySlice6DesiredTLSIdentities(draft) != nil ||
-		VerifySlice6DesiredIngressPolicy(draft) != nil {
+	if draft.Validate() != nil || verifySlice6DesiredNetworkGraphValidated(draft) != nil ||
+		verifySlice6DesiredPrincipalIDsValidated(draft) != nil || verifySlice6DesiredTrustEdgesValidated(draft) != nil ||
+		verifySlice6DesiredExternalServicesValidated(draft) != nil || verifySlice6DesiredEgressPoliciesValidated(draft) != nil ||
+		verifySlice6TrustAnchorsValidated(draft, slice6DesiredAnchors) != nil || verifySlice6DesiredTLSIdentitiesValidated(draft) != nil ||
+		verifySlice6DesiredIngressPolicyValidated(draft) != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
 	bound := draft
@@ -52,10 +52,11 @@ func BindSlice6DesiredNetworkPlan(draft Profile) (Profile, error) {
 		bound.IngressBindings[index].ConfigurationDigest = bound.IngressBindings[index].Digest()
 	}
 	bound.ProfileDigest = bound.Digest()
-	if VerifySlice6DesiredNetworks(bound) != nil || VerifySlice6DesiredPrincipalIDs(bound) != nil ||
-		VerifySlice6DesiredEdgeAddresses(bound) != nil || VerifySlice6DesiredExternalServices(bound) != nil ||
-		VerifySlice6DesiredEgressPolicies(bound) != nil || VerifySlice6DesiredTrustAnchors(bound) != nil ||
-		VerifySlice6DesiredTLSIdentities(bound) != nil || VerifySlice6DesiredIngress(bound) != nil {
+	// Binding changes the snapshot; draft validation cannot authorize this output.
+	if bound.Validate() != nil || verifySlice6DesiredNetworksValidated(bound) != nil || verifySlice6DesiredPrincipalIDsValidated(bound) != nil ||
+		verifySlice6DesiredEdgeAddressesValidated(bound) != nil || verifySlice6DesiredExternalServicesValidated(bound) != nil ||
+		verifySlice6DesiredEgressPoliciesValidated(bound) != nil || verifySlice6TrustAnchorsValidated(bound, slice6DesiredAnchors) != nil ||
+		verifySlice6DesiredTLSIdentitiesValidated(bound) != nil || verifySlice6DesiredIngressValidated(bound) != nil {
 		return Profile{}, errSlice6DesiredInventory
 	}
 	return bound, nil

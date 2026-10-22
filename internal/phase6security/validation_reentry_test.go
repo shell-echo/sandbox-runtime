@@ -36,6 +36,13 @@ func TestSlice6PublicProfileVerifiersRevalidateEveryCall(t *testing.T) {
 		{"ingress", final, VerifySlice6DesiredIngress},
 		{"ingress policy", final, VerifySlice6DesiredIngressPolicy},
 		{"planned networks", planned, VerifySlice6DesiredNetworks},
+		{"trust edges", draft, VerifySlice6DesiredTrustEdges},
+		{"external services", draft, VerifySlice6DesiredExternalServices},
+		{"edge addresses", planned, VerifySlice6DesiredEdgeAddresses},
+		{"network binder", draft, func(p Profile) error {
+			_, err := BindSlice6DesiredNetworkPlan(p)
+			return err
+		}},
 		{"draft network graph", draft, VerifySlice6DesiredNetworkGraph},
 		{"DNS CA", final, VerifySlice6DNSClientCA},
 		{"DNS runtime", final, VerifySlice6DNSRuntimePolicy},

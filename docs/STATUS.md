@@ -1,6 +1,35 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Targeted CPU profile](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-cpu-profile).
+Latest Phase6 step2 checkpoint: [Same-call network-plan validation](audits/product-phase-6-slice-6-startup.md#2026-10-22-network-plan-same-call-validation)
+is an **unaccepted interim checkpoint: required full race remains FAILED**.
+BindSlice6DesiredNetworkPlan now fully validates its input draft and rewritten
+output once each, reducing successful top-level Profile.Validate calls from
+18 to 2 while retaining every domain check and complete validation at every
+public entry. New tests check full input preservation, unsafe reentry after
+rehashing and rejection of a rewritten output that loses a reciprocal network
+association. Identical race benchmark samples show median ns/op -84.02%,
+allocated B/op -86.03% and allocs/op -77.81%; these are descriptive synthetic
+results, not peak RAM, end-to-end latency or old-timeout causation.
+A new informative JSON identity passes the same nine top-level/23 child tests
+and one package PASS naturally in 14.860998s under 90s; its 18 private refusal
+tests pass. The first focused run remains FAILED at 90.103202s, despite test
+PASS lines without package completion. Full vet passes in 27.874392s. The new
+full race reaches the unchanged 600s boundary (actual 600.672669s), is actively
+terminated/reaped and fails; 111 received package outcomes do not establish
+all-package success or identify the unfinished test. All 2167 fixed source/lock
+pins match; mise Go1.26.8, GOMAXPROCS2/-p2, child umask022 and cache/index recipe
+remain. No failed identity is rerun. Evidence:
+`slice6-network-plan-validation-once-20261022-083637`. Next independently narrow
+the unfinished full-suite work using existing receipts and an informative bounded
+observation, without another blind full run. Close-error/partial-drain handling
+remains open. No live Vault/Guest/three-Provider/final16 acceptance follows.
+Docker authority/Linux/native/P2, public ProfileV2/provider-v3, two issuers,
+PostgreSQL general, nine bindings/64 barriers, old locks and evidence-reuse
+rules stay. Phase6 remains **5/15**, Slice6 step2 ongoing, step3 incomplete,
+formal step4 not started; timers stay off. Normal interim Git synchronization
+is recorded separately from validation.
+
+Historical CPU diagnostic checkpoint: [Targeted CPU profile](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-cpu-profile).
 
 One independently reviewed exact-test diagnostic passes in **75.914772s**
 under the unchanged shared 90s. Go naturally exits 0 in 71.236237s, all 16
