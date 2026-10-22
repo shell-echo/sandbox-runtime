@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest independent source checkpoint: [Same-call peer-CRL validation, full validation failed](#2026-10-22-peer-crl-same-call-validation).
+Latest investigation checkpoint: [Bounded race-timeout investigation](#2026-10-22-bounded-race-timeout-diagnosis).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11083,3 +11083,93 @@ remain. Phase 6 stays **5/15**: Slice 6 step 1 historical bounded E unchanged,
 step 2 ongoing, step 3 incomplete, formal step 4 not started. Timers stay off.
 
 The local allocation measurement reuses the existing compile_index_once benchmark, three iterations per sample and three samples, under the original 90-second recorder. Each new allocated-byte/count sample is below every old sample; timing samples are dispersed and cannot be attributed to the host. No benchmark or failed full-race identity is rerun. Two read-only owned-process snapshots are not a full census at the deadline or a stack trace, so they do not locate the timeout. This change does not alter cache/index authority or evidence-reuse rules. There is no Docker driver/lifecycle or Provider Contract change; no new tagged Docker or named Contract-verifier result is claimed.
+
+
+## 2026-10-22 bounded race timeout diagnosis
+
+This is an investigation checkpoint, with **no Go source change or formal
+acceptance**. Phase6 remains **5/15**. Existing full-race failures remain
+FAILED; this stage does not blindly repeat `./...`.
+
+Independent read-only review compared the two previous 600s failures and the
+582.757202s successful run. Both failures received the same 111-package
+prefix; the successful run received 267 outcomes, including phase6security at
+400.906s. These summaries lack arrival times/test names/seeds, and the prefix
+does not prove that later packages were unexecuted. A failed-run process
+snapshot at Go elapsed7:59 with phase6security.test elapsed1:39 suggests a
+rough6:20 delay before that test process appeared, but does not prove a hung
+test, function-level CPU cause, cache cause or host/I/O bottleneck.
+
+A new reviewed identity, `slice6-race-timeout-diagnosis-20261022-041657-package-json-v1`,
+ran only `./internal/phase6security`, adding JSON observations to the original
+race/shuffle/count1 recipe. Existing mise Go1.26.8, -p2/GOMAXPROCS2, test
+umask022, module checksum sources and cache paths stay fixed. There is no
+increase in quotas/deadlines, no cache/index option change, no global tool
+installation, and no unrelated-process intervention. Read-only Git checks
+separately disable optional locks; this does not alter the Go environment.
+The observer drains Go and ps pipes concurrently through one selector, samples
+only this run's process group about every10s (ps2s/64KiB), and keeps the Go
+600s deadline independent. Nine synthetic refusal/scheduler tests pass,
+including simultaneous pipe draining, deadline/stream refusal, cleanup and
+separate read-only Git environment. The final offline analyzer adds three
+passing timeline/unknown/-O refusal tests. These are private diagnostic tests.
+
+The actual diagnostic is **FAILED** due to the original stdout1MiB cap:
+controller elapsed456.539950s; Go receipt456.529678s, exit-9, signalled and
+reaped, received1048933B/stored1048576B; stderr0. This is not a600s timeout or a
+package PASS. Complete source/tool/evidence postchecks match all2166 fixed
+source/lock inputs with unchanged clean c0f08d3666d8b747c8d36757929ec599c5c90c9e.
+No failed identity was repeated and the cap was not increased. Its known
+process-group postcheck returned no matching rows; escaped/unobserved children
+are not inferred absent.
+
+After independent input review, offline analysis froze and rechecked all142
+raw files (1320465B) and ten additional pins. It decoded3961 complete events;
+the final115-byte partial JSON line is retained and excluded. Seed:
+`1792643411634575000`. The complete prefix reports151 top-level passes,5 skips,
+0 observed top-level failures and **no package terminal result**. The final
+unpaired run in the saved prefix is not a stuck-test finding; its terminal
+record may be beyond the truncated prefix. The five slowest completed tests:
+
+| Test | Reported seconds |
+| --- | --- |
+| TestCompleteV2SyntheticFieldsHaveSuccessPathButNoAdmission | 48.90 |
+| TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode | 38.00 |
+| TestSlice6EvidenceRequiresCompleteClosedInventory | 32.49 |
+| TestSlice6ReceiptBundleRejectsCrossRunAndTampering | 27.40 |
+| TestCompiledPeerCRLAuthorizerMatchesClosedSources | 24.98 |
+
+The first test-run event was received2.782432s after launch in this run. It
+cannot be transplanted to explain the older full-run startup delay. Forty-six
+ps samples yield44 matched test-process intervals, with360.99s of observed
+user+system CPU counter progress over endpoint windows spanning approximately
+438-444s. Parent observer CPU is0.963395s; ps command elapsed times sum2.829914s
+and overlap the Go run. These observations show computation progress in this
+window, not continuous absence of waits, full host accounting or function-level
+attribution. CPU display quantization and ps coverage bounds apply. Exited,
+escaped and short-lived processes are not fully counted. Summed test durations
+may overlap if tests run in parallel and are not a serialized wall-clock
+breakdown. Old received summaries and new JSON results remain separate.
+
+Next review a focused CPU attribution plan for the measured48.90s synthetic-v2
+test and its validation call chain, using a fresh identity and an applicable
+unchanged original boundary; do not repeat the failed whole-package JSON run.
+The existing public-authorization loop remains only a static cost candidate,
+and multiple measured tests contribute cost. No source optimization, old
+failure closure, full-race PASS or runtime gate is claimed by this stage.
+
+Evidence is private under `slice6-race-timeout-diagnosis-20261022-041657` outside
+Git. A preparatory historical-index schema mismatch and draft Git optional-lock
+review block are preserved; old content-only index fields were all compared,
+and new full identities do not invent historical inode proof. Old indexes,
+seals and raw failures were not regenerated. New dynamic raw files were frozen
+before offline derivation. Development remains mise/Docker; timers stay off.
+
+Slice6 fixed four steps: step1 historical bounded Guest E unchanged; step2
+ongoing with this diagnosis; step3 full live Profile-v2 inventory, original16
+and independent acceptance incomplete; formal postacceptance step4 not started.
+Docker authority/Linux/native/P2 holds, public ProfileV2/provider-v3 holds,
+broker/general two-issuer policy, PostgreSQL general, original nine bindings,
+64 barriers, locks and evidence-reuse rules remain. No Docker/Vault/Guest/three
+Provider/final16 run occurs. This progress-only documentation commit is not
+formal step4; normal Git synchronization is checked separately.

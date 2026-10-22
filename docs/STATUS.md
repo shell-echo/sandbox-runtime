@@ -1,8 +1,19 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Same-call peer-CRL validation, full validation failed](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation).
+Latest Phase6 step2 checkpoint: [Bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis).
 
-The latest [2026-10-22 same-call peer-CRL validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation)
+A new independently reviewed one-package race/JSON diagnostic ended **FAILED**
+at the original 1 MiB stdout cap (456.539950s, not a 600s timeout). Its preserved
+complete events include 151 top-level passes and 5 skips, with no package
+terminal result. Forty-six process observations retain 44 intervals showing
+360.99s of test-process CPU progress; they do not identify the historical
+full-run root cause. Measured slow tests now provide specific targets for the
+next independently reviewed CPU attribution plan. No repository Go source or
+lock changes, full-race rerun, larger quota, longer deadline or gate relaxation
+occurred. The prior full race stays **FAILED**; Phase6 stays **5/15**, Slice6
+step2 ongoing, step3 incomplete and formal step4 not started. Timers stay off.
+
+The earlier [2026-10-22 same-call peer-CRL validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation)
 is an **unaccepted interim checkpoint: full validation remains FAILED**.
 PeerCRLSources now uses the existing private final-profile verifier after its
 same-call entry Profile.Validate, removing one duplicate validation on the

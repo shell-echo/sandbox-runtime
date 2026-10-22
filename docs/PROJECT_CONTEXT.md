@@ -46,7 +46,24 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-22 same-call peer-CRL validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation)
+The latest [bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis)
+adds diagnostic evidence only; full validation remains **FAILED**. A reviewed,
+fresh single-package `phase6security` race/JSON run stopped at its unchanged
+1 MiB stdout boundary after 456.539950s, before its 600s deadline; its leader
+was terminated and reaped. The saved prefix contains 151 top-level passes,
+5 skips and no package terminal result. Its slowest completed tests report
+48.90s, 38.00s, 32.49s, 27.40s and 24.98s. Across 44 covered intervals the
+sampled test process's CPU counter advances 360.99s; this is computation
+progress, not function-level attribution or a complete host/wait diagnosis.
+The first test event arrived after 2.782432s in this run, which does not
+explain the old full-run startup delay. Original failures, guards, cache
+recipe and 2166 source/lock bytes remain. No Go code changed or full gate was
+rerun. Evidence: `slice6-race-timeout-diagnosis-20261022-041657`. Next review a
+focused CPU attribution plan for the measured costly tests before execution.
+Phase6 remains **5/15**, Slice6 step2 ongoing; timers stay off. Git checkpoint
+synchronization is recorded separately from diagnostic/validation results.
+
+The earlier [2026-10-22 same-call peer-CRL validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation)
 is an **unaccepted interim checkpoint: full validation remains FAILED**.
 PeerCRLSources now uses the existing private final-profile verifier after its
 same-call entry Profile.Validate, removing one duplicate validation on the
