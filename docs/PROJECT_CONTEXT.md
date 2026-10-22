@@ -46,7 +46,24 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis)
+The latest [targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic)
+is **FAILED**, with no CPU hotspot attribution. One fresh exact-test run stopped
+at25.428686s on the unchanged artifact-file-set guard, actively terminating and
+reaping its leader; this was neither a90s timeout nor stream truncation. Its
+68 complete JSON events include the top-level test pass at21.97s and all15
+child passes, but no package terminal result. Both pprof commands were not
+started. The retained profile/binary remain unaccepted original evidence.
+Fixed Go source creates a transient umask probe when retaining a binary; this
+is a concrete mechanism candidate, not an observed cause, because refusal-time
+names were not recorded. All2166 source/lock pins and the clean d58 baseline
+match after execution. Evidence: `slice6-v2-target-cpu-20261022-050334`. Next
+review exact transient-file lifecycle observations and refusal tests before
+another diagnostic identity; no test or guard is weakened. No Go code, locks,
+quotas, deadlines or cache/index recipe changed. Earlier full race remains
+FAILED; Phase6 stays **5/15**, Slice6 step2 ongoing, step3 incomplete and formal
+step4 not started. Timers stay off; interim Git synchronization is separate.
+
+The earlier [bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis)
 adds diagnostic evidence only; full validation remains **FAILED**. A reviewed,
 fresh single-package `phase6security` race/JSON run stopped at its unchanged
 1 MiB stdout boundary after 456.539950s, before its 600s deadline; its leader

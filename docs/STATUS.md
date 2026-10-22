@@ -1,17 +1,26 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis).
+Latest Phase6 step2 checkpoint: [Targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic).
 
-A new independently reviewed one-package race/JSON diagnostic ended **FAILED**
-at the original 1 MiB stdout cap (456.539950s, not a 600s timeout). Its preserved
-complete events include 151 top-level passes and 5 skips, with no package
-terminal result. Forty-six process observations retain 44 intervals showing
-360.99s of test-process CPU progress; they do not identify the historical
-full-run root cause. Measured slow tests now provide specific targets for the
-next independently reviewed CPU attribution plan. No repository Go source or
-lock changes, full-race rerun, larger quota, longer deadline or gate relaxation
-occurred. The prior full race stays **FAILED**; Phase6 stays **5/15**, Slice6
-step2 ongoing, step3 incomplete and formal step4 not started. Timers stay off.
+The single reviewed exact-test diagnostic is **FAILED** at25.428686s: the
+artifact-file-set guard triggered active termination/reap, without reaching90s
+or truncating either stream. Saved complete JSON includes the top test pass
+at21.97s and15 child passes, but no package terminal; neither pprof command ran.
+CPU hotspots remain unknown. Two as-generated artifacts are preserved privately
+with full identity/hash and remain unaccepted. Go's retained-binary umask
+probe is a static candidate only; the actual rejected names were not saved.
+All2166 fixed source/lock pins and the clean d58 baseline match after execution.
+Next independently review exact transient-file lifecycle evidence and refusal
+tests before any new diagnostic. There is no Go source/lock change, whole-package
+or full-race rerun, quota/deadline increase, cache/index change or relaxed guard.
+Earlier full race remains **FAILED**. Phase6 stays **5/15**, Slice6 step2 ongoing,
+step3 incomplete and formal step4 not started. Timers stay off. Normal progress
+commit/push synchronization is checked separately from validation.
+
+The earlier [bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis)
+remains FAILED at its1MiB stdout boundary, with151 top passes/5skips and no
+package terminal. Its measured costs motivated this focused investigation;
+neither failure has been retried or retrospectively converted to a pass.
 
 The earlier [2026-10-22 same-call peer-CRL validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-peer-crl-same-call-validation)
 is an **unaccepted interim checkpoint: full validation remains FAILED**.

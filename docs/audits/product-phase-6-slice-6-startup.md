@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Bounded race-timeout investigation](#2026-10-22-bounded-race-timeout-diagnosis).
+Latest investigation checkpoint: [Targeted synthetic-v2 CPU diagnostic](#2026-10-22-targeted-synthetic-v2-cpu-diagnostic).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11173,3 +11173,69 @@ broker/general two-issuer policy, PostgreSQL general, original nine bindings,
 64 barriers, locks and evidence-reuse rules remain. No Docker/Vault/Guest/three
 Provider/final16 run occurs. This progress-only documentation commit is not
 formal step4; normal Git synchronization is checked separately.
+
+
+## 2026-10-22 targeted synthetic v2 CPU diagnostic
+
+This independently reviewed single-test investigation is **FAILED**, not a
+source optimization or a formal gate result. Phase6 remains **5/15**. The
+prior package/stdout and full-race/600s failures are preserved, not retried.
+
+Fresh identity `slice6-v2-target-cpu-20261022-050334-target-cpu-v2` targets only
+`TestCompleteV2SyntheticFieldsHaveSuccessPathButNoAdmission` with the existing
+race/shuffle/count1/JSON recipe and managed mise Go1.26.8. Standard CPU profiling
+retains the test binary in a new private root. The test and two local-only
+pprof reports share the original90s absolute deadline, original1MiB per-stream
+cap and -p2/GOMAXPROCS2 recipe. Profile1MiB/binary16MiB checks are observed
+thresholds, not kernel file-size caps. No quota, timeout, cache/index,
+fixture, lock or admission rule changes. No unrelated process is touched.
+
+Final review first blocked a controller gap that could start a child after
+preparation consumed the deadline. The v2 correction rechecks the absolute
+cutoff immediately before Popen; a synthetic crossing-deadline case proves no
+child starts and empty raw files remain. All11 offline refusal tests pass
+naturally in0.433463s, covering output bounds, identity/replacement/link checks,
+cleanup and complete exact test outcomes. This private harness result is
+separate from the real diagnostic. The unexecuted v1 and review block remain.
+
+Actual shared batch elapsed is25.428685625s; the target Go receipt records
+25.428160834s, exit-9, active termination and leader reap, failure
+`Refused: exact artifact file set`. This is not a90s timeout or stream
+truncation. Stdout18455B/stderr0 are retained. All68 saved JSON events are
+complete. There are16 observed run/pass pairs: the top test reports21.97s and
+all15 children pass. A later output says `ok ... 23.821s`, but the JSON package
+terminal is absent and the Go command was actively stopped. Therefore neither
+the command nor the diagnostic passes. Both flat/cumulative pprof commands
+were **NOT STARTED**; no CPU hotspot, optimization gain or historical-timeout
+root cause is established. The profile is not analyzed through a salvage path.
+
+After stopping, the owned0700 artifact directory contains only two owned,
+single-link regular files: profile31646B/mode0644 and binary16370002B/mode0755,
+both below their original observed thresholds. Original modes, dev/inode,
+full hashes and bytes are retained; no post-failure chmod or deletion occurs.
+All24 direct input pins,3 helpers,74 tool-source files and2166 source/lock
+entries remain consistent; postchecks record the unchanged clean d58 baseline
+and upstream. There is no Go code change and no broad test rerun.
+
+The frozen Go tool source has a concrete lifecycle candidate:
+`work/shell.go` moveOrCopyFile creates `dst+"-go-tmp-umask"`, reads its mode,
+then removes it before rename; `test/test.go` schedules retained-binary install
+after the test run. However, the controller did not save the unexpected names
+at refusal time. Static source and the final two-file listing do not prove
+which name caused this failure. Next independently review exact lifecycle
+observations and refusal tests; do not simply allow unknown files, remove
+the guard or repeat the failed identity. No further real test was launched.
+
+Private evidence: `slice6-v2-target-cpu-20261022-050334`. Independent actual-result
+review agrees with FAILED/no hotspot and retaining original artifact modes.
+Only progress documents are checkpointed in Git; the private binary/profile,
+source excerpts and failed receipts stay outside it. Normal commit/push and
+full local/upstream/live SHA equality are checked separately.
+
+Slice6 four steps remain: step1 historical bounded Guest E unchanged; step2
+ongoing; step3 full live Profile-v2 topology, original16 and independent formal
+acceptance incomplete; formal postacceptance step4 not started. Docker authority,
+Linux/native/P2 and public ProfileV2/provider-v3 holds remain. Broker/general
+only, PostgreSQL general, nine bindings,64 barriers, locks, evidence-reuse rules
+and original limits remain. No Docker/Vault/Guest/three-Provider/final16 gate
+runs. Development stays mise/Docker and timers stay off.
