@@ -46,7 +46,36 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [evidence-inventory CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-inventory-cpu-attribution)
+The latest [evidence-decoder optimization review](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-decoder-optimization-review)
+completes read-only pipeline analysis with **no accepted production change**.
+Three local lists of the retained profile finish naturally in1.015508s under
+the original shared90s; no test, benchmark, project build or new profile runs.
+Exact VerifySlice6Evidence source rows attribute3.87s to duplicate scanning,
+2.27s to typed Decode,0.47s to canonical Marshal and3.33s to equality/full
+validation. These are old sampled CPU costs, not fresh wall-time or saved
+budgets. Recursive scanner-list11.58s counts repeated frames and is not unique
+CPU; global5.74s Decode/2.41s Marshal include other callers.
+
+Independent review rejects moving duplicate scanning later because early
+duplicate large inputs would incur extra decode/serialization work. A digest
+copy change is deferred: the entire append+SHA line sampled20ms, with no measured
+allocation benefit. Keep byte limit, early duplicate scan, unknown/type/trailing
+refusal, exact canonical equality and every public semantic/digest check.
+Complete2167 source/74 tool source and129-file retained archive pre/post
+verification passes;77 old direct inputs remain current, while3 superseded
+progress docs retain byte-matched old copies and separate current pins.
+
+Next independently audit whether Slice6Evidence.Validate can avoid the second
+same-call Profile.Validate in observation validation after FinalGate succeeds,
+proving no intervening slice/map alias mutation and retaining full validation at
+every public entry. No implementation of that candidate is approved here.
+Prior full race stays **FAILED**; unchanged-source vet is historical and no
+whole-suite run is repeated. Private evidence: `slice6-evidence-decode-analysis-20261022-122648`.
+Phase6 remains **5/15**, Slice6step2ongoing, step3/formalstep4 incomplete; all
+existing holds, locks, nine bindings/64 barriers and reuse rules remain. TimersOFF.
+Stage Git synchronization is checked separately.
+
+The earlier [evidence-inventory CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-inventory-cpu-attribution)
 completes one fresh exact-test CPU diagnostic in **51.520068s** under the
 unchanged shared90s. TestSlice6EvidenceRequiresCompleteClosedInventory and all
 38 children pass (39 test outcomes plus one package PASS); the natural test

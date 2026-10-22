@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Artifact-refusal observation](#2026-10-22-artifact-refusal-observation).
+Latest investigation checkpoint: [Evidence-decoder optimization review](#2026-10-22-evidence-decoder-optimization-review).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11704,3 +11704,90 @@ formal review incomplete;formal4notstarted. Phase6 stays **5/15**. Docker author
 Linux/native/P2/public holds, broker/general-only/Postgres general,9bindings/
 64barriers and reuse rules remain. No quota/deadline increase, unrelated process
 intervention, global installation, merge/release or automation start; timersOFF.
+
+
+## 2026-10-22 Evidence decoder optimization review
+
+**Completed read-only analysis, no accepted production optimization.** Phase6
+remains5/15, Slice6step2ongoing. No project test/build/new profile/benchmark,
+Docker or live admission ran. Old whole-race failures remain FAILED; unchanged
+source vet evidence is historical, not rerun. Timers stayOFF.
+
+### Actual local analysis
+
+One fresh reviewed identity reads the retained profile/binary. Three exact local
+`pprof -list` commands finish naturally with no signal, truncation, timeout or
+stderr, all leaders reaped. Shared wall1.015508083s/90; individual
+0.655425333/0.112422500/0.246690208s. Complete stdout1676/2176/1017B. The
+retained profile still covers43.87s/32.25 sampled CPU seconds; these are not new
+CPU measurements. Any Go tool self-build was within the same90s. All source
+listings contain the exact target and current fixed source path/line.
+
+VerifySlice6Evidence lines320/326/333/334 attribute sampled cumulative
+3.87s to duplicate scanning,2.27s to typed Decode,0.47s to canonical Marshal and
+3.33s to equality/full Validate. The function's cumulative total is9.94s.
+Global Decoder.Decode5.74s and Marshal2.41s include other callers and must not
+be reported as these specific calls. Recursive duplicate source-list aggregation
+displays11.58s while the global cumulative row is3.87s; do not call11.58s
+exclusive CPU, time saved, elapsed time or a contradictory new runtime result.
+Do not add nested cumulative rows. No old full-race root cause is established.
+
+### Preserved rejection chain
+
+1. Reject byte length outside1..8MiB before any parse.
+2. Existing recursive json.Token pass rejects duplicate decoded keys, including in nested
+   objects, as well as malformed JSON/token values and extra trailing tokens.
+3. Typed Decoder DisallowUnknownFields rejects unknown fields/types; the next
+   Decode must yield EOF.
+4. json.Marshal typed evidence must equal the original bytes exactly.
+5. Public Slice6Evidence.Validate checks all final Profile/observation/inventory/
+   binding/scenario/cleanup/nonclaim/digest conditions afresh.
+6. File0600/no-symlink checks and raw receipt Bundle boundaries stay separate.
+
+All byte API failures return the same sentinel and zero evidence; sharing a
+boolean rejection set alone does not prove equivalent resource behavior.
+
+### Optimization decision
+
+- **Do not move duplicate scanning later.** Static early-duplicate large input
+  would newly reach typed decoding and reserialization; HTML escapes can expand
+  string bytes sixfold.8MiB input is not an8MiB temporary-memory or CPU bound.
+  No adversarial old/new resource comparison was run or claimed.
+- **Do not remove/fuse guards by assertion.** Canonical output equality does not
+  by itself justify changing early failure cost or hand-writing a replacement
+  JSON parser. Shared scanner changes would affect other independent readers.
+- **Defer digest-copy micro-optimization.** Sequential SHA256 writes of exactly
+  the current prefix+NUL and JSON are mathematically equivalent, but digest
+  function CPU is0.30s including0.28s Marshal; append+SHA line only0.02s. No
+  allocation improvement was measured. This is insufficient evidence for a CPU
+  repair or a fresh whole-race run. Tests currently generating expected digests
+  with the same helper would also require independent frozen literal vectors
+  before a digest implementation change.
+
+Next candidate is a read-only same-call proof: final Profile verification already
+calls Profile.Validate, then observation validation receives e.Profile again.
+First prove absence of intervening slice/map alias mutation. Review whether one
+private validated helper can remove only
+that second check, retaining fresh complete validation at every public entry,
+all domain/observation checks and unchanged snapshot boundaries. No such helper
+is implemented or independently accepted in this checkpoint; a bounded frozen
+input cost comparison and new rejection tests must precede any performance claim.
+
+### Integrity and review boundary
+
+Complete pre/post2167 source/locks,74 tool source files,77 unchanged direct pins,
+3 helper/2 module pins and129-file/7-directory retained archive equality pass.
+The3 later-updated progress docs were corrected during pre-execution design
+review: old archived copies match old bytes/size without inheriting their old
+inodes; current3dc docs have independent pins. DESIGN-v1 and the correction are
+preserved; no failed diagnostic identity was retried or old manifest changed.
+Actual Git before/after is clean3dc87d3166f4408e9976966d596bad682755d799 on
+codex/product-v1-phase-6-hardening, recorded upstream equal. Live remote is
+checked separately for this stage commit. Main retains sole writing under
+standing human confirmation; independent implementation_agent is read-only.
+
+Only three progress documents will be staged. Private evidence stays outsideGit.
+No locks/cache/index/evidence-reuse rule, quota, deadline, toolchain, public
+ProfileV2/provider-v3 hold, issuer policy or Docker authority boundary changed.
+Step1 historical bounded E stays; step3 live topology/original16/review and formal
+step4 remain incomplete. Nine bindings/64 barriers and all old evidence remain.
