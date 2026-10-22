@@ -46,7 +46,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic)
+The latest [artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation)
+identifies this new run's guard trigger: a non-atomic scan observed the extra
+`phase6security.test-go-tmp-umask` name with its listing inode retained privately. The scan
+reached EOF without truncation; this is not a simultaneous directory snapshot
+or creator/full-stat proof. That name was absent after leader reap. It matches
+the fixed Go tool's umask-probe path, without proving the older failure's cause.
+The new diagnostic remains **FAILED** at19.196845s with active termination/reap,
+not timeout/truncation. Its69 complete JSON events include16 test passes and
+a package PASS, but the Go command exits-9 and no pprof runs; CPU hotspots remain
+unknown. Twenty-one private observer/refusal tests pass; all2166 source/lock
+pins match after execution with clean f483 baseline/upstream. Evidence:
+`slice6-v2-artifact-refusal-20261022-060936`. Independent review blocks
+allowing a third name during production; no exception was implemented. Next
+review the fixed tool's existing copy branch and a precise private execution
+configuration that preserves the runtime two-name invariant and owner-only
+access. That alternative is not implemented or admitted.
+No Go code, locks, budgets, cache/index or evidence-reuse rules changed. Phase6
+stays **5/15**, Slice6 step2 ongoing, step3 incomplete, formal step4 not started;
+timers stay off. Normal Git synchronization is checked separately.
+
+The earlier [targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic)
 is **FAILED**, with no CPU hotspot attribution. One fresh exact-test run stopped
 at25.428686s on the unchanged artifact-file-set guard, actively terminating and
 reaping its leader; this was neither a90s timeout nor stream truncation. Its

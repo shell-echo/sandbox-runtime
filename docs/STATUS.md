@@ -1,21 +1,27 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic).
+Latest Phase6 step2 checkpoint: [Artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation).
 
-The single reviewed exact-test diagnostic is **FAILED** at25.428686s: the
-artifact-file-set guard triggered active termination/reap, without reaching90s
-or truncating either stream. Saved complete JSON includes the top test pass
-at21.97s and15 child passes, but no package terminal; neither pprof command ran.
-CPU hotspots remain unknown. Two as-generated artifacts are preserved privately
-with full identity/hash and remain unaccepted. Go's retained-binary umask
-probe is a static candidate only; the actual rejected names were not saved.
-All2166 fixed source/lock pins and the clean d58 baseline match after execution.
-Next independently review exact transient-file lifecycle evidence and refusal
-tests before any new diagnostic. There is no Go source/lock change, whole-package
-or full-race rerun, quota/deadline increase, cache/index change or relaxed guard.
-Earlier full race remains **FAILED**. Phase6 stays **5/15**, Slice6 step2 ongoing,
-step3 incomplete and formal step4 not started. Timers stay off. Normal progress
-commit/push synchronization is checked separately from validation.
+This run's rejection is now tied to the actually observed extra name
+`phase6security.test-go-tmp-umask`, absent after leader reap. Its listing inode
+and bound root identity are retained privately. The scan was untruncated but non-atomic; it does not prove a creator,
+refusal-time full metadata or the older failure's cause. The exact name matches
+the fixed Go tool's umask probe. The diagnostic remains **FAILED** at19.196845s:
+Go exit-9/active termination and reap, no timeout or stream truncation. There
+are69 complete JSON events,16 test passes and one package PASS; command failure
+still prevents pprof, and hotspots remain unknown. All21 private refusal tests
+pass and2166 source/lock pins remain consistent with the clean f483 baseline.
+Independent review blocks production-time third-name acceptance, so it is not
+implemented. Next review the fixed tool's existing copy branch with a precise
+private execution configuration preserving runtime exact-two names and access
+permissions; that alternative is not implemented or admitted. No Go source, lock, quota, deadline, cache/index or reuse-rule change.
+Phase6 stays **5/15**, Slice6 step2 ongoing, step3 incomplete, formal step4 not
+started; old full race stays FAILED and timers stay off. Git synchronization
+is separate from diagnostic/validation results.
+
+The earlier [targeted synthetic-v2 CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-targeted-synthetic-v2-cpu-diagnostic)
+remains FAILED at25.428686s without a package terminal or saved refusal names;
+this new run does not retrospectively supply those missing observations.
 
 The earlier [bounded race-timeout investigation](audits/product-phase-6-slice-6-startup.md#2026-10-22-bounded-race-timeout-diagnosis)
 remains FAILED at its1MiB stdout boundary, with151 top passes/5skips and no

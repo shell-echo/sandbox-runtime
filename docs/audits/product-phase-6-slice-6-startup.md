@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Targeted synthetic-v2 CPU diagnostic](#2026-10-22-targeted-synthetic-v2-cpu-diagnostic).
+Latest investigation checkpoint: [Artifact-refusal observation](#2026-10-22-artifact-refusal-observation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11239,3 +11239,73 @@ Linux/native/P2 and public ProfileV2/provider-v3 holds remain. Broker/general
 only, PostgreSQL general, nine bindings,64 barriers, locks, evidence-reuse rules
 and original limits remain. No Docker/Vault/Guest/three-Provider/final16 gate
 runs. Development stays mise/Docker and timers stay off.
+
+
+## 2026-10-22 artifact refusal observation
+
+The new evidence closes the missing **triggering-name observation for this run**;
+it does not complete CPU attribution or repair a formal validation gate.
+Phase6 remains **5/15**, with the prior full-race and package failures intact.
+
+A reviewed fresh identity, `slice6-v2-artifact-refusal-20261022-060936-artifact-refusal-v2`,
+uses the same single exact synthetic-v2 test and managed mise Go1.26.8 recipe.
+Only private observation code changed: the first file-set refusal is retained
+in memory before the original owned-process stop/reap, followed by optional
+nofollow metadata while the original deadline has time left. Sixteen observed
+entries/1024B names and64KiB total event bounds keep overflow/truncation explicit;
+unknown names, including the exact umask probe, still reject. Scandir observations
+are non-atomic and cannot establish a simultaneous directory snapshot. Review
+blocked v1 because optional listing-inode failure introduced an extra rejection
+for valid two-file input. Corrected v2 records unknown inode while preserving
+full original lstat checks;21 offline tests pass naturally in0.517111375s, with
+no signal/truncation. The blocked/unexecuted v1 and original19-test results remain.
+
+The single actual batch is **FAILED**:19.196844667s; target Go19.195984958s,
+exit-9, active termination and leader reap, `Refused: exact artifact file set`.
+Neither90s nor the1MiB stream limit was reached. Stdout18605B/stderr0 are saved.
+The69 complete JSON events contain16 test run/pass pairs, top test15.84s and
+one package PASS17.751s. That component terminal does not turn the actively
+stopped Go command or diagnostic into a pass. Both pprof commands are NOT STARTED;
+CPU hotspots, latency gains and the old full-race timeout cause remain unknown.
+
+The first refusal records reason `unknown_name`, scan EOF, no name/event
+truncation or extra-entry overflow. Its observed entries are `cpu.pprof`
+and `phase6security.test-go-tmp-umask`; their listing inodes and the bound root
+identity are retained privately. This extra observed name is the cause of this
+run's file-set rejection. These local observations are not an operator
+authority claim. After leader reap, bounded
+nofollow metadata in the same verified root finds the profile and records the
+probe ABSENT. No refusal-time owner, mode, full identity or creator was recovered
+for the probe. The final directory contains the normal two saved files. Fixed
+Go source uses that exact probe name in moveOrCopyFile while retaining a binary;
+name agreement alone does not establish independently authenticated creation,
+a historical failure's identical cause or a production trust boundary result.
+
+All35 direct pins,3 helpers,2166 source/lock inputs and74 tool-source files
+match post-execution, with unchanged clean f483 baseline/upstream. Private
+profile/binary bytes and original modes0644/0755 remain. No product Go code,
+fixture, lock, cache/index recipe, quota or deadline changes. Test, optional
+metadata, handoff checks and any pprof still share90s; original2CPU recipe and
+stream/profile1MiB/binary16MiB observed thresholds remain. No broad test or
+failed identity is repeated and no failed profile is analyzed through salvage.
+
+Independent review BLOCKS a producing/closed proposal that would allow this
+third name during writing: it changes the runtime exact-two-name invariant,
+and a matching empty-file name does not authenticate its creator. It was not
+implemented and no exception was requested. Next review the fixed Go tool's
+existing CopyFile branch with an exact private directory configuration,
+preserving runtime exact-two names, owner-only access and final full input
+binding. That alternative remains a read-only proposal requiring source,
+permission, refusal-test and final-input review before execution. No new
+permission configuration, copy/rename/native-ABI path or extra binary was
+implemented by this checkpoint. Gate/reuse-rule changes remain unapproved.
+
+Evidence is private under `slice6-v2-artifact-refusal-20261022-060936`, outside
+Git. Only the three progress documents are checkpointed; normal commit/push
+and full local/upstream/live SHA equality are verified separately. Slice6 fixed
+steps remain:1 historical bounded E unchanged;2 ongoing;3 full live Profile-v2
+inventory/original16/independent formal acceptance incomplete;4 formal
+postacceptance handoff not started. Docker authority/Linux/native/P2, public
+ProfileV2/provider-v3, two issuers, PostgreSQL general, nine bindings,64 barriers
+and evidence-reuse holds stay. No Docker/Vault/Guest/three-Provider/final16 gate
+runs; timers remain off.
