@@ -693,6 +693,131 @@ func TestPeerCRLGuardAdmissionAcceptsNondecreasingClock(t *testing.T) {
 	}
 }
 
+func TestPeerCRLGuardTrackRetainsRevocationObservation(t *testing.T) {
+	for _, next := range []string{"omitted", "retained", "expired", "clock rollback"} {
+		t.Run(next, func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil {
+				t.Fatal(err)
+			}
+			// With no registered peer, Poll must take its zero-peer Bootstrap
+			// path. This is not another handshake observing the revoked leaf.
+			f.client.response = f.response(t, 2, true, "fixed-source")
+			if err := f.guard.Poll(t.Context()); err != nil || !f.guard.Ready() {
+				t.Fatalf("zero-peer revoked CRL refresh failed: %v", err)
+			}
+			*f.clock = f.now.Add(2 * time.Second)
+			late, peer := net.Pipe()
+			t.Cleanup(func() { _ = late.Close(); _ = peer.Close() })
+			if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+				t.Fatalf("late revoked peer registered: %v", err)
+			}
+			f.guard.mu.Lock()
+			active := len(f.guard.active)
+			f.guard.mu.Unlock()
+			if active != 0 || f.client.calls.Load() != 2 {
+				t.Fatalf("refused Track changed registry/pulls: active=%d pulls=%d", active, f.client.calls.Load())
+			}
+			if next == "clock rollback" {
+				*f.clock = f.now.Add(time.Second)
+				if f.guard.Ready() {
+					t.Error("revocation observation did not advance the clock watermark")
+				}
+				*f.clock = f.now.Add(2 * time.Second)
+				if f.guard.Ready() {
+					t.Error("clock restoration revived failed revocation guard")
+				}
+				if err := f.guard.Bootstrap(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) || f.client.calls.Load() != 2 {
+					t.Errorf("failed observation clock permitted a fresh pull: err=%v pulls=%d", err, f.client.calls.Load())
+				}
+				return
+			}
+			if next == "expired" {
+				*f.clock = f.leaf.NotAfter
+				future := f
+				future.now = *f.clock
+				f.client.response = future.response(t, 3, false, "fixed-source")
+			} else {
+				f.client.response = f.response(t, 3, next == "retained", "fixed-source")
+			}
+			err := f.guard.Bootstrap(t.Context())
+			if next == "omitted" {
+				if !errors.Is(err, ErrPeerCRLUnavailable) || f.guard.Ready() {
+					t.Errorf("higher CRL resurrected an unexpired observed revoked peer: %v", err)
+				}
+				if err := f.guard.CheckHandshake(t.Context(), f.state); !errors.Is(err, ErrPeerCRLUnavailable) || f.client.calls.Load() != 3 {
+					t.Errorf("resurrection failure did not latch: err=%v pulls=%d", err, f.client.calls.Load())
+				}
+			} else if err != nil || !f.guard.Ready() || f.client.calls.Load() != 3 {
+				t.Fatalf("valid %s CRL rejected: err=%v pulls=%d", next, err, f.client.calls.Load())
+			}
+			if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+				t.Errorf("%s peer admitted after later CRL: %v", next, err)
+			}
+			if next == "expired" {
+				f.guard.mu.Lock()
+				observed := len(f.guard.observedRevoked)
+				f.guard.mu.Unlock()
+				if observed != 0 || !f.guard.Ready() {
+					t.Errorf("expired peer was retained as a revocation observation: %d", observed)
+				}
+			}
+		})
+	}
+}
+
+func TestPeerCRLGuardTrackRevocationObservationBound(t *testing.T) {
+	for _, repeated := range []bool{false, true} {
+		t.Run(map[bool]string{false: "new serial", true: "repeated serial"}[repeated], func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil {
+				t.Fatal(err)
+			}
+			old, oldPeer := net.Pipe()
+			t.Cleanup(func() { _ = old.Close(); _ = oldPeer.Close() })
+			if err := f.guard.Track(old, f.state); err != nil {
+				t.Fatal(err)
+			}
+			f.client.response = f.response(t, 2, true, "fixed-source")
+			if err := f.guard.Bootstrap(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			// Seed only the bounded-observation capacity fixture. The actual
+			// incoming leaf is still checked against the complete signed CRL.
+			f.guard.mu.Lock()
+			for index := range maxObservedRevokedPeers {
+				serial := big.NewInt(int64(index + 10000))
+				if repeated && index == 0 {
+					serial = new(big.Int).Set(f.leaf.SerialNumber)
+				}
+				f.guard.observedRevoked[serial.String()] = revokedPeerObservation{serial: serial, notAfter: f.leaf.NotAfter}
+			}
+			f.guard.mu.Unlock()
+			late, latePeer := net.Pipe()
+			t.Cleanup(func() { _ = late.Close(); _ = latePeer.Close() })
+			if err := f.guard.Track(late, f.state); !errors.Is(err, ErrPeerCRLUnavailable) {
+				t.Errorf("full observation table admitted revoked peer: %v", err)
+			}
+			f.guard.mu.Lock()
+			failed, active, observed := f.guard.failed, len(f.guard.active), len(f.guard.observedRevoked)
+			f.guard.mu.Unlock()
+			if !failed || active != 0 || observed != maxObservedRevokedPeers || f.client.calls.Load() != 2 {
+				t.Errorf("full table did not fail closed: failed=%v active=%d observed=%d pulls=%d", failed, active, observed, f.client.calls.Load())
+			}
+			_ = oldPeer.SetReadDeadline(time.Now().Add(time.Second))
+			var one [1]byte
+			if n, err := oldPeer.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
+				t.Errorf("full observation table retained existing peer: n=%d err=%v", n, err)
+			}
+			if f.guard.Ready() {
+				t.Error("full observation table retained readiness")
+			}
+		})
+	}
+}
+
 func TestPeerCRLBudgetRespectsDeclaredDrain(t *testing.T) {
 	budget, err := derivePeerCRLBudget(30*time.Second, 10*time.Second, 3*time.Second)
 	if err != nil || budget.timeout != 2*time.Second || budget.interval != 2*time.Second ||

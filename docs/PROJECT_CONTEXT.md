@@ -46,7 +46,30 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [2026-10-22 admission clock rollback](audits/product-phase-6-slice-6-startup.md#2026-10-22-admission-clock-rollback)
+The latest [2026-10-22 late-tracking revocation observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-late-tracking-revocation-observation)
+closes a source-level live-role CRL monotonicity gap independent of Docker
+management authority. A zero-peer poll could install a revoked CRL between
+a good handshake and Track; Track rejected that peer without retaining the
+observation, allowing a later higher-number CRL to omit the unexpired serial.
+Track now retains the verified revoked serial and certificate NotAfter through
+one bounded helper shared with refresh and Poll, and advances the guard's
+live clock watermark. The original 8192-entry
+cap, including repeated-serial refusal at capacity, stays fixed; capacity
+failure drains through existing Close after unlocking. Expired observations
+can still retire, and ordinary source-loss recovery is unchanged. Old-source
+regressions fail; fixed focused race passes. This stage's full race/shuffle/
+count1 passes 267 package outcomes in 582.757202 seconds under the original
+600 seconds; full vet passes in 3.901219 seconds. Tested Go/lock bytes match,
+with existing mise Go1.26.8, -p2/GOMAXPROCS2 and test umask022. Evidence:
+`slice6-crl-track-revocation-20261022-082700`. Test PKI, pipe EOF and synthetic
+capacity fixtures are component evidence only; old candidates do not inherit
+changed source. Docker authority/Linux/native/P2 and public admission holds
+remain. Phase6 stays **5/15**: Slice6 step1 historical bounded E, step2 ongoing,
+step3 incomplete, formal step4 not started. Guards, quotas, deadlines, issuer
+policy and reuse rules stay fixed; timers remain off. Git sync is recorded
+separately.
+
+The earlier [2026-10-22 admission clock rollback](audits/product-phase-6-slice-6-startup.md#2026-10-22-admission-clock-rollback)
 closes another source-level mTLS/CRL gap independent of Docker management
 authority. Track previously rejected a backwards clock without latching the
 failure, while Ready latched it without draining existing connections. Both

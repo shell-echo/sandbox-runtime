@@ -310,21 +310,27 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	}
 	checkErr := verified.CheckPeer(leafDER, issuerDER, observedAt)
 	if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
-		if len(g.observedRevoked) >= maxObservedRevokedPeers {
-			g.failed = true
-			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
-		}
 		leaf, parseErr := x509.ParseCertificate(leafDER)
-		if parseErr != nil {
+		if parseErr != nil || !g.observeRevokedPeerLocked(leaf) {
 			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
-		g.observedRevoked[leaf.SerialNumber.String()] = revokedPeerObservation{
-			serial: new(big.Int).Set(leaf.SerialNumber), notAfter: leaf.NotAfter}
 	}
 	if checkErr != nil && !errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
 		return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 	}
 	return checkErr
+}
+
+// observeRevokedPeerLocked retains only a leaf already checked against the
+// current complete CRL. All admission and polling paths share the same bound.
+func (g *PeerCRLGuard) observeRevokedPeerLocked(leaf *x509.Certificate) bool {
+	if len(g.observedRevoked) >= maxObservedRevokedPeers {
+		g.failed = true
+		return false
+	}
+	g.observedRevoked[leaf.SerialNumber.String()] = revokedPeerObservation{
+		serial: new(big.Int).Set(leaf.SerialNumber), notAfter: leaf.NotAfter}
+	return true
 }
 
 // scheduleEvidenceExpiryLocked closes active sockets at the earlier of source
@@ -377,17 +383,31 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 		g.Close()
 		return ErrPeerCRLUnavailable
 	}
-	defer g.mu.Unlock()
 
 	_, alreadyTracked := g.active[connection]
 	if g.failed || g.unavailable || g.current.Number() == nil ||
 		!now.Before(g.collectedAt.Add(g.maxStaleness)) || !now.Before(g.nextUpdate) ||
-		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) ||
-		g.current.CheckPeer(leaf.Raw, issuer.Raw, now) != nil {
+		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) {
+		g.mu.Unlock()
+		return ErrPeerCRLUnavailable
+	}
+	if err := g.current.CheckPeer(leaf.Raw, issuer.Raw, now); err != nil {
+		if errors.Is(err, workloadpki.ErrPeerRevoked) {
+			if !g.observeRevokedPeerLocked(leaf) {
+				g.mu.Unlock()
+				g.Close()
+				return ErrPeerCRLUnavailable
+			}
+			// A valid revocation observation advances the live watermark even
+			// though this particular connection must not be registered.
+			g.lastNow = now
+		}
+		g.mu.Unlock()
 		return ErrPeerCRLUnavailable
 	}
 	g.lastNow = now
 	g.active[connection] = state
+	g.mu.Unlock()
 	return nil
 }
 
@@ -435,12 +455,8 @@ func (g *PeerCRLGuard) Poll(ctx context.Context) error {
 			continue
 		}
 		if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
-			if len(g.observedRevoked) >= maxObservedRevokedPeers {
-				g.failed = true
-			} else {
-				g.observedRevoked[leaf.SerialNumber.String()] = revokedPeerObservation{
-					serial: new(big.Int).Set(leaf.SerialNumber), notAfter: leaf.NotAfter}
-			}
+			// The failed latch from a full table is handled after the scan.
+			g.observeRevokedPeerLocked(leaf)
 		}
 		delete(g.active, connection)
 		toClose = append(toClose, connection)

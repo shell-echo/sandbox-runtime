@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest independent source checkpoint: [Admission clock rollback](#2026-10-22-admission-clock-rollback).
+Latest independent source checkpoint: [Late-tracking revocation observation](#2026-10-22-late-tracking-revocation-observation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -10888,3 +10888,84 @@ public ProfileV2/provider-v3 holds remain. Broker/general only, PostgreSQL
 using general, old locks, guard/reuse rules, quotas and timeouts stay fixed.
 Timers remain off. Continue another independently reviewed existing startup
 audit item; held runtime routes still require their original authority proof.
+
+
+## 2026-10-22 late-tracking revocation observation
+
+Status: source-level component passed; the fixed complete-mTLS/CRL ledger row
+and Slice6 step2 remain open. This work does not require or replace the held
+Docker management-authority evidence.
+
+The real outbound transport invokes Track after TLS VerifyConnection and
+CheckHandshake; inbound PeerConnState uses Ready then Track. With no active
+peer, Poll uses Bootstrap and does not check a particular leaf. Thus CRL#1 can
+admit a handshake, zero-peer Poll can install CRL#2 revoking that peer, and
+late Track can first observe the actual revoked leaf. Previously Track only
+returned a generic refusal without retaining the observation; a higher-number,
+validly signed CRL#3 omitting the still-unexpired serial could then admit a new
+handshake/connection. This violates ADR0055's live-role monotonic observation
+requirement. No other entry necessarily observes this late peer.
+
+One mutex-only helper now shares the existing bounded serial deep copy and
+NotAfter retention across refresh, Poll and Track. Track records only after
+VerifiedCRL.CheckPeer returns ErrPeerRevoked, which follows its actual leaf/
+issuer, signature, validity and complete-CRL checks. A successful observation
+advances lastNow even though the connection is refused. Other peer errors do
+not record or advance it. The original len>=8192 failure rule stays fixed,
+including the same serial at capacity; a new Track capacity failure latches
+failed before unlocking and reuses existing Close to stop the expiry timer
+and drain old sockets within the original total budget. The refused untracked
+socket still belongs to the caller for cleanup. There is no new authority,
+protocol, persistence ledger, worker pool or compatibility branch.
+
+The deterministic regression follows CRL#1 good handshake → zero-active Poll
+with CRL#2 revoked → late Track refusal → CRL#3. Omitting the unexpired peer
+must latch failure; retaining the revocation must keep source readiness while
+still refusing that peer. A fresh CRL after leaf expiry can retire the old
+observation, while the expired leaf still cannot connect. The valid revocation
+observation also establishes the t+2 watermark, so a t+1 clock is refused and
+restoring t+2 cannot revive the failed guard. Two capacity fixtures seed only
+8192 observation entries, for a new or repeated serial, and require no growth,
+no implicit pull, failed readiness, active0 and actual EOF on an old pipe.
+Those seeded entries are not claimed as real prior certificate observations.
+
+| This stage's identity | Actual result | Actual seconds / original bound |
+| --- | --- | --- |
+| repro-v1, original production source plus new tests | Natural exit1: omitted, clock rollback and both full-table cases fail; retained/expired controls do not fail | 4.430389 / 90 |
+| focused-v1, phase6tls/connectiondrain race/shuffle/count1 | Natural exit0 | 7.319011 / 90 |
+| root-race-v1, full race/shuffle/count1 | Natural exit0, 229 ok + 38 no-test = 267 unique final package outcomes | 582.757202 / 600 |
+| vet-v1, full vet | Natural exit0, both streams empty | 3.901219 / 600 |
+
+All owned commands reaped naturally without active signals, truncation,
+capture failure or timeout. The full run uses its original600-second bound,
+not an extension. Existing mise Go1.26.8/Python3.13.16, GOTOOLCHAIN=local,
+GOROOT unset, readonly module locks, -p2/GOMAXPROCS2 and the Go child's umask022
+remain. Ordinary official Go proxy/sumdb/developer caches retain the prior
+reviewed recipe; no frozen diagnostic cache/index or final verifier offline
+recipe changes. Two private preparation assertion errors are preserved and
+corrected before their dependent actions: explicit immutable lock names replace
+an order-dependent snapshot check; a Git preparation membership assertion is
+fixed before candidate output/Git writes. The successful formatter and failed
+old-source run are not replayed. Neither correction changes Go inputs or gates.
+
+Only two Go files and three progress documents change. Both tested Go files,
+go.mod/go.sum and AGENTS remain byte-identical after full checks. No Provider
+DTO/wire/compatibility metadata/Contract or Docker driver/sandbox-lifecycle
+change triggers the named Contract-lock CLI or tagged Docker integration;
+neither is claimed as run. Existing source-loss recovery and actual TLS tests
+remain. Test PKI, pipe EOF and full Go checks do not prove live Vault, Guest
+revoke/CRL-loss/replacement, three isolated Provider commands, network/UID/GID,
+or final topology/original16 acceptance. Old candidates and receipts cannot
+inherit this source change without their affected source-bound and real gates.
+
+Evidence is private `slice6-crl-track-revocation-20261022-082700` outside Git;
+old checkpoints and failures are preserved. Reviewed source/docs follow a
+normal commit/push with exact local/upstream/live SHA checks recorded separately;
+this source paragraph alone is not proof of synchronization or formal step4.
+Phase6 remains **5/15**: step1 historical bounded GuestE unchanged/unreplayed;
+step2 continues with this source gap closed; step3 final complete liveProfile-v2,
+original16 and independent formal acceptance incomplete; formal step4 not started.
+Docker authority/Linux/native/P2, public ProfileV2/provider-v3 holds, two-issuer
+broker/general with PostgreSQL using general, quotas, deadlines, guards, old
+locks and evidence-reuse rules remain. Timers stay off. Continue a separately
+reviewed existing startup item; held runtime paths still need original proof.
