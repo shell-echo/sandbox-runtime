@@ -164,8 +164,18 @@ func ValidateObservations(profile Profile, observations ObservationSet) error { 
 // ValidateObservationsWithExternal binds independently inspected external
 // container IDs to every declared isolated service-bridge endpoint.
 func ValidateObservationsWithExternal(profile Profile, observations ObservationSet,
+	externalContainerIDs map[string]string) error {
+	if profile.Validate() != nil {
+		return ErrInvalidObservation
+	}
+	return validateObservationsWithExternalValidated(profile, observations, externalContainerIDs)
+}
+
+// validateObservationsWithExternalValidated requires Profile.Validate to have
+// succeeded for this same unchanged profile earlier in the current call.
+func validateObservationsWithExternalValidated(profile Profile, observations ObservationSet,
 	externalContainerIDs map[string]string) error { //nolint:gocyclo
-	if profile.Validate() != nil || observations.ProfileDigest != profile.ProfileDigest ||
+	if observations.ProfileDigest != profile.ProfileDigest ||
 		!observations.DistinctContainerUIDGIDEstablished || !observations.ContainerNamespaceIsolationEstablished ||
 		observations.HostUserNamespaceMappingEstablished || observations.PlatformServiceAccountEstablished ||
 		!observations.SameHostLocalContainerGate ||
@@ -291,7 +301,7 @@ func validateBrokerObservedAddresses(profile Profile, observations ObservationSe
 		networks[observed.Name] = observed
 	}
 	for _, policy := range profile.EgressPolicies {
-		// ValidateObservationsWithExternal already validated this same profile.
+		// The same-call entry already validated this unchanged profile.
 		edge, caller, broker, network, err := profile.brokerBoundaryForPolicyValidated(policy.ID)
 		if err != nil {
 			return ErrInvalidObservation

@@ -345,6 +345,7 @@ func (e Slice6Evidence) Validate() error {
 		}
 		externalIDs[service.Name] = service.ContainerID
 	}
+	// FinalGate and the following observation check share this unchanged profile.
 	if e.ID != Slice6EvidenceID || e.Version != Slice6EvidenceVersion ||
 		!slice6RunIDPattern.MatchString(e.RunID) || !digestPattern.MatchString(e.ReceiptIndexDigest) ||
 		e.Scope != "same_host_local_candidate_non_release" ||
@@ -353,7 +354,7 @@ func (e Slice6Evidence) Validate() error {
 		!digestPattern.MatchString(e.RuntimeTreeDigest) ||
 		!digestPattern.MatchString(e.EvidenceTreeDigest) ||
 		!validSlice6Time(e.ObservedAt) || VerifySlice6FinalGateProfile(e.Profile) != nil ||
-		ValidateObservationsWithExternal(e.Profile, e.Observations, externalIDs) != nil ||
+		validateObservationsWithExternalValidated(e.Profile, e.Observations, externalIDs) != nil ||
 		!validSlice6Candidates(e.Profile, e.Observations, e.Candidates, e.RuntimeRevision, e.RuntimeTreeDigest) ||
 		!validSlice6DescriptorReceipts(e.Profile, e.DescriptorReceipts) ||
 		!validSlice6Processes(e.Profile, e.Observations, e.Processes) ||

@@ -1,6 +1,40 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Evidence-decoder optimization review](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-decoder-optimization-review)
+The latest [same-call evidence Profile validation checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-23-evidence-same-call-profile-validation)
+passes the required default-tag repository race and vet on the final reduced
+Go source. Slice6Evidence.Validate uses a private observation check immediately
+after FinalGate fully validates the same unchanged Profile. Independent transitive
+alias review found no intervening writes; every public observation, decode and
+evidence entry retains complete validation. This is same-call validation, not
+cross-call evidence reuse or protection against concurrent alias writers.
+
+New tests preserve inputs, reject rehashed unsafe public reentry and retain eight
+observation-domain refusals with an independently valid final Profile. Earlier
+focused57 pass covers the same production/test logic; the final full race naturally
+passes in407.273025s under600s with267 complete package records (229 ok,38 without
+tests), including phase6security191.013s. Final vet naturally passes in4.932974s.
+Full2168 source/lock and direct/Git pre/post checks pass; no timeout, truncation or
+active signal. Final Go scope is two production files plus one test file.
+
+The attempted old/new benchmark comparison remains **FAILED**: equal851443-byte
+lengths had different corpus hashes. No measured latency/allocation benefit is
+accepted; only one redundant Profile.Validate is structurally removed. Temporary
+benchmark/fixture changes were withdrawn. Old failures, a blocked unexecuted
+baseline wrapper and prelaunch preparation refusals remain private originals.
+This success does not explain or retrospectively pass older timeout identities.
+
+Next independently review CRL close-error/partial-drain handling under one existing
+total budget. Private evidence: `slice6-evidence-profile-validation-once-20261022-125628`.
+Phase6 stays **5/15**: Slice6step1 historical bounded Guest E unchanged; step2
+ongoing; step3 live full Profile-v2 inventory/original16/independent acceptance
+incomplete; formalstep4 not started. Docker authority/Linux/native/P2, public
+ProfileV2/provider-v3 holds, broker/general-only with PostgreSQL general, nine
+bindings/64 barriers, old locks and reuse rules remain. mise/Docker only;
+no quota/deadline expansion or unrelated process intervention. TimersOFF.
+At this precommit checkpoint, stage commit/push are pending. Record full
+local/upstream/live SHA equality only after actual synchronization checks.
+
+Historical evidence-decoder checkpoint: [Evidence-decoder optimization review](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-decoder-optimization-review)
 completes read-only pipeline analysis with **no accepted production change**.
 Three local lists of the retained profile finish naturally in1.015508s under
 the original shared90s; no test, benchmark, project build or new profile runs.

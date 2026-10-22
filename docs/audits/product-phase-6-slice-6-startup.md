@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Evidence-decoder optimization review](#2026-10-22-evidence-decoder-optimization-review).
+Latest investigation checkpoint: [Same-call evidence Profile validation](#2026-10-23-evidence-same-call-profile-validation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11791,3 +11791,70 @@ No locks/cache/index/evidence-reuse rule, quota, deadline, toolchain, public
 ProfileV2/provider-v3 hold, issuer policy or Docker authority boundary changed.
 Step1 historical bounded E stays; step3 live topology/original16/review and formal
 step4 remain incomplete. Nine bindings/64 barriers and all old evidence remain.
+
+## 2026-10-23 evidence same-call Profile validation
+
+The narrow source change avoids the second top-level Profile.Validate inside one
+Slice6Evidence.Validate call after VerifySlice6FinalGateProfile succeeds. Its
+private observation helper requires the same-call unchanged validated Profile;
+the remaining body and refusal order are byte-equivalent to the old public body.
+The public wrapper still calls Profile.Validate first; decode/plain observation
+entries retain their public route. Evidence byte limit, early duplicate scan,
+type/unknown/trailing refusals, canonical equality, digest, receipt and file checks
+are unchanged. No cache, index or evidence-reuse rule changes.
+
+Independent design and final-code review followed the full transitive FinalGate
+path: sorting consumes clones/fresh collections, HBA builds local state,
+Profile.Digest clears only a scalar in a value copy, and the next observation
+call has no intervening alias mutation. This relies on the existing absence of a
+concurrent external alias writer; it is not an atomic snapshot claim. Three new
+tests exercise four input-preserving entries, two rehashed privilege/revision
+public reentries followed by original success, and eight observation faults with
+valid final profiles. Historical focused-v1 naturally passes57 tests/one package
+in33.694332s under90s, with complete233 JSON events and no skips/failures. Its
+production and semantic test/helper bodies match the final version; four temporary
+fixture edits and the diagnostic benchmark were withdrawn. The reconstructed8491B
+old test source matches its old SHA exactly and proves this body equivalence,
+excluding only the two imports, benchmark function and separating blank line.
+This is a reconstruction, not an original corpus or new execution receipt.
+
+Final complete default-tag `go test -race -shuffle=on -count=1 ./...` naturally
+passes in407.273025s under600s:267 complete package records,229 ok and38 without
+tests, including phase6security191.013s. Plain output does not provide per-test
+skip counts. Final `go vet ./...` naturally passes in4.932974s with empty streams.
+Both have natural0/reap, no signal, timeout or truncation, and full2168 source/lock
+plus direct/Git pre/post equality. Existing mise Go1.26.8/GOMAXPROCS2/-p2 and
+childumask022 remain; concurrency settings are not a kernel CPU quota. No Contract
+wire/DTO/metadata or driver/lifecycle change requires a new Contract-lock or tagged
+Docker run for this patch. The progress-only updates retain all2168 tested source/
+lock inputs exactly; the three progress files are separately captured and pinned.
+
+The baseline/fixed-v1 benchmark commands both finish naturally, but851443-byte
+corpora have different hashes; the comparison is **FAILED**, with no accepted
+latency/allocation benefit or percentage. Unordered map-to-Mounts fixture appends
+are a source-level explanation without original JSON byte-difference proof.
+Independent review blocked a proposed baseline-v2 restoration wrapper before
+execution because early refusal could skip restoration. Main restored both exact
+owned candidate files and verified the other2166 paths; no new baseline launched.
+Preparation refusals from identity-only drift and a mistaken progress-document
+manifest assumption are retained; neither launched Go nor changed the docs.
+The final scope avoids the benchmark/snapshot-switch framework and keeps two
+production files, one semantic-test file and three progress docs. All old raw logs,
+failed identities, source locks and blocked plans remain outside Git. Old failed
+commands do not become passes, and new whole-suite success does not establish the
+cause of those timeouts. The structural saving is one complete same-call
+Profile.Validate; actual performance benefit remains unproved.
+
+Next independently review the separate close-error/partial-drain source gap under
+the original single total close budget. No live Vault/Guest/three-Provider/final16
+run, new deployment, publication or merge occurs. Fixed steps remain:1 historical
+bounded Guest E unchanged;2 ongoing;3 live full Profile-v2 inventory/original16/
+independent acceptance incomplete;4 formal postacceptance handoff not started.
+This stage checkpoint is not formalstep4. Docker authority/Linux/native/P2 and
+public ProfileV2/provider-v3 holds remain, as do broker/general-only, PostgreSQL
+general, nine bindings/64 barriers, old locks and reuse rules. Timers stay off;
+no global development installation, unrelated process intervention, quota increase
+or timeout extension occurs. Private evidence:
+`slice6-evidence-profile-validation-once-20261022-125628`. At this precommit checkpoint, stage commit/push are pending.
+Record full local/upstream/live SHA equality only after actual normal push and
+completed synchronization checks.
