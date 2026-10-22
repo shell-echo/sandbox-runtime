@@ -11623,3 +11623,84 @@ Docker authority/Linux/native/P2 and public ProfileV2/provider-v3 remain held.
 Broker/general only, PostgreSQL general, nine bindings/64 barriers and reuse
 rules stay fixed. No global installation, quota/deadline increase, unrelated
 process intervention, release/merge or automation restart occurs; timers stay off.
+
+
+## 2026-10-22 evidence-inventory CPU attribution
+
+This is one independently reviewed targeted diagnostic, not full repository,
+release or Slice acceptance. Private originals remain in
+`slice6-evidence-inventory-cpu-20261022-112148`. Starting complete HEAD/upstream
+is87b380e04660c5678824c1746a50f52fe53038c7, clean0/0 on the fixed Phase6 branch.
+
+The exact target TestSlice6EvidenceRequiresCompleteClosedInventory contains
+19 generic,7 PostgreSQL and12 DNS named children plus3 unnamed malformed-JSON
+refusals and0600 acceptance/0644 rejection in the parent. Preserve all of them.
+The prior same-source streamed run reports28.09s, which is not CPU attribution
+or a completion guarantee. The earlier different-source/different-test75.915s
+CPU diagnostic is only scheme feasibility evidence, not inherited acceptance.
+
+Independent design, final implementation/new refusal tests and complete new
+input reviews admit a single new identity. Only BASE, TARGET,38 literal child
+names, fresh output/identity and the original2167-file manifest count differ
+from the existing controller; generic guard/capture/root/ACL bodies stay exact.
+Original41 tests are reused only in that unaffected generic scope. Seventeen
+new synthetic methods actually pass naturally in0.177236083s under30s/1MiB,
+including each38missing-run/pass refusal, exact39success and reverse order,
+old16frame rejection, unknown/duplicate/skip/fail/nonfinite/partial/missing
+package/seed refusal, complete39+non-natural receipt refusing retention, and
+complete39 routed through accept_target before retention. They are not real
+artifact/runtime evidence. There is no zero-discovery or failed identity replay.
+
+The actual recipe remains miseGo1.26.8, childumask022, GOMAXPROCS2/-p2,
+GOENVoff/GOWORKoff/GOTOOLCHAINlocal, original public module/cache/index recipe,
+-race/-shuffle=on/-count1/-json/-run exacttop/-cpuprofile/-o. The fresh root is
+sameFD0700→02700 during producing; exactly cpu.pprof<=1MiB and
+phase6security.test<=16MiB, no third name including an umask probe. Only natural
+exit0/reaped/noflags plus complete39test/unique-packagePASS and one shuffle seed
+permits sameFD02700→0700 and both held original files→0600. Seven bounded ACL
+commands, full EOF/hash/owner/GID/singlelink/identity checks and all transitions
+consume the same original90s as test and two pprof commands; pre/post full input
+and Git checks keep their separate old bounds. Do not call the whole controller
+wall time90s or these concurrency/observed-size controls kernel quotas.
+
+Actual shared batch passes naturally in **51.520067625s**. Target command
+49.617582875s, flat1.214565208s and cumulative0.300383333s all naturally exit0,
+reap, have empty stderr and no signal/truncation/timeout. The42273B/161complete
+JSON events contain39unique run/pass names (top+38), zero skip/fail/build-fail,
+one package PASS and seed1792668764300528000. Top reports43.68s; this differs
+from the prior unprofiled28.09s under a different order/context, with no product
+source change, so it establishes no controlled regression or speed improvement.
+
+Profile52335B SHA7b685756309dea966910dc6502cef60662f3429a5eeb294a0d46837b61adbec5
+and binary16387570B SHA79e77f8ef41be7b6b5ee464066d42694b96ff68c774bb72f846dfd06b6b0378d
+retain original bytes through permission tightening. Both final files are0600,
+root0700, UID501/GID20/nlink1, exact2names. All7ACL observations pass without
+extra ACL rows or '+' marker; '@' extended attributes are not an ACL. No third
+name is observed, which does not prove no transient ever existed. Complete80
+direct/3helper/2immutable module plus2167source/74tool references pass pre/post,
+2326references over2325unique paths because shell.go occurs in two categories;
+actual Git pre/post clean87b guards also pass. No manifest is regenerated.
+
+Both original pprof heads report duration43.87s and32.25 sampled CPU seconds.
+Leading flat rows are __tsan_read6.28s/19.47%, racecall3.37s/10.45% and
+racecalladdr2.38s/7.38%. Cumulative VerifySlice6Evidence9.94s/30.82% and
+rejectDuplicateMembers3.87s/12.00% are overlapping global rows;
+Slice6Evidence.Validate3.32s/10.29%,
+Profile.Validate2.65s/8.22% and Decoder.Decode5.74s/17.80% are other overlapping
+paths. These sampled cumulative rows cannot be added. The profile covers the
+test process, including race/runtime effects; it does not measure compiler/mise/
+whole-host CPU or swapping, or explain old all-package600s failure/deadlock.
+No remote symbolizer, third observer, whole-suite rerun or profile salvage runs.
+
+Next read-only and independently examine VerifySlice6Evidence duplicate-member
+scan/typed decode/canonicalization for a provably equivalent path, retaining all
+size/duplicate/unknown/trailing/canonical and public-entry checks. This profile
+provides a candidate chain, not an approved optimization or completed source fix.
+Only3progress docs change in Git; product Go/dependencies/fixtures/Contract locks
+stay identical, existing full vet remains valid, prior full race stays FAILED.
+All old failures and sealed originals remain. Normal commit/push/fullSHA sync is
+separate. Step1 historical bounded E unchanged;2ongoing;3live topology/original16/
+formal review incomplete;formal4notstarted. Phase6 stays **5/15**. Docker authority/
+Linux/native/P2/public holds, broker/general-only/Postgres general,9bindings/
+64barriers and reuse rules remain. No quota/deadline increase, unrelated process
+intervention, global installation, merge/release or automation start; timersOFF.

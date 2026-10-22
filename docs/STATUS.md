@@ -1,6 +1,44 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Streamed race-frontier diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-streamed-race-frontier-diagnostic)
+Latest Phase6 step2 checkpoint: [Evidence-inventory CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-22-evidence-inventory-cpu-attribution)
+completes one fresh exact-test CPU diagnostic in **51.520068s** under the
+unchanged shared90s. TestSlice6EvidenceRequiresCompleteClosedInventory and all
+38 children pass (39 test outcomes plus one package PASS); the natural test
+command takes49.617583s and the two local pprof commands1.214565/0.300383s.
+The complete stream has161 JSON events/42273B with no skipped/failed test,
+truncation, active signal or timeout. Seventeen new synthetic parser/gate refusal
+tests pass; old41 tests cover only unchanged generic guard behavior, not this
+new target. Full2326 pin references (2325 distinct paths), including2167 original
+source/locks and74 tool sources, and actual Git pre/post checks pass. No source,
+assertion, module/cache/index or evidence-reuse rule changes.
+
+The fresh held root stays02700 while producing exactly cpu.pprof/phase6security.test,
+then changes through the same FD to0700 after natural complete test success;
+both original files tighten to0600 with full bytes unchanged. Seven ACL checks
+pass; final profile52335B/binary16387570B are below the unchanged1MiB/16MiB
+observed thresholds. These are bounded observations under the private same-UID
+premise, not kernel quotas, proof of no transient or production authority.
+The profile covers43.87s with32.25 sampled CPU seconds. Flat race helpers lead:
+__tsan_read6.28s/19.47%, racecall3.37s/10.45%, racecalladdr2.38s/7.38%.
+Cumulative VerifySlice6Evidence is9.94s/30.82%; the global cumulative row for
+rejectDuplicateMembers is3.87s/12.00%. Slice6Evidence.Validate3.32s/10.29% and
+Profile.Validate2.65s/8.22% also overlap. Do not add cumulative rows or treat this
+as compile/mise/host CPU, swap attribution or old full-race cause. New43.68s test
+reporting versus prior28.09s is not a controlled regression/speed comparison.
+
+Next read-only and independently examine duplicate scanning, typed decoding and
+canonicalization in VerifySlice6Evidence for a provably equivalent optimization,
+preserving duplicate/unknown/trailing/canonical and every public-entry rejection;
+no optimization is implemented or accepted yet. The prior full race stays
+**FAILED**, and prior same-source vet remains valid without another whole-suite
+or vet run. Evidence: `slice6-evidence-inventory-cpu-20261022-112148`, private and
+outside Git. Phase6 remains **5/15**, Slice6step2ongoing; step1 historical E unchanged,
+step3 live inventory/original16/formal review incomplete, formalstep4 not started.
+Docker authority/Linux/native/P2, public holds, two issuers/PostgreSQL general,
+nine bindings/64 barriers and old locks remain. Timers stay off. Reviewed normal
+progress-doc commit/push and fullSHA synchronization are recorded separately.
+
+Historical race-frontier checkpoint: [Streamed race-frontier diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-streamed-race-frontier-diagnostic)
 passes one fresh phase6security single-package race/shuffle/count1/-v identity
 in 359.789372s under the unchanged 600s/1MiB bounds. Its 196771B stdout and
 empty stderr contain 185 top-level outcomes: 179 PASS, 6 SKIP; including children,
