@@ -11533,3 +11533,93 @@ general, nine bindings/64 barriers, old locks and reuse rules remain. No live
 Docker/Vault/Guest/three-Provider/final16 or release gate runs. No global
 development installation, quota increase or unrelated process intervention
 occurs; development stays mise/Docker and timers remain off.
+
+
+## 2026-10-22 streamed race-frontier diagnostic
+
+This completes one reviewed diagnostic, not full repository or Slice acceptance.
+The prior full race remains FAILED at600.672669s; Phase6 stays **5/15**. Private
+evidence is `slice6-race-frontier-20261022-102125`, outside Git. Source baseline
+is263478021b423d1ee565e5de8025efe09fa1029f with clean HEAD/upstream and0/0.
+
+Read-only analysis confirms111 unique received outcomes (87 ok,24 no-test),
+matching the first111 of an older267-package successful output and two earlier
+failed prefixes. The next historical package is internal/phase6security. The
+other156 are historical entries unreceived in this run, not proved unrun, stuck
+or the current entire package inventory. Current fixed Go1.26.8 orders print
+actions and buffers ordinary multi-package output; the original run has no
+test-event/receive/process timeline. Old process group/PID observations belong
+to different source/run identities and cannot bind this failure.
+
+The already-received controlstorage/dockercontrol/desktopcandidate packages
+report114.529/69.779/22.952s versus34.977/36.625/3.930s in the historical success.
+Reported seconds for the same87 tested packages total405.244 versus237.607,
+but parallel package durations are not an additive wall-clock/CPU decomposition.
+This is a competing early-stage cost observation, not a host or source diagnosis.
+
+Independent design, implementation/refusal-test and final full-input reviews
+admit exactly one new single-package command: `test -race -shuffle=on -count=1
+-v ./internal/phase6security`. It keeps miseGo1.26.8, GOMAXPROCS2/-p2, umask022,
+module/cache/index recipe,600s and1MiB per stream. It does not run./..., CPU
+profiling, ps, Docker or a new observer. The prior package-JSON failure preserves
+1MiB containing165174B decoded Output payload plus an incomplete115B tail; plain
+-v has measured format-cost justification, not a promise to stay within the cap.
+Current target sources have no testing.Verbose/test.v/TestMain branch. This is
+a different informative diagnostic, not a replay or a changed release/reuse rule.
+
+Nineteen new pure parser/reception refusal tests pass naturally in0.053364208s
+under30s/1MiB. They cover nested/parallel/paused and multiple pending names,
+partial tails, duplicate/missing/wrong terminals, byte/clock/EOF/reap/guard failures,
+and refusing command failure despite prefixPASS. A pre-execution inline launcher
+SyntaxError exits1 before any test or output root; its original plan and failure
+remain. The saved, precompiled new offline-v2 launcher executes the unchanged
+19 methods once. An intervening reviewer argv-prefix BLOCK was disproved by
+actual source/AST inspection and retracted; both opinions remain recorded.
+
+The real command naturally exits0/reaped in **359.789372291s** under600s with
+196771 stdout bytes,0 stderr, no timeout/truncation/signal and complete source/
+actual Git postchecks. It has185 top-level outcomes (179 PASS,6 SKIP) and1154
+all-name outcomes (1148 PASS,6 SKIP), no pending names/partial final line, bare
+PASS and one package ok356.268s. Seed1792666130455392000 is this new order, not
+the unavailable old full-race order. The six skips are fixture/export cases:
+ControlBootstrapFixture, ControlBootstrapRealImageBytes, ControlSourceProfileFixture,
+ExportSyntheticPeerCRLConstructorFixture, HeldPeerTLSFixture and HeldPeerTLSRevokedFixture
+(each with the Test prefix). They are not live gate acceptance.
+
+Constant458B metadata records start/spawn, first/last receive, stream byte totals,
+EOF and reap; it stores no per-test receive or CPU observations. First stdout
+receive is4.031167s after the command clock start, a receive upper bound rather
+than exact startup/build time. Both EOFs and final stream lengths link to the
+raw original bytes. Full40 direct/3 helper/1 module plus2167 source/lock inputs
+remain, with actual clean2634780 branch/upstream/origin/staged/status guards.
+
+The largest completed top-level reported durations are28.09s for
+TestSlice6EvidenceRequiresCompleteClosedInventory,27.21s for
+TestSlice6ReceiptBundleRejectsCrossRunAndTampering,25.31s for
+TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode,18.05s for
+TestSlice6RestartReceiptsRetainBothProcessInstances and17.68s for
+TestSlice6DescriptorReceiptDigestIsNotSemanticProof. SyntheticV2 is11.27s in
+this run. These rows may overlap and are not CPU attribution or a controlled
+historical speed comparison. The new package completes under its own boundary;
+it neither identifies the old unfinished tests nor excludes concurrency, other
+packages, host variation, short waits or deadlock in the old run.
+
+Next independently review a bounded exact-test CPU attribution for the28.09s
+evidence case under the existing90s diagnostic budget, before any optimization.
+Its source builds the full synthetic profile/evidence fixture, then exercises
+strict decoding and complete validation through many independent refusals; this
+is a candidate cost chain, not a measured function hotspot. Preserve original
+assertions, input/output identity and exact artifact guards. Do not repeat a
+whole repository/package run for reporting or transfer old candidate acceptance.
+
+Only the three progress documents change in Git. Go/dependencies/fixtures and
+locks match the tested source; existing full vet coverage remains valid and no
+new fullrace/vet/Contract/Docker gate is claimed. Normal commit/push and full
+local/upstream/live SHA equality are separate from diagnostic/acceptance status.
+All original failures and sealed material remain unchanged. Slice6 step1 bounded
+historical Guest E stays; step2 ongoing; step3 complete live Profile-v2 inventory/
+original16/independent formal review incomplete; formal step4 not started.
+Docker authority/Linux/native/P2 and public ProfileV2/provider-v3 remain held.
+Broker/general only, PostgreSQL general, nine bindings/64 barriers and reuse
+rules stay fixed. No global installation, quota/deadline increase, unrelated
+process intervention, release/merge or automation restart occurs; timers stay off.

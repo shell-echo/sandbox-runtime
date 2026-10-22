@@ -1,6 +1,38 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Same-call network-plan validation](audits/product-phase-6-slice-6-startup.md#2026-10-22-network-plan-same-call-validation)
+Latest Phase6 step2 checkpoint: [Streamed race-frontier diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-22-streamed-race-frontier-diagnostic)
+passes one fresh phase6security single-package race/shuffle/count1/-v identity
+in 359.789372s under the unchanged 600s/1MiB bounds. Its 196771B stdout and
+empty stderr contain 185 top-level outcomes: 179 PASS, 6 SKIP; including children,
+1148 PASS and 6 SKIP, with one package ok at356.268s. No pending names or partial
+line remains; natural0/reap, constant reception metadata and complete2167 source/
+lock plus actual Git pre/post checks pass. Nineteen offline observation/parser
+refusal tests pass; a separate pre-execution launcher SyntaxError remains recorded.
+The first stdout receive bound is4.031167s, not exact startup/build time or CPU.
+The prior full race remains **FAILED**. Its111 received outcomes exactly match
+an older267-package success prefix, whose next historical item is phase6security;
+156 historical entries were unreceived, not proved unrun or stuck, and the
+current whole-repository package count was not newly enumerated. Fixed Go orders
+plain multi-package summaries and buffers package output. New single-package
+-v provides test-level evidence without replaying the old capped JSON identity.
+Early received controlstorage/dockercontrol/desktopcandidate report114.529/
+69.779/22.952s versus historical34.977/36.625/3.930s; these parallel package times
+cannot be added as wall time or identify a host/source cause. Current slowest
+tests report28.09s for complete evidence inventory,27.21s for receipt-bundle
+cross-run/tamper refusal and25.31s for PostgreSQL peer-CRL owner/pinned decoding.
+Next independently review exact-test CPU attribution for the28.09s case under
+the existing90s diagnostic boundary, preserving all assertions and artifact guards.
+This new run proves neither the old full-race cause nor absence of deadlock;
+source, order and execution context must not be conflated. Evidence:
+`slice6-race-frontier-20261022-102125`. No product Go, locks, cache/index or reuse
+rules changed. Existing same-source vet remains valid; no whole-suite or vet
+rerun is claimed. Phase6 stays **5/15**, Slice6 step2 ongoing; step1 historical
+bounded E unchanged, step3 live inventory/original16/formal review incomplete,
+formal step4 not started. Docker authority/Linux/native/P2, public holds,
+two-issuer policy and nine bindings/64 barriers remain. Timers stay off; normal
+progress-doc Git synchronization is checked separately.
+
+Historical network-plan checkpoint: [Same-call network-plan validation](audits/product-phase-6-slice-6-startup.md#2026-10-22-network-plan-same-call-validation)
 is an **unaccepted interim checkpoint: required full race remains FAILED**.
 BindSlice6DesiredNetworkPlan now fully validates its input draft and rewritten
 output once each, reducing successful top-level Profile.Validate calls from
