@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest independent source checkpoint: [Late-tracking revocation observation](#2026-10-22-late-tracking-revocation-observation).
+Latest independent source checkpoint: [Observed CRL expiry, full validation failed](#2026-10-22-observed-crl-expiry-checkpoint).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -10969,3 +10969,88 @@ Docker authority/Linux/native/P2, public ProfileV2/provider-v3 holds, two-issuer
 broker/general with PostgreSQL using general, quotas, deadlines, guards, old
 locks and evidence-reuse rules remain. Timers stay off. Continue a separately
 reviewed existing startup item; held runtime paths still need original proof.
+
+
+## 2026-10-22 observed CRL expiry checkpoint
+
+Status: source fix implemented and focused race/vet passed; required full
+race **FAILED** at the unchanged limit. This is an unaccepted interim source
+checkpoint, not closure of the fixed complete-mTLS/CRL ledger row or Slice6.
+It neither needs nor replaces Docker management-authority evidence.
+
+The relative evidence timer calculates its delay when a CRL is installed.
+After a wall-clock jump forward, Ready or Track can first observe
+`now >= collectedAt+S` or `now >= nextUpdate` before that timer fires.
+Previously these entries only refused new work; old sockets remained tracked,
+and a subsequent clock rollback could reuse the unexpired-at-old-time state.
+
+One mutex-held transition now marks that observed expiry unavailable,
+advances lastNow to its first observed expiry time, invalidates the old timer
+sequence and stops the timer. Ready and Track unlock before one existing
+drainAll call, preserving the original total C and worker limit. There is no
+new failureSequence increment: completion-time signature/binding/freshness
+and clock checks still reject old responses, while genuinely fresh pulls,
+including an in-flight pull, may recover ordinary expiry. Observed rollback
+beneath that first expiry watermark still latches failure. This is observation
+at those entries, not a continuous wall-clock monitor. Existing conservative
+concurrent refresh/drain semantics are retained. Refused untracked sockets
+remain caller-owned. No persistence, authority, protocol or fallback is added.
+
+The regressions cover Ready/Track with source freshness or signed CRL
+nextUpdate taking precedence, at deadline-1ns, exactly at it and after it.
+Before-expiry controls actually forward a byte. Expired cases require actual
+pipe EOF, active0, timer invalidation and the new watermark; a newly signed
+CRL#2 restores readiness and admits only a new connection. Atomic clocks and
+channel synchronization cover stale and fresh in-flight responses; rollback
+cannot restore the expired guard. Old code fails these connection/watermark
+checks. Its fresh in-flight subcases additionally consume the existing 1s
+pull deadline while waiting 1s for missing EOF; that secondary timeout does
+not independently establish the cause or a failureSequence policy change.
+
+| This stage's identity | Actual result | Actual seconds / original bound |
+| --- | --- | --- |
+| repro-v1, original source plus new tests | Natural exit1; expiry and rollback regressions fail; four before-expiry forwarding controls do not fail | 16.974111 / 90 |
+| focused-v1, phase6tls/connectiondrain race/shuffle/count1 | Natural exit0 | 6.849086 / 90 |
+| root-race-v1, required full race/shuffle/count1 | FAILED: timeout, actively SIGKILLed owned group, child exit-9 / recorder exit2 | 600.011412 / 600 |
+| vet-v1, full vet | Natural exit0; both streams empty | 5.311936 / 600 |
+
+The failed root run received 8587 stdout bytes and zero stderr bytes before
+timeout, with 87 ok and 24 no-test package outcomes, no emitted failure stack
+and no complete full-run result. Unreceived/buffered output completeness is
+unknown because natural EOF was not observed. Neither these 111 outcomes nor
+the last ordered package line locates the blocked test or proves the remaining
+packages. The owned group was reaped; the failed identity is preserved and not
+retried. No per-stream byte cap was reached. Focused/vet commands reap
+naturally without signals or capture failures. The two Go files and existing
+locks match the tested snapshot. Existing mise Go1.26.8, GOTOOLCHAIN=local,
+GOROOT unset, -mod=readonly, -p2/GOMAXPROCS2, ordinary developer caches and test
+umask022 remain. No global tool installation, frozen cache/index, go.mod,
+go.sum or AGENTS change occurs. Narrative updates do not cause another full run.
+
+Only the two Go files and these three progress documents change. No Provider
+wire/Contract or Docker driver/sandbox-lifecycle change triggers named Contract
+or tagged Docker CLI gates; none are claimed. Test PKI and real pipes remain
+component evidence, not live Vault/Guest revoke-loss-replacement, three Provider
+processes, network/UID/GID enforcement or final topology/original16 acceptance.
+Old candidates require affected source-bound builds/gates before inheriting
+changed source. A separate identified gap remains: Close errors are ignored,
+and Poll partial close failure may leave other tracked sockets. Fixing it must
+preserve one total C; this stage neither fixes nor counts it as closed.
+
+Private evidence: `slice6-crl-observed-expiry-20261022-093433`, outside Git,
+with old `slice6-crl-track-revocation-20261022-082700` and failures unchanged.
+The validation summary v2 clarifies that timeout logs are received bytes, not
+proof of natural EOF; v1 and all original raw records are retained. Independent
+review permits normal commit/push as an explicitly unaccepted interim
+checkpoint; it does not waive the failed root gate. Full local/upstream/live
+SHAs and actual synchronization are verified separately. No force push,
+release or merge occurs. Next independently locate the full-race timeout before
+a new justified validation identity; do not repeat the failed identity or
+extend the limit.
+
+Slice6 step1 historical bounded E is unchanged/not replayed; step2 remains
+ongoing; step3 full live Profile-v2 inventory/original16/independent acceptance
+is incomplete; formal postacceptance step4 has not started. Phase6 remains
+**5/15**. Docker authority/Linux/native/P2 and ProfileV2/provider-v3 holds stay.
+Broker/general only, PostgreSQL general, original guards, budgets, quotas,
+locks and evidence-reuse rules remain; timers stay off.

@@ -818,6 +818,192 @@ func TestPeerCRLGuardTrackRevocationObservationBound(t *testing.T) {
 	}
 }
 
+// observeGuardExpiry exercises each public admission observation without a
+// second Ready call masking which entry point invalidated the old evidence.
+func observeGuardExpiry(t *testing.T, guard *PeerCRLGuard, state tls.ConnectionState, entry string) {
+	t.Helper()
+	if entry == "Ready" {
+		if guard.Ready() {
+			t.Error("expired evidence retained readiness")
+		}
+		return
+	}
+	late, peer := net.Pipe()
+	defer late.Close()
+	defer peer.Close()
+	if err := guard.Track(late, state); !errors.Is(err, ErrPeerCRLUnavailable) {
+		t.Errorf("expired evidence admitted a late connection: %v", err)
+	}
+}
+
+func requireGuardPeerEOF(t *testing.T, peer net.Conn) {
+	t.Helper()
+	_ = peer.SetReadDeadline(time.Now().Add(time.Second))
+	var one [1]byte
+	if n, err := peer.Read(one[:]); n != 0 || !errors.Is(err, io.EOF) {
+		t.Errorf("observed expiry retained an existing connection: n=%d err=%v", n, err)
+	}
+}
+
+func TestPeerCRLGuardObservedExpiryDrainsConnections(t *testing.T) {
+	for _, entry := range []string{"Ready", "Track"} {
+		for _, bound := range []string{"source freshness", "CRL nextUpdate"} {
+			for _, offset := range []time.Duration{-time.Nanosecond, 0, time.Second} {
+				t.Run(entry+"/"+bound+"/"+offset.String(), func(t *testing.T) {
+					f := newGuardFixture(t)
+					deadline := f.now.Add(f.guard.maxStaleness)
+					if bound == "CRL nextUpdate" {
+						// Both inputs remain within the production five-minute
+						// staleness maximum; nextUpdate now precedes collection+S.
+						f.guard.maxStaleness = 5 * time.Minute
+						*f.clock = f.now.Add(10 * time.Second)
+						deadline = f.now.Add(5 * time.Minute)
+					}
+					f.client.response = f.response(t, 1, false, "fixed-source")
+					if err := f.guard.CheckHandshake(t.Context(), f.state); err != nil {
+						t.Fatal(err)
+					}
+					local, peer := net.Pipe()
+					t.Cleanup(func() { _ = local.Close(); _ = peer.Close() })
+					if err := f.guard.Track(local, f.state); err != nil {
+						t.Fatal(err)
+					}
+					*f.clock = deadline.Add(offset)
+					if offset < 0 {
+						if entry == "Ready" {
+							if !f.guard.Ready() {
+								t.Fatal("unexpired evidence rejected")
+							}
+						} else if err := f.guard.Track(local, f.state); err != nil {
+							t.Fatalf("unexpired tracked peer rejected: %v", err)
+						}
+						_ = local.SetWriteDeadline(time.Now().Add(time.Second))
+						_ = peer.SetReadDeadline(time.Now().Add(time.Second))
+						written := make(chan error, 1)
+						go func() { _, err := local.Write([]byte{42}); written <- err }()
+						var one [1]byte
+						n, err := peer.Read(one[:])
+						writeErr := <-written
+						if n != 1 || one[0] != 42 || err != nil || writeErr != nil {
+							t.Fatalf("unexpired connection lost forwarding: n=%d read=%v write=%v", n, err, writeErr)
+						}
+						return
+					}
+					f.guard.mu.Lock()
+					sequence, failures := f.guard.expirySequence, f.guard.failureSequence
+					f.guard.mu.Unlock()
+					observeGuardExpiry(t, f.guard, f.state, entry)
+					f.guard.mu.Lock()
+					unavailable, failed, active := f.guard.unavailable, f.guard.failed, len(f.guard.active)
+					advanced := f.guard.expirySequence > sequence && f.guard.lastNow.Equal(*f.clock)
+					failureSequence := f.guard.failureSequence
+					f.guard.mu.Unlock()
+					if !unavailable || failed || active != 0 || !advanced || failureSequence != failures || f.client.calls.Load() != 1 {
+						t.Errorf("expiry did not invalidate and drain once: unavailable=%v failed=%v active=%d advanced=%v failures=%d->%d pulls=%d", unavailable, failed, active, advanced, failures, failureSequence, f.client.calls.Load())
+					}
+					requireGuardPeerEOF(t, peer)
+					future := f
+					future.now = *f.clock
+					f.client.response = future.response(t, 2, false, "fixed-source")
+					if err := f.guard.Bootstrap(t.Context()); err != nil || !f.guard.Ready() {
+						t.Fatalf("fresh signed post-expiry CRL did not recover: %v", err)
+					}
+					recovered, recoveredPeer := net.Pipe()
+					t.Cleanup(func() { _ = recovered.Close(); _ = recoveredPeer.Close() })
+					if err := f.guard.Track(recovered, f.state); err != nil {
+						t.Fatalf("new connection after fresh recovery refused: %v", err)
+					}
+					f.guard.mu.Lock()
+					active = len(f.guard.active)
+					_, oldTracked := f.guard.active[local]
+					f.guard.mu.Unlock()
+					if active != 1 || oldTracked || f.client.calls.Load() != 2 {
+						t.Errorf("recovery restored an old connection: active=%d old=%v pulls=%d", active, oldTracked, f.client.calls.Load())
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestPeerCRLGuardObservedExpiryInflightRefresh(t *testing.T) {
+	for _, entry := range []string{"Ready", "Track"} {
+		for _, fresh := range []bool{false, true} {
+			t.Run(entry+"/"+map[bool]string{false: "stale", true: "fresh"}[fresh], func(t *testing.T) {
+				f := newGuardFixture(t)
+				f.client.response = f.response(t, 1, false, "fixed-source")
+				if err := f.guard.Bootstrap(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				local, peer := net.Pipe()
+				t.Cleanup(func() { _ = local.Close(); _ = peer.Close() })
+				if err := f.guard.Track(local, f.state); err != nil {
+					t.Fatal(err)
+				}
+				jump := f.now.Add(f.guard.maxStaleness + time.Second)
+				response := f.response(t, 2, false, "fixed-source")
+				if fresh {
+					future := f
+					future.now, future.clock = jump, &jump
+					response = future.response(t, 2, false, "fixed-source")
+				}
+				var clock atomic.Int64
+				clock.Store(f.now.UnixNano())
+				f.guard.now = func() time.Time { return time.Unix(0, clock.Load()).UTC() }
+				started, release := make(chan struct{}), make(chan struct{})
+				var releaseOnce sync.Once
+				defer releaseOnce.Do(func() { close(release) })
+				f.client.responseForCall = func(int32) workloadtlsagent.PeerCRLResponse {
+					close(started)
+					<-release
+					return response
+				}
+				done := make(chan error, 1)
+				go func() { done <- f.guard.Bootstrap(t.Context()) }()
+				<-started
+				clock.Store(jump.UnixNano())
+				observeGuardExpiry(t, f.guard, f.state, entry)
+				requireGuardPeerEOF(t, peer)
+				releaseOnce.Do(func() { close(release) })
+				err := <-done
+				if fresh {
+					if err != nil || !f.guard.Ready() {
+						t.Fatalf("fresh in-flight pull could not recover ordinary expiry: %v", err)
+					}
+				} else if !errors.Is(err, ErrPeerCRLUnavailable) || f.guard.Ready() {
+					t.Fatalf("stale in-flight pull revived expired evidence: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestPeerCRLGuardObservedExpiryClockRollback(t *testing.T) {
+	for _, entry := range []string{"Ready", "Track"} {
+		t.Run(entry, func(t *testing.T) {
+			f := newGuardFixture(t)
+			f.client.response = f.response(t, 1, false, "fixed-source")
+			if err := f.guard.Bootstrap(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			jump := f.now.Add(f.guard.maxStaleness + time.Second)
+			*f.clock = jump
+			observeGuardExpiry(t, f.guard, f.state, entry)
+			*f.clock = f.now
+			if f.guard.Ready() {
+				t.Error("clock rollback restored expired readiness")
+			}
+			*f.clock = jump
+			future := f
+			future.now = jump
+			f.client.response = future.response(t, 2, false, "fixed-source")
+			if err := f.guard.Bootstrap(t.Context()); !errors.Is(err, ErrPeerCRLUnavailable) || f.guard.Ready() || f.client.calls.Load() != 1 {
+				t.Errorf("fresh pull revived a rollback-failed guard: err=%v pulls=%d", err, f.client.calls.Load())
+			}
+		})
+	}
+}
+
 func TestPeerCRLBudgetRespectsDeclaredDrain(t *testing.T) {
 	budget, err := derivePeerCRLBudget(30*time.Second, 10*time.Second, 3*time.Second)
 	if err != nil || budget.timeout != 2*time.Second || budget.interval != 2*time.Second ||

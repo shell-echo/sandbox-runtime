@@ -1,8 +1,32 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Late-tracking revocation observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-late-tracking-revocation-observation).
+Latest Phase6 step2 checkpoint: [Observed CRL expiry, full validation failed](audits/product-phase-6-slice-6-startup.md#2026-10-22-observed-crl-expiry-checkpoint).
 
-The latest [2026-10-22 late-tracking revocation observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-late-tracking-revocation-observation)
+The latest [2026-10-22 observed CRL expiry checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-22-observed-crl-expiry-checkpoint)
+implements a source-level fix independent of Docker management authority,
+but full validation is **FAILED**, so this is an unaccepted interim checkpoint.
+After a forward wall-clock jump, Ready/Track now invalidate expired evidence
+and drain old connections under the original total close budget. They share
+one locked transition, advance the first observed expiry watermark and stop
+the old timer. Fresh signed pulls, including genuinely fresh in-flight pulls,
+can recover ordinary expiry; clock rollback remains latched. Old-source
+regressions fail; fixed phase6tls/connectiondrain race passes in 6.849086s and
+full vet passes in 5.311936s. The required full race hits its original 600s
+limit (actual 600.011412s), is actively terminated and fails. Its 111 completed
+package results do not establish full success or locate the timeout cause.
+No failed identity is retried. Tested Go/lock bytes match; existing mise
+Go1.26.8, -p2/GOMAXPROCS2 and test umask022 remain. Evidence:
+`slice6-crl-observed-expiry-20261022-093433`. Close-error/partial-drain handling
+remains a separate open source gap requiring a single-budget design. No live
+Vault/Guest/three-Provider or final16 gate runs; old candidates do not inherit
+changed source. Docker authority/Linux/native/P2 and public admission holds
+remain. Phase6 stays **5/15**: Slice6 step1 historical E unchanged, step2
+ongoing, step3 incomplete, formal step4 not started. Guards, quotas, deadlines,
+issuer policy and reuse rules stay fixed; timers remain off. Next independently
+locate the full-race timeout before another justified validation identity.
+Normal interim commit/push and full SHA synchronization are checked separately.
+
+The earlier [2026-10-22 late-tracking revocation observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-late-tracking-revocation-observation)
 closes a source-level live-role CRL monotonicity gap independent of Docker
 management authority. A zero-peer poll could install a revoked CRL between
 a good handshake and Track; Track rejected that peer without retaining the

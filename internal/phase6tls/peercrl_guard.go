@@ -362,6 +362,23 @@ func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
 	})
 }
 
+// expireEvidenceLocked handles wall-clock expiry observed before the relative
+// timer fires. The caller drains after unlocking, under the existing total C.
+// Ordinary expiry remains recoverable by a pull verified at its completion.
+func (g *PeerCRLGuard) expireEvidenceLocked(now time.Time) bool {
+	if g.failed || g.unavailable || g.collectedAt.IsZero() ||
+		(now.Before(g.collectedAt.Add(g.maxStaleness)) && now.Before(g.nextUpdate)) {
+		return false
+	}
+	g.unavailable = true
+	g.lastNow = now
+	g.expirySequence++
+	if g.expiryTimer != nil {
+		g.expiryTimer.Stop()
+	}
+	return true
+}
+
 // Track adds a connection only after its actual TLS handshake passed the
 // configured VerifyConnection callback. It rechecks the current complete CRL
 // and source availability under the same lock before admitting the connection
@@ -383,10 +400,14 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 		g.Close()
 		return ErrPeerCRLUnavailable
 	}
+	if g.expireEvidenceLocked(now) {
+		g.mu.Unlock()
+		g.drainAll()
+		return ErrPeerCRLUnavailable
+	}
 
 	_, alreadyTracked := g.active[connection]
-	if g.failed || g.unavailable || g.current.Number() == nil ||
-		!now.Before(g.collectedAt.Add(g.maxStaleness)) || !now.Before(g.nextUpdate) ||
+	if g.failed || g.unavailable || g.current.Number() == nil || g.collectedAt.IsZero() ||
 		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) {
 		g.mu.Unlock()
 		return ErrPeerCRLUnavailable
@@ -579,16 +600,18 @@ func (g *PeerCRLGuard) Ready() bool {
 		g.Close()
 		return false
 	}
+	if g.expireEvidenceLocked(now) {
+		g.mu.Unlock()
+		g.drainAll()
+		return false
+	}
 	defer g.mu.Unlock()
 
 	if g.failed || g.unavailable || g.collectedAt.IsZero() {
 		return false
 	}
-	ready := now.Before(g.collectedAt.Add(g.maxStaleness)) && now.Before(g.nextUpdate)
-	if ready {
-		g.lastNow = now
-	}
-	return ready
+	g.lastNow = now
+	return true
 }
 
 func (g *PeerCRLGuard) PollInterval() time.Duration {
