@@ -125,10 +125,11 @@ func (p PeerCRLSources) validatedPostgresOwners(profile Profile) (map[[2]string]
 	used := make(map[string]bool, len(sources))
 	// A PostgreSQL logical peer is the only exceptional outbound edge that
 	// needs the complete final external authority. Resolve that authority once
-	// for this already validated, locally unchanged Profile snapshot instead of
-	// revalidating the entire 78-principal graph for each peer-CRL edge.
+	// for the same Profile snapshot validated at entry; neither the source checks
+	// above nor this private verifier mutate it. Public entries still revalidate
+	// every call, including the complete graph before projecting its nine owners.
 	postgresOwners := make(map[[2]string]string)
-	if peerCRLNeedsFinalPostgresAuthority(p, profile) && VerifySlice6DesiredFinalExternalProfile(profile) == nil {
+	if peerCRLNeedsFinalPostgresAuthority(p, profile) && verifySlice6DesiredFinalExternalProfileValidated(profile) == nil {
 		principals := make(map[string]Principal, len(profile.Principals))
 		for _, principal := range profile.Principals {
 			principals[principal.Name] = principal

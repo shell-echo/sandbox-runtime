@@ -79,6 +79,53 @@ func finalPeerCRLAuthorizerFixture(t testing.TB) (Profile, PeerCRLSources) {
 	return profile, sources
 }
 
+func TestPeerCRLConstructorsRevalidateRehashedProfile(t *testing.T) {
+	profile, sources := finalPeerCRLAuthorizerFixture(t)
+	for _, entry := range []struct {
+		name   string
+		verify func(Profile, PeerCRLSources) error
+	}{
+		{"sources", func(p Profile, s PeerCRLSources) error { return s.Validate(p) }},
+		{"compiler", func(p Profile, s PeerCRLSources) error {
+			_, err := CompilePeerCRLAuthorizer(p, s)
+			return err
+		}},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			if err := entry.verify(profile, sources); err != nil {
+				t.Fatalf("valid final authority rejected: %v", err)
+			}
+			for _, change := range []struct {
+				name   string
+				mutate func(*Principal)
+			}{
+				{"writable root", func(p *Principal) { p.ReadOnlyRootFilesystem = false }},
+				{"new privileges", func(p *Principal) { p.NoNewPrivileges = false }},
+			} {
+				t.Run(change.name, func(t *testing.T) {
+					changed := profile
+					changed.Principals = slices.Clone(profile.Principals)
+					change.mutate(&changed.Principals[0])
+					changed.ProfileDigest = changed.Digest()
+					changedSources := sources
+					// Match both digests so refusal must check the unsafe profile,
+					// rather than just reject an obsolete source-document binding.
+					changedSources.SecurityProfileDigest = changed.ProfileDigest
+					if changed.ProfileDigest == profile.ProfileDigest {
+						t.Fatal("unsafe fixture did not change the profile digest")
+					}
+					if err := entry.verify(changed, changedSources); err == nil {
+						t.Fatal("rehashed unsafe profile accepted after a valid call")
+					}
+					if err := entry.verify(profile, sources); err != nil {
+						t.Fatalf("rejected input poisoned later validation: %v", err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestCompiledPeerCRLAuthorizerMatchesClosedSources(t *testing.T) {
 	profile, sources := finalPeerCRLAuthorizerFixture(t)
 	index, err := CompilePeerCRLAuthorizer(profile, sources)

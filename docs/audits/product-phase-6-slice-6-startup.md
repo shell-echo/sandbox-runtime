@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest independent source checkpoint: [Observed CRL expiry, full validation failed](#2026-10-22-observed-crl-expiry-checkpoint).
+Latest independent source checkpoint: [Same-call peer-CRL validation, full validation failed](#2026-10-22-peer-crl-same-call-validation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11054,3 +11054,32 @@ is incomplete; formal postacceptance step4 has not started. Phase6 remains
 **5/15**. Docker authority/Linux/native/P2 and ProfileV2/provider-v3 holds stay.
 Broker/general only, PostgreSQL general, original guards, budgets, quotas,
 locks and evidence-reuse rules remain; timers stay off.
+
+## 2026-10-22 Peer-CRL same-call validation
+
+This is an **unaccepted interim checkpoint: full validation remains FAILED**.
+PeerCRLSources now uses the existing private final-profile verifier after its
+same-call entry Profile.Validate, removing one duplicate validation on the
+unchanged snapshot. Complete final-graph/nine-owner, ordinary/DNS/purpose and
+source checks remain; both public entries still revalidate every call. New
+refusals rehash both Profile and Sources bindings before rejecting unsafe
+root/privilege settings and accepting the original input again. Existing
+race benchmark samples show median allocated bytes -43.95% and allocation
+count -33.83%, but median ns/op is 29.1% slower with a wide range: no latency
+improvement or previous-timeout cause is proved. Focused race passes in
+84.742314s under 90s; full vet passes in 56.586027s. Required full race reaches
+its unchanged 600s boundary (actual 600.034008s), is actively terminated/reaped
+and **fails**. Its 111 received package outcomes do not establish full success
+or identify a stuck test. All 2166 fixed source/lock pins match; existing
+mise Go1.26.8, -p2/GOMAXPROCS2 and test umask022 remain. Evidence:
+`slice6-peercrl-validation-once-20261022-032759`. Earlier f46 local/upstream/
+live synchronization is confirmed separately; this checkpoint's normal Git
+synchronization is checked separately from validation. No new runtime,
+Vault/Guest/three-Provider or final 16-scenario gate runs, and old candidates do not
+inherit changed source. Close-error/partial-drain handling remains open.
+Docker authority/Linux/native/P2 and public ProfileV2/provider-v3 holds,
+two-issuer policy, PostgreSQL general, old locks, reuse rules and budgets
+remain. Phase 6 stays **5/15**: Slice 6 step 1 historical bounded E unchanged,
+step 2 ongoing, step 3 incomplete, formal step 4 not started. Timers stay off.
+
+The local allocation measurement reuses the existing compile_index_once benchmark, three iterations per sample and three samples, under the original 90-second recorder. Each new allocated-byte/count sample is below every old sample; timing samples are dispersed and cannot be attributed to the host. No benchmark or failed full-race identity is rerun. Two read-only owned-process snapshots are not a full census at the deadline or a stack trace, so they do not locate the timeout. This change does not alter cache/index authority or evidence-reuse rules. There is no Docker driver/lifecycle or Provider Contract change; no new tagged Docker or named Contract-verifier result is claimed.
