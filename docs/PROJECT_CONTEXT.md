@@ -46,7 +46,28 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation)
+The latest [private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture)
+passes the directory configuration prerequisite in 0.060627 seconds, after
+independent design and implementation/input review. A fresh owner-only root
+changes through the same FD from 0700 to 02700 and back to 0700, retaining its
+device/inode/UID/GID. Two new tiny samples have no privilege bits, retain their
+bytes through root tightening, then tighten from 0644/0755 to 0600. All eight
+bounded ACL observations and 35 direct plus three helper input checks pass.
+Twenty-four offline refusal tests pass; the initial zero-test discovery failure
+is preserved separately. Evidence: `slice6-v2-copy-root-20261022-064857`.
+Fixed Go source checks parent setgid before the umask probe and uses CopyFile;
+this fixture does not execute that Go path or establish its I/O budget. No Go
+or pprof ran and CPU hotspots remain unknown. Runtime third-name acceptance
+remains blocked. Next integrate the qualified configuration into the private
+controller, preserving exact two names and original limits, and independently
+review final code/tests/full fresh inputs before another Go diagnostic. This
+is not hostile same-UID protection or production authority; CopyFile may use
+extra temporary I/O/space. No product code, locks, cache/index or reuse rules
+changed. Prior full-race failures remain FAILED. Phase6 stays **5/15**, Slice6
+step2 ongoing, step3 incomplete, formal step4 not started; timers stay off.
+Normal Git synchronization is checked separately.
+
+The earlier [artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation)
 identifies this new run's guard trigger: a non-atomic scan observed the extra
 `phase6security.test-go-tmp-umask` name with its listing inode retained privately. The scan
 reached EOF without truncation; this is not a simultaneous directory snapshot

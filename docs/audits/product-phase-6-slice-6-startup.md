@@ -11309,3 +11309,64 @@ postacceptance handoff not started. Docker authority/Linux/native/P2, public
 ProfileV2/provider-v3, two issuers, PostgreSQL general, nine bindings,64 barriers
 and evidence-reuse holds stay. No Docker/Vault/Guest/three-Provider/final16 gate
 runs; timers remain off.
+
+
+## 2026-10-22 private copy-root fixture
+
+This checkpoint passes a private filesystem prerequisite, not another Go
+diagnostic or formal gate. The fixed Go1.26.8 source checks the destination
+parent's ModeSetgid before creating its umask probe and selects its existing
+CopyFile branch. Darwin stat maps the directory setgid bit accordingly.
+Independent review continues to reject allowing any third runtime artifact
+name. CopyFile's destination open lacks O_NOFOLLOW: this local configuration
+assumes no hostile same-UID writer and proves no production authority or
+hostile same-UID safety. CopyFile may add temporary I/O/space; original quotas
+and the future shared 90-second diagnostic budget receive no increase.
+
+Independent design and final code/full-input review admitted one fresh
+fixture identity under `slice6-v2-copy-root-20261022-064857`. It naturally
+exits 0 in 0.060627333 seconds under its 30-second fixture limit. The new root
+changes through the same FD from 0700 to 02700 and back to 0700, retaining
+device/inode/type/UID/GID; actual mode and ctime changes are recorded. Its rwx
+permissions remain 0700. Two tiny new samples created with local umask022
+have modes 0644 and 0755, nlink1, current UID/GID and no privilege bits. Root
+tightening preserves their full metadata and bytes. Their own FDs then
+tighten to 0600, retaining original hashes and all 72 aggregate bytes.
+All final new directories are 0700 and files 0600.
+
+Eight original `ls -ldne` observations naturally exit 0/reaped under the
+unchanged two-second/64KiB command limits, with empty stderr and complete
+headers showing no extra ACL rows or ACL marker. Each is separately bound
+to the target FD/path/stat before and after observation. All 35 direct input
+pins and three helper pins match before and after execution. Original raw
+observations, identities and permissions remain private outside Git.
+All eight headers do carry `@` extended-attribute markers; these are distinct
+from the absent `+` ACL marker and are not treated as extra ACL grants.
+
+The first offline test identity naturally exits 5 with zero tests because
+unittest discovery sees the bootstrap module; its code, plan and error remain
+FAILED evidence. The new identity explicitly loads all 24 unchanged test
+methods and requires both the actual count and success. It naturally exits 0
+in 0.124690083 seconds with all 24 passing, no signal/truncation/timeout.
+Refusals cover wrong permissions/UID/GID, dropped setgid, links, replaced
+paths, changed bytes, malformed/extra ACL output and exhausted deadlines.
+The tested rule and capture modules are unchanged for the real fixture.
+
+No Go, pprof, Docker, build, scan or host-performance admission ran. No CPU
+hotspot, latency improvement or old-timeout root cause follows. All prior
+diagnostic/full-race failures and sealed evidence remain intact. Next
+integrate this qualified directory configuration into the private controller,
+with the original runtime two-name invariant, full final bindings, ACL checks
+and limits. Final controller/refusal tests/new complete inputs require
+independent review before a new real Go identity; the fixture alone is not
+runtime admission. No product Go, Contract, old lock, cache/index recipe or
+evidence-reuse policy changed, so no full Go/vet/Contract rerun is claimed.
+
+Only three progress documents are checkpointed in Git; normal commit/push
+and full local/upstream/live SHA equality are checked separately. Phase6
+remains **5/15**: Slice6 step1 historical bounded E unchanged; step2 ongoing;
+step3 full live Profile-v2 inventory/original16/independent formal acceptance
+incomplete; formal postacceptance step4 not started. Docker authority,
+Linux/native/P2 and public ProfileV2/provider-v3 holds, broker/general only,
+PostgreSQL general, nine bindings, 64 barriers and evidence-reuse rules remain.
+Development stays mise/Docker and timers stay off.

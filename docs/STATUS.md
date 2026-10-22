@@ -1,6 +1,26 @@
 # Project Status
 
-Latest Phase6 step2 checkpoint: [Artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation).
+Latest Phase6 step2 checkpoint: [Private copy-root fixture](audits/product-phase-6-slice-6-startup.md#2026-10-22-private-copy-root-fixture).
+
+One independently reviewed private filesystem fixture passes in 0.060627s.
+The new root retains FD/path/device/inode/UID/GID while changing
+0700 → 02700 → 0700; rwx permissions remain owner-only. Two tiny new files
+have no privilege bits and retain bytes through root tightening, then tighten
+0644/0755 → 0600. Eight bounded ACL observations and 35 direct plus three
+helper input checks pass. All 24 offline refusal tests pass; a separate initial
+zero-test discovery failure is retained. No Go or pprof ran. The fixed Go
+CopyFile branch is supported by source, but its actual execution/I/O budget,
+CPU hotspots and old full-race timeout cause remain unproved. Next integrate
+this configuration into the private controller and independently review final
+code/tests/fresh inputs, preserving runtime exact-two names and original
+limits. No product code, lock, cache/index or reuse-rule change. This provides
+neither hostile same-UID protection nor production authority. Phase6 remains
+**5/15**, Slice6 step2 ongoing, step3 incomplete, formal step4 not started;
+prior full-race failures remain FAILED and timers stay off. Git synchronization
+is verified separately.
+
+The earlier [artifact-refusal observation](audits/product-phase-6-slice-6-startup.md#2026-10-22-artifact-refusal-observation)
+retains its failed Go result and original evidence:
 
 This run's rejection is now tied to the actually observed extra name
 `phase6security.test-go-tmp-umask`, absent after leader reap. Its listing inode
