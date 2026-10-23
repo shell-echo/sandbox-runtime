@@ -1,6 +1,48 @@
 # Project Status
 
-The latest [receipt-file source CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-file-source-cpu-attribution)
+The latest [bundle/canonical CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-bundle-and-canonical-cpu-attribution)
+naturally passes in4.441331s under the original shared90s, including full
+input/Git/archive pre/post and three local reports. Those commands take
+1.103288s/0.269843s/0.269676s, all exit0/reaped, empty stderr, no signal,
+timeout or truncation. New18 parser/refusal methods pass0.308325s/30s.
+Complete47 direct/2170 source-lock/74 tool-source and oldQ149-file archive
+checks pass; local HEAD/upstreambfb8da325b654672f2359f34cb648da226a7fb9b
+is clean0/0. No Go test, new profile, project build or host/Docker run occurs.
+
+Old sampled bundle cumulative7.29s attributes3.72s to manifest-file verification,
+2.60s to private reads and810ms to canonical receipt calls. Source rows split
+private index/raw/envelope reads10ms/2.09s/500ms and canonical index/envelope
+640/170ms. Canonical helper total890ms contains duplicate scan410ms,
+typedDecode370ms and Marshal110ms; scenario validation contributes another
+incoming80ms. Rows and graph weights overlap and round: they are not invocation
+counts, waits, measured savings, host CPU or the cause of the old600s timeout.
+Unsampled EOF/digest/identity/canonical checks remain necessary.
+
+No production optimization is accepted. Keep early duplicate rejection,
+typed unknown/type/trailing refusal, exact canonical bytes, run/config/content
+digests, every public entry and dynamic filesystem checks. Current samples do
+not justify custom decoding, reordered checks, new maps or caches. One stale
+source-text mutation in an unexecuted fixture draft was corrected before final
+review; old draft/plan bytes remain and no failed identity is replayed.
+Next independently select another high-cost target from retained phase6security
+evidence and require a discriminating bounded plan before new execution.
+Do not keep replaying this completed diagnostic or the full repository blindly.
+Private evidence: slice6-bundle-canonical-cpu-lines-20261023-124851.
+
+The prior sync stage naturally pushesbfb8 and observes identical complete
+local/upstream/final live SHA, clean0/0; old failures stay preserved. This
+analysis freezes precommit source records; its later reviewed docs-only commit
+and normalpush/full live disposition will be recorded separately.
+Required fullrace remains **FAILED600.014672s**, Phase6 **5/15**/Slice6step2.
+Step1 historical boundedE unchanged; step3 live fullProfileV2/original16/
+independent acceptance incomplete; formalstep4 not started. Docker authority/
+Linux/native/P2/publicProfileV2/provider-v3/twoissuer broker+general/
+PostgreSQLgeneral/9bindings64barriers/oldlocks/reuse stay held. Existing
+miseGo1.26.8/-p2/cache/publicproxy recipe remains, no kernelquota/networkexclusion
+claim, globalinstall, unrelatedprocess intervention or quota/deadline expansion.
+TimersOFF.
+
+The earlier [receipt-file source CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-file-source-cpu-attribution)
 naturally passes the complete retained-profile operation in3.526027s/90s.
 The three local reports take0.791644s,0.169803s and0.453769s; all exit0/reaped,
 with empty stderr and no timeout/signal/truncation. Complete120 direct,
