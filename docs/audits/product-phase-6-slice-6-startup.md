@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Peer-CRL recheck source attribution](#2026-10-23-peer-crl-recheck-source-attribution).
+Latest investigation checkpoint: [Profile-v2 single encoding](#2026-10-24-profile-v2-single-encoding).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12574,3 +12574,71 @@ Private evidence: slice6-peercrl-checkpoint-ssh443-20261023-234529 and
 slice6-peercrl-recheck-lines-20261023-235125, outside Git. Only these three progress
 documents change. This intermediate checkpoint's reviewed commit/push/full SHA
 disposition is recorded separately; it is not formal Slice6step4.
+
+## 2026-10-24 Profile-v2 single encoding
+
+Status: equivalent encoding change and targeted component checks PASS.
+Phase6 remains5/15, Slice6step2; historical bounded step1 is unchanged, step3
+full live topology/original16/independent acceptance and formalstep4 incomplete.
+
+Independent source review establishes that the root ProfileDigest is a required
+string whose validated form is71 unescaped ASCII bytes. Current reachable
+types have no custom JSON/Text marshaler or dynamic/recursive encoding shape.
+In a data-race-free invocation, clearing that scalar on a value copy leaves
+all other encoded fields, including nested profile_digest values, unchanged.
+Consequently the unsigned encoding length plus71 equals the original signed
+encoding length. This is a current-source equivalence argument, not a new
+runtime trust authority, concurrent alias isolation or measured performance gain.
+
+The two production files share one digest-preimage encoder and one unchanged
+domain hash. Digest retains its original public signature and ignored-marshal-
+error behavior. The private validateDocument helper checks only the old encoding
+tail: reject marshal error, reject unsigned length greater than maxBytes minus
+the supplied digest length, then compare the hash. validateFields calls it only
+after every original field guard in its original order. Oversize rejection
+precedes hashing. No JSON byte replacement, global cache, cross-call token,
+public-entry bypass or removal of final role/snapshot validation is introduced.
+
+New tests use an independent old double-Marshal/domain oracle for exact signed
+sizes maxBytes-1, maxBytes and maxBytes+1; incorrect digests, default escaping
+and invalid UTF-8 handling, nested same-name digest fields, nil/empty collections
+and non-nil CodingExecution, caller immutability and between-call alias mutation.
+The type-assumption guard requires fresh review if custom/dynamic/recursive
+reachable shapes are added. Partial boundary fixtures prove only the encoding
+tail; they do not become valid or admitted complete Profiles.
+
+A new bounded A run passes44 named outcomes:20 new encoding outcomes and24
+original wire/complete-field/accessor/CodingExecution outcomes, with one package
+PASS. The tests take42.643373s and package vet1.663895s; the complete shared
+operation including input/Git pre/post and publication takes51.556528s/90s.
+All19 receipts complete naturally/reaped with no timeout/signal/truncation;
+test/vet stderr and vet stdout are empty. The strict event parser's30 refusal
+variants and saved73-event-name compatibility are separate parser evidence.
+
+A separately reviewed new B identity passes the unchanged original
+TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target, all73 named outcomes
+and one package PASS, with the same source state. Its complete shared operation
+takes15.635456s/90s; A package vet is explicitly checked and reused, not rerun.
+All input/source/Git pre/post guards and complete event acceptance pass. Neither
+run generates a CPU profile or executes the old saved test binary; original
+exact-two artifacts remain untouched. Both use existing miseGo1.26.8, original
+environment/cache settings, GOMAXPROCS2/-p2 and childumask022. These concurrency
+settings are not a kernel CPU/memory quota or network isolation claim.
+
+The current2172-file lock set adds one encoding test and changes only the two
+reviewed production files against the prior2171. All other source/fixture bytes
+and identity fields remain. Only three progress documents change after the
+tests; tested source is retained exactly. This is not a new whole-repository
+race/vet, Contract, Docker, Provider/TLS or formal release gate. Required fullrace
+remains FAILED600.014672s, not rerun or waived. Old failures/drafts/evidence,
+broker/general issuers with PostgreSQL general, public ProfileV2/provider-v3
+holds, Docker authority/Linux/native/P2 gaps, nine bindings/64 barriers and
+evidence-reuse rules remain. No timeout/quota/cache/index expansion, installation,
+unrelated-process action or timer restart.
+
+Next independently select a useful remaining retained-profile bottleneck or
+startup-audit item. No net speedup is established by comparing these different
+test/profile contexts. Private evidence: slice6-profile-v2-encoding-20261024-003430.
+The coherent six-file source/test/progress checkpoint's reviewed commit,
+normal push and full local/upstream/live disposition follow separately; this
+is an intermediate checkpoint, not formal Slice6step4.

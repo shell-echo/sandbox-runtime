@@ -1,7 +1,6 @@
 package phase6security
 
 import (
-	"encoding/json"
 	"slices"
 
 	"github.com/shell-echo/sandbox-runtime/internal/securityprincipal"
@@ -130,11 +129,7 @@ func (p ProfileV2) validateFields() error { //nolint:gocyclo
 	if p.verifyCodingResourceBudget() != nil {
 		return ErrInvalidProfile
 	}
-	encoded, err := json.Marshal(p)
-	if err != nil || len(encoded) > maxBytes || p.ProfileDigest != p.Digest() {
-		return ErrInvalidProfile
-	}
-	return nil
+	return p.validateDocument()
 }
 
 func validateV2DNSClientCA(services []ExternalService) error {

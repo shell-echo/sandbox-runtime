@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-23
+Updated: 2026-10-24
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -46,7 +46,30 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
+The latest [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
+removes one full JSON encoding from each complete private field validation.
+One value-copy encoding clears only the root ProfileDigest; the original
+domain hash is shared with Digest. Restoring the valid71-byte ASCII digest
+for the size check preserves the original signed-document2MiB boundary.
+All earlier field guards, marshal-error rejection, public holds and separate
+snapshot/final-role validations remain. No cache or JSON byte substitution.
+
+Independently reviewed A passes44 named results (20 new,24 original) and
+package vet in51.556528s/90s. Separate B passes the original73 PeerCRL results
+in15.635456s/90s, reusing A vet with identical2172 source/lock inputs. Both
+complete naturally with full input/Git pre/post checks and publication inside
+their own90s boundaries. Size -1/at/+1, independent old-policy oracle, escaping,
+nested digests, mutable aliases and current type assumptions pass. No new CPU
+profile, measured speedup, whole-repository pass or runtime admission is claimed.
+
+Phase6 stays **5/15**, Slice6step2; required fullrace **FAILED600.014672s**
+remains unsatisfied. Next independently choose another useful retained-profile
+target or remaining startup audit item; do not blindly repeat full tests.
+miseGo1.26.8, old locks/reuse rules and timers OFF remain. Private evidence:
+slice6-profile-v2-encoding-20261024-003430. The reviewed six-file checkpoint's
+commit/push/live SHA disposition follows separately.
+
+The preceding [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
 passes three local reports in3.208271s under the original shared90s, including
 publication. Complete2171 source/lock,74 tool sources and the entire442-file
 saved CPU checkpoint match before/after. The strict parser is unchanged;

@@ -93,10 +93,30 @@ type ArtifactScannerAuthorityV2 struct {
 }
 
 func (p ProfileV2) Digest() string {
+	document, _ := p.digestDocument()
+	return profileV2DocumentDigest(document)
+}
+
+func (p ProfileV2) digestDocument() ([]byte, error) {
 	p.ProfileDigest = ""
-	document, _ := json.Marshal(p)
+	return json.Marshal(p)
+}
+
+func profileV2DocumentDigest(document []byte) string {
 	digest := sha256.Sum256(append([]byte("sandbox-runtime/phase6-security-profile/v2\x00"), document...))
 	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+// validateDocument checks only the encoding tail, after validateFields has
+// checked the complete field chain. A matching digest is always 71 unescaped
+// ASCII bytes, so restoring it adds exactly that length to the encoded document.
+func (p ProfileV2) validateDocument() error {
+	document, err := p.digestDocument()
+	if err != nil || len(document) > maxBytes-len(p.ProfileDigest) ||
+		p.ProfileDigest != profileV2DocumentDigest(document) {
+		return ErrInvalidProfile
+	}
+	return nil
 }
 
 func DecodeV2(document []byte) (ProfileV2, error) {

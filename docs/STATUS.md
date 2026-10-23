@@ -1,6 +1,23 @@
 # Project Status
 
-The latest [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
+The latest [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
+replaces two full encodings in the private field-validator tail with one
+root-digest-cleared encoding. Exact71-byte restoration keeps the original
+signed JSON2MiB size limit; domain/error semantics and every earlier field
+guard, public hold and independent validation boundary remain.
+
+A passes44 named results (20 new/24 original) plus package vet in51.556528s/90s;
+separate B passes the original73 PeerCRL results in15.635456s/90s. Both include
+full2172 source/input/Git pre/post and publication; B reuses unchanged A vet.
+This proves component behavior and the source-level two-to-one encoding change,
+not measured savings, a new CPU profile, whole-repo or runtime acceptance.
+Phase6 remains **5/15**, Slice6step2, fullrace **FAILED600.014672s** unsatisfied.
+Next select another useful retained-profile or startup-audit target through
+independent review. Existing gates/miseGo1.26.8/locks/reuse rules and timers OFF
+remain. Private evidence: slice6-profile-v2-encoding-20261024-003430; six-file
+commit/push/full SHA disposition follows separately.
+
+The preceding [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
 passes three local reports in3.208271s/90s including publication. Full2171
 source/lock,74 tools and442 saved checkpoint files match before/after; unchanged
 parser coverage reuses24 prior methods. No Go change/new test/profile/vet or
