@@ -46,7 +46,66 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [retained race-timeout analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-retained-race-timeout-action-analysis)
+The latest [receipt-bundle targeted CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-bundle-targeted-cpu-diagnostic)
+naturally passes its original shared90s batch in40.124208s. The exact
+TestSlice6ReceiptBundleRejectsCrossRunAndTampering parent and all seven children
+pass, with37 complete JSON events, one package PASS and a new shuffle seed.
+The parent also retains raw/index/path/permission/scenario/cleanup assertions;
+eight outcomes do not mean only eight business checks. No fixture or Go source
+changes. The old full-repository race remains **FAILED** at600.014672s.
+
+The target command takes38.628149s, flat pprof0.989787s and cumulative pprof
+0.220421s, all natural0/reaped with empty stderr and no signal, timeout or
+truncation. Shared90s includes root preparation, test, complete artifact retention
+and both local pprof commands. Full input/Git/environment pre/post checks keep
+their original separate bounds; this is not a whole-operation90s guarantee.
+Complete2170 source/lock,74 tool-source,105 direct,three helper and two module
+pins and clean local HEAD1ca31bcea10e11bd350e77956a2d5443394f2565 checks pass.
+Recorded upstream0154f0de708d35a49978858552c788432524a85a remains one commit behind;
+that is frozen local identity, not proof of current remote synchronization.
+
+Exactly two outputs remain: cpu.pprof40914B and phase6security.test16424322B.
+Same held FDs bind root0700->02700->0700, generated0644/0755->retained0600,
+unchanged full bytes/hashes, UID/GID/single-link identities and seven ACL checks.
+The existing1MiB/16MiB thresholds are observed caps, not kernel quotas or proof
+against a hostile same-UID writer. New18 offline refusal methods naturally pass
+in0.159219s/30s, including old16 and actual old39-case stream refusal.
+An initial preexecution plan was blocked for stale top-level bootstrap/root
+metadata before any Go command; its original remains. Corrected v2 inputs
+received independent approval, without code changes or replaying a failed run.
+
+The profile spans33.60s with22.48 sampled CPU seconds (66.91% as reported by
+pprof). It covers this test process including race/runtime, not builder or host
+CPU. Global cumulative rows show VerifySlice6EvidenceBundle7.29s,
+VerifySlice6Evidence3.71s, Decoder.Decode2.74s,
+readPrivateSlice6ReceiptFile2.60s and absoluteSlice6ReceiptRoot1.67s.
+Rows overlap: do not add them or call them caller-exclusive cost, measured saving,
+CPU saturation, IO/swap cause or an explanation of the earlier600s failure.
+The historical unprofiled27.21s is a different context, not a controlled comparison.
+
+Next independently review bounded source-line/caller inspection of this retained
+profile for private-file/root checks, without rerunning tests. Identify dynamic
+filesystem checks versus repeated same-call computation before proposing any
+equivalent change. Preserve every public entry, root/file identity, symlink,
+ownership/mode/replacement, EOF/hash/canonical/content refusal; do not cache
+evidence across calls or assume alias stability. No optimization is accepted here.
+Private evidence: slice6-receipt-bundle-cpu-20261023-111347.
+
+mise Go1.26.8/GOMAXPROCS2/-p2/umask022 and existing module/cache/index recipe
+remain; concurrency flags are not kernel quotas. Public GOPROXY remains capable
+of fetching missing modules; no network-exclusion or no-implicit-download claim.
+No full-repository rerun, Docker/runtime scenario, global installation, unrelated
+process intervention, quota/deadline expansion or reuse-rule change occurs.
+Phase6 stays **5/15**: Slice6step1 historical bounded Guest E unchanged; step2
+ongoing; step3 live full Profile-v2 inventory/original16/independent acceptance
+incomplete; formalstep4 not started. Docker authority/Linux/native/P2, public
+ProfileV2/provider-v3 holds, broker/general-only/PostgreSQL general,
+nine bindings/64 barriers and old locks/evidence remain. TimersOFF.
+This source record freezes the precommit checkpoint. Actual reviewed commit/push
+and full local/upstream/live disposition will be recorded separately; no successful
+remote synchronization is preclaimed.
+
+The earlier [retained race-timeout analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-retained-race-timeout-action-analysis)
 completes one independently reviewed offline operation naturally in10.902611s/90s,
 including full input/local-Git pre/post checks and22 passing synthetic tests.
 No Go test, build, Docker command, fresh host observation or network operation
