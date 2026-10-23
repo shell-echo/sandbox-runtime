@@ -46,7 +46,50 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [receipt-bundle targeted CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-bundle-targeted-cpu-diagnostic)
+The latest [receipt-file source CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-file-source-cpu-attribution)
+naturally passes the complete retained-profile operation in3.526027s/90s.
+The three local reports take0.791644s,0.169803s and0.453769s; all exit0/reaped,
+with empty stderr and no timeout/signal/truncation. Complete120 direct,
+2170 source/locks,74 tool sources and the old149-file archive pass pre/post
+checks. Local HEAD/upstream089eac50dc8a4a16c0aaa1b1a3eb85f86b384fe1 is clean0/0.
+No Go test, new profile, project build, Docker or host observation runs.
+
+Root cumulative1.67s resolves to Lstat1.65s and lexical/Clean20ms.
+File cumulative2.60s receives a sample edge from VerifySlice6EvidenceBundle;
+root-call1.67s, ancestor/file Lstat280/90ms,Open420ms,ReadAll100ms,
+Dir10ms and graph Close30ms remain rounded overlapping CPU samples.
+Graph weights are not invocation counts, wait time, measured savings or the
+cause of the earlier full-race timeout. Unsampled checks remain necessary.
+No production optimization is accepted: dynamic filesystem checks cannot
+be cached as immutable computation; small lexical samples do not justify
+extra code. Diagnostic artifact UID/GID/link checks are not invented as
+existing application helper assertions.
+
+Original lines-v1 remains FAILED2.666709s: its first pprof exits0/0.969017s
+but the absolute-only parser refuses the correct repository-relative source
+header; later reports do not run. A separate0.816133s after-failure closure
+does not pass that identity. Independent correction review permits only the
+two complete exact path spellings, with every source line still byte-matched.
+Corrected18 parser/refusal methods pass0.048450s/30s; old16/failure originals
+remain. An unexecuted draft with wrong branch/artifact names is blocked before
+a precisely corrected executor and full new identity receive independent review.
+
+Next independently inspect this same retained profile's bundle/canonical-decode
+source and callers, preserving early duplicate/type/unknown/trailing/canonical/
+digest/content and every public-entry refusal. No change is approved here.
+Private evidence: slice6-receipt-file-cpu-lines-20261023-114816.
+The required fullrace remains **FAILED600.014672s**; no rerun or fresh pass.
+Phase6 stays **5/15**: step1 historical bounded E unchanged; step2 ongoing;
+step3 live full Profile-v2/original16/independent acceptance incomplete;
+formalstep4 not started. Docker authority/Linux/native/P2/publicProfileV2/
+provider-v3/two-issuer broker/general/PostgreSQLgeneral/9bindings64barriers/
+oldlocks/reuse stay held. Existing miseGo1.26.8/-p2/cache/public-proxy recipe
+remains; no kernel-quota or network-exclusion claim, expanded quota/deadline,
+installation or unrelated process intervention. TimersOFF.
+This is the precommit source record; actual reviewed commit/push and full
+local/upstream/live disposition will be recorded separately, not preclaimed.
+
+The earlier [receipt-bundle targeted CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-receipt-bundle-targeted-cpu-diagnostic)
 naturally passes its original shared90s batch in40.124208s. The exact
 TestSlice6ReceiptBundleRejectsCrossRunAndTampering parent and all seven children
 pass, with37 complete JSON events, one package PASS and a new shuffle seed.
