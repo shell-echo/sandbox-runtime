@@ -12361,3 +12361,78 @@ slice6-peercrl-field-cpu-lines-20261023-144932, OPTIMIZATION-PROPOSAL-v2.md.
 A retained unexecuted proposal draft had a line-reference typo corrected from
 77 to 70 before independent review; both originals remain. This is a precommit
 record; reviewed checkpoint/push and final full SHAs are recorded separately.
+
+
+## 2026-10-23 peer-CRL same-call graph reuse
+
+Status: component implementation and affected validation PASS; Slice6 step2
+continues. Phase6 remains5/15. Step1 historical bounded Guest E remains within
+its original scope. Full Profile-v2 live inventory, original16 scenarios and
+independent step3 acceptance remain incomplete; formal step4 has not started.
+
+The independently reviewed change removes only the second direct
+requiredPeerCRLV2 call inside the private Postgres derive. The complete
+PeerCRLSources validator now returns the validated required map on success;
+the existing error-only validator delegates to that single body. All six error
+returns yield nil plus ErrInvalidProfile. The original predicates and their
+order are unchanged. Empty owner is still rejected first. Source, mapping,
+issuer, mount, location, edge and TLS constraints remain complete; construction
+is fresh and the final complete Postgres role validator still runs. Thus the
+source-level successful derive has two full graph/field validations rather
+than three. The returned map is private to one unchanged, data-race-free call;
+there is no persistent cache or reusable validation token. Public ProfileV2
+launch holds, provider serve v3, decoder/compiler/file entry validation and
+input/output snapshot boundaries remain. Only broker/general issuers exist;
+Postgres continues to use general.
+
+New tests cover23 invalid-input cases (24 named results including their
+parent), call-local map and input independence, nine explicit owner tuples,
+three unauthorized owner cases, canonical output and an independently computed
+role digest. Existing source and Postgres owner/pinned-decode tests retain
+original bytes. The v3 race/shuffle/count1 batch ran130 named results with128
+passes, then naturally FAILED: the new provider-runtime expected edge used
+provider-postgres while unchanged dependency source and its original test
+require provider-coding-postgres. Only that new expected literal was corrected,
+with independent review; no production or authority data changed. v3 remains
+FAILED48.445792s total (test46.777036s), natural1, no timeout/signal/truncation;
+vet was not executed after that failure. Its five wholly passed unaffected
+parents supply117 named passes under existing coverage reuse rules.
+
+The v4 plan was rejected before execution after a global filesystem device
+number difference (16777233 to16777232) was observed in both reviewer and main
+environments. All other seven identity fields, SHA, size and mode matched in
+2335 records/2326 unique paths. The cause is unknown. Old manifests, migration
+inventories, Guest receipts, nine bindings and64 barriers were not edited.
+Independent review approved a new v5 identity with fresh complete eight-field
+pins; no device field was ignored. This component suite uses in-memory
+Profile/JSON data; the117 reused results are not filesystem identity gates.
+
+Fresh v5 uses the reviewed strict Go JSON parser (one positive and30 refusal
+fixtures; retained real73-name events are parser compatibility evidence only).
+Its raw57 Go events contain exactly13 run/pass pairs and one package PASS.
+All19 commands exit0 naturally and are reaped; no active signal, truncation or
+timeout. The affected target command is7.967041s, package vet1.142068s with
+empty stdout/stderr, and the whole batch11.252236s under the unchanged shared
+90s boundary. This is new13 plus reused117 coverage, not130 passes in one run.
+Execution pre/post checks cover165 direct inputs, three helpers,2171 source
+files, core/retained raw pins and exact Git HEAD/upstream7e534386 with two
+modified Go files, one new test and no staged work. The2171 source files are
+the unchanged old2170 set plus the new test, including the two reviewed edits.
+Afterward only these progress documents change. mise Go1.26.8, GOMAXPROCS2,
+-p2, original module/cache/proxy settings,64KiB Git and1MiB Go stream caps,
+owned process groups and the022 test-child umask are retained. Build/runtime
+flags are not a kernel quota claim. Rejected preparation/controller drafts,
+old locks and original failures remain in private evidence.
+
+No new CPU profile or measured optimization gain is claimed. The overlapping
+old sampled rows and120ms direct-edge weight do not prove savings. The prior
+full race remains FAILED600.014672s and was not blindly rerun; package vet is
+not full-repository vet. No driver/lifecycle, Contract, runtime, Docker,
+Postgres, production or release gate is claimed by these pure Go results.
+Timers remain OFF; no resource, deadline, cache/index or evidence reuse policy
+was changed. Next select a useful targeted performance measurement or another
+step2 issue from retained evidence before any new bounded execution.
+
+Private evidence: slice6-peercrl-graph-reuse-20261023-155048, outside Git.
+This precommit entry is followed by separately recorded reviewed commit,
+normal push and full local/upstream/live disposition.

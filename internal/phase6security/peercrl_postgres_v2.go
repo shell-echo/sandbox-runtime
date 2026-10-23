@@ -42,10 +42,10 @@ func DerivePostgresPeerCRLRoleDocumentV2(profile ProfileV2, sources PeerCRLSourc
 
 func derivePostgresPeerCRLRoleDocumentV2Fields(profile ProfileV2, sources PeerCRLSources,
 	owner string) (PeerCRLRoleDocument, error) {
-	if owner == "" || sources.validateV2Fields(profile) != nil {
+	if owner == "" {
 		return PeerCRLRoleDocument{}, ErrInvalidProfile
 	}
-	required, err := requiredPeerCRLV2(profile)
+	required, err := sources.validateV2FieldsAndRequired(profile)
 	if err != nil {
 		return PeerCRLRoleDocument{}, ErrInvalidProfile
 	}

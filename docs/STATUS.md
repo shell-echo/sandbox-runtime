@@ -1,6 +1,33 @@
 # Project Status
 
-The latest [peer-CRL same-call validation analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-validation-proposal)
+The latest [peer-CRL same-call graph reuse](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-graph-reuse)
+implements the independently reviewed private Postgres derive change from three
+to two source-level full graph/field validations. One unchanged source-validator
+body returns its required map only after every check succeeds; its existing
+entry remains a full-check wrapper. Empty-owner ordering, nil graph on error,
+all source/issuer/mapping refusals, fresh output and final complete role
+validation remain. Public launch holds, separate entry validation and snapshot
+boundaries remain; no cross-call cache or input-mutation reuse is introduced.
+
+The first v3 test batch naturally FAILED in48.445792s/90 because one new
+expected edge literal disagreed with the unchanged authoritative dependency:
+provider-runtime uses provider-coding-postgres. The production implementation
+was unchanged by that test correction. Independent review permits reuse of117
+named passes in five unaffected complete parents. Fresh v5 passes the affected
+13 named results and package vet in11.252236s/90, with complete input/source
+checks before/after; this is not130 passes in one batch. Old failures remain.
+
+A global filesystem device-number change was separately observed; hashes and
+all other identity fields matched. Its cause is unknown. v4 was never run;
+new v5 uses independently reviewed fresh full eight-field bindings without
+editing old manifests or receipts. No measured performance benefit, whole-repo
+pass or runtime acceptance is claimed. Full race remains **FAILED600.014672s**,
+not rerun. Phase6 stays **5/15**, Slice6 step2; step3 and formal step4 remain
+incomplete. mise Go1.26.8, all existing gates and timers OFF remain.
+Private evidence: slice6-peercrl-graph-reuse-20261023-155048.
+This is the precommit record; commit/push/live SHA disposition is separate.
+
+The earlier [peer-CRL same-call validation analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-validation-proposal)
 completes three read-only reports on the retained profile in 2.289901s under
 the original shared 90s boundary. All exit0/reaped, empty stderr, no signal,
 timeout or truncation; full source/lock, tool-source and old archive checks

@@ -171,11 +171,18 @@ func v2LocalAgentOwnsEdge(profile ProfileV2, name, principalDigest string) bool 
 // public launch hold remains in force. It requires an exhaustive tuple set,
 // not merely that each caller-listed mapping happens to be valid.
 func (p PeerCRLSources) validateV2Fields(profile ProfileV2) error {
+	_, err := p.validateV2FieldsAndRequired(profile)
+	return err
+}
+
+// Return the fresh required graph only after the entire source mapping passes.
+// It may be reused only within the same unchanged, data-race-free invocation.
+func (p PeerCRLSources) validateV2FieldsAndRequired(profile ProfileV2) (map[string]peerCRLRequiredV2, error) {
 	required, err := requiredPeerCRLV2(profile)
 	if err != nil || p.Protocol != PeerCRLSourcesProtocolID ||
 		p.SecurityProfileDigest != profile.ProfileDigest ||
 		len(p.Sources) != 2 || len(p.Edges) != len(required) {
-		return ErrInvalidProfile
+		return nil, ErrInvalidProfile
 	}
 	vaultDigest, vaultEdge := "", false
 	brokerIssuerDigest, brokerIssuerID := "", ""
@@ -198,7 +205,7 @@ func (p PeerCRLSources) validateV2Fields(profile ProfileV2) error {
 	}
 	if vaultDigest == "" || p.VaultExternalIdentityDigest != vaultDigest || !vaultEdge ||
 		!digestPattern.MatchString(brokerIssuerDigest) || !ValidSlice6IssuerID(brokerIssuerID) {
-		return ErrInvalidProfile
+		return nil, ErrInvalidProfile
 	}
 	sources := make(map[string]PeerCRLSource, len(p.Sources))
 	locations, used := make(map[string]bool), make(map[string]bool)
@@ -208,7 +215,7 @@ func (p PeerCRLSources) validateV2Fields(profile ProfileV2) error {
 		if source.ID <= previous || !namePattern.MatchString(source.ID) || source.Mount != "pki" ||
 			!ValidSlice6IssuerID(source.IssuerID) ||
 			!digestPattern.MatchString(source.IssuerDigest) || locations[location] {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		previous = source.ID
 		locations[location] = true
@@ -222,7 +229,7 @@ func (p PeerCRLSources) validateV2Fields(profile ProfileV2) error {
 	if brokerSource == "" || generalSource == "" || brokerSource == generalSource ||
 		sources[generalSource].IssuerID == brokerIssuerID ||
 		sources[generalSource].IssuerDigest == brokerIssuerDigest {
-		return ErrInvalidProfile
+		return nil, ErrInvalidProfile
 	}
 	edges := make(map[string]TrustEdge, len(profile.TrustEdges))
 	for _, edge := range profile.TrustEdges {
@@ -244,17 +251,17 @@ func (p PeerCRLSources) validateV2Fields(profile ProfileV2) error {
 		if key <= previous || !requiredEdge || !edgeExists ||
 			binding.PeerAnchorID != want.PeerAnchorID ||
 			binding.SourceID != expectedSource {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 		previous = key
 		used[binding.SourceID] = true
 	}
 	for id := range sources {
 		if !used[id] {
-			return ErrInvalidProfile
+			return nil, ErrInvalidProfile
 		}
 	}
-	return nil
+	return required, nil
 }
 
 func (d PeerCRLRoleDocument) ValidateV2(profile ProfileV2, expectedMappingDigest,
