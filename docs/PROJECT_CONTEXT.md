@@ -46,7 +46,34 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [PostgreSQL peer-CRL CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-postgresql-peer-crl-targeted-cpu-diagnostic)
+The latest [peer-CRL same-call validation analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-validation-proposal)
+completes three read-only reports on the retained profile in 2.289901s under
+the original shared 90s boundary. All exit0/reaped, empty stderr, no signal,
+timeout or truncation; full source/lock, tool-source and old archive checks
+pass before/after. New 24 parser/refusal methods pass in 0.074500s/30s.
+No application test, new profile, Go optimization or runtime acceptance occurs.
+
+Exact source and directed caller evidence identifies three full graph/field
+validations on the private Postgres derive's complete source-level happy path.
+Independent review accepts a minimal 3-to-2 design: one source-validator body
+returns its required map only after all checks succeed; the existing validator
+remains a full-check wrapper, and only this derive reuses the returned map.
+Keep empty-owner ordering, nil graph on every error, all source/issuer/mapping
+refusals, fresh output construction, and the final complete role validator.
+Public launch holds, independent decode/file/compiler calls and snapshot
+boundaries remain. No cross-call cache or input-mutation reuse is permitted.
+
+The removable direct derive-to-required edge has only 120ms sampled weight.
+That is not a call count or measured benefit; the overlapping 2.68s/3.03s totals
+cannot be claimed as savings. Next review the concrete minimal implementation
+and refusal tests before a new bounded execution identity. The required full
+race remains **FAILED600.014672s** and was not rerun. Phase6 stays **5/15**,
+Slice6 step2; step3 acceptance and formal step4 remain incomplete. All existing
+security, evidence, resource and time gates hold; mise Go1.26.8, timers OFF.
+Private evidence: slice6-peercrl-field-cpu-lines-20261023-144932.
+This is the precommit record; commit/push/live SHA disposition is separate.
+
+The earlier [PostgreSQL peer-CRL CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-postgresql-peer-crl-targeted-cpu-diagnostic)
 passes the exact TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target:
 73 named results, one package PASS and 297 complete JSON events. The unchanged
 test retains additional owner, pin, encoding and public-hold assertions inside

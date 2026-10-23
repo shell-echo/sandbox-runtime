@@ -12251,3 +12251,113 @@ Private evidence: slice6-postgres-peercrl-cpu-20261023-141819.
 This precommit record is followed by a separately reviewed commit/normal push
 and full local/upstream/live verification, with actual disposition retained
 outside Git.
+
+## 2026-10-23 peer-CRL same-call validation proposal
+
+This is the independently reviewed read-only continuation of the retained
+PostgreSQL peer-CRL CPU diagnostic. It changes three progress documents only;
+there is no production Go, fixture, protocol, lock or runtime change.
+Source HEAD/upstream was 2a6fc32b2fe5ee1c8a77a0fede5ed23234d28cc9, clean0/0,
+before/after the operation. This records tracking state, not a fresh live query.
+
+The shared 90s operation naturally completes in 2.289901s, including bootstrap,
+complete pre/post checks, the entire old 375-file archive, and three local pprof
+reports: required list 0.685483s, fields list 0.107139s, directed peek 0.117101s.
+All commands exit0/reaped with empty stderr and no active signal, truncation
+or timeout. Complete 2170 source/lock and 74 tool-source records plus direct,
+helper, artifact and module pins match; 2670 unique inputs were independently
+reviewed. New 24 offline parser/refusal methods pass in 0.074500s/30s.
+They cover separate exact source pairs, receiver declaration, contiguous
+byte-matched lines and per-center caller/callee direction. The two permitted
+complete source spellings are the exact repository-relative and checkout
+absolute paths. A suffix, other receiver or cross-file source is refused.
+No application test, new CPU profile, binary execution, project build,
+host/Docker observation or live PostgreSQL operation occurs.
+
+Source attribution and boundaries:
+
+- requiredPeerCRLV2 at peercrl_v2.go:28 invokes profile.validateFields at:29.
+  Its sampled cumulative 2.71s includes 2.68s there, 10ms at:83 and 20ms at:119.
+- ProfileV2.validateFields at profile_v2_validate.go:23 has 3.03s cumulative.
+  Source rows include validatePrincipal 710ms, Marshal 470ms and Digest 540ms.
+  These overlapping rounded weights are not exclusive cost or savings.
+- Incoming required edges include Postgres role validation 2.21s, ordinary
+  role validation 170ms, source validation 160ms, private Postgres derive 120ms,
+  ordinary derive 30ms and the fixture 20ms. Direction is retained explicitly.
+- Private Postgres derive at peercrl_postgres_v2.go:43 rejects empty owner
+  before sources.validateV2Fields at:45. That source validator, starting at
+  peercrl_v2.go:173, obtains required first at:174 and then validates the entire
+  source/mapping graph. The derive calls required again at:48, constructs a
+  fresh document, and retains its full final role validation at:70.
+- That final validator starts at peercrl_postgres_v2.go:14, checks cheap role,
+  pin/owner/one-edge fields first, then obtains required at:22 and checks the
+  exact owner, purpose, direction and peer anchor. The complete source-level
+  happy path therefore has three graph/field validations; early-return paths
+  differ and this is not a measured invocation count.
+- ProfileV2.Validate at profile_v2_validate.go:12 calls validateFields and
+  always returns ErrInvalidProfile. Public V2 admission remains closed.
+  The pinned decode at peercrl_v2_decode.go:76 and private Postgres decode
+  at:106 are independent calls; their canonical/external-pin/role checks stay.
+
+The minimal independently accepted design is private Postgres derive 3-to-2:
+
+1. Extract the existing PeerCRLSources.validateV2Fields body into one private
+   method returning its already-built required map only after every existing
+   check succeeds. Every error returns nil graph and ErrInvalidProfile.
+2. Keep validateV2Fields as a thin full-check wrapper that calls that one body
+   and discards the map. Do not duplicate the validator or keep a legacy path.
+3. Only the private Postgres derive consumes this successful map instead of
+   its direct repeated required call. Retain empty-owner ordering, source
+   selection and duplicate-owner refusal, sources.Digest calls, fresh output
+   storage and the final complete role validator at:70 unchanged.
+
+The same-call proof is narrow: between successful source validation and the
+redundant direct call there are no input writes, callbacks, IO, goroutines or
+reentry. Source/edge/role values are concrete strings and string structs;
+Digest uses read-only JSON/SHA with no package MarshalJSON override. The map
+is fresh, contains scalar copies, and must not escape into a cache. ProfileV2
+itself has caller-aliased pointers/maps/slices; a value copy is not isolation.
+The proof assumes one unchanged data-race-free invocation and grants no reuse
+across snapshots, owners, decodes, IO or caller mutation. Keep the existing
+bounded deep-copy/snapshot and every public-entry validation boundary.
+
+Preserve the entire refusal matrix: full Profile fields and public hold;
+protocol/profile/Vault and strict source ID/digest/location binding; exactly
+broker/general with PostgreSQL on general; sorted unique sources, both used;
+exact edge count/order/key/role/local/direction/anchor/source mapping;
+unknown/cross-owner/purpose and issuer refusals; existing zero output/error;
+128KiB, duplicate/unknown/type/trailing/canonical JSON and external pins;
+bounded private no-symlink file reads and original profile-first/clear order.
+The standalone role-field validator checks issuer syntax; do not claim that
+it verifies issuer bytes against a source document it does not receive.
+
+The removable direct edge is weighted only 120ms in this retained profile.
+Benefit is limited and unmeasured, with no strict savings bound. Do not claim
+removal of the 2.21s independent role checks or all 2.68s/3.03s field totals.
+These samples do not establish waiting, host/build CPU or the old race cause.
+They justify a small extraction, not a broad validator/decoder rewrite.
+
+Next independently review the concrete implementation and refusal tests.
+Keep all existing 73 named outcomes and unnamed assertions. Add nil graph on
+failure, invalid profile/source/issuer/missing-extra mapping, owner isolation,
+all nine owners' canonical role/digest against independent expected tuples,
+separate-call mutation refusal and input before/after alias checks. Keep
+standalone postvalidator/decode, public hold and private snapshot coverage.
+Do not add a global counter or duplicate implementation just for tests.
+Only after final diff and complete new-input review execute a fresh identity
+within the existing targeted90s recipe. No such implementation or execution
+is performed by this proposal. Repository-required checks remain obligations.
+
+Required full race stays **FAILED600.014672s**, not rerun; no new vet, Contract
+or Docker integration result is claimed. Phase6 remains **5/15**, Slice6 step2.
+Step1 historical bounded E is unchanged; step3 full live Profile-v2/original16/
+independent acceptance is incomplete; formal step4 has not started.
+Docker authority/Linux/native/P2/public ProfileV2/provider-v3 holds, two issuers,
+nine bindings/64 barriers, old locks/reuse and all security gates remain.
+No failed identity replay, cache/index change, quota/deadline expansion,
+global installation, unrelated-process intervention or automation restart.
+Existing mise Go1.26.8/Docker only; timers OFF. Private evidence:
+slice6-peercrl-field-cpu-lines-20261023-144932, OPTIMIZATION-PROPOSAL-v2.md.
+A retained unexecuted proposal draft had a line-reference typo corrected from
+77 to 70 before independent review; both originals remain. This is a precommit
+record; reviewed checkpoint/push and final full SHAs are recorded separately.
