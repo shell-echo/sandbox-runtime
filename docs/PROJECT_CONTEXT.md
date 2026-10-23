@@ -46,7 +46,63 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [CRL drain source checkpoint with a full-race timeout](audits/product-phase-6-slice-6-startup.md#2026-10-23-crl-close-errors-and-single-budget-drain)
+The latest [retained race-timeout analysis](audits/product-phase-6-slice-6-startup.md#2026-10-23-retained-race-timeout-action-analysis)
+completes one independently reviewed offline operation naturally in10.902611s/90s,
+including full input/local-Git pre/post checks and22 passing synthetic tests.
+No Go test, build, Docker command, fresh host observation or network operation
+runs in this analysis. The required full-repository race remains **FAILED** at
+600.014672s; its213 received package records do not provide a causal timeline.
+
+Original logs independently yield182 tested and31 no-test records, an exact
+package/status prefix of the historical267-record success. On the recorded
+two-action-worker model, conservatively subtracting1ms per displayed duration,
+the received test-action intervals imply a necessary span of at least524.019s;
+the same historical prefix gives330.2395s and the old complete run373.476s.
+These are conditional action-span lower bounds, not CPU use, full-command elapsed,
+remaining budget or proof of a cause. Never splice old suffix durations into
+this run. Go's ordered/buffered output leaves54 historical names without received
+results; none is thereby proved unstarted, hung or failed.
+
+The largest displayed intervals include phase6security345.135s (old191.013s),
+controlstorage56.678s (22.065s) and qualificationadapterprotocol47.310s
+(19.987s). Multiple packages increased in different run contexts; no controlled
+regression is established. No old process CPU/stacks/profile, actual PID timeline
+or compile/queue timings exist in these records. Installed Go1.26.8 source ties
+the displayed duration to the last test execution attempt through preformatting,
+including post-Run buffer handling and rounding; it is not exact process CPU/wall.
+
+Next prepare an independently reviewed exact-case CPU diagnostic for
+TestSlice6ReceiptBundleRejectsCrossRunAndTampering, whose retained earlier
+single-package trace reports27.21s. Current source repeats full bundle
+verification across seven named envelope mutations and further raw/scenario/
+cleanup refusal paths. Retain every assertion and fixture; collect complete
+test events plus the existing exact-two-artifact CPU profile/binary under the
+original90s batch and unchanged tool/cache/resource settings. This is a proposal,
+not an executed or admitted diagnostic, and success would not explain the old
+full-run timeout. New controller/target refusal tests, identity and complete
+inputs require review before execution.
+
+All2170 source/lock pins, three preanalysis progress docs,28 direct inputs,
+three helpers and both sealed228/333-file checkpoints pass complete pre/post
+checks. Content differences from the old successful source are only two added
+and two changed phase6tls files; that does not establish build/runtime/environment
+equivalence. The earlier focused93 outcomes and vet remain their recorded
+same-Go-source evidence; no new full-suite pass is claimed. Private evidence:
+`slice6-race-timeout-analysis-20261023-094817`.
+
+Phase6 remains **5/15**: step1 historical bounded Guest E unchanged; step2
+ongoing; step3 live full Profile-v2 inventory/original16/independent acceptance
+incomplete; formalstep4 not started. Docker authority/Linux/native/P2,
+public ProfileV2/provider-v3 holds, broker/general-only/PostgreSQL general,
+nine bindings/64 barriers, old locks and reuse rules remain. mise/Docker only;
+no quota/deadline expansion or unrelated process intervention. TimersOFF.
+Prior0154 source push naturally succeeded and one postpush query observed it;
+the later final live query and a separate readonly attempt failed. Do not claim
+latest remote equality from local tracking alone. This document freezes the
+precommit analysis checkpoint; a separately reviewed Git stage will record actual
+commit/push and final local/upstream/live disposition.
+
+The earlier [CRL drain source checkpoint with a full-race timeout](audits/product-phase-6-slice-6-startup.md#2026-10-23-crl-close-errors-and-single-budget-drain)
 is an unaccepted intermediate source checkpoint. It fixes three independently
 reproduced guard defects: discarded Close errors,
 remaining peers omitted after a partial failure, and fresh authority restoring
