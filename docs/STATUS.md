@@ -1,6 +1,26 @@
 # Project Status
 
-The latest [peer-CRL post-optimization CPU recheck](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-post-optimization-cpu-recheck)
+The latest [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
+passes three local reports in3.208271s/90s including publication. Full2171
+source/lock,74 tools and442 saved checkpoint files match before/after; unchanged
+parser coverage reuses24 prior methods. No Go change/new test/profile/vet or
+runtime admission. Source rows locate8.37s of requiredPeerCRLV2's overlapping
+8.60s cumulative sampled weight at full Profile validation; sampled field
+callees include validatePrincipal1.82s, Digest1.79s and json.Marshal1.58s.
+These are not call counts, savings or a full-race timeout explanation.
+
+Next independently inspect the two encodings' distinct ProfileDigest/size/error
+semantics before proposing any equivalent change. Keep all public/final/snapshot
+validation and refusal conditions. Earlier checkpoint792f5b9769a8422a36518560e4da3accd586564a
+is normally pushed and verified local/upstream/live equal, clean0/0; the
+officialSSH443 route preserves existing trust and original10/90s bounds.
+The oldSSH22 failure remains. Phase6 stays **5/15**, Slice6step2; fullrace
+**FAILED600.014672s** unchanged, timers OFF. Private evidence:
+slice6-peercrl-checkpoint-ssh443-20261023-234529 and
+slice6-peercrl-recheck-lines-20261023-235125. This new documentation checkpoint's
+commit/push disposition follows separately.
+
+The preceding [peer-CRL post-optimization CPU recheck](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-post-optimization-cpu-recheck)
 passes the unchanged TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target:
 73 named results, one package PASS and297 complete events. Target55.726909s,
 flat pprof1.478675s and cumulative pprof0.396227s complete naturally in a

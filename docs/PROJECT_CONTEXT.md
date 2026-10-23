@@ -46,7 +46,30 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [peer-CRL post-optimization CPU recheck](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-post-optimization-cpu-recheck)
+The latest [peer-CRL retained-profile source attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-recheck-source-attribution)
+passes three local reports in3.208271s under the original shared90s, including
+publication. Complete2171 source/lock,74 tool sources and the entire442-file
+saved CPU checkpoint match before/after. The strict parser is unchanged;
+its24 previously passed methods are reused, not rerun. No Go change or new test,
+profile, vet or runtime admission occurs.
+
+requiredPeerCRLV2 has8.60s cumulative sampled weight, including8.37s at its
+profile.validateFields call. The field validator's sampled callees include
+validatePrincipal1.82s, Digest1.79s and json.Marshal1.58s. These overlap and
+are not call counts, savings or the old600s timeout cause. Next independently
+inspect the two profile encodings and their size/digest/error semantics before
+proposing an equivalent change; Digest clears ProfileDigest, while the size
+check encodes the supplied value. Keep full public/final/snapshot validation.
+
+The preceding checkpoint792f5b9769a8422a36518560e4da3accd586564a is now
+normally pushed and verified local/upstream/live equal, clean0/0, through
+GitHub's officialSSH443 route with the existing strict host key. The oldSSH22
+10s failure remains. Private evidence: slice6-peercrl-checkpoint-ssh443-20261023-234529
+and slice6-peercrl-recheck-lines-20261023-235125. Phase6 stays **5/15**, Slice6
+step2, required fullrace **FAILED600.014672s** unchanged; timers OFF. This new
+documentation checkpoint's commit/push disposition is recorded separately.
+
+The preceding [peer-CRL post-optimization CPU recheck](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-post-optimization-cpu-recheck)
 passes the unchanged TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target:
 73 named results, one package PASS and297 complete events. Target55.726909s,
 flat pprof1.478675s and cumulative pprof0.396227s complete naturally in a

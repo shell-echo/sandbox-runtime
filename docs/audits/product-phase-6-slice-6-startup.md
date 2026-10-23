@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Bundle/canonical CPU attribution](#2026-10-23-bundle-and-canonical-cpu-attribution).
+Latest investigation checkpoint: [Peer-CRL recheck source attribution](#2026-10-23-peer-crl-recheck-source-attribution).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12519,3 +12519,58 @@ process intervention, quota/deadline expansion or timer occurs.
 Private evidence: slice6-postgres-peercrl-cpu-recheck-20261023-230152.
 This precommit record is followed by separately verified checkpoint, normal
 push and full local/upstream/live SHA disposition; it is not formalstep4.
+
+## 2026-10-23 peer-CRL recheck source attribution
+
+Status: read-only source/caller attribution PASS; no application implementation
+or new test/profile. Phase6 remains5/15, Slice6step2; historical bounded step1
+is unchanged, step3 full live topology/original16/independent acceptance and
+formalstep4 remain incomplete. Required fullrace remains FAILED600.014672s.
+
+The preceding three-document checkpoint792f5b9769a8422a36518560e4da3accd586564a
+is normally pushed and independently verified local/upstream/final live equal,
+clean0/0. The previous SSH22 push remains FAILED at10.002591s/10s. Its retained
+Trace2 shows get_refs_list9.658783s and a later local pack child0.046139s;
+untimestamped SSH messages do not locate the network/server delay or prove
+remote acceptance. One separately reviewed fresh officialSSH443 identity
+completes in26.408930s/90s including publication. Normalpush6.015434s and all
+three live queries meet the original10s command bound. All45 receipts are
+complete/reaped,41 natural0 and four expected configuration-absence natural1,
+with no timeout/signal/truncation. Actual ssh.github.com:443, existing published
+ED25519 key and publickey checks pass; origin/config/known_hosts remain unchanged.
+This proves that synchronization, not a general latency fix. Its154-file private
+archive is content integrity only, not operator authority or runtime admission.
+
+A new identity reuses the byte-identical strict source/caller parser and its
+24 previously passed refusal methods without rerunning them. Three reports
+read the new saved exact-two profile/binary: list-required0.864024s,
+list-fields0.213685s and peek-callers0.205899s. The entire operation, including
+bootstrap, complete input/Git pre/post and publication, is3.208271s/90s.
+All17 receipts are natural0/reaped/complete, with empty analysis stderr and no
+failure flags. Full2171 source/locks,74 closed tool sources, direct bindings,
+source text/line associations and the entire442-file saved archive match.
+Measured HEAD/upstream792 is clean0/0; its Go source equals testedbf8a.
+
+requiredPeerCRLV2 has8.60s cumulative sampled weight; source line29 attributes
+8.37s to profile.validateFields. Its sampled incoming edges include Postgres
+role validation7.51s, full source validation0.51s and ordinary role validation
+0.48s. ProfileV2.validateFields has9.76s cumulative weight: source line69 calls
+validatePrincipal1.82s, line133 json.Marshal1.58s, and line134 Digest1.79s.
+These rounded overlapping weights are sampled attribution, not invocation
+counts, exclusive costs, static complete edges, absent-edge proof, wait causes,
+controlled performance comparison or measured savings.
+
+Next independently inspect profile_v2.go Digest and the field validator's
+encoding, size-limit and error paths. The current size check encodes the
+supplied ProfileDigest; Digest separately clears that field before encoding.
+Do not treat these payloads as identical or remove a check based on the samples.
+Any equivalent optimization needs source proof, all refusal conditions and
+focused behavioral validation; public entry holds, final role validation and
+independent snapshot boundaries remain. No cache/index or evidence reuse rule
+changes, larger quota/deadline, whole-repo rerun, unrelated process intervention
+or timer restart. miseGo1.26.8/Docker and all existing gates remain.
+
+Private evidence: slice6-peercrl-checkpoint-ssh443-20261023-234529 and
+slice6-peercrl-recheck-lines-20261023-235125, outside Git. Only these three progress
+documents change. This intermediate checkpoint's reviewed commit/push/full SHA
+disposition is recorded separately; it is not formal Slice6step4.
