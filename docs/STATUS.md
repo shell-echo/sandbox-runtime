@@ -1,6 +1,39 @@
 # Project Status
 
-The latest [bundle/canonical CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-bundle-and-canonical-cpu-attribution)
+The latest [PostgreSQL peer-CRL CPU diagnostic](audits/product-phase-6-slice-6-startup.md#2026-10-23-postgresql-peer-crl-targeted-cpu-diagnostic)
+passes the exact TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target:
+73 named results, one package PASS and 297 complete JSON events. The unchanged
+test retains additional owner, pin, encoding and public-hold assertions inside
+those named cases. This is pure Go component evidence, not a live PostgreSQL run.
+
+The original shared 90-second batch completes naturally in 19.370434s:
+target command 18.317265s, flat pprof 0.661247s and cumulative pprof 0.146760s.
+All three exit0/reaped with empty stderr and no signal, truncation or timeout.
+New 21 offline refusal methods pass in 0.118586s/30s. Complete 2170 source/lock,
+74 tool-source and frozen direct/helper/module checks pass before/after, with
+local HEAD/upstream f98b8c522799d27345ddf28e549fe7b31234f7e7 clean0/0.
+The earlier independent sync stage observed this same full live remote SHA.
+
+The profile spans 13.22s with 12.12 sampled CPU seconds. Cumulative rows show
+ProfileV2.validateFields 3.03s, requiredPeerCRLV2 2.71s,
+PeerCRLRoleDocument.validatePostgresV2Fields 2.21s and
+decodePostgresPeerCRLRoleDocumentV2Fields 1.46s. Rows overlap; they are not
+exclusive cost, invocation counts, wait time, measured savings, host/build CPU
+or the cause of the earlier full-race timeout. No Go source changes or
+optimization are accepted. Next independently inspect those source/caller paths
+using this saved profile, preserving full public-entry validation and all
+owner, mapping, issuer, encoding and launch-hold refusals.
+
+The required full race remains **FAILED600.014672s**; it was not rerun.
+Phase6 remains **5/15**, Slice6 step2. Step1 historical bounded E is unchanged;
+step3 live full Profile-v2/original16/independent acceptance is incomplete;
+formal step4 has not started. mise Go1.26.8, existing resource/cache/proxy
+settings and all security/evidence gates remain unchanged; timers OFF.
+Private evidence: slice6-postgres-peercrl-cpu-20261023-141819.
+This is the precommit source record; reviewed commit, push and final full
+local/upstream/live disposition are recorded separately.
+
+The earlier [bundle/canonical CPU attribution](audits/product-phase-6-slice-6-startup.md#2026-10-23-bundle-and-canonical-cpu-attribution)
 naturally passes in4.441331s under the original shared90s, including full
 input/Git/archive pre/post and three local reports. Those commands take
 1.103288s/0.269843s/0.269676s, all exit0/reaped, empty stderr, no signal,

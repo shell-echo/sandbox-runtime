@@ -12179,3 +12179,75 @@ PostgreSQLgeneral/9bindings64barriers/oldlocks/reuse stay held. Existing
 miseGo1.26.8/-p2/cache/publicproxy recipe remains, no kernelquota/networkexclusion
 claim, globalinstall, unrelatedprocess intervention or quota/deadline expansion.
 TimersOFF.
+
+## 2026-10-23 PostgreSQL peer-CRL targeted CPU diagnostic
+
+Independent review selected TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode
+from the retained single-package trace: its earlier parent row reports 25.31s,
+after the already investigated inventory and receipt targets. The new exact
+target retains every source assertion. Parent, nine owner cases and 63 named
+refusals all pass: 73 named results, one package PASS, a new shuffle seed and
+297 complete JSON events. Additional wrong/cross-owner, external pin, malformed
+encoding, ordinary/PostgreSQL separation and public-hold assertions remain
+inside the parent/owner cases; this is not only 73 assertions or live database
+evidence.
+
+The new batch naturally completes in 19.370434s under the original shared90s.
+The test command takes 18.317265s, flat pprof 0.661247s and cumulative pprof
+0.146760s, each exit0/reaped, empty stderr, with no signal, timeout or truncation.
+Shared90 covers new-root configuration, Go, artifact retention and both pprof
+commands. Full input/local-Git/environment pre/post retain their separate
+original bounds; do not call the entire operation90s. New21 offline refusal
+methods naturally pass in0.118586s/30s, including missing each descendant,
+missing an owner subtree, unknown grandchildren, nonnatural receipts and
+actual old8/39-result stream refusal. No failed identity is replayed.
+
+Complete114 direct, three helpers, two immutable modules,2170 source/lock and
+74 pprof tool sources match before/after. The tested source is local
+HEAD/upstream f98b8c522799d27345ddf28e549fe7b31234f7e7, clean0/0; the preceding
+sync stage separately observed this same full live remote SHA. No Go source
+or fixture changes occur. New held FDs retain exactly cpu.pprof26948B and
+phase6security.test16424322B through root0700->02700->0700 and generated
+0644/0755->0600, with unchanged bytes/hash, UID/GID/single-link identities and
+all seven ACL checks. The1MiB/16MiB thresholds remain observations, not kernel
+quotas or protection against a hostile same-UID writer. The new binary's bytes
+equal the old receipt diagnostic's binary under the unchanged Go cache recipe;
+new -count1 execution, events and profile do not claim a new embedded VCS
+revision or inherit an old run's acceptance.
+
+The profile spans13.22s with12.12 sampled CPU seconds (91.70% as reported).
+Cumulative application rows include ProfileV2.validateFields3.03s,
+requiredPeerCRLV2 2.71s, PeerCRLRoleDocument.validatePostgresV2Fields2.21s,
+decodePostgresPeerCRLRoleDocumentV2Fields1.46s, derivePostgres role fields360ms
+and sources.validateV2Fields160ms. Fixture builders testCompleteV2Fields and
+testPeerCRLSourcesV2 appear at100ms and60ms cumulative. Runtime/race samples
+are substantial, including flat madvise1.90s and __tsan_read1.67s; this does
+not establish swap, IO waits, host saturation or a runtime defect. Values
+overlap and round. Do not add nested rows, treat samples as call counts, or
+claim measured savings or the cause of the old600s failure. Old25.31s and new
+parent-reported13.08s come from different contexts, without a code change;
+their difference is not an optimization result.
+
+Next independently inspect requiredPeerCRLV2 and ProfileV2.validateFields
+source lines and callers in this retained profile. Establish which same-call
+validation/snapshot boundaries actually repeat before proposing an equivalent
+change. Keep every public entry fully validated; preserve owner isolation,
+exact required graph, mapping/role/local pins, canonical/duplicate/unknown/
+oversized input refusals, only broker/general issuers, general for PostgreSQL
+and the public ProfileV2/provider-v3 launch holds. No optimization, cross-call
+cache, evidence reuse change or new diagnostic replay is accepted here.
+
+The required repository race remains FAILED600.014672s, not rerun or replaced
+by this component PASS. No new vet, Contract/Docker integration, full topology,
+real database/Provider/TLS, supply or production gate runs. Phase6 stays5/15:
+step1 historical boundedE unchanged; step2 ongoing; step3 live fullProfile-v2/
+original16/independent acceptance incomplete; formalstep4 not started.
+Docker management-authority/Linux/native/P2, nine bindings/64 barriers, old
+locks and evidence-reuse boundaries remain held. Existing miseGo1.26.8,
+GOMAXPROCS2/-p2, childumask022, cache/index and public proxy recipe remain;
+these flags are not kernel quotas or network exclusion. No installation,
+quota/deadline expansion or unrelated-process intervention. TimersOFF.
+Private evidence: slice6-postgres-peercrl-cpu-20261023-141819.
+This precommit record is followed by a separately reviewed commit/normal push
+and full local/upstream/live verification, with actual disposition retained
+outside Git.
