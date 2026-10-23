@@ -12436,3 +12436,86 @@ step2 issue from retained evidence before any new bounded execution.
 Private evidence: slice6-peercrl-graph-reuse-20261023-155048, outside Git.
 This precommit entry is followed by separately recorded reviewed commit,
 normal push and full local/upstream/live disposition.
+
+## 2026-10-23 peer-CRL post-optimization CPU recheck
+
+Status: exact-target component CPU diagnostic PASS; no new Go change.
+Phase6 remains5/15, Slice6 step2. Step1 historical bounded Guest E is unchanged;
+step3 full live Profile-v2/original16/independent acceptance remains incomplete,
+and formalstep4 has not started.
+
+The new identity reuses the original exact target
+TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode and unchanged fixture bytes:
+parent, nine owners and63 named refusals,73 named results total. Unnamed owner
+and parent assertions remain. All297 complete events pass the strict parser,
+with one package PASS and new shuffle seed. The actual retention path requires
+natural success and complete73 before any permission retention or pprof.
+
+The fresh private controller retains the original ArtifactGuard, two immutable
+modules, same held FDs/path identities, UID/GID/nlink, exact-two collection,
+EOF/hash, seven ACL checks and original observed thresholds. Only current
+HEAD/upstream/source2171 bindings and strict parser integration change. The
+strict parser body comes from the independently reviewed earlier controller;
+its summary adapter preserves the original shape. All21 prior offline methods
+retain refusal/callback assertions with legal package/parent ordering;30 strict
+variants through actual accept_target plus old real297 compatibility form two
+additional methods,23 total. They pass naturally0.206235s/30s. Old real frames
+are parser compatibility only, not a new Go pass or gate replay.
+
+Independent final input review precedes the new real execution. Target55.726909s,
+flat pprof1.478675s, cumulative pprof0.396227s, all natural0/reaped/empty stderr,
+with no timeout, signal or truncation. Root setup, Go, original-byte artifact
+retention and both local pprof commands share57.995788s under90. Full input,
+local Git and Goenv pre/post checks retain original separate10s-command bounds;
+do not call the whole operation90s. All25 raw command receipts have complete
+streams, expected natural0 and no failure flags.
+
+The preserved profile is50413B, sha256
+fc573a8cd579de527d0a588913cfb18c1a8f18a33afb72e9abc1c1cfa40f056e;
+the matching test binary is16495506B, sha256
+67443f24ee7d93ff03fcf69b75d16bd9bba596c436fa55dd84a3296220a0a88b.
+Both are0600, owner501/group20, single-link with full FD/path identities.
+Generated0644/0755 to0600 and root02700 to0700 preserve original bytes; all
+seven ACL observations pass. Thresholds remain1MiB profile/16MiB binary,
+observations rather than kernel quotas or hostile same-UID isolation.
+
+All137 direct inputs, three helpers, two modules, complete2171 source/lock and
+74 tool-source files pass before/after and independent current checks. Tool
+source roots are exact; precompiled managed pprof remains absent. Original
+114 historical bindings retain their byte hashes and other identity fields;
+new current full8 observations do not rewrite old manifests or receipts after
+the earlier global device-number change. Compared with the old2170 source,
+only the two reviewed Go files differ and the reviewed test file is added.
+The measured HEAD/upstream isbf8a73d8680491b493c759ddcce0bfcdbd9ec33c, clean0/0.
+Afterward only the three progress documents change; original evidence is sealed.
+
+Profile header: duration47.66s, total sampled CPU28.35s (59.48% as reported).
+Application cumulative rows: ProfileV2.validateFields9.76s,
+requiredPeerCRLV2 8.60s, Postgres role validator7.51s, pinned decoder4.75s,
+private derive0.83s and full source helper0.51s. Runtime/race samples are
+substantial, including flat __tsan_read5.46s and runtime.madvise1.93s.
+Rows overlap and round; they are not invocation counts, exclusive costs,
+host CPU/load, swap/IO waiting, measured savings or the old600s cause.
+
+Old batch19.370434s/profile13.22s/sampleCPU12.12s and these new values describe
+different executions, without a controlled A/B design. Do not claim a benefit
+or regression from their differences. Source-level3-to-2 same-call validation
+was proved separately; absence of a sampled edge does not prove removal.
+Next independently inspect source/caller/line attribution of this new retained
+profile, define falsifiable duplicated work versus necessary validation, then
+decide whether any equivalent optimization is justified. Do not automatically
+remove final/public/decoder validations, change cache/index or reuse policy,
+or repeat full repository tests.
+
+No new vet, Contract, Docker integration, live Postgres/Provider/TLS, supply,
+production or formal release gate runs. Required fullrace remains
+FAILED600.014672s, not rerun or waived. Keep public ProfileV2/provider-v3 holds,
+broker/general only with Postgres general, Docker authority/Linux/native/P2,
+nine bindings/64 barriers and all old evidence/reuse rules. miseGo1.26.8,
+original cache/proxy/GOMAXPROCS2/-p2 and test-childumask022 remain; concurrency
+flags are not kernel quotas or network exclusion. No installation, unrelated
+process intervention, quota/deadline expansion or timer occurs.
+
+Private evidence: slice6-postgres-peercrl-cpu-recheck-20261023-230152.
+This precommit record is followed by separately verified checkpoint, normal
+push and full local/upstream/live SHA disposition; it is not formalstep4.

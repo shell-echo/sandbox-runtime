@@ -46,7 +46,39 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [peer-CRL same-call graph reuse](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-graph-reuse)
+The latest [peer-CRL post-optimization CPU recheck](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-post-optimization-cpu-recheck)
+passes the unchanged TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode target:
+73 named results, one package PASS and297 complete events. Target55.726909s,
+flat pprof1.478675s and cumulative pprof0.396227s complete naturally in a
+57.995788s/90s diagnostic batch. Complete input/Git/environment pre/post retain
+their separate original bounds; this is not the entire operation elapsed.
+
+New23 offline methods pass0.206235s/30s, preserving original refusals and adding
+strict event/actual-retention-path refusal and old297-event compatibility.
+The new real profile and binary are retained as exactly two private files,
+with original FD/UID/GID/nlink/ACL/hash/mode guards and1MiB/16MiB observed
+thresholds unchanged. Full137 direct/3helper/2module,2171 source and74 tool
+checks pass before/after. Tested HEAD/upstreambf8a73d is clean0/0; no Go or
+fixture code changes occur in this recheck, and no new vet/full-race pass.
+
+The profile spans47.66s with28.35 sampled CPU seconds. Application cumulative
+rows include ProfileV2.validateFields9.76s, requiredPeerCRLV2 8.60s,
+Postgres role validation7.51s and pinned decode4.75s. Rows overlap and are
+sampled, not call counts, savings, waits or the cause of the old600s timeout.
+Old19.370434s versus new57.995788s comes from different contexts and is not a
+controlled regression or benefit measurement. The source-level3-to-2 change
+remains verified separately; absent samples cannot prove an edge disappeared.
+
+Next independently inspect this new retained profile's source/caller/line
+attribution before any further equivalent-change proposal. Keep full public
+entry and snapshot validation, final role checks and every refusal. Phase6
+remains **5/15**, Slice6 step2; step3 live inventory/original16/independent
+acceptance and formalstep4 remain incomplete. Required full race remains
+**FAILED600.014672s**, not rerun. miseGo1.26.8, all existing gates, timers OFF.
+Private evidence: slice6-postgres-peercrl-cpu-recheck-20261023-230152.
+This is the precommit source record; normal push/full SHA disposition follows.
+
+The earlier [peer-CRL same-call graph reuse](audits/product-phase-6-slice-6-startup.md#2026-10-23-peer-crl-same-call-graph-reuse)
 implements the independently reviewed private Postgres derive change from three
 to two source-level full graph/field validations. One unchanged source-validator
 body returns its required map only after every check succeeds; its existing
