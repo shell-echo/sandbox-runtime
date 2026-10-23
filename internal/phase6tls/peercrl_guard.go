@@ -54,6 +54,8 @@ type PeerCRLGuard struct {
 	current         workloadpki.VerifiedCRL
 	observedRevoked map[string]revokedPeerObservation
 	active          map[net.Conn]tls.ConnectionState
+	closing         map[net.Conn]struct{}
+	draining        *peerCRLDrain
 	expiryTimer     *time.Timer
 	expirySequence  uint64
 }
@@ -149,6 +151,10 @@ func derivePeerCRLBudget(staleness, drain, operationTimeout time.Duration) (peer
 // The actual verified leaf and its immediate issuer, not a claimed serial or
 // header, select the CRL. Every call makes a fresh nonce-bound agent pull.
 func (g *PeerCRLGuard) CheckHandshake(ctx context.Context, state tls.ConnectionState) error {
+	return g.checkHandshake(ctx, state, &peerCRLCloseScope{})
+}
+
+func (g *PeerCRLGuard) checkHandshake(ctx context.Context, state tls.ConnectionState, scope *peerCRLCloseScope) error {
 	if g == nil || ctx == nil || state.Version != tls.VersionTLS13 || len(state.VerifiedChains) != 1 ||
 		len(state.VerifiedChains[0]) < 2 || len(state.PeerCertificates) < 1 ||
 		state.VerifiedChains[0][0] == nil || state.PeerCertificates[0] == nil ||
@@ -162,20 +168,24 @@ func (g *PeerCRLGuard) CheckHandshake(ctx context.Context, state tls.ConnectionS
 	if leaf == nil || issuer == nil || len(leaf.Raw) == 0 || len(issuer.Raw) == 0 {
 		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
-	return g.refresh(ctx, issuer.Raw, leaf.Raw, false)
+	return g.refresh(ctx, issuer.Raw, leaf.Raw, false, scope)
 }
 
 // Bootstrap reads the same fixed source before any peer exists. It validates
 // the returned full issuer DER against the operator-pinned digest, but does
 // not identify a peer or add the issuer to TLS trust roots.
 func (g *PeerCRLGuard) Bootstrap(ctx context.Context) error {
+	return g.bootstrap(ctx, &peerCRLCloseScope{})
+}
+
+func (g *PeerCRLGuard) bootstrap(ctx context.Context, scope *peerCRLCloseScope) error {
 	if g == nil || ctx == nil {
 		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
-	return g.refresh(ctx, nil, nil, true)
+	return g.refresh(ctx, nil, nil, true, scope)
 }
 
-func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, bootstrap bool) (result error) {
+func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, bootstrap bool, scope *peerCRLCloseScope) (result error) {
 	if g == nil || ctx == nil {
 		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
@@ -189,20 +199,25 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 		return newPeerCRLFailure(PeerCRLBindingFailure, nil)
 	}
 	g.mu.Lock()
+	if g.draining != nil {
+		g.mu.Unlock()
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
+	}
 	startedFailureSequence := g.failureSequence
 	g.mu.Unlock()
+	permitHeld := false
 	defer func() {
+		var batch *peerCRLDrain
 		if result != nil && !errors.Is(result, workloadpki.ErrPeerRevoked) {
 			g.mu.Lock()
-			g.unavailable = true
-			g.failureSequence++
-			g.expirySequence++
-			if g.expiryTimer != nil {
-				g.expiryTimer.Stop()
-			}
+			batch = g.invalidatePeerEvidenceLocked(scope)
 			g.mu.Unlock()
-			g.drainAll()
 		}
+		// Publish invalidation and pending closure before releasing the pull permit.
+		if permitHeld {
+			<-g.pullPermit
+		}
+		g.awaitPeerDrain(batch)
 	}()
 	operationContext, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
@@ -211,7 +226,7 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	}
 	select {
 	case g.pullPermit <- struct{}{}:
-		defer func() { <-g.pullPermit }()
+		permitHeld = true
 	case <-operationContext.Done():
 		return peerCRLContextFailure(ctx, operationContext)
 	}
@@ -267,6 +282,9 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	observedAt := g.now().UTC()
 	if g.failed || observedAt.Before(g.lastNow) {
 		g.failed = true
+		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
+	}
+	if g.draining != nil {
 		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
 	}
 	if g.failureSequence != startedFailureSequence {
@@ -357,8 +375,9 @@ func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
 			return
 		}
 		g.unavailable = true
+		batch := g.beginPeerDrainLocked(&peerCRLCloseScope{}, nil, true)
 		g.mu.Unlock()
-		g.drainAll()
+		g.awaitPeerDrain(batch)
 	})
 }
 
@@ -389,6 +408,7 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 		!bytes.Equal(state.PeerCertificates[0].Raw, state.VerifiedChains[0][0].Raw) {
 		return ErrPeerCRLUnavailable
 	}
+	scope := &peerCRLCloseScope{}
 	leaf, issuer := state.VerifiedChains[0][0], state.VerifiedChains[0][1]
 	g.mu.Lock()
 	now := g.now().UTC()
@@ -397,18 +417,19 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 		// closing a tracked socket can call Forget and take the same lock.
 		g.failed = true
 		g.mu.Unlock()
-		g.Close()
+		g.closePeerGuard(scope)
 		return ErrPeerCRLUnavailable
 	}
 	if g.expireEvidenceLocked(now) {
+		batch := g.beginPeerDrainLocked(scope, nil, true)
 		g.mu.Unlock()
-		g.drainAll()
+		g.awaitPeerDrain(batch)
 		return ErrPeerCRLUnavailable
 	}
 
 	_, alreadyTracked := g.active[connection]
-	if g.failed || g.unavailable || g.current.Number() == nil || g.collectedAt.IsZero() ||
-		(len(g.active) >= maxObservedRevokedPeers && !alreadyTracked) {
+	if g.failed || g.unavailable || g.draining != nil || g.current.Number() == nil || g.collectedAt.IsZero() ||
+		(len(g.active)+len(g.closing) >= maxObservedRevokedPeers && !alreadyTracked) {
 		g.mu.Unlock()
 		return ErrPeerCRLUnavailable
 	}
@@ -416,7 +437,7 @@ func (g *PeerCRLGuard) Track(connection net.Conn, state tls.ConnectionState) err
 		if errors.Is(err, workloadpki.ErrPeerRevoked) {
 			if !g.observeRevokedPeerLocked(leaf) {
 				g.mu.Unlock()
-				g.Close()
+				g.closePeerGuard(scope)
 				return ErrPeerCRLUnavailable
 			}
 			// A valid revocation observation advances the live watermark even
@@ -437,6 +458,7 @@ func (g *PeerCRLGuard) Forget(connection net.Conn) {
 		return
 	}
 	g.mu.Lock()
+	// Forget removes registration, never an unresolved claimed Close identity.
 	delete(g.active, connection)
 	g.mu.Unlock()
 }
@@ -449,6 +471,7 @@ func (g *PeerCRLGuard) Poll(ctx context.Context) error {
 	if g == nil || ctx == nil {
 		return ErrPeerCRLUnavailable
 	}
+	scope := &peerCRLCloseScope{}
 	g.mu.Lock()
 	var representative tls.ConnectionState
 	for _, state := range g.active {
@@ -458,12 +481,14 @@ func (g *PeerCRLGuard) Poll(ctx context.Context) error {
 	g.mu.Unlock()
 	var err error
 	if len(representative.VerifiedChains) == 0 {
-		err = g.Bootstrap(ctx)
+		err = g.bootstrap(ctx, scope)
 	} else {
-		err = g.CheckHandshake(ctx, representative)
+		err = g.checkHandshake(ctx, representative, scope)
 	}
 	if err != nil && !errors.Is(err, workloadpki.ErrPeerRevoked) {
-		g.drainAll()
+		if !scope.failureHandled {
+			g.invalidateAndDrain(scope)
+		}
 		return ErrPeerCRLUnavailable
 	}
 	g.mu.Lock()
@@ -476,82 +501,26 @@ func (g *PeerCRLGuard) Poll(ctx context.Context) error {
 			continue
 		}
 		if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
-			// The failed latch from a full table is handled after the scan.
 			g.observeRevokedPeerLocked(leaf)
 		}
-		delete(g.active, connection)
 		toClose = append(toClose, connection)
 	}
 	failed := g.failed
+	// Claim under the scan's admission lock; Forget cannot erase selected work.
+	batch := g.beginPeerDrainLocked(scope, toClose, failed)
 	g.mu.Unlock()
-	if !closeTrackedConnections(toClose, g.closeBudget) {
-		g.mu.Lock()
-		g.failed = true
-		g.mu.Unlock()
-	}
-	if failed {
-		g.drainAll()
+	if !g.awaitPeerDrain(batch) || failed {
 		return ErrPeerCRLUnavailable
 	}
-	if !g.Ready() {
+	if !g.ready(scope) {
 		return ErrPeerCRLUnavailable
 	}
 	return nil
 }
 
-func (g *PeerCRLGuard) drainAll() {
-	g.mu.Lock()
-	connections := make([]net.Conn, 0, len(g.active))
-	for connection := range g.active {
-		connections = append(connections, connection)
-		delete(g.active, connection)
-	}
-	g.mu.Unlock()
-	if !closeTrackedConnections(connections, g.closeBudget) {
-		g.mu.Lock()
-		g.failed = true
-		g.mu.Unlock()
-	}
-}
+func (g *PeerCRLGuard) Close() { g.closePeerGuard(&peerCRLCloseScope{}) }
 
-// A fixed worker set closes all underlying sockets without allowing one slow
-// Close to hold every other peer. This is a total collection budget, not a
-// per-connection timeout; a gate must fail if actual closure exceeds it.
-func closeTrackedConnections(connections []net.Conn, totalBudget time.Duration) bool {
-	if len(connections) == 0 {
-		return true
-	}
-	if totalBudget < 100*time.Millisecond {
-		totalBudget = 100 * time.Millisecond
-	}
-	jobs := make(chan net.Conn, len(connections))
-	for _, connection := range connections {
-		jobs <- connection
-	}
-	close(jobs)
-	var workers sync.WaitGroup
-	for range min(len(connections), 16) {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			for connection := range jobs {
-				_ = connection.Close()
-			}
-		}()
-	}
-	done := make(chan struct{})
-	go func() { workers.Wait(); close(done) }()
-	timer := time.NewTimer(totalBudget)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return true
-	case <-timer.C:
-		return false
-	}
-}
-
-func (g *PeerCRLGuard) Close() {
+func (g *PeerCRLGuard) closePeerGuard(scope *peerCRLCloseScope) {
 	if g == nil {
 		return
 	}
@@ -561,8 +530,9 @@ func (g *PeerCRLGuard) Close() {
 	if g.expiryTimer != nil {
 		g.expiryTimer.Stop()
 	}
+	batch := g.beginPeerDrainLocked(scope, nil, true)
 	g.mu.Unlock()
-	g.drainAll()
+	g.awaitPeerDrain(batch)
 }
 
 func parsePeerCRLTime(value string) (time.Time, error) {
@@ -588,7 +558,9 @@ func peerCRLIssuerDigest(issuerDER []byte) string {
 
 // Ready reports only observed, unexpired evidence. A new process has no
 // last-good state. A fresh pull must succeed before this becomes true.
-func (g *PeerCRLGuard) Ready() bool {
+func (g *PeerCRLGuard) Ready() bool { return g.ready(&peerCRLCloseScope{}) }
+
+func (g *PeerCRLGuard) ready(scope *peerCRLCloseScope) bool {
 	if g == nil {
 		return false
 	}
@@ -597,17 +569,18 @@ func (g *PeerCRLGuard) Ready() bool {
 	if !g.failed && now.Before(g.lastNow) {
 		g.failed = true
 		g.mu.Unlock()
-		g.Close()
+		g.closePeerGuard(scope)
 		return false
 	}
 	if g.expireEvidenceLocked(now) {
+		batch := g.beginPeerDrainLocked(scope, nil, true)
 		g.mu.Unlock()
-		g.drainAll()
+		g.awaitPeerDrain(batch)
 		return false
 	}
 	defer g.mu.Unlock()
 
-	if g.failed || g.unavailable || g.collectedAt.IsZero() {
+	if g.failed || g.unavailable || g.draining != nil || g.collectedAt.IsZero() {
 		return false
 	}
 	g.lastNow = now

@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Same-call evidence Profile validation](#2026-10-23-evidence-same-call-profile-validation).
+Latest investigation checkpoint: [CRL close errors and single-budget drain; full race timeout](#2026-10-23-crl-close-errors-and-single-budget-drain).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -11858,3 +11858,114 @@ or timeout extension occurs. Private evidence:
 `slice6-evidence-profile-validation-once-20261022-125628`. At this precommit checkpoint, stage commit/push are pending.
 Record full local/upstream/live SHA equality only after actual normal push and
 completed synchronization checks.
+
+## 2026-10-23 CRL close errors and single-budget drain
+
+The latest [CRL drain source checkpoint with a full-race timeout](#2026-10-23-crl-close-errors-and-single-budget-drain)
+is an unaccepted intermediate source checkpoint. It fixes three independently
+reproduced guard defects: discarded Close errors,
+remaining peers omitted after a partial failure, and fresh authority restoring
+readiness while an old socket is still closing. The old-source three-test command
+naturally failed in2.751586s; its original failure remains preserved.
+
+One guard-wide batch claims identities under the admission lock and runs Close
+outside that lock with at most16 workers. The first real monotonic close deadline
+is shared across the same call and concurrent joins; it may shorten, never renew.
+A Close error or deadline permanently fails the guard and claims the remaining
+peers within that batch. Pending closure refuses Ready/Track/fresh authority
+commit; synchronous Registry.Forget cannot erase an uncertain closing identity.
+Successful ordinary source-loss/expiry closure may recover only after a fresh
+verified pull. Existing budget derivation and the8192 total identity cap remain.
+
+Focused race naturally passes93 test outcomes (including children) and2 packages
+in9.596221s/90s, with382 complete JSON events and no failure/skip.
+The required final default-tag repository race **FAILED** at its original600s
+limit (actual600.014672s, owned process group killed/reaped). Its16430B stdout
+contains213 complete package records:182 ok and31 without tests, including
+phase6tls5.488s, connectiondrain2.642s and phase6security345.135s. The remaining54
+names in the old267-package list have no received result; this does not prove
+which tests ran, stalled or failed. No cause is established and no full rerun occurs.
+Final vet naturally passes in4.631769s. All2170 source/lock and direct/Git
+pre/post checks pass. Focused/vet have no timeout, truncation or active signal;
+the failed full race is neither a pass nor replaced by the old095 checkpoint. mise Go1.26.8,
+GOMAXPROCS2/-p2 and childumask022 remain; concurrency flags are not kernel quotas.
+These are component/development gates, not live Vault/Guest/Provider evidence.
+
+If16 arbitrary Close calls never return, the17th stays queued: it is not proved
+physically closed. The guard retains uncertainty and rejects admission; cleanup
+may continue on the original pool after failure, without converting it to success.
+New tests release their owned blockers and verify cleanup, no retry and bounded
+concurrency. No old receipt, manifest, lock or reuse rule is overwritten.
+
+Next independently analyze this full-race timeout's retained output and any
+available process evidence, then propose a discriminating bounded diagnostic;
+do not blindly replay the whole repository or reuse this failed identity. Private evidence:
+`slice6-crl-close-budget-20261023-085001`.
+Phase6 remains **5/15**: step1 historical bounded Guest E unchanged; step2
+ongoing; step3 live full Profile-v2 inventory/original16/independent acceptance
+incomplete; formalstep4 not started. Docker authority/Linux/native/P2, public
+ProfileV2/provider-v3 holds, broker/general-only with PostgreSQL general, nine
+bindings/64 barriers and old locks remain. mise/Docker only; no quota/deadline
+expansion or unrelated process intervention. TimersOFF.
+This source record freezes the precommit checkpoint. Stage commit/push and full
+local/upstream/live SHA equality are recorded separately after actual
+synchronization checks.
+
+### Implementation and refusal coverage
+
+Independent design and final-code/input review preceded execution. Main owns the
+four Go paths; a new private coordinator replaces the old global close helper,
+without a compatibility fallback. Public CheckHandshake/Bootstrap/Track/Poll/
+Ready/Close signatures and source/issuer/nonce/CRL verification remain. A private
+same-call scope carries only a lazy monotonic deadline and failure-handled flag,
+never cached evidence or approval. Refresh publishes invalidation and the batch
+before releasing its pull permit. Error-to-failed-to-claim-all happens under the
+admission lock before completion/readiness can be observed; all Close calls run
+outside it because Registry.Close synchronously invokes Forget.
+
+The new public regressions reproduce the original three defects before the fix.
+Further refusal tests exercise a real Registry wrapper whose Close hook forgets
+registration while uncertainty is retained; two phases sharing the exact same C;
+zero/negative injected C rejected without a100ms fallback;16 blocked calls plus
+one queued identity with repeated Close/Bootstrap unable to create another pool,
+renew C or retry an identity; and expiry joining a selective drain at its original
+deadline. Positive paths observe peer EOF or actual surviving byte forwarding and
+fresh authority recovery after successful closure. Test-owned blockers are
+released for cleanup. A queued or uncertain socket is never inferred closed from
+active=0 or Registry.Active=0. The existing8192 active+closing cap remains and
+pending/failed state rejects Track before additional identity admission.
+
+The sole old helper test now uses the guard coordinator, retaining its original
+elapsed and real peer-close assertions. An old literal expiry fixture now states
+its100ms C explicitly; production constructor still enforces the original budget
+formula and minimum. No timeout, worker maximum, source rule or safety assertion
+is weakened. The complete focused stream has93 test outcomes including children,
+not93 independent top-level cases.
+
+### Required-gate failure and evidence boundary
+
+The final full-race command is FAILED, with its own600.014672s receipt and
+active-termination/reap evidence. The complete last received line and213 ordered
+package records match a prefix of the old267-record success, leaving54 historical
+names unreceived. That comparison is not a fresh execution inventory or a causal
+timeline: Go buffers/orders multi-package output. Received phase6security345.135s
+and the old191.013s are different run observations, not a controlled regression or
+proof that this package caused the timeout. No new process stacks or CPU profile
+were collected. The old095 full-race pass applies only to its old tested state.
+
+Final vet naturally passes in4.631769s with empty streams. Full2170 source/locks
+and direct/Git checks match before/after every new Go command;3 progress docs have
+separate HEAD-blob-matched old copies and current pins. Existing mise Go1.26.8,
+GOMAXPROCS2/-p2, readonly module settings, existing cache/index and childumask022
+remain. No Provider Contract wire/DTO/metadata or driver/lifecycle code changes,
+so no new tagged Docker or Contract-lock pass is claimed. No blind full retry,
+budget extension, quota increase, unrelated process intervention or timer occurs.
+
+This checkpoint saves reviewed source and its failed required-gate disposition;
+it does not accept Slice6 or release the revision. The private normal-commit
+controller preparation initially refused a nonexistent guessed bootstrap filename
+before any Git command; that record remains, and a fresh preparation uses the
+actual pinned bootstrap. Git synchronization is independently reviewed and
+recorded after this source document freezes; no source statement preclaims a
+successful commit or push. All old raw logs, failed identities,33 segments,
+old402 inputs, nine bindings/64 barriers and evidence reuse rules are preserved.

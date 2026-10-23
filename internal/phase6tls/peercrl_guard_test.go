@@ -1082,6 +1082,7 @@ func TestPeerCRLGuardEvidenceExpiryDrainsBeforeNextPoll(t *testing.T) {
 	first, second := net.Pipe()
 	defer second.Close()
 	guard := &PeerCRLGuard{maxStaleness: time.Second, pollInterval: 2 * time.Second,
+		closeBudget: 100 * time.Millisecond,
 		collectedAt: now, nextUpdate: now.Add(40 * time.Millisecond),
 		active: map[net.Conn]tls.ConnectionState{first: {}}, now: time.Now}
 	guard.mu.Lock()
@@ -1119,7 +1120,13 @@ func TestPeerCRLCloseBudgetDoesNotSeriallyBlockOtherPeers(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 	start := time.Now()
-	if closeTrackedConnections([]net.Conn{blockingCloseConn{Conn: blocked, release: release}, other}, 50*time.Millisecond) {
+	guard := &PeerCRLGuard{active: map[net.Conn]tls.ConnectionState{
+		blockingCloseConn{Conn: blocked, release: release}: {}, other: {}}, closeBudget: 50 * time.Millisecond}
+	guard.Close()
+	guard.mu.Lock()
+	timedOut := guard.draining != nil && guard.draining.timedOut
+	guard.mu.Unlock()
+	if !timedOut {
 		t.Fatal("blocked collection reported within total close budget")
 	}
 	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
