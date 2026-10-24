@@ -1,6 +1,35 @@
 # Project Status
 
-The [whole-repository verification](audits/product-phase-6-slice-6-startup.md#2026-10-24-whole-repository-race-verification)
+The [Browser terminal-intent audit](audits/product-phase-6-slice-6-startup.md#2026-10-24-browser-terminal-intent-during-uncertain-creation)
+adds four deterministic cancellation/expiry interleavings during creation,
+without changing production code. Unknown completion retains the exact
+Creating identity, UID and capacity, excludes a competing allocation and never
+redispatches or grants a handoff. A simulated finished proof permits terminal
+cleanup only; failed fresh absence keeps Cleaning. Reconstructed application
+objects share an in-memory ledger and boolean proof, so this is component
+evidence, not another OS process, PostgreSQL/fsync or Docker acceptance.
+
+The new test passes five named results (parent plus four scenarios) and package
+vet in a complete 6.628684s/90s stage. At base HEAD
+fdf17e0bf1591d409e0d7e96d6fc99c44005cc54 plus this exact new test, root-module
+`go test -race -shuffle=on -count=1 ./...` passes naturally in 574.172236s/600s:
+267 unique packages, 229 passing and 38 without tests, empty stderr and no
+signal, timeout or truncation. All 2175 source/lock inputs match before/after.
+Full vet passes in 2.199113s, with its complete stage 3.273768s/90s. Only these
+progress documents change after verification; no measured speedup is claimed.
+
+The observer remains incomplete after 41 process samples: at 400.061617s it
+sees a terminalbroker.test descendant shell in another process group and
+conservatively stops sampling. Go continues naturally; this does not prove a
+shell fault, leaked process or the historical race-timeout cause. Old failures
+and evidence remain intact. Phase 6 stays **5/15**, Slice 6 step 2; Docker
+management authority and real recovery gates, step 3 live inventory/original
+16 scenarios/independent acceptance, and formal step 4 remain open. Existing
+holds, gates, locks, 9 bindings/64 barriers, reuse rules, mise Go1.26.8 and
+timers OFF remain. Private evidence: slice6-browser-uncertainty-audit-20261024-v1.
+This four-file test/progress checkpoint's commit/push disposition is separate.
+
+The preceding [whole-repository verification](audits/product-phase-6-slice-6-startup.md#2026-10-24-whole-repository-race-verification)
 now passes at tested source d23a19ff3294bdc02843c2e106bb3bc96b9353e0.
 The original `go test -race -shuffle=on -count=1 ./...` finishes naturally in
 503.982350s/600s: 267 unique package lines, 229 passing test packages and38

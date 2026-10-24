@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [DNS lexical validation](#2026-10-24-dns-lexical-validation).
+Latest investigation checkpoint: [Browser terminal intent during uncertain creation](#2026-10-24-browser-terminal-intent-during-uncertain-creation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12827,3 +12827,71 @@ No quota or timeout expansion, global development installation, merge, release
 or Docker authority claim occurs. Private raw outputs, receipts and failures:
 slice6-fullrace-observe-20261024-v1, outside Git. Commit/push disposition for
 these three progress documents follows separately.
+
+### 2026-10-24 Browser terminal intent during uncertain creation
+
+Independent source review selects cancellation/expiry while AllocateBound is
+in flight, following Vertical, the identity coordinator/runtime, PostgreSQL
+identity adapter and Docker finished-dispatch proof. No production defect is
+demonstrated. This stage adds only one test file and these progress documents;
+no implementation, lease, interface, Contract or evidence-reuse rule changes.
+Historical tagged PostgreSQL/Docker crash evidence is reviewed, not rerun.
+
+TestBrowserTerminalIntentDuringCreateRetainsIdentityUntilProof uses channel
+barriers, a synchronized clock and bounded joins, without sleep-based ordering.
+Four cases cross cancellation/expiry with missing proof or a simulated finished
+dispatch before ledger commit. Terminal intent cannot revive the original Open
+or grant a handoff. Reconstructed Vertical/runtime objects never redispatch;
+the exact Creating identity and capacity exclude a distinct competitor. Without
+proof, recovery and return of the original dispatch cannot release the claim.
+With proof, reconciliation can advance only into terminal cleanup; failed fresh
+absence retains Cleaning, and successful fresh absence permits one finalization
+and release. Attach remains unused. These are same-process in-memory ledger/
+port fixtures with a boolean completion flag, not PostgreSQL durability, fsync,
+another OS process or real Docker cleanup/authority evidence.
+
+The reviewed target stage passes five named results (parent plus four cases),
+25 complete JSON events and package vet. Target 5.124992s, package vet 0.217945s;
+complete bootstrap/input/Git pre/post/publication 6.628684s/90s. Thirty strict
+parser-refusal variants and a positive check also pass.
+
+At base HEAD fdf17e0bf1591d409e0d7e96d6fc99c44005cc54 plus the exact new test
+(SHA256 79cd25a36153c001ce656f4a713394aa940cf7817fb36f06dd2df008977cd252),
+required `go test -race -shuffle=on -count=1 ./...` passes naturally in
+574.172236s/600s: exit0/reaped, stdout20650B/stderr0B, no failure, timeout,
+signal or truncation. All267 unique package lines complete: 229ok and38 without
+tests. This covers the root module, not nested modules, tagged Docker or live
+topology gates. Complete2175 source/lock inputs and15 Git/environment pre/post
+receipts match. Separately bounded pre/post work makes the actual controller
+operation575.803349s, not a whole-stage600 claim. Full `go vet ./...` then
+passes in2.199113s with empty outputs; bootstrap through publication passes
+in3.273768s/90s. miseGo1.26.8, GOMAXPROCS2, -mod=readonly -p=2 and original
+cache/module settings/bounds remain. Only progress docs change after testing.
+
+The passive observer remains INCOMPLETE, independently of the Go PASS. After
+41 process samples, at400.061617s its conservative guard sees an owned
+terminalbroker.test descendant /bin/sh in a different process group and stops
+sampling. Errors are empty; raw timeline remains; no observer patch or rerun
+occurs. This establishes neither a shell fault/leak nor the historical timeout's
+unique cause or reliable future performance margin. The old600.014672s failure
+remains historical failure. A vet preparation rejected for stale scope wording
+was not executed; a documentation preparation failed before any repository
+write because it confused separate document pins with the Go-source manifest.
+Both failures and original inputs are retained; no test identity is replayed.
+
+Fixed Slice6 order remains:
+
+1. GuestE keeps its earlier limited acceptance; no new Guest run.
+2. Browser terminal interleaving component audit passes; remaining startup/safety
+   audits and real PostgreSQL/Docker recovery gates continue. Docker management
+   authority remains unresolved and is not bypassed by fixtures.
+3. Complete live Profile-v2 inventory, original16 scenarios and independent
+   acceptance remain incomplete.
+4. Formal post-acceptance handoff remains unstarted; this intermediate checkpoint
+   is not Slice closure.
+
+Phase6 remains **5/15**. Existing public ProfileV2/provider-v3 holds,
+9bindings/64barriers, original locks/evidence/reuse and timers OFF remain.
+No quota, timeout, global toolchain, merge, release or runtime authority change.
+Private evidence: slice6-browser-uncertainty-audit-20261024-v1, outside Git;
+four-file test/progress checkpoint commit/push disposition follows separately.
