@@ -12759,3 +12759,71 @@ formalstep4 remain incomplete. Existing gates, miseGo1.26.8, old evidence,
 locks/reuse rules and timers OFF remain. Private evidence:
 slice6-dns-policy-scan-20261024-102141. Five-file source/test/progress checkpoint
 commit/push/live SHA disposition follows separately.
+
+### 2026-10-24 Whole-repository race verification
+
+The question was whether the accumulated equivalent changes could satisfy the
+original whole-repository race boundary. This stage changes no repository Go,
+fixtures, Contract or runtime policy. Tested clean source and recorded tracking
+revision are d23a19ff3294bdc02843c2e106bb3bc96b9353e0. A fresh reviewed run keeps
+miseGo1.26.8, the original sanitized Go environment, GOMAXPROCS2,
+`GOFLAGS=-mod=readonly -p=2`, module/cache settings, test child umask022 and
+`go test -race -shuffle=on -count=1 ./...` unchanged.
+
+The Go lifecycle passes naturally in **503.982350s/600s**, exit0/reaped,
+stdout20,651B ending with a complete line and stderr0B. All267 unique package
+lines are complete: 229 `ok` and38 `[no test files]`; no other line, timeout,
+truncation or active signal. The separately bounded input/Git pre/post work
+is outside that original Go600 boundary; the controller records509.427111s
+for its operation. Complete2174 source/lock,25 direct and3 helper inputs match
+before/after; both seven-command Git sets pass on clean d23a19ff/upstream.
+This is the root module's `./...` scope, not nested modules or tagged Docker gates.
+
+Full `go vet ./...` then passes naturally in **67.234062s**, empty stdout/stderr.
+Its fresh vet-v2 shared90 stage includes bootstrap, complete inputs/Git pre/post
+and publication; the outer process exits0 after the reachable post-publication
+check at **87.628873s/90s**. Earlier rejected vet plans remain unexecuted and
+unchanged; a successful SystemExit had bypassed that guard until corrected.
+The original Go child environment is preserved; only Git pre/post commands
+receive their three existing Git guard variables.
+
+The observer has a separate **incomplete** disposition. Its first process sample
+is valid, but repeated unregister after ps pipe EOF incorrectly sets incomplete,
+stopping subsequent ps sampling. Go receive-time/offset records remain, but
+these are controller receive times subject to Go buffering/print order, not test
+start/finish timestamps. No sidecar, new signal, parameter change or second
+full-race execution is introduced. The old frozen observer/receipt is retained.
+A private corrected copy ignores expected duplicate-unregister KeyError and
+passes24 offline methods in4.259759s/30s, including positive three-cycle normal
+and early-EOF observations. The first accelerated fixture failed under timing
+load and remains FAILED; the final clock advances between completed samples,
+not during their original2s observation bounds. This is simulated controller
+coverage, not a new real full-run timeline, admission or operator signature.
+
+The current ordinary development race/vet gates are satisfied for this exact
+source. The historical600.014672s failure remains historical failure; neither
+it nor the observer is relabelled PASS. phase6security reports280.793s in the
+new run; qualificationsupervisor39.915s, dockercontrol37.568s,
+qualificationadapterprotocol32.336s and controlstorage32.154s also consume
+material package wall time. These are overlapping package durations, not CPU
+attribution or additive wall times. The old CPU samples justified focused local
+changes, but this uncontrolled whole-run comparison cannot prove a unique timeout
+cause, per-change speedup or reliable future margin. No further blind whole-run
+or unmeasured micro-optimization is needed to report this stage's PASS.
+
+Fixed Slice6 order remains:
+
+1. Bounded GuestE evidence retains its earlier limited acceptance; no new Guest run.
+2. Remaining startup/safety audits continue; current ordinary full-race/vet checks
+   pass. Docker management authority remains a separate unresolved boundary.
+3. Complete live Profile-v2 inventory, original16 scenarios and independent
+   acceptance remain incomplete.
+4. Formal post-acceptance documentation/commit/push handoff remains unstarted;
+   this intermediate checkpoint is not that closure.
+
+Phase6 remains **5/15**, Slice6step2. Public ProfileV2/provider-v3 holds,
+9bindings/64barriers, old evidence/locks and reuse rules remain; timers OFF.
+No quota or timeout expansion, global development installation, merge, release
+or Docker authority claim occurs. Private raw outputs, receipts and failures:
+slice6-fullrace-observe-20261024-v1, outside Git. Commit/push disposition for
+these three progress documents follows separately.

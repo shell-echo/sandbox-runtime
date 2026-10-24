@@ -1,6 +1,36 @@
 # Project Status
 
-The latest [DNS lexical validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-dns-lexical-validation)
+The [whole-repository verification](audits/product-phase-6-slice-6-startup.md#2026-10-24-whole-repository-race-verification)
+now passes at tested source d23a19ff3294bdc02843c2e106bb3bc96b9353e0.
+The original `go test -race -shuffle=on -count=1 ./...` finishes naturally in
+503.982350s/600s: 267 unique package lines, 229 passing test packages and38
+packages without tests, empty stderr, no timeout/truncation/active signal.
+Full2174 source/lock and direct/tool/Git checks match before/after. This is
+one current root-module execution, not a repeatability or nested-module claim.
+
+Separate `go vet ./...` passes naturally in67.234062s; its complete stage,
+including bootstrap, inputs/Git pre/post and publication, finishes in
+87.628873s/90s. miseGo1.26.8, GOMAXPROCS2, `-mod=readonly -p=2`, original
+cache/module settings and all safety/refusal boundaries remain unchanged.
+No repository Go or fixture change occurs in this verification stage.
+
+The passive observer is explicitly incomplete: one valid process sample,
+then an erroneous duplicate-FD-unregister marker stops further sampling.
+Its failure does not interrupt Go. A separate private corrected copy passes
+24 offline methods, including two positive multi-cycle/early-EOF tests;
+no second full-race run occurs. Old failed preparations and the original
+600.014672s timeout remain unchanged. This pass does not establish that
+failure's unique cause, any individual optimization's savings or a stable
+performance margin. Earlier entries below retain their then-current status.
+
+Phase6 stays **5/15**, Slice6step2. Resume independently selected remaining
+startup/safety audits; Docker management authority, step3 live inventory and
+original16 scenarios/independent acceptance, and formalstep4 remain open.
+Timers stay OFF; no gate, quota, timeout, old lock or evidence-reuse rule changes.
+Private evidence: slice6-fullrace-observe-20261024-v1. This three-document
+checkpoint's commit/push disposition is recorded separately.
+
+The preceding [DNS lexical validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-dns-lexical-validation)
 uses one bounded ASCII pass for the original lowercase/host/double-dot language.
 Original size/edge/Unicode/IP rejection and permissive label behavior remain;
 all TLS, external-service, egress, public-entry and snapshot checks remain.
