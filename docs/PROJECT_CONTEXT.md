@@ -46,7 +46,24 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
+The latest [principal digest check](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
+removes only the duplicate outer-digest regexp in validatePrincipal after
+Registry.Validate and exact identity-digest equality. The Registry still
+checks the same digest syntax and recomputes the identity hash; Digest is a
+field getter. TLS, authorization, sandbox controlling-digest checks and every
+public/snapshot validation boundary remain. No cross-call reuse is added.
+
+Independently reviewed A passes58 named results (33 new,25 original) and
+package vet in14.408291s/90s. Separate B passes the unchanged73 PeerCRL results
+in13.286053s/90s, reusing A vet under identical2173 source/lock inputs. Both
+include complete inputs/Git pre/post checks and publication. These are component
+checks; existing cumulative CPU samples do not measure this predicate's cost
+or savings. Fullrace **FAILED600.014672s** remains unsatisfied; Phase6 **5/15**,
+Slice6step2, original gates/miseGo1.26.8/locks/reuse rules and timers OFF remain.
+Private evidence: slice6-principal-digest-guard-20261024-081613. This five-file
+source/test/progress checkpoint's commit/push disposition follows separately.
+
+The preceding [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
 removes one full JSON encoding from each complete private field validation.
 One value-copy encoding clears only the root ProfileDigest; the original
 domain hash is shared with Digest. Restoring the valid71-byte ASCII digest

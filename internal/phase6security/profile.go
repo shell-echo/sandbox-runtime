@@ -963,8 +963,10 @@ func validatePrincipal(value Principal, registry *securityprincipal.Registry, au
 	}
 	if value.AuthorizationPrincipal != nil {
 		identity := *value.AuthorizationPrincipal
+		// Registry validation checks the identity digest's syntax; the exact
+		// equality below binds the outer digest to that same checked value.
 		if registry == nil || registry.Validate(identity) != nil || value.PrincipalDigest != identity.Digest() ||
-			!digestPattern.MatchString(value.PrincipalDigest) || value.ControllingPrincipalDigest != "" ||
+			value.ControllingPrincipalDigest != "" ||
 			(value.Kind == "ingress_relay" && value.TLS != nil) || (value.Kind != "ingress_relay" && value.TLS == nil) ||
 			(value.TLS != nil && (value.TLS.PrincipalDigest != value.PrincipalDigest || validateTLS(*value.TLS) != nil)) ||
 			validateAuthorizationBinding(value.Name, value.Kind, identity, authorityBindings, dynamicTLSBindings) != nil {

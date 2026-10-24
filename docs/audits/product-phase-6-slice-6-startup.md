@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Profile-v2 single encoding](#2026-10-24-profile-v2-single-encoding).
+Latest investigation checkpoint: [Principal digest validation](#2026-10-24-principal-digest-validation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12642,3 +12642,59 @@ test/profile contexts. Private evidence: slice6-profile-v2-encoding-20261024-003
 The coherent six-file source/test/progress checkpoint's reviewed commit,
 normal push and full local/upstream/live disposition follow separately; this
 is an intermediate checkpoint, not formal Slice6step4.
+
+### 2026-10-24 Principal digest validation
+
+Independent read-only review follows the v1 Profile.Validate and v2
+ProfileV2.validateFields callers, the separate v2 identity fragment, Registry,
+TLS, image and authorization checks. The original retained CPU checkpoint has
+1.90s cumulative sampled weight in validatePrincipal, including1.82s at the
+v2 field-validator call line. Its original profile.go matched this stage's
+base bytes. These overlapping rounded samples select a target; they are not
+call counts, the removed predicate's time, saved time or the old600s timeout's
+cause. No new profile or saved test-binary replay is performed.
+
+The only production change removes the outer PrincipalDigest regexp after
+Registry.Validate(identity)==nil and exact outer==identity.Digest(). Registry
+has already checked the identical ^sha256:[0-9a-f]{64}$ language and recomputed
+the identity hash; Digest only returns the stored digest. The copied identity
+contains only strings and an integer, with no intervening mutation or callback.
+Thus the removed rejection was unreachable after those preceding checks. All
+remaining guard order, complete registry validation, authorization/TLS/image
+checks, sandbox ControllingPrincipalDigest regexp, public v2/provider holds,
+and independent entry/snapshot/final validation remain. No cache, evidence
+reuse or cross-call trust rule changes.
+
+New33 named results cover seven accepted component categories, malformed outer
+and synchronized inner/outer/TLS digest tampering, canonical forged hashes,
+nil/wrong-environment registries, a valid other registered identity, dynamic
+policy-authority/TLS-agent binding swaps, sandbox controlling digests and
+between-call identity mutation. The synchronized tamper cases cannot pass
+merely because a later TLS digest differs. Errors remain ErrInvalidProfile.
+The unchanged full v1/ingress and v2 wire/complete/private-success/public-hold
+cases supply25 additional named results.
+
+A passes all58 exact named results, one package PASS and237 complete Go events;
+target12.913540s and package vet0.411949s, whole14.408291s/90s. Separate B
+passes the unchanged TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode:
+73 named results, one package PASS and297 complete events, target12.106153s,
+whole13.286053s/90s. B reuses A vet with identical2173 source/lock inputs.
+Complete inputs/Git pre/post checks and publication fit within each original
+90s limit; all37 command receipts are natural0/reaped with no timeout, signal
+or truncation. The strict event parser retains30 refusal variants and old73
+event compatibility; those are offline parser evidence, not another run.
+
+An unexecuted first preparation retained a stale44-result narrative. Final
+preparation corrects it to58 and synchronizes the three tamper fixtures' TLS
+digests before independent review; no failed execution identity is replayed.
+After both runs only the three progress documents change; tested Go inputs
+remain exact. No driver/lifecycle, Contract or runtime behavior is broadened,
+and no tagged Docker or Contract gate is claimed from these component tests.
+
+There is no controlled performance comparison or new whole-repository pass.
+Required fullrace FAILED600.014672s remains unsatisfied; Phase6 stays5/15,
+Slice6step2. Step3 live inventory/original16 scenarios/independent acceptance
+and formalstep4 remain incomplete. Original gates, miseGo1.26.8, old evidence,
+locks and reuse rules remain; timers OFF. Private evidence:
+slice6-principal-digest-guard-20261024-081613. This is the precommit source
+record; normal commit/push/full SHA disposition follows separately.

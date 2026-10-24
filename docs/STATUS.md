@@ -1,6 +1,22 @@
 # Project Status
 
-The latest [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
+The latest [principal digest validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
+removes one redundant outer-digest regexp after full Registry validation and
+exact digest equality. Every rejection remains: malformed/forged identities,
+wrong registry/authorization/TLS bindings and sandbox controlling digests still
+fail closed. Public holds and separate snapshot validations remain.
+
+A passes58 named results (33 new/25 original) plus package vet in14.408291s/90s;
+B passes the original73 PeerCRL results in13.286053s/90s using unchanged A vet.
+Complete2173 source/lock and inputs/Git pre/post plus publication are included.
+No measured speedup, new CPU profile, whole-repository pass or runtime admission
+is claimed. Phase6 remains **5/15**, Slice6step2; fullrace **FAILED600.014672s**
+is unsatisfied, not rerun. Existing gates, miseGo1.26.8, old evidence/locks/reuse
+rules and timers OFF remain. Private evidence:
+slice6-principal-digest-guard-20261024-081613. The reviewed five-file checkpoint's
+commit/push/live SHA disposition is recorded separately.
+
+The preceding [Profile-v2 single-encoding change](audits/product-phase-6-slice-6-startup.md#2026-10-24-profile-v2-single-encoding)
 replaces two full encodings in the private field-validator tail with one
 root-digest-cleared encoding. Exact71-byte restoration keeps the original
 signed JSON2MiB size limit; domain/error semantics and every earlier field
