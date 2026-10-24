@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Principal digest validation](#2026-10-24-principal-digest-validation).
+Latest investigation checkpoint: [DNS lexical validation](#2026-10-24-dns-lexical-validation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12698,3 +12698,64 @@ and formalstep4 remain incomplete. Original gates, miseGo1.26.8, old evidence,
 locks and reuse rules remain; timers OFF. Private evidence:
 slice6-principal-digest-guard-20261024-081613. This is the precommit source
 record; normal commit/push/full SHA disposition follows separately.
+
+### 2026-10-24 DNS lexical validation
+
+Independent read-only review selects validDNSName from the retained CPU
+checkpoint's0.76s cumulative sampled weight out of28.35s total samples. These
+are overlapping rounded samples, not the old600s failure's cause, call counts,
+lexical-check costs or saved time. The helper and its host regexp were unchanged
+between that sampled source and this stage's506eac5 base; the retained raw Git
+diff shows only the preceding principal-check hunk. No new CPU profile or
+saved binary execution is performed.
+
+Only validDNSName's lexical checks change: separate ToLower equality, host
+regexp and consecutive-dot scans become one bounded ASCII byte loop. It keeps
+length1..253, lowercase alphanumeric ends, only lowercase alphanumerics/dots/
+hyphens internally, no consecutive dots, and the original net.ParseIP rejection.
+The existing language deliberately still permits64-character labels, a.-b,
+leading-zero dotted names and shortened numeric names that ParseIP does not
+recognize. This is equivalence to the current profile policy, not general DNS
+standards conformance or a new admission claim. NonASCII, invalidUTF8, uppercase,
+wildcards, NUL, wrong edges and recognized IP literals still fail. The now-unused
+hostPattern is removed; no caller or public/independent snapshot validation is
+removed, cached or reordered across a boundary.
+
+The new tests freeze the original regex/lowercase/Contains/ParseIP primitives
+as an independent test oracle. Thirty-five explicit boundaries and7241 bounded
+comparisons cover512 single/embedded byte cases,4681 short strings over eight
+lexical representatives, and2048 deterministically seeded longer samples.
+TLS trust-domain/URI pairs, TLS SANs, external-service SANs and egress target
+hosts each reject seven invalid names after a valid fixture baseline. External
+identity digests are recomputed and egress target slices independently cloned,
+so stale hashes or alias mutations cannot hide those consumer checks. Seventy
+new named outcomes plus25 unchanged v1/ingress/v2 wire/private-success/public-
+hold outcomes form the exact95-result A inventory.
+
+A passes95 named results, one package PASS and385 complete JSON events;
+target14.653488s and package vet0.722717s, whole16.701829s/90s. Separate B passes
+the original TestPostgresPeerCRLV2OwnerIsolationAndPinnedDecode:73 named results,
+one package PASS and297 complete events, target11.241941s, whole12.217274s/90s.
+B reuses A vet under identical2174 source/lock inputs. Complete input/Git pre/post
+and publication are inside each original90s; all37 A/B command receipts are
+natural0/reaped without timeout, signal or truncation. The strict event parser's
+30 refusal variants and old73-event compatibility remain offline evidence,
+not additional application passes.
+
+After A/B, an auxiliary source-attribution preparation assertion FAILED because
+raw.count("@@ ") counted both markers of one diff header. The original command
+itself completed naturally under10s/64KiB; its raw bytes and receipt and the
+failed preparation assertion remain. Offline inspection of those same bytes
+supplies the source attribution, confirmed by independent offline review; no Git
+or application test is replayed and no failed result is relabeled. This does not
+affect the two passed test batches.
+After both batches only three progress documents change; all2174 Go/lock inputs
+remain exact. There is no measured speedup, new whole-repository pass, tagged
+Docker/Contract result, topology evidence or runtime admission.
+
+Phase6 remains5/15, Slice6step2; required fullrace FAILED600.014672s remains
+unsatisfied. Step3 full live inventory/original16/independent acceptance and
+formalstep4 remain incomplete. Existing gates, miseGo1.26.8, old evidence,
+locks/reuse rules and timers OFF remain. Private evidence:
+slice6-dns-policy-scan-20261024-102141. Five-file source/test/progress checkpoint
+commit/push/live SHA disposition follows separately.

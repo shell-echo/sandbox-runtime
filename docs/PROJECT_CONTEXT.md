@@ -46,7 +46,25 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The latest [principal digest check](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
+The latest [DNS lexical validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-dns-lexical-validation)
+replaces separate lowercase/regexp/consecutive-dot checks with one bounded
+ASCII pass in validDNSName. The original1..253-byte language, permissive label
+structure and net.ParseIP exclusion remain; all consumers and separate full
+entry/snapshot validations remain. The unused host regexp is removed.
+
+A passes95 named results (70 new,25 original), including7241 bounded comparisons
+against an independent original-policy oracle, and package vet in16.701829s/90s.
+B passes the original73 PeerCRL results in12.217274s/90s, reusing A vet under
+identical2174 source/lock inputs. Both include complete inputs/Git pre/post
+and publication. A source-attribution preparation count failed; its raw diff
+and failure remain. Independent offline review confirms the raw source attribution
+without replay; the preparation failure stays FAILED.
+No new CPU profile, measured speedup or whole-repository pass is claimed.
+Fullrace **FAILED600.014672s** remains unsatisfied; Phase6 **5/15**, Slice6step2,
+original gates/miseGo1.26.8/locks/reuse and timers OFF remain. Private evidence:
+slice6-dns-policy-scan-20261024-102141. Commit/push disposition follows separately.
+
+The preceding [principal digest check](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
 removes only the duplicate outer-digest regexp in validatePrincipal after
 Registry.Validate and exact identity-digest equality. The Registry still
 checks the same digest syntax and recomputes the identity hash; Digest is a

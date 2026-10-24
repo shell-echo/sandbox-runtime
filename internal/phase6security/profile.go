@@ -38,7 +38,6 @@ var (
 	imagePlatformPattern = regexp.MustCompile(`^linux/(?:amd64|arm64(?:/v8)?)$`)
 	namePattern          = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	routePathPattern     = regexp.MustCompile(`^/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*){0,7}$`)
-	hostPattern          = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 )
 
 var requiredPrincipals = map[string]string{
@@ -1843,7 +1842,21 @@ func validTargetProtocol(value string) bool {
 }
 
 func validDNSName(value string) bool {
-	return len(value) <= 253 && value == strings.ToLower(value) && hostPattern.MatchString(value) && !strings.Contains(value, "..") && net.ParseIP(value) == nil
+	if len(value) == 0 || len(value) > 253 {
+		return false
+	}
+	// Keep the profile's existing ASCII language, including its permissive
+	// label structure; this does not normalize names or add DNS label limits.
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if c >= 'a' && c <= 'z' || c >= '0' && c <= '9' {
+			continue
+		}
+		if (c != '.' && c != '-') || i == 0 || i == len(value)-1 || (c == '.' && value[i-1] == '.') {
+			return false
+		}
+	}
+	return net.ParseIP(value) == nil
 }
 
 func validSPIFFE(value string) bool {

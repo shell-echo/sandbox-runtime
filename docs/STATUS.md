@@ -1,6 +1,23 @@
 # Project Status
 
-The latest [principal digest validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
+The latest [DNS lexical validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-dns-lexical-validation)
+uses one bounded ASCII pass for the original lowercase/host/double-dot language.
+Original size/edge/Unicode/IP rejection and permissive label behavior remain;
+all TLS, external-service, egress, public-entry and snapshot checks remain.
+
+A passes95 named results (70 new/25 original),7241 original-oracle comparisons
+and package vet in16.701829s/90s. B passes the original73 PeerCRL results in
+12.217274s/90s using unchanged A vet and the same2174 source/lock inputs.
+Complete inputs/Git pre/post and publication are included in each batch.
+One source-attribution preparation assertion failed by counting both hunk
+markers; raw/failure retained. Independent offline review confirms the source
+attribution without replay; the preparation failure stays FAILED.
+No measured savings, new CPU profile, whole-repository pass or runtime admission.
+Phase6 remains **5/15**, Slice6step2; fullrace **FAILED600.014672s** is unsatisfied.
+miseGo1.26.8, original gates/locks/reuse and timers OFF remain. Private evidence:
+slice6-dns-policy-scan-20261024-102141. Five-file commit/push disposition is separate.
+
+The preceding [principal digest validation change](audits/product-phase-6-slice-6-startup.md#2026-10-24-principal-digest-validation)
 removes one redundant outer-digest regexp after full Registry validation and
 exact digest equality. Every rejection remains: malformed/forged identities,
 wrong registry/authorization/TLS bindings and sandbox controlling digests still
