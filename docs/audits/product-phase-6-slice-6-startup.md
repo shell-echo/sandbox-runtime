@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Browser terminal intent during uncertain creation](#2026-10-24-browser-terminal-intent-during-uncertain-creation).
+Latest investigation checkpoint: [Provider reconciler lifetime readiness](#2026-10-24-provider-reconciler-lifetime-readiness).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12895,3 +12895,77 @@ Phase6 remains **5/15**. Existing public ProfileV2/provider-v3 holds,
 No quota, timeout, global toolchain, merge, release or runtime authority change.
 Private evidence: slice6-browser-uncertainty-audit-20261024-v1, outside Git;
 four-file test/progress checkpoint commit/push disposition follows separately.
+
+### 2026-10-24 Provider reconciler lifetime readiness
+
+Independent source review selects the shared process reconciler behind the
+Provider readiness checker. Previously checked/lastErr could retain successful
+readiness after Startup stopped. A cancelled or expired step returning nil
+could also publish success and enter the next step. The initial worker-context
+fix still left readiness open while an expired current step remained blocked.
+The checker is used by the coding v2, Browser and Desktop compositions; coding
+v3 itself remains an explicit hold. Concurrent server shutdown does not prove
+that every in-flight readiness request has stopped before this worker exits.
+These are source/component findings, not a three-command live exploit claim.
+
+The final implementation stores worker and active-pass contexts under the
+existing mutex. Ready refuses an unstarted/stopped worker or expired active
+pass, then applies the previous complete-pass result. Before each step it
+checks cancellation; final publication joins the step and context errors and
+clears the active pass under the same lock. Deferred cancellation therefore
+cannot invalidate completed success, and a late nil cannot erase cancellation.
+The worker remains single-use. Interval/timeout, recovery ownership, runtime
+drivers, allocation/UID rules, public APIs/Contract, locks and public v3 holds
+are unchanged; no lease, cache, additional goroutine or execution budget is added.
+
+Two separately reviewed, fresh identities reproduce distinct failures: RED2
+runs nine named original-production regressions, all FAIL as expected in
+4.997018s/90s; RED3 runs only the newly found expired-active-pass counterexample
+against the preliminary worker-only fix, FAIL as expected in4.759259s/90s.
+Natural Go exit1/raw fail frames remain failure evidence, not passing gates;
+the old failed identity is not rerun. A shutdown test draft was rejected because
+its pass deadline could precede Shutdown; the final synchronous pre-cancelled
+caller test proves worker cancellation before releasing the blocked dependency.
+
+Final GREEN2 passes14 named results (10 new/4 existing),61 complete Go events
+and package vet. The eight new boundary scenarios include parent cancellation,
+Shutdown, blocked late success, cancellation before/during steps, pass timeout,
+pre-cancelled Startup and an expired but still-blocked active pass. A same-process
+handler/checker test requires stopped readyz503; it starts no listener/Provider.
+The active-pass test's post-release Ready poll alone does not prove publication;
+direct completed-pass error checks and shutdown/join tests cover late outcomes.
+Normal dependency failure/recovery remains covered through actual Startup.
+Test8.508912s, package vet0.260407s; complete bootstrap/input/Git pre/post/result
+publication9.478036s/90s, with all17 commands natural0 and no signal/truncation.
+
+At base3a25bd1a577a92ce13ed8143380258072ae65682 plus the exact two Go changes,
+`go test -race -shuffle=on -count=1 ./...` passes naturally384.341810s/600s,
+exit0/reaped, stdout20648B/stderr0B, no failure/timeout/truncation/active signal.
+All267 unique package lines complete:229ok and38without tests. Complete2175
+source/lock inputs and15 bounded input/Git/environment receipts match before/
+after. Actual controller operation384.985177s includes separately bounded
+pre/post work, not a whole-operation600s claim. Root-module scope excludes
+nested modules and tagged Docker gates. Full `go vet ./...` then passes
+naturally1.929341s with empty outputs; complete stage2.567144s/90s. Only these
+three progress documents change afterward; tested source stays unchanged.
+
+Passive observation remains INCOMPLETE:21 process samples; at200.041617s the
+conservative guard observes qualificationsupervisor.test's qualification-adapter
+child in another process group and stops sampling. Go continues naturally.
+No shell/test fault, unique old timeout cause or stable performance gain is
+inferred. Historical failures remain. FULL2 failed at Git preflight before Go
+launch: strip() removed a significant porcelain-status leading space; the
+fresh FULL3 preserves bytes with rstrip(newline). The six raw preflight receipts,
+FAIL and all unexecuted/rejected preparations remain; no timeout is relabelled.
+
+Fixed order remains:1 bounded GuestE limited acceptance unchanged;2 remaining
+startup/safety work continues with this process-readiness subissue closed at
+component scope;3 full live Profile-v2 inventory/original16/independent
+acceptance incomplete;4 formal post-acceptance handoff unstarted. Real Provider,
+PostgreSQL/Docker recovery, Docker management authority and full-topology gates
+remain open. This pure process-readiness change touches no runtime driver or
+resource lifecycle, so it does not substitute for or newly run tagged Docker.
+Phase6 remains **5/15**. Original gates,9bindings/64barriers, old evidence/locks/
+reuse, miseGo1.26.8 and timers OFF remain; no release/merge/global installation.
+Private evidence: slice6-reconciler-readiness-20261024-v1, outside Git. The
+five-file fix/test/progress checkpoint's commit/push disposition is separate.

@@ -46,7 +46,38 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Browser terminal-intent audit](audits/product-phase-6-slice-6-startup.md#2026-10-24-browser-terminal-intent-during-uncertain-creation)
+The [Provider reconciler readiness fix](audits/product-phase-6-slice-6-startup.md#2026-10-24-provider-reconciler-lifetime-readiness)
+binds readiness to the active single-use worker and rejects an expired current
+recovery pass even when its dependency has not returned. Each step checks
+cancellation before starting; final publication retains cancellation/deadline
+errors and clears the current pass before its deferred cancellation. Stopping
+or a late nil result cannot reuse old success. Normal failure/recovery remains.
+No polling interval, timeout, runtime driver, Contract or public v3 hold changes.
+
+Two bounded reproductions retain 9 expected failures on original production
+and one new active-deadline failure on the preliminary fix. Final process tests
+pass all14 named results (10 new and4 existing), including eight new boundary
+scenarios and handler-only stopped-worker readyz503, plus package vet in a
+complete9.478036s/90s. This is component evidence, not real Provider commands,
+PostgreSQL or Docker. Coding v3 remains held.
+
+At base3a25bd1a577a92ce13ed8143380258072ae65682 plus the two Go changes,
+root-module full race passes naturally in384.341810s/600s:267 unique packages,
+229passing/38without tests, stdout20648B/stderr0B, no timeout/signal/truncation.
+Full vet passes in1.929341s; complete stage2.567144s/90s. All2175 source/lock
+inputs match before/after; only progress docs change afterward. Observer
+INCOMPLETE:21 samples, stopping at200.041617s after a qualificationsupervisor
+child has a different process group. This is not a test fault or timeout-root-
+cause finding. One full preflight failed before Go started because strip()
+removed a valid Git-status space; raw failure and all rejected drafts remain.
+
+Phase6 stays **5/15**, Slice6step2. Real Provider/PG/Docker recovery and authority,
+step3 live inventory/original16/independent acceptance and formalstep4 remain
+open; gates, locks/reuse,9bindings/64barriers, miseGo1.26.8 and timers OFF remain.
+Private evidence: slice6-reconciler-readiness-20261024-v1. This five-file
+fix/test/progress checkpoint's commit/push disposition is separate.
+
+The preceding [Browser terminal-intent audit](audits/product-phase-6-slice-6-startup.md#2026-10-24-browser-terminal-intent-during-uncertain-creation)
 adds four deterministic cancellation/expiry interleavings during creation,
 without changing production code. Unknown completion retains the exact
 Creating identity, UID and capacity, excludes a competing allocation and never

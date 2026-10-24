@@ -17,11 +17,13 @@ type Reconciler struct {
 	timeout  time.Duration
 	steps    []ReconcileFunc
 
-	mu      sync.RWMutex
-	lastErr error
-	checked bool
-	cancel  context.CancelFunc
-	done    chan struct{}
+	mu            sync.RWMutex
+	lastErr       error
+	checked       bool
+	cancel        context.CancelFunc
+	workerContext context.Context
+	passContext   context.Context
+	done          chan struct{}
 }
 
 func NewReconciler(interval, timeout time.Duration, steps ...ReconcileFunc) (*Reconciler, error) {
@@ -45,10 +47,14 @@ func (r *Reconciler) Startup(ctx context.Context) error {
 		return errors.New("Provider reconciler already started")
 	}
 	r.cancel = cancel
+	r.workerContext = workerCtx
 	r.done = make(chan struct{})
 	done := r.done
 	r.mu.Unlock()
-	defer close(done)
+	defer func() {
+		cancel()
+		close(done)
+	}()
 	r.run(workerCtx)
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
@@ -65,16 +71,26 @@ func (r *Reconciler) Startup(ctx context.Context) error {
 func (r *Reconciler) run(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
+	r.mu.Lock()
+	r.passContext = ctx
+	r.mu.Unlock()
 	var result error
 	for _, step := range r.steps {
+		if err := ctx.Err(); err != nil {
+			result = err
+			break
+		}
 		if err := step(ctx); err != nil {
-			result = errors.Join(result, err)
+			result = err
 			break
 		}
 	}
 	r.mu.Lock()
-	r.lastErr = result
+	// A dependency returning nil cannot turn an expired pass into success.
+	r.lastErr = errors.Join(result, ctx.Err())
 	r.checked = true
+	// Clear before defer cancel: a completed successful pass stays successful.
+	r.passContext = nil
 	r.mu.Unlock()
 }
 
@@ -87,6 +103,15 @@ func (r *Reconciler) Ready(ctx context.Context) error {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.workerContext == nil {
+		return errors.New("Provider reconciliation has not completed")
+	}
+	if err := r.workerContext.Err(); err != nil {
+		return err
+	}
+	if r.passContext != nil && r.passContext.Err() != nil {
+		return r.passContext.Err()
+	}
 	if !r.checked {
 		return errors.New("Provider reconciliation has not completed")
 	}
