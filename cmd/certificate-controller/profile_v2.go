@@ -10,15 +10,9 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
 )
 
-func validControllerConfigVersion(c configDocument) bool {
-	switch c.Protocol {
-	case configProtocol:
-		return c.PeerCRLSourcesPath == "" && c.PeerCRLSourcesDigest == ""
-	case peerCRLConfigProtocol, profileV2ConfigProtocol:
-		return filepath.IsAbs(c.PeerCRLSourcesPath) && c.PeerCRLSourcesDigest != ""
-	default:
-		return false
-	}
+func validControllerConfig(c configDocument) bool {
+	return (c.Protocol == peerCRLConfigProtocol || c.Protocol == profileV2ConfigProtocol) &&
+		filepath.IsAbs(c.PeerCRLSourcesPath) && c.PeerCRLSourcesDigest != ""
 }
 
 func validCertificatePolicyPurpose(p certificatePolicy) bool {
@@ -60,7 +54,7 @@ type controllerStartupProfile struct {
 // or opening a ledger/listener. A rejected v2 document never falls back to v1.
 func loadControllerProfile(c configDocument) (controllerStartupProfile, error) {
 	var result controllerStartupProfile
-	if !validControllerConfigVersion(c) {
+	if !validControllerConfig(c) {
 		return result, stageError("config-version")
 	}
 	_, ledgerPath, err := phase6security.Slice6ControllerLedgerMount("certificate-controller")
@@ -103,23 +97,20 @@ func loadControllerProfile(c configDocument) (controllerStartupProfile, error) {
 	} else {
 		p, err := phase6security.VerifyFile(c.SecurityProfilePath)
 		if err != nil || p.ProfileDigest != c.SecurityProfileDigest || p.EnvironmentDigest != c.EnvironmentDigest || p.PrincipalProfileDigest != c.ProfileDigest ||
-			(len(p.PostgresClientAgents) != 0 && c.Protocol != postgresConfigProtocol) ||
 			phase6security.VerifySlice6PrivateConfigPath(p, "certificate-controller", phase6security.Slice6ProfileConfigFile, c.SecurityProfilePath) != nil {
 			return result, stageError("security-profile")
 		}
 		if phase6security.VerifySlice6ControllerLedgerMounts(p) != nil {
 			return result, stageError("ledger-binding")
 		}
-		if c.Protocol == peerCRLConfigProtocol {
-			if phase6security.VerifySlice6PrivateConfigPath(p, "certificate-controller", phase6security.Slice6PeerCRLSourcesFile, c.PeerCRLSourcesPath) != nil {
-				return result, stageError("peer-crl-sources-path")
-			}
-			sources, err := phase6security.VerifyPeerCRLSourcesFile(c.PeerCRLSourcesPath, p)
-			if err != nil || sources.Digest() != c.PeerCRLSourcesDigest {
-				return result, stageError("peer-crl-sources")
-			}
-			result.sources = &sources
+		if phase6security.VerifySlice6PrivateConfigPath(p, "certificate-controller", phase6security.Slice6PeerCRLSourcesFile, c.PeerCRLSourcesPath) != nil {
+			return result, stageError("peer-crl-sources-path")
 		}
+		sources, err := phase6security.VerifyPeerCRLSourcesFile(c.PeerCRLSourcesPath, p)
+		if err != nil || sources.Digest() != c.PeerCRLSourcesDigest {
+			return result, stageError("peer-crl-sources")
+		}
+		result.sources = &sources
 		result.v1 = &p
 		result.registry, err = p.PrincipalRegistry()
 		if err != nil {
@@ -166,13 +157,8 @@ func (p controllerStartupProfile) validatePolicies(c configDocument, policies []
 		}
 		return validateFiniteIssuerPolicyGroupsV2(*p.v2, *p.sources, c.PeerCRLSourcesDigest, policies)
 	}
-	if p.v1 != nil && p.v2 == nil {
-		if c.Protocol == configProtocol && p.sources == nil {
-			return nil
-		}
-		if c.Protocol == peerCRLConfigProtocol && p.sources != nil {
-			return validateFiniteIssuerPolicyGroups(*p.v1, *p.sources, policies)
-		}
+	if p.v1 != nil && p.v2 == nil && p.sources != nil && c.Protocol == peerCRLConfigProtocol {
+		return validateFiniteIssuerPolicyGroups(*p.v1, *p.sources, policies)
 	}
 	return workloadpki.ErrUnavailable
 }
@@ -181,10 +167,8 @@ func (p controllerStartupProfile) newController(c configDocument, config workloa
 	if p.v2 != nil && p.v1 == nil && p.sources != nil && c.Protocol == profileV2ConfigProtocol {
 		return workloadpki.NewControllerV2(config, *p.v2, *p.sources, c.PeerCRLSourcesDigest)
 	}
-	if p.v1 != nil && p.v2 == nil && (c.Protocol == configProtocol || c.Protocol == peerCRLConfigProtocol) {
-		if p.sources != nil {
-			config.PeerCRLProfile, config.PeerCRLSources = p.v1, p.sources
-		}
+	if p.v1 != nil && p.v2 == nil && p.sources != nil && c.Protocol == peerCRLConfigProtocol {
+		config.PeerCRLProfile, config.PeerCRLSources = p.v1, p.sources
 		return workloadpki.NewController(config)
 	}
 	return nil, workloadpki.ErrUnavailable

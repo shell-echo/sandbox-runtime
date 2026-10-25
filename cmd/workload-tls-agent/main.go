@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	configProtocol           = "sandbox-runtime.workload-tls-agent-config.v2"
 	peerCRLConfigProtocol    = "sandbox-runtime.workload-tls-agent-config.v3"
 	postgresConfigProtocol   = "sandbox-runtime.workload-tls-agent-config.v4"
 	profileV2ConfigProtocol  = "sandbox-runtime.workload-tls-agent-config.v5"
@@ -117,7 +116,7 @@ func run() error { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!validConfigVersion(config) ||
+		!validAgentConfig(config) ||
 		config.MaxTTLSeconds < 60 || config.MaxTTLSeconds > maximumPolicyTTL || config.CertificateTTLSeconds < 60 ||
 		int64(config.CertificateTTLSeconds) > config.MaxTTLSeconds || config.RotateAfterSeconds < 1 ||
 		config.RotateAfterSeconds > config.CertificateTTLSeconds*2/3 || config.OverlapSeconds < 0 ||
@@ -265,19 +264,15 @@ func matchesProfileBinding(profile phase6security.Profile, binding phase6securit
 
 func matchesBindingFields(profile agentProfileFields, binding phase6security.TLSAgentBinding,
 	agent, subject phase6security.Principal, config configDocument) bool {
-	if config.SecurityProfileDigest != profile.ProfileDigest || config.EnvironmentDigest != profile.EnvironmentDigest ||
+	if !validAgentConfig(config) || config.SecurityProfileDigest != profile.ProfileDigest || config.EnvironmentDigest != profile.EnvironmentDigest ||
 		config.ProfileDigest != profile.PrincipalProfileDigest || config.AgentDeployment == "" || config.SubjectDeployment == "" ||
 		subject.TLS == nil {
 		return false
 	}
-	expectedTTL := subject.TLS.TTLSeconds
-	if config.Protocol != configProtocol {
-		var err error
-		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
-			subject.TLS.RotateAfterSeconds)
-		if err != nil {
-			return false
-		}
+	expectedTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(subject.TLS.TTLSeconds,
+		subject.TLS.RotateAfterSeconds)
+	if err != nil {
+		return false
 	}
 	controllerPublic, controllerErr := base64.RawURLEncoding.DecodeString(config.CertificateControllerPublic)
 	requestPublic, requestErr := base64.RawURLEncoding.DecodeString(config.AgentPublicKey)

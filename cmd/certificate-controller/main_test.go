@@ -155,13 +155,14 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			AgentPublicKey: base64.RawURLEncoding.EncodeToString(public)}
 	}
 	valid := func() configDocument {
-		return configDocument{Protocol: configProtocol, ControllerKeyID: authority.ResponseKeyID,
+		return configDocument{Protocol: peerCRLConfigProtocol, ControllerKeyID: authority.ResponseKeyID,
+			PeerCRLSourcesPath: "/run/phase6/config/peer-crl-sources.json", PeerCRLSourcesDigest: "pinned",
 			Credential: credentialDocument{Principal: controllerIdentity,
 				SocketPath:  profile.CredentialIssuerSockets[0].SocketPath,
 				ExpectedUID: credential.UID, ExpectedGID: credential.GID,
 				ControllerUID: controller.UID, ControllerGID: controller.GID},
 			ManagedVaultTLS: managedTLSConfig{PolicyID: authority.ManagedPolicyID, ControllerSocket: authority.SelfSocketPath,
-				CertificateTTLSeconds: 600, RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10},
+				CertificateTTLSeconds: 569, RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10},
 			Policies: []certificatePolicy{
 				policy(authority.ManagedPolicyID, authority.ManagedRequestKeyID, authority.ManagedVaultRole,
 					controllerIdentity, controllerIdentity, controllerTLS, controller.UID, controller.GID, managedPublic),
@@ -197,17 +198,11 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 	if !validateControllerProfileConfig(profile, valid(), responsePublic, managedPublic) {
 		t.Fatal("exact controller/agent inventory rejected")
 	}
-	production := valid()
-	production.Protocol = peerCRLConfigProtocol
-	production.ManagedVaultTLS.CertificateTTLSeconds = 569
-	if !validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
-		t.Fatal("v4 managed request lifetime rejected")
-	}
 	fields, err := controllerFieldsV1(profile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2 := production
+	v2 := valid()
 	v2.Protocol = profileV2ConfigProtocol
 	if !validateControllerConfigFields(fields, v2) {
 		t.Fatal("v5 field preflight rejected exact inherited bindings")
@@ -230,11 +225,16 @@ func TestControllerRequiresCompleteProfileBoundBrokerAgentInventory(t *testing.T
 			}
 		})
 	}
+	production := valid()
 	production.ManagedVaultTLS.CertificateTTLSeconds = 600
 	if validateControllerProfileConfig(profile, production, responsePublic, managedPublic) {
 		t.Fatal("v4 accepted pre-backdate request lifetime")
 	}
 	for name, change := range map[string]func(*configDocument){
+		"retired protocol":      func(c *configDocument) { c.Protocol = "sandbox-runtime.certificate-controller-config.v3" },
+		"missing source path":   func(c *configDocument) { c.PeerCRLSourcesPath = "" },
+		"relative source path":  func(c *configDocument) { c.PeerCRLSourcesPath = "relative" },
+		"missing source digest": func(c *configDocument) { c.PeerCRLSourcesDigest = "" },
 		"missing broker policy": func(c *configDocument) { c.Policies = c.Policies[:2] },
 		"extra broker policy":   func(c *configDocument) { c.Policies = append(c.Policies, c.Policies[2]) },
 		"wrong requester":       func(c *configDocument) { c.Policies[2].Requester.Name = "other" },

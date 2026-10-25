@@ -902,8 +902,13 @@ handshake and active-connection polling still use the actual TLS-verified
 issuer/leaf. Provider/Gateway live-signer role-config v3 is an unpublished
 draft tightened in place: all three peer-CRL binding fields are mandatory,
 and old development snapshots must be regenerated rather than silently
-defaulted or downgraded. The previous v2 command configuration remains a component
-compatibility path and does not enable production peer-revocation admission.
+defaulted or downgraded. The pre-CRL `workload-tls-agent-config.v2` command
+configuration is retired as of2026-10-25; it is rejected even with source pins
+or the current request TTL. This retires a configuration compatibility path,
+not the active `workload-tls-agent.v2` CRL message protocol. Controller
+pre-CRL config.v3 is likewise retired; all accepted command configurations bind
+private CRL sources and use the same backdated request TTL. The current CRL
+builders remain unchanged pending joint Profile/consumer/harness migration.
 The unpublished Browser and Desktop executor backend authority v2 likewise
 requires `peer_crl_role_file`, `peer_crl_role_digest` and
 `peer_crl_source_mapping_digest`. Both entrypoints verify the matching

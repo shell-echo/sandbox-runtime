@@ -3,6 +3,11 @@
 - Status: accepted
 - Date: 2026-09-22
 
+Current amendment: [prelaunch runtime path consolidation](#2026-10-25-prelaunch-runtime-path-consolidation).
+The user's prelaunch policy supersedes the2026-10-05 requirement to retain
+historical V1 runtime compatibility. Historical rulings below remain unchanged
+as records; current safety gates and original receipts are preserved.
+
 ## Context
 
 Phase 6 Slice 5 establishes role-owned secret registries, short-lived Vault
@@ -5170,3 +5175,31 @@ the signature cannot retroactively authorize sockets, devices or source mounts.
 Production key governance, source-owned Store and actual full-service composition
 remain separately reviewed work. Public holds, two issuers and frozen-R rules
 are unchanged.
+
+## 2026-10-25 prelaunch runtime path consolidation
+
+The project has not launched. Maintain one coherent current implementation;
+do not retain an old Profile decoder, validator or command branch solely for
+historical runtime compatibility, and do not create a further internal version
+to improve an unpublished design. This supersedes that maintenance requirement
+in the2026-10-05 ruling, not its trust, identity, rejection or evidence boundary.
+Original source, locked Contracts, digest-bound receipts and failure records
+remain historical evidence; an implementation change needs its own validation.
+
+The first reviewed cleanup removes only the unconsumed no-CRL controller
+config.v3 and TLS-agent config.v2 paths, their nil-source success cases and raw
+request-TTL exception. All accepted command configurations now require private
+CRL-source pins and the current backdated TTL. Existing CRL message protocols
+and the active three tagged builders remain unchanged. The command tests cover
+retired inputs, missing/relative source paths, missing pins, policy purposes and
+rejection before any inherited dummy key descriptor is consumed.
+
+Both Profile types still exist in current role constructors and tagged gates.
+Their consolidation must replace that whole caller chain with one current
+model, without fallback or aliases retained for old revisions. Keeping active
+consumers operational during this intermediate source checkpoint is not a new
+compatibility commitment. The full-model and Provider-v3 holds remain closed;
+synthetic field validation and these root-module checks cannot lift them. The
+only issuers remain broker/general, with PostgreSQL on general. Step3 still
+requires the fresh complete live inventory, original16 scenarios and independent
+acceptance; this checkpoint is Slice6step2, Phase6 remains5/15.

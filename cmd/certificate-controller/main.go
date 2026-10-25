@@ -37,8 +37,6 @@ import (
 )
 
 const (
-	configProtocol          = "sandbox-runtime.certificate-controller-config.v3"
-	postgresConfigProtocol  = "sandbox-runtime.certificate-controller-config.v4"
 	peerCRLConfigProtocol   = "sandbox-runtime.certificate-controller-config.v4"
 	profileV2ConfigProtocol = "sandbox-runtime.certificate-controller-config.v5"
 	maxConfigBytes          = 2 << 20
@@ -160,7 +158,7 @@ func run() (runErr error) { //nolint:gocyclo
 	}
 	canonical, err := json.Marshal(config)
 	if err != nil || !bytes.Equal(canonical, document) ||
-		!validControllerConfigVersion(config) ||
+		!validControllerConfig(config) ||
 		config.MaximumActiveCertificates < 1 || config.MaximumActiveCertificates > 2 ||
 		len(config.Listeners) < 1 || len(config.Listeners) > 128 ||
 		len(config.Policies) < 1 || len(config.Policies) > 128 || len(config.VaultClientCertificatePEM) < 1 ||
@@ -359,7 +357,7 @@ func run() (runErr error) { //nolint:gocyclo
 	httpClient := &http.Client{Transport: tracked}
 	client, err := workloadpki.NewVaultClient(workloadpki.VaultConfig{Endpoint: config.VaultEndpoint, Mount: config.VaultMount,
 		AllowedPolicies: vaultPolicies, OperationTimeout: time.Duration(config.OperationTimeoutSeconds) * time.Second, Now: time.Now,
-		RequireImmediateCompleteCRL: peerSources != nil, PeerIssuerSources: vaultPeerSources}, httpClient, tokenSource)
+		RequireImmediateCompleteCRL: true, PeerIssuerSources: vaultPeerSources}, httpClient, tokenSource)
 	if err != nil {
 		return stageError("vault-pki")
 	}
@@ -565,6 +563,9 @@ func validateControllerProfileConfig(profile phase6security.Profile, config conf
 }
 
 func validateControllerConfigFields(profile controllerProfileFields, config configDocument) bool {
+	if !validControllerConfig(config) {
+		return false
+	}
 	authority := profile.CertificateController
 	if config.Credential.SocketPath != profile.issuerSocket.SocketPath ||
 		config.Credential.ExpectedUID != profile.credentialServer.UID || config.Credential.ExpectedGID != profile.credentialServer.GID ||
@@ -581,14 +582,10 @@ func validateControllerConfigFields(profile controllerProfileFields, config conf
 	if controller.TLS == nil {
 		return false
 	}
-	expectedTTL := controller.TLS.TTLSeconds
-	if config.Protocol == peerCRLConfigProtocol || config.Protocol == profileV2ConfigProtocol {
-		var err error
-		expectedTTL, err = phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
-			controller.TLS.RotateAfterSeconds)
-		if err != nil {
-			return false
-		}
+	expectedTTL, err := phase6security.Slice6ManagedCertificateRequestTTL(controller.TLS.TTLSeconds,
+		controller.TLS.RotateAfterSeconds)
+	if err != nil {
+		return false
 	}
 	if controller.AuthorizationPrincipal == nil || controller.TLS == nil ||
 		uint32(os.Getuid()) != authority.UID || uint32(os.Getgid()) != authority.GID ||

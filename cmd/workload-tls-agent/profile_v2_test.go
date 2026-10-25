@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -14,9 +15,10 @@ import (
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"github.com/shell-echo/sandbox-runtime/internal/workloadpki"
+	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
-func TestAgentConfigVersionsKeepPurposeAndSourcePins(t *testing.T) {
+func TestAgentConfigRequiresPurposeAndSourcePins(t *testing.T) {
 	for _, version := range []string{peerCRLConfigProtocol, postgresConfigProtocol, profileV2ConfigProtocol, postgresV2ConfigProtocol} {
 		c := configDocument{Protocol: version, PeerCRLSourcesPath: "/run/phase6/config/peer-crl-sources.json", PeerCRLSourcesDigest: "pinned"}
 		pg := version == postgresConfigProtocol || version == postgresV2ConfigProtocol
@@ -24,7 +26,7 @@ func TestAgentConfigVersionsKeepPurposeAndSourcePins(t *testing.T) {
 			c.Purpose = workloadpki.PostgresClientPurpose
 			c.Postgres = &postgresClientConfig{}
 		}
-		if !validConfigVersion(c) {
+		if !validAgentConfig(c) {
 			t.Fatal("known version rejected", version)
 		}
 		for _, change := range []func(*configDocument){
@@ -51,29 +53,52 @@ func TestAgentConfigVersionsKeepPurposeAndSourcePins(t *testing.T) {
 		} {
 			copy := c
 			change(&copy)
-			if validConfigVersion(copy) {
+			if validAgentConfig(copy) {
 				t.Fatal("version/purpose/source drift accepted", version)
 			}
 		}
 	}
-	if !validConfigVersion(configDocument{Protocol: configProtocol}) {
-		t.Fatal("legacy v2 rejected")
-	}
-	if validConfigVersion(configDocument{Protocol: configProtocol, PeerCRLSourcesPath: "/run/sources", PeerCRLSourcesDigest: "pinned"}) {
-		t.Fatal("legacy v2 silently enabled sources")
+	for _, c := range []configDocument{{Protocol: "sandbox-runtime.workload-tls-agent-config.v2"},
+		{Protocol: "sandbox-runtime.workload-tls-agent-config.v2", PeerCRLSourcesPath: "/run/sources", PeerCRLSourcesDigest: "pinned"}} {
+		if validAgentConfig(c) {
+			t.Fatal("retired agent configuration accepted")
+		}
 	}
 }
 
-func TestAgentV2RejectsBeforeReadingInheritedKey(t *testing.T) {
-	if os.Getenv("SANDBOX_RUNTIME_AGENT_PREFLIGHT_CHILD") == "1" {
+func TestAgentRequiresCRLProvider(t *testing.T) {
+	startup := agentStartupProfile{v1: &phase6security.Profile{}}
+	for _, protocol := range []string{peerCRLConfigProtocol, postgresConfigProtocol, "sandbox-runtime.workload-tls-agent-config.v2"} {
+		provider, err := startup.peerProvider(configDocument{Protocol: protocol}, nil)
+		if provider != nil || !errors.Is(err, workloadtlsagent.ErrUnavailable) {
+			t.Fatalf("absent CRL authority accepted: provider=%v err=%v", provider, err)
+		}
+	}
+}
+
+func TestAgentRejectsUnsafeStartupBeforeReadingInheritedKey(t *testing.T) {
+	if expected := os.Getenv("SANDBOX_RUNTIME_AGENT_PREFLIGHT_CHILD"); expected != "" {
 		err := run()
-		if err == nil || !strings.Contains(err.Error(), "stage security-profile-binding:") {
+		if err == nil || !strings.Contains(err.Error(), "stage "+expected+":") {
 			t.Fatalf("unexpected command rejection: %v", err)
 		}
 		return
 	}
-	for _, version := range []string{profileV2ConfigProtocol, postgresV2ConfigProtocol} {
-		t.Run(version, func(t *testing.T) {
+	for _, test := range []struct {
+		name, protocol, stage string
+		change                func(*configDocument)
+	}{
+		{"ordinary-profile", peerCRLConfigProtocol, "security-profile-binding", func(*configDocument) {}},
+		{"postgres-profile", postgresConfigProtocol, "security-profile-binding", func(*configDocument) {}},
+		{"current-ordinary-hold", profileV2ConfigProtocol, "security-profile-binding", func(*configDocument) {}},
+		{"current-postgres-hold", postgresV2ConfigProtocol, "security-profile-binding", func(*configDocument) {}},
+		{"retired-with-sources", "sandbox-runtime.workload-tls-agent-config.v2", "config-validate", func(*configDocument) {}},
+		{"retired-without-sources", "sandbox-runtime.workload-tls-agent-config.v2", "config-validate", func(c *configDocument) { c.PeerCRLSourcesPath = ""; c.PeerCRLSourcesDigest = "" }},
+		{"missing-source-path", profileV2ConfigProtocol, "config-validate", func(c *configDocument) { c.PeerCRLSourcesPath = "" }},
+		{"relative-source-path", postgresV2ConfigProtocol, "config-validate", func(c *configDocument) { c.PeerCRLSourcesPath = "relative" }},
+		{"missing-source-digest", profileV2ConfigProtocol, "config-validate", func(c *configDocument) { c.PeerCRLSourcesDigest = "" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			directory := t.TempDir()
 			profile := phase6security.ProfileV2{Protocol: phase6security.ProtocolIDV2, Version: phase6security.VersionV2, Revision: "command-hold-test"}
 			profile.ProfileDigest = profile.Digest()
@@ -85,14 +110,15 @@ func TestAgentV2RejectsBeforeReadingInheritedKey(t *testing.T) {
 			if err := os.WriteFile(profilePath, data, 0600); err != nil {
 				t.Fatal(err)
 			}
-			c := configDocument{Protocol: version, SecurityProfilePath: profilePath, SecurityProfileDigest: profile.ProfileDigest,
+			c := configDocument{Protocol: test.protocol, SecurityProfilePath: profilePath, SecurityProfileDigest: profile.ProfileDigest,
 				PeerCRLSourcesPath: filepath.Join(directory, "absent-sources.json"), PeerCRLSourcesDigest: "sha256:" + strings.Repeat("a", 64),
 				MaxTTLSeconds: 600, CertificateTTLSeconds: 569, RotateAfterSeconds: 300, OverlapSeconds: 30, CheckIntervalMilliseconds: 100, RevocationPollIntervalSeconds: 1, RevocationMaxStalenessSeconds: 10,
 				OperationTimeoutSeconds: 1, MaxConnections: 1, ReplayCapacity: 16, AgentUID: 20001, AgentGID: 30001, ExpectedRoleUID: 20002, ExpectedRoleGID: 30002, SignerSocketUID: 20001, SignerSocketGID: 30002}
-			if version == postgresV2ConfigProtocol {
+			if test.protocol == postgresConfigProtocol || test.protocol == postgresV2ConfigProtocol {
 				c.Purpose = workloadpki.PostgresClientPurpose
 				c.Postgres = &postgresClientConfig{}
 			}
+			test.change(&c)
 			input, err := json.Marshal(c)
 			if err != nil {
 				t.Fatal(err)
@@ -110,8 +136,8 @@ func TestAgentV2RejectsBeforeReadingInheritedKey(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestAgentV2RejectsBeforeReadingInheritedKey$")
-			command.Env = append(os.Environ(), "SANDBOX_RUNTIME_AGENT_PREFLIGHT_CHILD=1")
+			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestAgentRejectsUnsafeStartupBeforeReadingInheritedKey$")
+			command.Env = append(os.Environ(), "SANDBOX_RUNTIME_AGENT_PREFLIGHT_CHILD="+test.stage)
 			command.Stdin = bytes.NewReader(input)
 			command.ExtraFiles = []*os.File{f}
 			if output, err := command.CombinedOutput(); err != nil {

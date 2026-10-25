@@ -12,11 +12,9 @@ import (
 	"github.com/shell-echo/sandbox-runtime/internal/workloadtlsagent"
 )
 
-func validConfigVersion(c configDocument) bool {
+func validAgentConfig(c configDocument) bool {
 	sources := filepath.IsAbs(c.PeerCRLSourcesPath) && c.PeerCRLSourcesDigest != ""
 	switch c.Protocol {
-	case configProtocol:
-		return c.Purpose == "" && c.Postgres == nil && c.PeerCRLSourcesPath == "" && c.PeerCRLSourcesDigest == ""
 	case peerCRLConfigProtocol, profileV2ConfigProtocol:
 		return c.Purpose == "" && c.Postgres == nil && sources
 	case postgresConfigProtocol, postgresV2ConfigProtocol:
@@ -50,7 +48,7 @@ type agentStartupProfile struct {
 
 func loadAgentProfile(c configDocument) (agentStartupProfile, error) {
 	var result agentStartupProfile
-	if !validConfigVersion(c) {
+	if !validAgentConfig(c) {
 		return result, stageError("config-version")
 	}
 	if c.Protocol == profileV2ConfigProtocol || c.Protocol == postgresV2ConfigProtocol {
@@ -77,16 +75,14 @@ func loadAgentProfile(c configDocument) (agentStartupProfile, error) {
 			phase6security.VerifySlice6PrivateConfigPath(p, c.AgentDeployment, phase6security.Slice6ProfileConfigFile, c.SecurityProfilePath) != nil {
 			return result, stageError("security-profile-binding")
 		}
-		if c.Protocol != configProtocol {
-			if phase6security.VerifySlice6PrivateConfigPath(p, c.AgentDeployment, phase6security.Slice6PeerCRLSourcesFile, c.PeerCRLSourcesPath) != nil {
-				return result, stageError("peer-crl-sources-path")
-			}
-			sources, err := phase6security.VerifyPeerCRLSourcesFile(c.PeerCRLSourcesPath, p)
-			if err != nil || sources.Digest() != c.PeerCRLSourcesDigest {
-				return result, stageError("peer-crl-sources")
-			}
-			result.sources = &sources
+		if phase6security.VerifySlice6PrivateConfigPath(p, c.AgentDeployment, phase6security.Slice6PeerCRLSourcesFile, c.PeerCRLSourcesPath) != nil {
+			return result, stageError("peer-crl-sources-path")
 		}
+		sources, err := phase6security.VerifyPeerCRLSourcesFile(c.PeerCRLSourcesPath, p)
+		if err != nil || sources.Digest() != c.PeerCRLSourcesDigest {
+			return result, stageError("peer-crl-sources")
+		}
+		result.sources = &sources
 		result.v1 = &p
 		result.registry, err = p.PrincipalRegistry()
 		if err != nil {
@@ -100,7 +96,7 @@ func loadAgentProfile(c configDocument) (agentStartupProfile, error) {
 }
 
 func validateProfileBindingV2(p phase6security.ProfileV2, c configDocument) bool {
-	if !validConfigVersion(c) {
+	if !validAgentConfig(c) {
 		return false
 	}
 	switch c.Protocol {
@@ -116,7 +112,7 @@ func validateProfileBindingV2(p phase6security.ProfileV2, c configDocument) bool
 }
 
 func prepareAgentPolicy(c configDocument, registry *securityprincipal.Registry) (workloadpki.Policy, ed25519.PublicKey, ed25519.PublicKey, error) {
-	if !validConfigVersion(c) || registry == nil {
+	if !validAgentConfig(c) || registry == nil {
 		return workloadpki.Policy{}, nil, nil, stageError("certificate-policy")
 	}
 	agentPublic, err := base64.RawURLEncoding.DecodeString(c.AgentPublicKey)
@@ -150,17 +146,12 @@ func (p agentStartupProfile) peerProvider(c configDocument, client workloadtlsag
 		if c.Protocol == profileV2ConfigProtocol {
 			return workloadtlsagent.NewControllerPeerCRLProviderV2(*p.v2, *p.sources, c.PeerCRLSourcesDigest, c.Subject.Digest(), client, time.Now)
 		}
-	} else if p.v1 != nil && p.v2 == nil {
-		if c.Protocol == configProtocol && p.sources == nil {
-			return nil, nil
+	} else if p.v1 != nil && p.v2 == nil && p.sources != nil {
+		if c.Protocol == postgresConfigProtocol {
+			return workloadtlsagent.NewPostgresControllerPeerCRLProvider(*p.v1, *p.sources, c.SubjectDeployment, c.Subject.Digest(), client, time.Now)
 		}
-		if p.sources != nil {
-			if c.Protocol == postgresConfigProtocol {
-				return workloadtlsagent.NewPostgresControllerPeerCRLProvider(*p.v1, *p.sources, c.SubjectDeployment, c.Subject.Digest(), client, time.Now)
-			}
-			if c.Protocol == peerCRLConfigProtocol {
-				return workloadtlsagent.NewControllerPeerCRLProvider(*p.v1, *p.sources, c.Subject.Digest(), client, time.Now)
-			}
+		if c.Protocol == peerCRLConfigProtocol {
+			return workloadtlsagent.NewControllerPeerCRLProvider(*p.v1, *p.sources, c.Subject.Digest(), client, time.Now)
 		}
 	}
 	return nil, workloadtlsagent.ErrUnavailable

@@ -46,6 +46,46 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [CRL-required command cleanup](audits/product-phase-6-slice-6-startup.md#2026-10-25-crl-required-command-cleanup)
+removes the unconsumed pre-CRL controller config.v3 and agent config.v2
+startup paths, missing-source/nil-provider successes and the old raw request
+TTL exception. Current configurations always bind an absolute CRL-source path
+and digest, use the existing backdated TTL and require immediate complete
+Vault CRLs. Exact policy, identity, issuer and inherited-key-FD refusals remain.
+The three active tagged builders are byte-identical; no new protocol is added.
+
+This is the first cleanup stage under the user's prelaunch single-implementation
+policy. Global Profile consolidation is still incomplete: both Profile types,
+constructors and active consumers remain to be replaced together with the real
+harness. Their current presence is a migration task, not a promise of historical
+runtime compatibility. ProfileV2.Validate and Provider v3 admission stay closed.
+
+Focused race records120 named passes (controller69/agent51), one existing
+operator fixture SKIP and package vet natural0. The inner result records
+15.796966s; the original outer tail/exit is unavailable after context truncation,
+so no complete focused90 outer0 claim is made. Tagged Go compile/empty selection
+exits0 in6.999336s. Its controller stays FAILED because of a wrong ok-tab output
+expectation; Go1.26.8 emits ok-two-spaces-tab. Independent offline review accepts
+the original bytes with1positive/17refusals, without Go replay or real scenarios.
+
+On baseb7d56f5dbf3f5592628668ba32f89790c3b7139e plus these eight Go files,
+required root race passes naturally419.582453s/600s:267unique packages,
+229passing/38without tests, stdout20650B/stderr0B, no signal/timeout/truncation.
+The passive observer completes42samples; this is not a controlled speedup or
+historical-timeout-cause finding. Full vet passes1.627352s; outer publication
+completes2.408668s/90s. All2176 source/lock inputs match before/after; only these
+five policy/progress documents change afterward. These are component/root-module
+checks, not real Controller/agent/Vault/Docker or full-topology acceptance.
+
+Phase6 remains **5/15**, Slice6step2. Docker management authority, remaining
+real startup/recovery boundaries, step3 fresh whole inventory/original16/
+independent acceptance and formalstep4 remain open. Next scope the single
+current Profile with its constructors, role consumers and live harness together;
+do not add another internal generation or bypass a hold. Old locks/receipts/
+reuse,9bindings/64barriers, miseGo1.26.8 and scheduled tasks OFF remain.
+Private evidence: slice6-profile-cleanup-20261025. This13-file source/test/
+policy/progress checkpoint's commit/push disposition is recorded separately.
+
 The [CRL pull completion guard](audits/product-phase-6-slice-6-startup.md#2026-10-25-crl-pull-completion-and-retained-watermark)
 now checks the original parent/operation contexts after verification/lock wait
 and immediately before publication. CheckPeer and leaf parsing complete before

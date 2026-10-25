@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [CRL pull completion and retained watermark](#2026-10-25-crl-pull-completion-and-retained-watermark).
+Latest investigation checkpoint: [CRL-required command cleanup](#2026-10-25-crl-required-command-cleanup).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13048,3 +13048,53 @@ or lock-verifier run; no such real gate is claimed. Phase6 stays **5/15**. Exist
 miseGo1.26.8,9bindings/64barriers, old locks/receipts/reuse and scheduled tasks OFF
 remain. Private evidence: slice6-crl-completion-deadline-20261025-v1. The coherent
 six-file fix/test/progress checkpoint's commit/push/live-SHA disposition is separate.
+
+## 2026-10-25 CRL-required command cleanup
+
+The CRL-required command cleanup
+removes the unconsumed pre-CRL controller config.v3 and agent config.v2
+startup paths, missing-source/nil-provider successes and the old raw request
+TTL exception. Current configurations always bind an absolute CRL-source path
+and digest, use the existing backdated TTL and require immediate complete
+Vault CRLs. Exact policy, identity, issuer and inherited-key-FD refusals remain.
+The three active tagged builders are byte-identical; no new protocol is added.
+
+This is the first cleanup stage under the user's prelaunch single-implementation
+policy. Global Profile consolidation is still incomplete: both Profile types,
+constructors and active consumers remain to be replaced together with the real
+harness. Their current presence is a migration task, not a promise of historical
+runtime compatibility. ProfileV2.Validate and Provider v3 admission stay closed.
+
+Focused race records120 named passes (controller69/agent51), one existing
+operator fixture SKIP and package vet natural0. The inner result records
+15.796966s; the original outer tail/exit is unavailable after context truncation,
+so no complete focused90 outer0 claim is made. Tagged Go compile/empty selection
+exits0 in6.999336s. Its controller stays FAILED because of a wrong ok-tab output
+expectation; Go1.26.8 emits ok-two-spaces-tab. Independent offline review accepts
+the original bytes with1positive/17refusals, without Go replay or real scenarios.
+
+On baseb7d56f5dbf3f5592628668ba32f89790c3b7139e plus these eight Go files,
+required root race passes naturally419.582453s/600s:267unique packages,
+229passing/38without tests, stdout20650B/stderr0B, no signal/timeout/truncation.
+The passive observer completes42samples; this is not a controlled speedup or
+historical-timeout-cause finding. Full vet passes1.627352s; outer publication
+completes2.408668s/90s. All2176 source/lock inputs match before/after; only these
+five policy/progress documents change afterward. These are component/root-module
+checks, not real Controller/agent/Vault/Docker or full-topology acceptance.
+
+Phase6 remains **5/15**, Slice6step2. Docker management authority, remaining
+real startup/recovery boundaries, step3 fresh whole inventory/original16/
+independent acceptance and formalstep4 remain open. Next scope the single
+current Profile with its constructors, role consumers and live harness together;
+do not add another internal generation or bypass a hold. Old locks/receipts/
+reuse,9bindings/64barriers, miseGo1.26.8 and scheduled tasks OFF remain.
+Private evidence: slice6-profile-cleanup-20261025. This13-file source/test/
+policy/progress checkpoint's commit/push disposition is recorded separately.
+
+The original tagged controller failure and the offline preparation filename
+failure are retained separately. Source-only preparation drafts also retain
+wrong private-root/label failures; none are real runtime acceptance. The tagged
+package has no package-defined init/TestMain and zero selected tests; dependency
+initialization can occur. No real tagged Docker or role scenario is claimed.
+No driver/lifecycle or Provider Contract surface changed, so this stage does not
+invoke the unresolved Docker authority path or claim a new Contract qualification.

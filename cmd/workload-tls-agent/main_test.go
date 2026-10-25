@@ -32,6 +32,7 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 			DNSNames: []string{"product.sandbox.test"}, Usages: []string{"client_auth", "server_auth"}, TTLSeconds: 600,
 			RotateAfterSeconds: 300, OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10}}
 	config := configDocument{Protocol: peerCRLConfigProtocol, SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
+		PeerCRLSourcesPath: "/run/phase6/config/peer-crl-sources.json", PeerCRLSourcesDigest: "pinned",
 		ProfileDigest: profile.PrincipalProfileDigest, AgentDeployment: binding.AgentDeployment, SubjectDeployment: binding.SubjectDeployment,
 		Requester: requester, Subject: subjectIdentity, PolicyID: binding.IssuerPolicyID, VaultRole: binding.IssuerVaultRole,
 		AgentRequestKeyID: binding.AgentRequestKeyID, AgentPublicKey: base64.RawURLEncoding.EncodeToString(requestPublic),
@@ -70,20 +71,23 @@ func TestAgentStartupMatchesExactProfileBinding(t *testing.T) {
 		})
 	}
 	legacy := config
-	legacy.Protocol = configProtocol
+	legacy.Protocol = "sandbox-runtime.workload-tls-agent-config.v2"
 	legacy.CertificateTTLSeconds = int(subject.TLS.TTLSeconds)
-	if !matchesProfileBinding(profile, binding, agent, subject, legacy) {
-		t.Fatal("historical v2 binding rejected")
+	if matchesProfileBinding(profile, binding, agent, subject, legacy) {
+		t.Fatal("retired agent configuration accepted")
 	}
 	legacy.CertificateTTLSeconds = config.CertificateTTLSeconds
 	if matchesProfileBinding(profile, binding, agent, subject, legacy) {
-		t.Fatal("historical v2 request lifetime silently changed")
+		t.Fatal("retired configuration accepted with the current request lifetime")
 	}
 	for name, change := range map[string]func(*configDocument){
-		"profile":       func(c *configDocument) { c.SecurityProfileDigest = "other" },
-		"agent":         func(c *configDocument) { c.Requester.Name = "other" },
-		"subject":       func(c *configDocument) { c.Subject.Name = "other" },
-		"issuer policy": func(c *configDocument) { c.PolicyID = "other" },
+		"missing source path":   func(c *configDocument) { c.PeerCRLSourcesPath = "" },
+		"relative source path":  func(c *configDocument) { c.PeerCRLSourcesPath = "relative" },
+		"missing source digest": func(c *configDocument) { c.PeerCRLSourcesDigest = "" },
+		"profile":               func(c *configDocument) { c.SecurityProfileDigest = "other" },
+		"agent":                 func(c *configDocument) { c.Requester.Name = "other" },
+		"subject":               func(c *configDocument) { c.Subject.Name = "other" },
+		"issuer policy":         func(c *configDocument) { c.PolicyID = "other" },
 		"request key": func(c *configDocument) {
 			c.AgentPublicKey = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
 		},
@@ -142,6 +146,7 @@ func TestPostgresAgentConfigMatchesOnlyDedicatedPurpose(t *testing.T) {
 			Usages: []string{"client_auth", "server_auth"}, TTLSeconds: 600, RotateAfterSeconds: 300,
 			OverlapSeconds: 30, RevocationMaxStalenessSeconds: 10}}
 	config := configDocument{Protocol: postgresConfigProtocol, Purpose: workloadpki.PostgresClientPurpose,
+		PeerCRLSourcesPath: "/run/phase6/config/peer-crl-sources.json", PeerCRLSourcesDigest: "pinned",
 		Postgres: &postgresClientConfig{OwnerDeployment: base.SubjectDeployment, DatabaseName: target.DatabaseName,
 			RuntimeRole: target.SQLRole, CommonName: binding.CommonName, IssuerAnchorID: binding.IssuerAnchorID},
 		SecurityProfileDigest: profile.ProfileDigest, EnvironmentDigest: profile.EnvironmentDigest,
