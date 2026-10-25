@@ -266,6 +266,10 @@ func topRoleDocument(kind string, documents phase6security.ImageDescriptorDocume
 }
 
 func validRoleConfig(document []byte, source SourceInputs) bool {
+	recipe, err := recipeForTarget(source.BuildTarget)
+	if err != nil {
+		return false
+	}
 	var config struct {
 		Config struct {
 			User       string            `json:"User"`
@@ -278,7 +282,7 @@ func validRoleConfig(document []byte, source SourceInputs) bool {
 		return false
 	}
 	entrypoint := []string{phase6fdloader.RolePath}
-	if _, needsLoader := phase6fdloader.SpecificationFor(source.BuildTarget); needsLoader {
+	if recipe.stage == "fd-loader" {
 		entrypoint = []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand}
 	}
 	if !slices.Equal(config.Config.Entrypoint, entrypoint) {

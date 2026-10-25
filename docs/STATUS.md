@@ -1,5 +1,34 @@
 # Project Status
 
+The [local-role recipe checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-closed-local-role-build-recipes)
+implements one closed package/stage policy shared by candidate source collection,
+independent role/loader builds and image entrypoint checks for the 12 existing
+complete ordinary-role targets. Shell and Go builds now isolate compilation
+configuration and fix GOMAXPROCS=2/-p=2 while preserving caller storage/cache
+paths. Native helpers remain native. Unknown, Control and Scanner targets
+cannot inherit this generic recipe; their complete source closure remains open.
+
+Final focused race passes 11 roots/39 named results, zero skips, plus package
+vet in a complete 5.077400-second/90-second stage. At base
+091d94c9ed58fd3e50a13d1fc0617a992105eff3 plus seven Go changes and the build
+script, required root race passes naturally in 389.152669 seconds/600 seconds:
+267 unique packages, 229 passing/38 without tests, 20650 stdout bytes/zero
+stderr, no timeout/signal/truncation. Full vet passes in 1.536765 seconds;
+publication completes in 2.149543 seconds/90 seconds. All 2179 source/lock
+rows and direct inputs match before/after. Only four progress documents change
+afterward; these results are reused for unchanged Go bytes, not rerun after docs.
+
+The original nine red failures, an unexecuted environment-review rejection and
+one failed GOENV-output test run remain intact. The corrected test separately
+checks raw GOENV=off and Go1.26.8's empty EnvFile output. Passive ps samples do
+not establish trusted CPU measurements, savings or the old timeout's cause.
+No current image, production operator authority, Docker or full-topology gate
+is accepted. The signer120/public holds/two issuers/PG general/old locks and
+reuse remain unchanged. Phase 6 stays **5/15**, Slice 6 step 2; original four
+steps/16 scenarios and joint current-model migration remain open. Timers stay
+OFF. Private evidence: slice6-offline-role-recipe-20261025; this twelve-file
+checkpoint's commit/push disposition is recorded separately.
+
 The [current builder source-closure inventory](audits/product-phase-6-slice-6-startup.md#2026-10-25-current-builder-source-closure)
 completes a bounded read-only checkpoint; **current inputs remain incomplete**.
 ImageSupply's exact target/directory and composed builder still cover the old

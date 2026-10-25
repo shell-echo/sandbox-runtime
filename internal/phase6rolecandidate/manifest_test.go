@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 )
 
 func TestDecodeCanonicalManifestRejectsNoncanonicalAndDrift(t *testing.T) {
@@ -31,6 +33,35 @@ func TestDecodeCanonicalManifestRejectsNoncanonicalAndDrift(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if _, err := decodeCanonicalManifest(candidate); err == nil {
 				t.Fatal("invalid manifest admitted")
+			}
+		})
+	}
+}
+
+func TestRoleConfigRejectsUnreviewedBuildRecipes(t *testing.T) {
+	for _, target := range []string{"unknown", "../core", "provider-artifact-scanner",
+		"provider-docker-control-bootstrap-v1", phase6fdloader.ControlDeliveryTarget,
+		phase6fdloader.ControlSourceTarget, phase6fdloader.ControlTrustTarget} {
+		t.Run(target, func(t *testing.T) {
+			source := SourceInputs{BuildTarget: target, SourceRevision: strings.Repeat("a", 40)}
+			entrypoint := []string{phase6fdloader.RolePath}
+			if _, ok := phase6fdloader.SpecificationFor(target); ok {
+				entrypoint = []string{"/bin/sh", "-ec", phase6fdloader.FixedEntrypointCommand}
+			}
+			document, err := json.Marshal(map[string]any{"config": map[string]any{
+				"User": "65532:65532", "Entrypoint": entrypoint,
+				"Labels": map[string]string{
+					"io.github.shell-echo.sandbox-runtime.phase6-candidate": "local-only-non-release",
+					"io.github.shell-echo.sandbox-runtime.source-revision":  source.SourceRevision,
+					"io.github.shell-echo.sandbox-runtime.role-target":      target,
+					"io.github.shell-echo.sandbox-runtime.go-version":       "go1.26.8",
+				},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if validRoleConfig(document, source) {
+				t.Fatal("matching labels admitted an unsupported build recipe")
 			}
 		})
 	}

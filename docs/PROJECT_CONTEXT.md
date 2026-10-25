@@ -46,6 +46,35 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [closed local-role build recipes](audits/product-phase-6-slice-6-startup.md#2026-10-25-closed-local-role-build-recipes)
+now connect source collection, independent role/loader rebuilding and image
+entrypoint checks to one fixed package/stage policy for the existing 12 complete
+ordinary-role targets. Go discovery/builds and the shell recipe use matching
+closed compilation environments, native helpers stay on the host platform,
+and image binaries use the exact Linux target with GOMAXPROCS=2 and -p=2.
+PATH and storage/cache inputs still need their existing origin controls.
+
+Final component race passes 11 roots/39 named results without skips and package
+vet; the whole stage completes in 5.077400 seconds/90 seconds. At base
+091d94c9ed58fd3e50a13d1fc0617a992105eff3 plus seven Go files and the build script,
+root race passes naturally in 389.152669 seconds/600 seconds (267 packages:
+229 pass, 38 without tests), and full vet passes in 1.536765 seconds. All 2179
+source/lock rows and direct script/tool inputs match before/after; only four
+progress/plan documents change afterward. Original red and the incorrect GOENV
+output test failure remain preserved. The passive observer is not trusted CPU
+attribution or evidence of a speedup.
+
+This implements the ordinary-role foundation of the offline verifier boundary;
+current Control/Scanner inputs remain incomplete and their targets stay refused.
+No image, production key, source-proof authority or Profile generation is added.
+New parameter digests do not overwrite old candidates or change frozen-R reuse.
+The host signer retains 120 seconds; public holds, two issuers/PG general and
+the original four steps/16 scenarios remain. Phase 6 stays **5/15**, Slice 6
+step 2. Development uses mise Go1.26.8; Docker and timers are untouched/OFF.
+Private evidence: slice6-offline-role-recipe-20261025. Commit/push disposition
+is recorded separately. Continue current Control pin/role/loader/probe source
+binding and the separate complete Scanner recipe before joint model migration.
+
 The [current builder source-closure inventory](audits/product-phase-6-slice-6-startup.md#2026-10-25-current-builder-source-closure)
 completes a bounded read-only checkpoint; **current inputs remain incomplete**.
 ImageSupply's exact target/directory and composed builder still cover the old

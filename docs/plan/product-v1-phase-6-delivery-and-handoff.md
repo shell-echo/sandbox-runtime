@@ -5,8 +5,9 @@ Date: 2026-10-04
 Status: coordination and delivery plan. Product positioning below is a
 hypothesis to validate, not a comparative performance or production claim.
 
-Current amendments: [single current Profile migration](#single-current-profile-migration-2026-10-25) and
-[current source-closure boundary](#current-builder-source-closure-2026-10-25).
+Current amendments: [single current Profile migration](#single-current-profile-migration-2026-10-25),
+[current source-closure boundary](#current-builder-source-closure-2026-10-25) and
+[closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1600,3 +1601,36 @@ switch together; desired envelopes and step3 same-run dynamic observations
 remain distinct. Formal Slice6 foursteps/original16, Phase6 5/15 and timersOFF
 are unchanged. Document-only progress does not relabel C=R or change frozen-R
 reuse rules. This inventory did not run any Go/Docker/network/signature gate.
+
+
+## Closed local-role build recipes (2026-10-25)
+
+The ordinary-role foundation of the preceding source-closure boundary is
+implemented: one private target/package/stage policy is consumed by source
+collection, role/loader rebuilding and OCI config entrypoint checks. All 12
+existing complete local-role recipes are covered. Unknown/Control/Scanner
+recipes are refused; the source/deployment/OCI/directory gates still precede
+admission. This does not expand the old78 inventory or admit a current image.
+
+The shell and verifier use matching closed compilation settings, preserve
+explicit tool/storage/cache paths, keep native helpers native and fix Linux
+architecture plus GOMAXPROCS=2/-p=2 for image binaries. New candidate parameter
+digests bind the package and environment; old originals/locks and frozen-R
+reuse are unchanged. Environment isolation does not authenticate PATH or
+cache origin. The host signer120 budget and authority stay unchanged.
+
+The [actual checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-25-closed-local-role-build-recipes)
+records 39 component passes/zero skips, full root race389.152669s/600s and
+vet1.536765s, with complete2179 source/lock checks. Scratch executables are
+compiler/component inputs, not restored OCI images or production operator
+approval. Original red/rejected/failed identities stay preserved. Phase6 is
+still5/15, Slice6step2; no hold, quota, timeout, 9binding/64barrier or evidence
+rule changes and timers remainOFF.
+
+Continue the current Control independent public-key origin and same-source
+role/loader/probe/selected-OCI binding, then the full Scanner supply recipe.
+Only actual authenticated originals can extend Manifest/source reopening and
+ImageSupply/VerifySources. Do not add an unreachable recipe or caller-signed
+proof token to substitute for missing inputs. Joint current Profile/consumer/
+three-tagged-builder migration and the original step3 live topology/scenarios
+remain separate following work.

@@ -10,6 +10,9 @@ import (
 )
 
 func TestCollectSourceInputsRequiresReviewedCleanBuild(t *testing.T) {
+	// Candidate verification must use the managed toolchain, not user Go
+	// configuration or a workspace selected by the invoking process.
+	poisonGoConfiguration(t)
 	root := t.TempDir()
 	write := func(name, value string) {
 		t.Helper()

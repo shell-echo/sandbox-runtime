@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [current builder source closure](#2026-10-25-current-builder-source-closure).
+Latest implementation checkpoint: [closed local-role build recipes](#2026-10-25-closed-local-role-build-recipes).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13215,3 +13215,71 @@ offline candidate target/recipe/input contract and its rejection tests, retainin
 original source/OCI/public-key bytes and the existing supply/resource/time
 rules. Later builder freeze still reopens originals, and observed whole-topology
 acceptance remains separate. No source/manifest/key/approval is fabricated.
+
+
+## 2026-10-25 closed local-role build recipes
+
+The ordinary-role portion of the offline source-candidate boundary is now
+implemented. CollectSourceInputs, VerifyBuildContext and validRoleConfig share
+one private closed policy for the existing 12 complete command targets and
+fixed package/stage pairs. The role/loader rebuild and bounded executable reads
+share one implementation. A loader specification alone grants no recipe;
+unknown/path-like targets, all Control diagnostic/current targets and Scanner
+remain refused. Existing deployment selection, clean source/revision/tree,
+Go1.26.8, dependency locks, descriptor/layer/executable bytes, canonical manifest
+and exact candidate-directory checks remain. The previous target concatenation
+was behind VerifySource; no arbitrary-package execution bypass was established.
+
+Go discovery and both builds now use a closed environment. Only the explicit
+tool-discovery and storage/cache paths are inherited; module mode, experiments,
+microarchitecture, workspace/config, network/authentication and compiler
+parallelism are fixed. GOROOT/tool overrides are absent. The shell build uses
+matching settings for version/native pin helpers and Linux image compilation;
+native helpers do not inherit the image target. GOMAXPROCS=2 and explicit -p=2
+remain process/build concurrency settings, not proof of a host-wide CPU quota.
+The fixed package/environment enter new candidate parameter digests. No old
+manifest, receipt, lock or evidence-reuse rule is rewritten or grandfathered.
+PATH/cache provenance remains an external premise under the existing gates;
+environment isolation is not independent tool-origin authentication.
+
+Final component race passes 11 roots and 39 named results with zero skips,
+including all 12 script/package/stage selections, source collection under
+polluted Go settings, full native Go-env agreement and actual scratch
+Linux/arm64 role/loader compilation through both implementations with identical
+bytes. ELF architecture, Go1.26.8, v8.0, trimpath/no-build-ID and invalid
+context/platform refusals are checked. Package vet passes. Go takes
+4.140452 seconds, package vet 0.344789 seconds; complete publication takes
+5.077400 seconds/90 seconds and the outer command exits naturally 0. This
+runs only the extracted script selection/function and scratch compiler inputs,
+never the complete image build, a pin read, Docker, or a production executable.
+
+On baseline 091d94c9ed58fd3e50a13d1fc0617a992105eff3 plus the seven Go files
+and build.sh, required `go test -race -shuffle=on -count=1 ./...` passes
+naturally in 389.152669 seconds/600 seconds: 267 unique packages, 229 passing
+and 38 without tests, 20650 stdout bytes/zero stderr. There is no active signal,
+timeout or truncation. Full `go vet ./...` passes in 1.536765 seconds; its
+whole stage including publication takes 2.149543 seconds/90 seconds. All 2179
+source/lock rows and direct script/tool inputs match before/after. The 39
+complete passive ps samples are not trusted CPU attribution, optimization
+savings or proof of the historical timeout's cause. Four progress documents
+change afterward; the Go evidence is reused for the unchanged Go snapshot.
+
+Preserved failures are explicit: original code has nine named red failures;
+one environment candidate was rejected before execution; green-v2 naturally
+exits 1 with 38 named passes, one failed GOENV-output expectation and zero skips.
+Go1.26.8's cfg.EnvFile returns an empty path for raw GOENV=off, and MkEnv reports
+that path. The final test separately asserts the raw off setting, the empty
+observed output and complete Go/shell agreement. No failed identity was rerun
+or reclassified. Private originals are in slice6-offline-role-recipe-20261025.
+
+Current Control still requires independently sourced public-key input plus
+same-clean-source role, loader and probe/OCI verification. Scanner still needs
+its complete authenticated engine/dependency/config/rule/image recipe. The
+old78 builder and resource roster is unchanged and is not a final live count.
+No source-proof signer, production key authority, Profile generation, current
+image or runtime admission is added. The host signer120/public holds, existing
+broker/general issuers with PostgreSQL on general, old evidence/reuse and
+9bindings/64barriers remain. Phase6 stays **5/15**, Slice6 step2; the original
+four steps/16 real scenarios, joint model/consumer switch and independent
+whole-topology acceptance remain open. Development uses mise Go1.26.8; timers
+stay OFF. The twelve-file checkpoint's commit/push disposition is separate.

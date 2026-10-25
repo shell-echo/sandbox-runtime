@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/shell-echo/sandbox-runtime/internal/desktopcandidate"
-	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 )
 
@@ -61,6 +60,10 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	target, err := phase6security.Slice6DesiredImageTarget(deployment)
 	if err != nil || target == phase6security.Slice6BrowserPublishedImage ||
 		target == phase6security.Slice6DesktopCandidateImage {
+		return SourceInputs{}, ErrInvalidSourceInputs
+	}
+	recipe, err := recipeForTarget(target)
+	if err != nil {
 		return SourceInputs{}, ErrInvalidSourceInputs
 	}
 	info, err := os.Lstat(sourceRoot)
@@ -107,17 +110,16 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	}
 	parameters := struct {
 		Target    string `json:"target"`
+		Package   string `json:"package"`
 		Stage     string `json:"stage"`
 		Platform  string `json:"platform"`
 		BuildMode string `json:"build_mode"`
 		GoFlags   string `json:"go_flags"`
 		Docker    string `json:"docker"`
-	}{Target: target, Stage: "direct", Platform: platform, BuildMode: "CGO_ENABLED=0 GOOS=linux GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local",
-		GoFlags: "-mod=readonly -trimpath -buildvcs=false -ldflags=-buildid=",
-		Docker:  "--no-cache --network none --provenance=false --pull=false SOURCE_DATE_EPOCH=0"}
-	if _, needsLoader := phase6fdloader.SpecificationFor(target); needsLoader {
-		parameters.Stage = "fd-loader"
-	}
+	}{Target: target, Package: recipe.packagePath, Stage: recipe.stage, Platform: platform,
+		BuildMode: "path_inputs=" + goPathInputs + "; GOROOT=unset " + fixedGoEnvironment + " GOOS=linux GOARCH=platform",
+		GoFlags:   "-p=2 -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid=",
+		Docker:    "--no-cache --network none --provenance=false --pull=false SOURCE_DATE_EPOCH=0"}
 	parameterBytes, err := json.Marshal(parameters)
 	if err != nil {
 		return SourceInputs{}, ErrInvalidSourceInputs
@@ -151,6 +153,7 @@ func privateSourceFile(path string) ([]byte, error) {
 
 func exactToolchainDigest(ctx context.Context) (string, error) {
 	command := exec.CommandContext(ctx, "go", "env", "GOVERSION", "GOROOT")
+	command.Env = offlineGoEnvironment()
 	document, err := command.Output()
 	fields := strings.Split(strings.TrimSpace(string(document)), "\n")
 	if err != nil || len(fields) != 2 || fields[0] != "go1.26.8" || !filepath.IsAbs(fields[1]) {
