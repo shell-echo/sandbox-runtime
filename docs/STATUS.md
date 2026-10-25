@@ -1,6 +1,38 @@
 # Project Status
 
-The [Provider reconciler readiness fix](audits/product-phase-6-slice-6-startup.md#2026-10-24-provider-reconciler-lifetime-readiness)
+The [CRL pull completion guard](audits/product-phase-6-slice-6-startup.md#2026-10-25-crl-pull-completion-and-retained-watermark)
+now checks the original parent/operation contexts after verification/lock wait
+and immediately before publication. CheckPeer and leaf parsing complete before
+that last check; timely valid CRLs still retain their sequence before a peer
+semantic error, preserving rollback refusal. Expiry scheduling deducts the
+monotonic verification time, so this move does not extend evidence freshness.
+No new timeout, quota, cache, issuer, protocol, driver or public hold is added.
+
+Final focused race passes27 named results (21 new/6 existing) and package vet
+in13.442044s/90s. On baselineb75ce2b5ce46ddde5fb685d10c9c432145a64ea7 plus
+three Go files, root-module full race passes naturally511.094589s/600s:
+267unique packages,229passing/38without tests, stdout20651B/stderr0B, no
+signal/timeout/truncation. Full vet passes5.101528s; complete stage6.831918s/90s.
+Complete2176 source/lock inputs match before/after; only these progress docs
+change afterward. These are component/root-module checks, not live role gates.
+
+Historical failures stay intact:19 original-code Go failures were independently
+attributed from189 raw events; their controller failed on nonexistent intermediate
+parent names. A fixture set its deadline after net.Pipe had closed; its failed
+run remains. A preliminary candidate could lose a timely verified CRL watermark;
+its own full run was precisely stopped at351.249009s and stays FAILED, not a
+600s timeout or performance finding. The final watermark regression passes.
+Observer INCOMPLETE:29 samples; at280.046422s a qualification-adapter child had
+a different process group. This neither fails Go nor proves the old timeout cause.
+
+Phase6 remains **5/15**, Slice6step2. Real Controller/agent/Guest/Provider flows,
+Docker management authority, step3 live Profile-v2/original16/independent
+acceptance and formalstep4 remain open.9bindings/64barriers, old evidence/locks/
+reuse, miseGo1.26.8 and scheduled tasks OFF remain. Private evidence:
+slice6-crl-completion-deadline-20261025-v1. This six-file checkpoint's commit,
+normal push and full live-SHA reconciliation are recorded separately.
+
+The preceding [Provider reconciler readiness fix](audits/product-phase-6-slice-6-startup.md#2026-10-24-provider-reconciler-lifetime-readiness)
 binds readiness to the active single-use worker and rejects an expired current
 recovery pass even when its dependency has not returned. Each step checks
 cancellation before starting; final publication retains cancellation/deadline

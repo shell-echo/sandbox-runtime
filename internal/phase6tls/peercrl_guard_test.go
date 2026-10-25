@@ -1086,7 +1086,7 @@ func TestPeerCRLGuardEvidenceExpiryDrainsBeforeNextPoll(t *testing.T) {
 		collectedAt: now, nextUpdate: now.Add(40 * time.Millisecond),
 		active: map[net.Conn]tls.ConnectionState{first: {}}, now: time.Now}
 	guard.mu.Lock()
-	guard.scheduleEvidenceExpiryLocked(now)
+	guard.scheduleEvidenceExpiryLocked(now, time.Now())
 	guard.mu.Unlock()
 	defer guard.Close()
 	_ = second.SetReadDeadline(time.Now().Add(300 * time.Millisecond))

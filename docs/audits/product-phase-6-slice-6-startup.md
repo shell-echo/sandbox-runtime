@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Provider reconciler lifetime readiness](#2026-10-24-provider-reconciler-lifetime-readiness).
+Latest investigation checkpoint: [CRL pull completion and retained watermark](#2026-10-25-crl-pull-completion-and-retained-watermark).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -12969,3 +12969,82 @@ Phase6 remains **5/15**. Original gates,9bindings/64barriers, old evidence/locks
 reuse, miseGo1.26.8 and timers OFF remain; no release/merge/global installation.
 Private evidence: slice6-reconciler-readiness-20261024-v1, outside Git. The
 five-file fix/test/progress checkpoint's commit/push disposition is separate.
+
+
+## 2026-10-25 CRL pull completion and retained watermark
+
+Independent source review identifies a remaining full-pull deadline gap in
+`PeerCRLGuard.refresh`: its agent-return context check preceded CRL verification,
+commit-lock wait, retained-revocation scanning and peer validation. A valid but
+late result could install `current`, clear `unavailable` and return success or
+revoked. ADR0055's T covers the complete pull, not only agent I/O.
+
+The final implementation checks the existing parent/operation contexts after
+acquiring the commit lock and again immediately before publication. It first
+computes CheckPeer and revoked-leaf parsing, then preserves the original timely
+publish/timer/observe/error order. This matters even for an invalid peer: a
+verified timely CRL2 must keep its number watermark before reporting the peer
+error, so a subsequent CRL1 is still a sticky rollback refusal. Parent cancellation
+and parent deadline retain priority over the internal deadline. Ordinary failed
+pulls still invalidate and drain; only a new fresh pull can recover availability.
+
+Moving peer verification before publication must not start the expiry timer
+later by its CPU cost. A local monotonic anchor taken at the old publication
+boundary charges that elapsed time against the unchanged freshness/nextUpdate
+bound; negative remaining delay schedules immediate expiry. It is not a close
+scope, cached authority, new budget or new g.now observation. Existing source,
+issuer, number/content/ThisUpdate, revoked-watermark and drain refusals remain.
+No Profile/public-v3 hold, timeout/interval, resource cap, issuer, runtime driver,
+protocol, Contract, candidate lock or evidence-reuse rule changes.
+
+New identity GREEN3 passes27 named results in113 complete JSON events:21 new
+results (18 delayed completion leaves plus their root, compensated expiry and
+invalid-peer watermark) and6 existing results. It covers verification/commit
+windows, parent cancellation/deadline/internal deadline, bootstrap/good/revoked
+handshakes, old-peer in-memory net.Pipe EOF, no late CRL/observation/timer,
+permit/drain release, fresh recovery, immediate expiry and signed CRL2-to-CRL1
+rollback refusal. The fixture clock does not prove a real TLS handshake, Vault
+controller/agent process, Guest or independent operator result. Race and package
+vet complete naturally in13.442044s/90s including bootstrap/full input/Git checks
+and publication. All17 receipts exit0, reaped, without signal/truncation.
+
+On baselineb75ce2b5ce46ddde5fb685d10c9c432145a64ea7 plus exactly the three Go
+files, original root-module `go test -race -shuffle=on -count=1 ./...` passes
+naturally in511.094589s/600s:267 unique package rows,229ok/38without tests,
+stdout20651B/stderr0B, no timeout/signal/truncation, leader reaped. Complete2176
+source/lock and15 pre/post Git/environment receipts match before/after. The
+600s limit is the Go lifecycle; pre/post work has its separately unchanged bounds.
+`go vet ./...` then passes5.101528s with empty streams; entire stage including
+bootstrap/pre/post/publication6.831918s/90s. Only progress docs change afterward.
+Root-module default tests exclude nested modules and tagged real gates.
+
+The observer is separately INCOMPLETE:29 process samples, stopping at280.046422s
+when qualificationsupervisor.test's qualification-adapter has a distinct process
+group. Go completes naturally. No helper fault, complete process accounting,
+unique historical timeout cause or stable performance improvement is inferred.
+
+All failures and rejected preparations stay preserved outside Git. Original
+production returns19 named FAIL in26.111543s; independent read-only attribution
+confirms all18 leaves' three target messages in189 events. Its controller remains
+FAILED because slash-containing direct subtest names do not create intermediate
+parent events. An optional offline-entry draft was rejected before execution;
+no failed identity was replayed. GREEN1 fails because setting net.Pipe's deadline
+after remote closure returns ErrClosedPipe; the fixed fixture sets the same1s
+deadline before the operation and still accepts only EOF. GREEN2 passes20 results,
+but source review then finds the preliminary early semantic return loses CRL2's
+watermark. Its own full run is precisely actively stopped at351.249009s with
+owned-group cleanup/reaped leader and complete source/Git postcheck; it stays
+FAILED, not a timeout/performance observation. GREEN3 and FULL2 bind the corrected
+source. One optional historical-source text reconstruction mismatch is retained;
+new private byte copies match saved old SHAs and do not inherit old inode identity.
+
+Fixed Slice6 order:1 historical bounded GuestE unchanged;2 this common-guard
+subissue passes at component scope, while real Controller/agent/Guest peer revoke,
+CRL loss/replacement, three Providers and network/UID/GID authority remain open;
+3 final live Profile-v2 inventory/original16 and independent acceptance incomplete;
+4 formal post-acceptance handoff unstarted. This pure CRL state-publication change
+adds no driver/resource-lifecycle or Contract change requiring a new tagged Docker
+or lock-verifier run; no such real gate is claimed. Phase6 stays **5/15**. Existing
+miseGo1.26.8,9bindings/64barriers, old locks/receipts/reuse and scheduled tasks OFF
+remain. Private evidence: slice6-crl-completion-deadline-20261025-v1. The coherent
+six-file fix/test/progress checkpoint's commit/push/live-SHA disposition is separate.

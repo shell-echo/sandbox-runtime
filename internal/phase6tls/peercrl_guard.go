@@ -280,6 +280,9 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	observedAt := g.now().UTC()
+	if contextFailure := peerCRLContextFailure(ctx, operationContext); contextFailure != nil {
+		return contextFailure
+	}
 	if g.failed || observedAt.Before(g.lastNow) {
 		g.failed = true
 		return newPeerCRLFailure(PeerCRLLocalGuardFailure, nil)
@@ -317,19 +320,29 @@ func (g *PeerCRLGuard) refresh(ctx context.Context, issuerDER, leafDER []byte, b
 			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 	}
+	timerAnchor := time.Now()
+	var checkErr error
+	var revokedLeaf *x509.Certificate
+	var parseErr error
+	if !bootstrap {
+		checkErr = verified.CheckPeer(leafDER, issuerDER, observedAt)
+		if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
+			revokedLeaf, parseErr = x509.ParseCertificate(leafDER)
+		}
+	}
+	// The original pull deadline covers verification and lock wait as well as
+	// agent I/O. Do not publish a late result or a revocation observation.
+	if contextFailure := peerCRLContextFailure(ctx, operationContext); contextFailure != nil {
+		return contextFailure
+	}
 	g.sourceID, g.issuerDigest = response.SourceID, issuerDigest
 	g.number, g.thisUpdate, g.crlDigest = verified.Number(), verified.ThisUpdate(), verified.CRLDigest()
 	g.collectedAt, g.nextUpdate = collectedAt, verified.NextUpdate()
 	g.current = verified
 	g.unavailable = false
-	g.scheduleEvidenceExpiryLocked(observedAt)
-	if bootstrap {
-		return nil
-	}
-	checkErr := verified.CheckPeer(leafDER, issuerDER, observedAt)
+	g.scheduleEvidenceExpiryLocked(observedAt, timerAnchor)
 	if errors.Is(checkErr, workloadpki.ErrPeerRevoked) {
-		leaf, parseErr := x509.ParseCertificate(leafDER)
-		if parseErr != nil || !g.observeRevokedPeerLocked(leaf) {
+		if parseErr != nil || !g.observeRevokedPeerLocked(revokedLeaf) {
 			return newPeerCRLFailure(PeerCRLSemanticFailure, nil)
 		}
 	}
@@ -354,7 +367,7 @@ func (g *PeerCRLGuard) observeRevokedPeerLocked(leaf *x509.Certificate) bool {
 // scheduleEvidenceExpiryLocked closes active sockets at the earlier of source
 // freshness expiry and CRL nextUpdate, even if the next poll has not run yet.
 // The sequence prevents an old timer from draining a newer valid snapshot.
-func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
+func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt, timerAnchor time.Time) {
 	g.expirySequence++
 	sequence := g.expirySequence
 	if g.expiryTimer != nil {
@@ -364,7 +377,9 @@ func (g *PeerCRLGuard) scheduleEvidenceExpiryLocked(observedAt time.Time) {
 	if g.nextUpdate.Before(deadline) {
 		deadline = g.nextUpdate
 	}
-	delay := deadline.Sub(observedAt)
+	// Peer verification now precedes publication. Preserve the original expiry
+	// point by charging its elapsed monotonic time to the same freshness bound.
+	delay := deadline.Sub(observedAt) - time.Since(timerAnchor)
 	if delay < 0 {
 		delay = 0
 	}
