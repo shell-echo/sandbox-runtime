@@ -53,10 +53,6 @@ func (s SourceInputs) VerifySource(ctx context.Context, sourceRoot string) error
 }
 
 func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform string) (SourceInputs, error) {
-	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(sourceRoot) || filepath.Clean(sourceRoot) != sourceRoot ||
-		sourceRoot == string(filepath.Separator) || (platform != "linux/amd64" && platform != "linux/arm64/v8") {
-		return SourceInputs{}, ErrInvalidSourceInputs
-	}
 	target, err := phase6security.Slice6DesiredImageTarget(deployment)
 	if err != nil || target == phase6security.Slice6BrowserPublishedImage ||
 		target == phase6security.Slice6DesktopCandidateImage {
@@ -64,6 +60,17 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	}
 	recipe, err := recipeForTarget(target)
 	if err != nil {
+		return SourceInputs{}, ErrInvalidSourceInputs
+	}
+	return collectSourceInputs(ctx, sourceRoot, deployment, platform, target, recipe, "-buildid=")
+}
+
+// Only the closed ordinary selector above and the held Control verifier select
+// this private recipe. It does not expand ordinary Manifest/VerifySource input.
+func collectSourceInputs(ctx context.Context, sourceRoot, deployment, platform, target string,
+	recipe roleBuildRecipe, ldflags string) (SourceInputs, error) {
+	if ctx == nil || ctx.Err() != nil || !filepath.IsAbs(sourceRoot) || filepath.Clean(sourceRoot) != sourceRoot ||
+		sourceRoot == string(filepath.Separator) || (platform != "linux/amd64" && platform != "linux/arm64/v8") {
 		return SourceInputs{}, ErrInvalidSourceInputs
 	}
 	info, err := os.Lstat(sourceRoot)
@@ -111,6 +118,7 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 	parameters := struct {
 		Target    string `json:"target"`
 		Package   string `json:"package"`
+		Probe     string `json:"probe,omitempty"`
 		Stage     string `json:"stage"`
 		Platform  string `json:"platform"`
 		BuildMode string `json:"build_mode"`
@@ -118,8 +126,12 @@ func CollectSourceInputs(ctx context.Context, sourceRoot, deployment, platform s
 		Docker    string `json:"docker"`
 	}{Target: target, Package: recipe.packagePath, Stage: recipe.stage, Platform: platform,
 		BuildMode: "path_inputs=" + goPathInputs + "; GOROOT=unset " + fixedGoEnvironment + " GOOS=linux GOARCH=platform",
-		GoFlags:   "-p=2 -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid=",
+		GoFlags:   "-p=2 -mod=readonly -trimpath -buildvcs=false -ldflags=" + ldflags,
 		Docker:    "--no-cache --network none --provenance=false --pull=false SOURCE_DATE_EPOCH=0"}
+	if recipe.stage == "control-delivery" {
+		parameters.Probe = "./tools/control-process-observe"
+		parameters.Docker = "--no-cache --network none --provenance=mode=min --pull=false SOURCE_DATE_EPOCH=0"
+	}
 	parameterBytes, err := json.Marshal(parameters)
 	if err != nil {
 		return SourceInputs{}, ErrInvalidSourceInputs

@@ -46,6 +46,36 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [held Control source-candidate checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-held-control-source-candidate-correspondence)
+adds a reachable `tools/control-source-review -candidate` mode. It independently
+rebuilds the fixed current Control package, FD loader and probe from clean
+source/Go1.26.8, binds the actual linked public pin and compares selected OCI
+bytes. Original FD/path/full-byte guards and a private64MiB snapshot protect
+inputs. The21-field output remains held/offline and explicitly leaves operator
+key origin unverified; it is not a Manifest, source-proof grant or permit.
+
+Final affected component race passes17 named results/zero skips plus package
+vet in27.434272s/90s. Another65 unaffected named passes are reused from the
+preserved failed first command; that command remains FAILED. A fresh synthetic
+CLI run checks all21 independently derived fields and completes naturally in
+6.894106s/90s. Its tiny clean test source/OCI is not the current project image.
+At baseline0eaa012881439ca45f747f05dd60180a4d518987 plus12Go files, required
+full race passes naturally401.598465s/600s (267unique packages:230pass,
+37no-tests); full vet passes1.534335s, complete stage2.167106s/90s. All2186
+Go/lock rows match before/after; only these five documents change afterward.
+Default opt-in skips do not replace the explicit synthetic component tests.
+The41 passive process samples do not establish CPU attribution or speedup.
+
+Ordinary Manifest/VerifySources APIs still refuse Control/Scanner. Current
+production key origin, actual authenticated Control originals, complete Scanner
+engine/dependency/rule recipe and old78 ImageSupply/resource roster migration
+remain open. The host signer120, public holds, twoissuers/PGgeneral, old locks/
+reuse and9bindings/64barriers stay unchanged. Phase6 remains **5/15**, Slice6
+step2; original foursteps/16scenarios and formal acceptance/handoff remain open.
+Development uses mise Go1.26.8; Docker is untouched and timers stayOFF. Private
+originals: slice6-control-source-candidate-20261025. This17-file checkpoint's
+commit/push disposition is recorded separately.
+
 The [closed local-role build recipes](audits/product-phase-6-slice-6-startup.md#2026-10-25-closed-local-role-build-recipes)
 now connect source collection, independent role/loader rebuilding and image
 entrypoint checks to one fixed package/stage policy for the existing 12 complete

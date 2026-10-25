@@ -43,7 +43,7 @@ func VerifyBuildContext(ctx context.Context, sourceRoot string, inputs SourceInp
 	}
 	defer os.RemoveAll(workdir)
 	outputPath := filepath.Join(workdir, "role")
-	rebuilt, err := rebuildExecutable(ctx, sourceRoot, outputPath, inputs.Platform, recipe.packagePath)
+	rebuilt, err := rebuildExecutable(ctx, sourceRoot, outputPath, inputs.Platform, recipe.packagePath, "-buildid=")
 	if err != nil || !bytes.Equal(rebuilt, imageBinary) {
 		return BuildContextProof{}, ErrInvalidBuildContext
 	}
@@ -56,7 +56,7 @@ func VerifyBuildContext(ctx context.Context, sourceRoot string, inputs SourceInp
 			return BuildContextProof{}, ErrInvalidBuildContext
 		}
 		loaderPath := filepath.Join(workdir, "loader")
-		rebuiltLoader, err := rebuildExecutable(ctx, sourceRoot, loaderPath, inputs.Platform, "./cmd/phase6-fd-loader")
+		rebuiltLoader, err := rebuildExecutable(ctx, sourceRoot, loaderPath, inputs.Platform, "./cmd/phase6-fd-loader", "-buildid=")
 		if err != nil || !bytes.Equal(rebuiltLoader, imageLoader) {
 			return BuildContextProof{}, ErrInvalidBuildContext
 		}

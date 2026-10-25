@@ -1797,6 +1797,39 @@ Full topology must separately establish allowed Provider/TLS/CA peers and
 private input readiness. See the [mode and evidence boundary](plan/product-v1-phase-6-control-storage-backend.md#2026-10-11-reviewed-complete-profile-source-access-declaration).
 
 
+### Held offline Control source-candidate review (2026-10-25)
+
+`tools/control-source-review -candidate` consumes canonical JSON containing
+exactly `source_root`, `profile`, `public_key` and `archive` absolute paths.
+Use physical clean committed source and existing mise Go1.26.8. Original public
+inputs must be outside that source, owned by the current user, mode0600 with
+one link in private mode0700 physical parent directories. Supply the original
+32-byte public key, never a private signing key or a digest-only substitute.
+
+Run this mode under the independently reviewed hard90-second owned-process
+supervisor, including complete pre/post input checks and result publication.
+The CLI context alone cannot interrupt every filesystem/OCI syscall. Keep the
+existing tool/cache origin controls: closed compilation settings do not
+establish independent tool or production operator authority. Rebuilds force
+network/authentication off and GOMAXPROCS=2/-p=2; those are concurrency settings,
+not an enforced host-wide CPU quota. The parent development harness has its
+own explicitly configured module proxy.
+
+The fixed current Control target binds one independent pin and the same-source
+role/loader/probe to the selected OCI. It uses a private archive snapshot capped
+at64MiB, original FD/path identity and full-byte checks. A512MiB filesystem-free
+space precheck is only a pressure hint, not a reservation or quota guarantee;
+copy/sync/close/build errors and oversized outputs reject. Compiler diagnostics
+are bounded to64KiB per stream.
+
+The21-field result is `held-not-a-permit`, `offline-byte-correspondence-only`
+and `operator_key_origin=not-verified`. It is not a Manifest, ImageSupply source
+proof, production key approval or Store/signing permit. Ordinary candidate APIs
+still refuse Control/Scanner. Keep all public originals, test source/OCI and
+results outside Git. The explicit synthetic component fixture is not the
+current project image or a completed supply/runtime gate.
+
+
 ### Held Control bootstrap/process evidence (2026-10-12)
 
 See [the exact bootstrap and observation boundary](plan/product-v1-phase-6-control-operator-bootstrap.md).

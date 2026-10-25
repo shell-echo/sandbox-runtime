@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [closed local-role build recipes](#2026-10-25-closed-local-role-build-recipes).
+Latest implementation checkpoint: [held Control source-candidate correspondence](#2026-10-25-held-control-source-candidate-correspondence).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13283,3 +13283,91 @@ broker/general issuers with PostgreSQL on general, old evidence/reuse and
 four steps/16 real scenarios, joint model/consumer switch and independent
 whole-topology acceptance remain open. Development uses mise Go1.26.8; timers
 stay OFF. The twelve-file checkpoint's commit/push disposition is separate.
+
+## 2026-10-25 held Control source-candidate correspondence
+
+The fixed current Control source recipe is reachable through the existing
+`tools/control-source-review -candidate` planning command. Canonical input has
+exactly four absolute paths: source_root, profile, public_key and archive.
+Darwin/Linux input custody requires original current-user mode0600 files with
+one link and private mode0700 physical immediate parents, outside the clean
+source. The full held Profile binds its current trust target, independent public
+pin, launch source and selected OCI. No private signing key is consumed.
+
+One shared private source collector and executable builder reproduce exactly
+`./cmd/provider-docker-control`, `./cmd/phase6-fd-loader` and
+`./tools/control-process-observe`; only the role receives the fixed -X pin.
+Closed compilation settings force network/authentication off and retain
+GOMAXPROCS=2/-p=2. This is concurrency control, not a host-wide CPU quota; the
+parent development harness retains its explicitly configured module proxy.
+Ordinary public source/candidate entry points still reject every Control and
+Scanner target. The separate21-field review cannot serve as an ordinary
+Manifest, ImageSupply source proof, Store capability or signing authority.
+It says held-not-a-permit/offline-byte-correspondence-only and
+operator_key_origin=not-verified.
+
+Original FDs remain open and each full chunked pass checks file/path/parent
+identity, owner/mode/link count/size/time and SHA256 through EOF. All existing
+OCI path APIs consume only a private run-owned64MiB archive snapshot; the
+source/toolchain and original inputs are fully rechecked after rebuilding.
+Cleanup refuses unknown replacements. Compiler diagnostics cap each stream at
+64KiB and overflow cancels/refuses. The512MiB statfs check is a pressure hint,
+not a storage reservation or quota guarantee; real write/sync/close/build errors
+still refuse. Only standard trailing directory separators are normalized;
+interior dot/alias selectors remain rejected. The operator hard90-second
+supervisor covers bootstrap, full checks and publication; the CLI90 context
+alone cannot interrupt every filesystem/OCI syscall. Host signer120 is unchanged.
+
+The final affected component run passes17 named results/two roots with zero
+skips: actual linked ELF pin, changed-key changed bytes/old-OCI refusal, source/
+revision/lock, target/archive/config, role/loader/probe and storage selectors.
+The consistent unsupported-platform fixture is rejected at the full Profile
+boundary, not demonstrated to reach OCI rebuilding. Config-side changes must
+fail at service-image. Package vet passes; Go26.017142s, whole27.434272s/90s,
+outer0. Another65 unaffected named passes from the first command are reused
+with their original source scope, giving82 named coverage across distinct
+runs, not a newly passing combined first command. Custody mutation/replacement,
+FIFO/symlink/hardlink/mode, short-write/cancellation and compiler-cap refusals
+remain covered.
+
+A fresh CLI identity then checks all21 output fields against independently
+recomputed Profile/key/source/lock/SDK/OCI/three-binary values:59 complete fixture
+files (including Git index) and11481 Go SDK files are pinned before/after, along
+with2186 repository Go/lock rows. Actual Go naturally exits0 in3.380834s;
+whole6.894106s/90s, stdout1553B/stderr0, no signal/timeout/truncation, outer0.
+The fixture is a tiny clean synthetic Go module and synthetic three-ELF OCI
+without a base image. It is not the current project source candidate, approved
+operator origin or a complete image supply/runtime gate. SDK byte binding does
+not independently approve tool origin. A prior CLI plan was rejected before
+execution for checking only three classification fields; it was never run.
+
+On baseline0eaa012881439ca45f747f05dd60180a4d518987 plus12Go changes, required
+`go test -race -shuffle=on -count=1 ./...` naturally passes401.598465s/600s:
+267unique packages,230passing/37without tests, stderr0 and no signal/timeout/
+truncation, outer0. Full `go vet ./...` passes1.534335s; complete publication
+2.167106s/90s, outer0. All2186 source/lock rows match before/after. The41 passive
+ps samples are not trusted CPU attribution, measured savings or historical
+timeout-cause evidence. Default opt-in skips do not replace explicit component
+runs. Five documentation files change afterward; the measured Go bytes remain
+unchanged. No driver/lifecycle or Provider Contract surface changes are made.
+
+Original failures stay preserved: green-v1 naturally exits1 after11.606701s
+with65 named passes and an early positive failure. Its raw output has no stage
+label; standard TMPDIR's trailing separator is the source/input-based cause
+inference. green-v2 naturally exits1 after19.580224s: the deliberately bad
+platform was wrongly sent through a positive-only fixture validator and its
+mutable state leaked into following cases. Final tests restore a fresh full
+Profile per case and route that negative to the actual API. No failed identity
+was replayed, overwritten or counted as passing.
+
+Current ImageSupply/Manifest admission, independent production public-key origin,
+actual current Control source/OCI inputs, complete Scanner engine/dependency/
+rule recipe, old78 resource/model migration and real management authority remain
+open. No new Profile generation, runtime fallback, proof signer, cache/index
+or reuse rule is introduced. Original broker/general issuers, PostgreSQL general,
+public holds,9bindings/64barriers and old evidence/locks stay. Phase6 remains
+**5/15**, Slice6step2; original foursteps/16scenarios, independent whole-topology
+acceptance and formalstep4 remain incomplete. mise Go1.26.8; no Docker operation
+or automation change, timersOFF. Private evidence:
+slice6-control-source-candidate-20261025. This17-file source/test/progress
+checkpoint's commit/push disposition is recorded separately.

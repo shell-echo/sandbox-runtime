@@ -1,46 +1,76 @@
-// control-source-review is a bounded, read-only operator planning tool. It has
-// no Docker connection, provisioning, credential, or runtime admission path.
+// control-source-review is an operator planning tool. Candidate mode builds in
+// owned temporary storage and uses the selected Go caches; it never connects
+// to Docker, provisions credentials or grants runtime admission. Its operator
+// supervisor must enforce a hard wall limit around non-cancellable file I/O.
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
+	"github.com/shell-echo/sandbox-runtime/internal/phase6rolecandidate"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
 	"io"
 	"os"
+	"time"
 )
 
-func main() {
-	if len(os.Args) > 2 || len(os.Args) == 2 && os.Args[1] != "-intent" {
-		fmt.Fprintln(os.Stderr, "read canonical Profile from stdin; output is held, not a permit")
-		os.Exit(2)
+var errUsage = errors.New("read canonical Profile, -intent or -candidate input from stdin; output is held, not a permit")
+
+func run(ctx context.Context, args []string, input io.Reader, output io.Writer) error {
+	if len(args) > 1 || len(args) == 1 && args[0] != "-intent" && args[0] != "-candidate" {
+		return errUsage
 	}
-	data, e := io.ReadAll(io.LimitReader(os.Stdin, (4<<20)+1))
-	if e != nil || len(data) > 4<<20 {
-		fmt.Fprintln(os.Stderr, "invalid input")
-		os.Exit(1)
+	if ctx == nil || ctx.Err() != nil {
+		return errors.New("invalid input")
 	}
-	if len(os.Args) == 2 {
+	maximum := 4 << 20
+	if len(args) == 1 && args[0] == "-candidate" {
+		maximum = 64 << 10
+	}
+	data, e := io.ReadAll(io.LimitReader(input, int64(maximum)+1))
+	if e != nil || len(data) > maximum || ctx.Err() != nil {
+		return errors.New("invalid input")
+	}
+	if len(args) == 1 && args[0] == "-candidate" {
+		var request phase6rolecandidate.ControlCandidateInput
+		if phase6fdloader.DecodeCanonical(data, &request) != nil {
+			return errors.New("invalid held source candidate input")
+		}
+		review, err := phase6rolecandidate.ReviewControlSourceCandidate(ctx, request)
+		if err != nil || ctx.Err() != nil {
+			return errors.New("held source candidate unavailable")
+		}
+		return json.NewEncoder(output).Encode(review)
+	}
+	if len(args) == 1 {
 		intent, d, e := phase6security.ReviewControlSourceIntent(data)
 		if e != nil {
-			fmt.Fprintln(os.Stderr, "invalid standalone source intent")
-			os.Exit(1)
+			return errors.New("invalid standalone source intent")
 		}
-		if json.NewEncoder(os.Stdout).Encode(struct {
+		return json.NewEncoder(output).Encode(struct {
 			Admission string                               `json:"admission"`
 			Digest    string                               `json:"intent_digest"`
 			Intent    phase6security.ControlSourceIntentV1 `json:"intent"`
-		}{"held-not-a-permit", d, intent}) != nil {
-			os.Exit(1)
-		}
-		return
+		}{"held-not-a-permit", d, intent})
 	}
 	review, e := phase6security.ReviewControlSourceProfile(data)
 	if e != nil {
-		fmt.Fprintln(os.Stderr, "invalid complete source Profile")
-		os.Exit(1)
+		return errors.New("invalid complete source Profile")
 	}
-	if json.NewEncoder(os.Stdout).Encode(review) != nil {
+	return json.NewEncoder(output).Encode(review)
+}
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if err := run(ctx, os.Args[1:], os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, errUsage) {
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }

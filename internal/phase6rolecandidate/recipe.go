@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // A recipe is deliberately narrower than the FD-loader protocol: a loader
@@ -66,8 +68,8 @@ func offlineGoEnvironment() []string {
 	return append(env, strings.Fields(fixedGoEnvironment)...)
 }
 
-// packagePath comes only from the closed recipe or the fixed loader package.
-func rebuildExecutable(ctx context.Context, sourceRoot, outputPath, platform, packagePath string) ([]byte, error) {
+// Package and flags come only from the closed recipes and Control verifier.
+func rebuildExecutable(ctx context.Context, sourceRoot, outputPath, platform, packagePath, ldflags string) ([]byte, error) {
 	if ctx == nil || ctx.Err() != nil {
 		return nil, ErrInvalidBuildContext
 	}
@@ -80,11 +82,16 @@ func rebuildExecutable(ctx context.Context, sourceRoot, outputPath, platform, pa
 	default:
 		return nil, ErrInvalidBuildContext
 	}
-	command := exec.CommandContext(ctx, "go", "build", "-p=2", "-mod=readonly", "-trimpath", "-buildvcs=false",
-		"-ldflags=-buildid=", "-o", outputPath, packagePath)
+	buildContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	command := exec.CommandContext(buildContext, "go", "build", "-p=2", "-mod=readonly", "-trimpath", "-buildvcs=false",
+		"-ldflags="+ldflags, "-o", outputPath, packagePath)
 	command.Dir = sourceRoot
 	command.Env = append(offlineGoEnvironment(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+architecture)
-	if _, err := command.CombinedOutput(); err != nil {
+	stdout, stderr := &buildOutput{cancel: cancel}, &buildOutput{cancel: cancel}
+	command.Stdout, command.Stderr = stdout, stderr
+	command.WaitDelay = time.Second // Cleanup is inside the operator's hard wall budget.
+	if err := command.Run(); err != nil || stdout.exceeded.Load() || stderr.exceeded.Load() || ctx.Err() != nil {
 		return nil, ErrInvalidBuildContext
 	}
 	info, err := os.Lstat(outputPath)
@@ -96,4 +103,22 @@ func rebuildExecutable(ctx context.Context, sourceRoot, outputPath, platform, pa
 		return nil, ErrInvalidBuildContext
 	}
 	return rebuilt, nil
+}
+
+// Compiler diagnostics are neither API output nor an unbounded memory buffer.
+// Overflow cancels the child and is a refusal even if it wrote an executable.
+type buildOutput struct {
+	count    int
+	exceeded atomic.Bool
+	cancel   context.CancelFunc
+}
+
+func (w *buildOutput) Write(p []byte) (int, error) {
+	if len(p) > (64<<10)-w.count {
+		w.exceeded.Store(true)
+		w.cancel()
+		return 0, ErrInvalidBuildContext
+	}
+	w.count += len(p)
+	return len(p), nil
 }

@@ -6,6 +6,7 @@ import (
 	"debug/buildinfo"
 	"debug/elf"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shell-echo/sandbox-runtime/internal/phase6fdloader"
 	"github.com/shell-echo/sandbox-runtime/internal/phase6security"
@@ -185,7 +187,7 @@ func TestOfflineRebuildIgnoresCallerGoConfiguration(t *testing.T) {
 	var executables [][]byte
 	selection := scriptSelection(t)
 	for name, packagePath := range map[string]string{"role": recipe.packagePath, "loader": "./cmd/phase6-fd-loader"} {
-		executable, err := rebuildExecutable(t.Context(), root, filepath.Join(t.TempDir(), name), "linux/arm64/v8", packagePath)
+		executable, err := rebuildExecutable(t.Context(), root, filepath.Join(t.TempDir(), name), "linux/arm64/v8", packagePath, "-buildid=")
 		if err != nil {
 			t.Fatalf("isolated scratch %s build: %v", name, err)
 		}
@@ -225,11 +227,11 @@ func TestOfflineRebuildIgnoresCallerGoConfiguration(t *testing.T) {
 		t.Fatal("role and loader package selection collapsed")
 	}
 	for _, ctx := range []context.Context{nil, canceledContext()} {
-		if _, err := rebuildExecutable(ctx, root, filepath.Join(t.TempDir(), "rejected"), "linux/arm64/v8", recipe.packagePath); err == nil {
+		if _, err := rebuildExecutable(ctx, root, filepath.Join(t.TempDir(), "rejected"), "linux/arm64/v8", recipe.packagePath, "-buildid="); err == nil {
 			t.Fatal("invalid context admitted a build")
 		}
 	}
-	if _, err := rebuildExecutable(t.Context(), root, filepath.Join(t.TempDir(), "rejected"), "linux/386", recipe.packagePath); err == nil {
+	if _, err := rebuildExecutable(t.Context(), root, filepath.Join(t.TempDir(), "rejected"), "linux/386", recipe.packagePath, "-buildid="); err == nil {
 		t.Fatal("unsupported platform admitted a build")
 	}
 }
@@ -238,4 +240,36 @@ func canceledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
+}
+
+func TestRebuildExecutableRejectsDiagnosticOverflow(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		blocks, stream int
+		reject         bool
+	}{
+		{"exact stdout limit", 1024, 1, false}, {"stdout overflow", 1025, 1, true}, {"stderr overflow", 1025, 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := candidateTestDirectory(t)
+			// This finite fake tool tests only subprocess-output handling. A real
+			// source admission still requires the independently checked toolchain.
+			script := fmt.Sprintf("#!/bin/sh\nout=\nwhile [ \"$#\" -gt 0 ]; do if [ \"$1\" = -o ]; then shift; out=$1; fi; shift; done\nprintf fixture > \"$out\"\ni=0\nwhile [ \"$i\" -lt %d ]; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' >&%d; i=$((i+1)); done\n", tc.blocks, tc.stream)
+			path := filepath.Join(root, "go")
+			if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			defer cancel()
+			data, err := rebuildExecutable(ctx, root, filepath.Join(root, "output"), "linux/arm64/v8", ".", "-buildid=")
+			if tc.reject {
+				if err == nil || data != nil {
+					t.Fatal("oversized compiler diagnostics admitted executable")
+				}
+			} else if err != nil || string(data) != "fixture" {
+				t.Fatal("bounded compiler output rejected", err)
+			}
+		})
+	}
 }

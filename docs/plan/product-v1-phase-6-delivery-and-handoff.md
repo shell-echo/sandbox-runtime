@@ -7,7 +7,8 @@ hypothesis to validate, not a comparative performance or production claim.
 
 Current amendments: [single current Profile migration](#single-current-profile-migration-2026-10-25),
 [current source-closure boundary](#current-builder-source-closure-2026-10-25) and
-[closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25).
+[closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25), plus
+[held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1634,3 +1635,30 @@ ImageSupply/VerifySources. Do not add an unreachable recipe or caller-signed
 proof token to substitute for missing inputs. Joint current Profile/consumer/
 three-tagged-builder migration and the original step3 live topology/scenarios
 remain separate following work.
+
+## Held Control source-candidate correspondence (2026-10-25)
+
+The [reachable planning checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-25-held-control-source-candidate-correspondence)
+implements the fixed current Control package/pin/loader/probe byte comparison
+through `tools/control-source-review -candidate`. Original public files and
+selected OCI are held/reopened, one private64MiB snapshot feeds existing OCI
+readers, and clean source/Go1.26.8 rebuilding is compared byte-for-byte. The
+21-field result is separate held offline data, with operator_key_origin
+explicitly not-verified. It cannot be supplied as ordinary Manifest/source
+proof or runtime approval. Existing ordinary APIs still refuse Control/Scanner.
+
+Explicit synthetic component/CLI checks pass; final full race401.598465s/600s
+and vet1.534335s pass on2186 unchanged Go/lock rows. Default fixture skips are
+separate from explicit positive evidence. The tiny test source/three-ELF OCI
+is not a project image, restored base, approved key or complete supply gate.
+The512MiB pressure hint is not a reservation; external whole90, compiler64KiB
+caps, host signer120 and all original holds remain.
+
+Next establish independently approved public-key origin and actual clean
+Control source/selected-OCI originals under existing supply gates; separately
+complete Scanner's engine, dependencies, rule/config/image recipe. Then wire
+original manifest/source reopening into ImageSupply/VerifySources and migrate
+the current model, resource roster, consumers and three tagged builders together.
+Do not turn this planning result into a new proof issuer or bypass missing
+current inputs. Original foursteps/16scenarios, Phase6 **5/15**, Slice6step2,
+9bindings/64barriers, old locks/reuse, twoissuers/PGgeneral and timersOFF stay.
