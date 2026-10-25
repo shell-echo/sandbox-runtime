@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -182,67 +181,45 @@ func validRuleFiles(files []RuleFile, floor RuleVersionFloor) bool {
 	return true
 }
 
-func verifyRuleDirectory(ctx context.Context, path string, files []RuleFile) error {
-	info, err := os.Lstat(path)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o022 != 0 {
-		return ErrRulesUnavailable
-	}
-	root, err := os.OpenRoot(path)
+func verifyRuleDirectory(ctx context.Context, path string, files []RuleFile) (err error) {
+	root, err := openRuleDirectory(path)
 	if err != nil {
 		return ErrRulesUnavailable
 	}
-	defer root.Close()
-	directory, err := root.Open(".")
-	if err != nil {
-		return ErrRulesUnavailable
-	}
-	entries, readErr := directory.ReadDir(4)
-	closeErr := directory.Close()
-	if readErr != nil && readErr != io.EOF || closeErr != nil || len(entries) != len(files) {
-		return ErrRulesUnavailable
-	}
-	names := make([]string, len(entries))
-	for index, entry := range entries {
-		names[index] = entry.Name()
-	}
-	sort.Strings(names)
-	want := make([]string, len(files))
-	for index, file := range files {
-		want[index] = file.Name
-	}
-	sort.Strings(want)
-	for index := range names {
-		if names[index] != want[index] {
-			return ErrRulesUnavailable
+	var opened []*ruleOriginalFile
+	defer func() {
+		for _, file := range opened {
+			if file.file.Close() != nil {
+				err = errors.Join(err, ErrRulesUnavailable)
+			}
 		}
+		if root.file.Close() != nil {
+			err = errors.Join(err, ErrRulesUnavailable)
+		}
+	}()
+	if verifyRuleNames(root, files) != nil {
+		return ErrRulesUnavailable
 	}
+	buffer := make([]byte, 64<<10)
 	for _, expected := range files {
-		before, err := root.Lstat(expected.Name)
-		if err != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0o022 != 0 || before.Size() != expected.SizeBytes {
-			return ErrRulesUnavailable
-		}
-		file, err := root.Open(expected.Name)
+		file, err := root.open(expected.Name)
 		if err != nil {
 			return ErrRulesUnavailable
 		}
-		opened, statErr := file.Stat()
-		if statErr != nil || !os.SameFile(before, opened) {
-			_ = file.Close()
+		opened = append(opened, file)
+		if file.size() != expected.SizeBytes {
 			return ErrRulesUnavailable
 		}
 		hash := sha256.New()
-		buffer := make([]byte, 64<<10)
 		var size int64
 		for {
 			if err := ctx.Err(); err != nil {
-				_ = file.Close()
 				return err
 			}
-			count, readErr := file.Read(buffer)
+			count, readErr := file.file.Read(buffer)
 			if count > 0 {
 				size += int64(count)
 				if size > expected.SizeBytes {
-					_ = file.Close()
 					return ErrRulesUnavailable
 				}
 				_, _ = hash.Write(buffer[:count])
@@ -251,14 +228,39 @@ func verifyRuleDirectory(ctx context.Context, path string, files []RuleFile) err
 				break
 			}
 			if readErr != nil || count == 0 {
-				_ = file.Close()
 				return ErrRulesUnavailable
 			}
 		}
-		after, err := root.Lstat(expected.Name)
-		closeErr := file.Close()
-		if err != nil || closeErr != nil || !os.SameFile(before, after) || size != expected.SizeBytes ||
-			"sha256:"+hex.EncodeToString(hash.Sum(nil)) != expected.Digest {
+		if file.check() != nil || size != expected.SizeBytes || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != expected.Digest {
+			return ErrRulesUnavailable
+		}
+	}
+	// Keep all three descriptors until the entire snapshot has been hashed:
+	// a rule checked earlier must not change while a later rule is read.
+	if verifyRuleNames(root, files) != nil {
+		return ErrRulesUnavailable
+	}
+	for _, file := range opened {
+		if file.check() != nil {
+			return ErrRulesUnavailable
+		}
+	}
+	return root.check()
+}
+
+func verifyRuleNames(root *ruleDirectory, files []RuleFile) error {
+	entries, err := root.entries()
+	if err != nil || len(files) != 3 || len(entries) != len(files) {
+		return ErrRulesUnavailable
+	}
+	names, want := make([]string, len(entries)), make([]string, len(files))
+	for i, entry := range entries {
+		names[i], want[i] = entry.Name(), files[i].Name
+	}
+	sort.Strings(names)
+	sort.Strings(want)
+	for i := range names {
+		if names[i] != want[i] {
 			return ErrRulesUnavailable
 		}
 	}

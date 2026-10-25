@@ -6,9 +6,10 @@ Status: coordination and delivery plan. Product positioning below is a
 hypothesis to validate, not a comparative performance or production claim.
 
 Current amendments: [single current Profile migration](#single-current-profile-migration-2026-10-25),
-[current source-closure boundary](#current-builder-source-closure-2026-10-25) and
-[closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25), plus
-[held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25).
+[current source-closure boundary](#current-builder-source-closure-2026-10-25),
+[closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25),
+[held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25), and
+[Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1662,3 +1663,27 @@ the current model, resource roster, consumers and three tagged builders together
 Do not turn this planning result into a new proof issuer or bypass missing
 current inputs. Original foursteps/16scenarios, Phase6 **5/15**, Slice6step2,
 9bindings/64barriers, old locks/reuse, twoissuers/PGgeneral and timersOFF stay.
+
+## Scanner original-rule custody (2026-10-25)
+
+Independent review selected a concrete input-custody defect before adding a
+Scanner image recipe without authenticated materials. The
+[fixed verifier](../audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-original-rule-custody)
+holds original directory/three rule FDs, checks full native identity and fresh
+exact-three membership through the entire verification, and refuses path,
+metadata or already-read file changes. Original red is preserved; final65named
+component tests/zero skips, fullrace399.978324s600 and fullvet2.202584s pass
+on2190 unchanged source/lock rows. These are Darwin filesystem/component checks
+with synthetic bytes, not actual ClamD loaded-rule or complete supply evidence.
+
+Next restore/independently approve actual fixed ClamAV engine and dependency
+originals, fixed configuration and fresh three-file official rule snapshot,
+signature/current-check receipt and loaded-set evidence before accepting a
+complete source-bound Scanner image recipe. Do not simply add its target to
+the Alpine Go-only recipe or substitute a caller digest map/proof signer.
+Actual Control production key/source/OCI origin and the old78 ImageSupply/
+resource/current-model migration remain open. A successful same-call check
+cannot make later engine file opens atomic; RO mount and real service gates
+remain. Phase6 **5/15**, Slice6step2, original foursteps/16scenarios, publicholds,
+twoissuers/PGgeneral,9bindings/64barriers, hostsigner120 and oldlocks/reuse stay.
+Existing mise/Docker development policy remains; no Docker operation, timersOFF.

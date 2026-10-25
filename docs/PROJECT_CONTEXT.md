@@ -46,6 +46,37 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Scanner original-rule custody fix](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-original-rule-custody)
+retains the original directory and all three rule file descriptors through a
+complete verification. Native openat/Fstatat checks bind current paths to the
+held device/inode/mode/UID/GID/link count/size/mtime/ctime; fresh enumeration
+rechecks the exact three names. A changed earlier file or restored bytes/mtime
+cannot reuse an earlier successful hash. Hash/size/context/freshness rules stay.
+
+Original-code red records nine named failures (parent plus eight mutation
+cases) and two passes. Final Darwin component race passes19roots/65named tests,
+zero skips, and package vet in6.606058s/90s. At base
+3a70b0db40358f7001f83f81ed6c3cc66913d4fc plus6Go files, full race passes
+naturally399.978324s/600s (267unique packages:230pass/37no-tests); full vet
+passes2.202584s, complete stage3.103693s/90s. All2190 Go/lock inputs match
+before/after; only four progress documents change afterward. The passive
+observer stops after29samples on a different process group at280.035613s;
+this does not fail Go or establish CPU attribution/leakage. All four PIDs
+from that sample are absent in the bounded post-run check.
+
+These are same-call filesystem/component results using tiny synthetic rules,
+not official signatures, new current-check receipts or proof ClamD loaded the
+snapshot. Darwin/Linux provide native custody; other OS refuses explicitly,
+with an unsupported-OS test supplied but not run on Darwin. RO mounts, official
+rule/source/signature/vulnerability gates,72h freshness and actual engine load
+remain required. Complete Scanner supply and actual Control key/source/OCI
+origin, old78 ImageSupply/resource/model migration and real management authority
+remain open. Phase6 stays **5/15**, Slice6step2; public holds, original foursteps/
+16scenarios, twoissuers/PGgeneral,9bindings/64barriers, hostsigner120 and old
+locks/reuse stay. miseGo1.26.8; no Docker operation and timersOFF. Private
+originals: slice6-scanner-rule-custody-20261025. This ten-file checkpoint's
+commit/push disposition is separate.
+
 The [held Control source-candidate checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-held-control-source-candidate-correspondence)
 adds a reachable `tools/control-source-review -candidate` mode. It independently
 rebuilds the fixed current Control package, FD loader and probe from clean

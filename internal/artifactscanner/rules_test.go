@@ -14,6 +14,9 @@ import (
 // not ClamAV rules or evidence that a daemon loaded official signatures.
 func testRuleSnapshot(t *testing.T) (*RuleVerifier, RuleManifest, string) {
 	t.Helper()
+	if !ruleCustodySupported {
+		t.Skip("original rule custody requires Darwin/Linux native filesystem identity")
+	}
 	root := t.TempDir()
 	directory := filepath.Join(root, "rules")
 	if err := os.Mkdir(directory, 0o700); err != nil {

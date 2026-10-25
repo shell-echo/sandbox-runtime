@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [held Control source-candidate correspondence](#2026-10-25-held-control-source-candidate-correspondence).
+Latest implementation checkpoint: [Scanner original-rule custody](#2026-10-25-scanner-original-rule-custody).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13371,3 +13371,78 @@ acceptance and formalstep4 remain incomplete. mise Go1.26.8; no Docker operation
 or automation change, timersOFF. Private evidence:
 slice6-control-source-candidate-20261025. This17-file source/test/progress
 checkpoint's commit/push disposition is recorded separately.
+
+## 2026-10-25 Scanner original-rule custody
+
+Read-only next-input review found an actual same-call rule-verification gap.
+The old verifier listed the three names once, held os.Root, hashed each file
+and closed it, without checking the original directory path or prior files
+again. During hashing a directory replacement, extra file, permission drift,
+restored file bytes/mtime or later modification of an already checked file
+could still return success. This is a demonstrated local-filesystem component
+failure, not a proven production exploit or permission to bypass RO mounts.
+
+The one current implementation now holds the original directory FD and all
+three rule FDs until the complete check finishes. Darwin/Linux native openat
+uses NOFOLLOW/NONBLOCK/CLOEXEC with only the existing six CVD/CLD family names;
+Fstatat uses AT_SYMLINK_NOFOLLOW. Go os.Root.OpenFile may resolve symlinks and
+is not used as a no-follow guarantee. A fresh independently opened dot stream
+re-enumerates exactly three names, avoiding a reused EOF/dup-shared offset.
+Held descriptors and current paths compare device/inode/mode/UID/GID/nlink/
+size/mtime/ctime, excluding read-induced atime. All files are rechecked after
+all hashes, so an earlier-file change cannot hide while a later file is read.
+Actual open/stat/read/close failures refuse; cancellation remains observable.
+The original byte/hash/size/EOF, manifest, engine/config binding, version floor,
+72h freshness and current-receipt requirements remain unchanged.
+
+Original-code red naturally exits1 in2.813363s; whole3.688996s/90s, outer0 only
+for successful capture of the expected failure. Eight mutation children each
+uniquely report `changed original rules admitted <nil>`: replacement, symlink,
+extra file, directory mode, restored directory metadata, restored file bytes,
+restored file mode and an earlier file changed during the second read. Parent
+plus children are9named failures; stable and cancellation are2named passes.
+No sleep, production test hook or probabilistic racing is used. A test Context
+Err barrier synchronously changes real local files in the existing chunk loop;
+ctime-change/mtime-restoration and the actual barrier are explicitly asserted.
+Original source/test bytes, plans and raw failed results remain preserved.
+
+Final complete artifactscanner package race passes19roots/65named tests with
+zero skips: all original assertions, mutation refusals, unchanged regular/CVD/
+CLD positives and symlink/FIFO/directory/writeable/empty/unknown/traversal
+refusals. Go4.889296s and packagevet0.411338s, whole6.606058s/90s, naturalouter0.
+These files are tiny synthetic inputs, not ClamAV databases, official signatures
+or evidence of a live daemon's loaded rules. Darwin executes the native checks;
+other OS fails closed with a separate refusal test, not a weaker fallback.
+That other-OS test is supplied but was not executed by this Darwin run. Native
+success-fixture skips apply only to unsupported platforms, not the65results.
+
+At baseline3a70b0db40358f7001f83f81ed6c3cc66913d4fc plus6Go files, required
+`go test -race -shuffle=on -count=1 ./...` naturally passes399.978324s/600s,
+267unique packages=230passing+37without tests, stderr0, no active signal,
+timeout or truncation, outer0. Full `go vet ./...` passes2.202584s, complete
+publication3.103693s/90s, outer0 with empty outputs. All2190 source/lock rows
+match before/after; only four progress/plan docs change afterward. The passive
+observer is INCOMPLETE after29samples: at280.035613s a descendant has another
+process group. This is not CPU attribution, savings, a test fault or a leak
+finding; a later bounded targeted ps finds all four recorded PIDs absent.
+Default opt-in skips elsewhere do not replace actual role/service gates.
+
+Execution-plan drafts were rejected before Go ran for inconsistent source-index
+or renamed vet-command/output references. New identities and literal original
+Go commands corrected those private controllers; no component or full run was
+repeated to erase a failure, and no limit was extended. All drafts remain.
+No driver/lifecycle, Provider wire Contract, engine command/configuration,
+signing path or Docker operation changes. There is no atomicity guarantee
+between return and ClamD opening/loading the path: RO mount custody, actual
+source/supplier/signature/vulnerability evidence and an independent official
+current-rule check/loaded-set gate are still necessary. Historical pinned
+ClamD benign/EICAR evidence with stale rules cannot qualify this new snapshot.
+
+Complete Scanner engine/dependency/config/rule/image supply, independently
+approved actual Control public-key/source/OCI input, old78 ImageSupply/resource/
+model migration and real Docker management authority remain open. Phase6 is
+**5/15**, Slice6step2. Original foursteps/16scenarios, public holds, twoissuers/
+PGgeneral,9bindings/64barriers, hostsigner120, old locks/receipts/reuse remain.
+Development uses existing miseGo1.26.8/Python3.13.16, timersOFF. Private evidence:
+slice6-scanner-rule-custody-20261025. This ten-file source/test/progress
+checkpoint's commit/push disposition is separate.
