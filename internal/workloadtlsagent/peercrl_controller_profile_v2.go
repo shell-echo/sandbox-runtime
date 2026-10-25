@@ -28,21 +28,6 @@ func newControllerPeerCRLProviderV2(profile phase6security.ProfileV2, sources ph
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	found := false
-	if postgresOwner == "" {
-		for _, binding := range privateProfile.TLSAgentBindings {
-			if binding.SubjectPrincipalDigest == subjectDigest {
-				found = true
-				break
-			}
-		}
-	} else {
-		bound, ok := identity.PostgresSubjectForOwner(postgresOwner)
-		found = ok && bound == subjectDigest
-	}
-	if !found {
-		return nil, ErrUnavailable
-	}
-	return &ControllerPeerCRLProvider{profileDigest: privateProfile.ProfileDigest, identity: identity,
-		subjectDigest: subjectDigest, postgresOwner: postgresOwner, client: client, now: now}, nil
+	return newControllerPeerCRLProviderFromSnapshot(privateProfile.ProfileDigest, privateProfile.TLSAgentBindings,
+		identity, subjectDigest, postgresOwner, client, now)
 }

@@ -81,6 +81,7 @@ func TestPostgresControllerPeerCRLProviderConstructorRejectsDrift(t *testing.T) 
 		owner   string
 		subject string
 	}{
+		{"empty owner ordinary subject", profile, sources, "", profile.TLSAgentBindings[0].SubjectPrincipalDigest},
 		{"wrong owner", profile, sources, "provider-runtime", subjectDigest},
 		{"wrong subject", profile, sources, "product-migration-job", peerCRLTestDigest("other")},
 		{"changed source", profile, func() phase6security.PeerCRLSources {

@@ -5,6 +5,11 @@ Date: 2026-10-04
 Status: coordination and delivery plan. Product positioning below is a
 hypothesis to validate, not a comparative performance or production claim.
 
+Current amendment: [single current Profile migration](#single-current-profile-migration-2026-10-25).
+The user's prelaunch single-implementation direction supersedes older runtime
+compatibility intentions in this historical plan; it does not change formal
+gates, locked Contracts, original receipts or the fixed Slice6 order.
+
 ## Purpose and authority
 
 Finish the existing Slice 6 acceptance scope without extending it into an
@@ -1487,3 +1492,60 @@ Only six handoff documents change. Existing mise/Docker, Go1.26.8/old locks/cand
 ## 2026-10-15 interval readiness recheck keeps native APK held
 
 Three independently reviewed interval samples confirm the same daemon and27 bounded calls pass, but continuing large swap deltas keep native APK unadmitted. The original v2 DB remains fresh, and prior37/19 raw reports match and are reused without new scans. No container/image/candidate executes, and installation/GPG helpers retain their separate review boundary. See [the measured checkpoint](product-v1-phase-6-vault-generator-output.md#2026-10-15-interval-readiness-recheck-keeps-native-apk-held), private `gpg-native-recheck-20261015-102127`. Existing mise/Docker, quotas/deadlines and deleted automation stay unchanged. Only six handoff documents change;2148 Go files retain prior matching evidence without a new Go test claim. Phase6 remains5/15; Slice6 steps1/2/3/4 remain historical bounded E / ongoing / incomplete / not started.
+
+## Single current Profile migration (2026-10-25)
+
+The user's2026-10-21 prelaunch direction supersedes this plan's older intention
+to retain v1/v2 runtime compatibility. Earlier text remains an historical
+snapshot. End with one current Profile and implementation, remove redundant old
+runtime decoders/constructors/fallbacks, and do not add ProfileV3 or preserve an
+old type through aliases. Historical evidence verification remains separate
+from runtime admission; old receipts, locks and source revisions are unchanged.
+
+Current source facts explain the migration boundary. CandidateProfile.Profile
+and buildSlice6CandidateProfile in internal/phase6profilebuilder still construct
+the old model; slice6VaultComposedInputs.Profile and the three tagged
+Controller/ordinary-agent/PG-agent builders consume it. The current full-model
+field success in profile_v2_complete_fixture_test.go is synthetic, built from
+old JSON plus Control/Scanner and their agents. Public ProfileV2.Validate and
+DecodeV2 remain closed. Renaming types, changing a protocol string, projecting
+fields or replacing success tests with expected refusal would not finish this
+caller chain or establish current runtime success.
+
+Migration and its existing acceptance boundary, beginning in Slice6step2
+without a new formal acceptance matrix:
+
+1. Consolidate genuinely shared post-admission execution. This checkpoint
+   implements one TLS peer-CRL provider construction core and rejects empty PG
+   owner before dependencies. Each typed validator, private copy, externally
+   pinned source digest and public hold still precedes it. The existing
+   certificate-controller runtime binding is already independent of Profile type.
+2. Independently authenticate and connect complete current inputs to the
+   existing source-bound builder: clean-source Control/Scanner executables and
+   actual image manifests, private numeric UID/GID, exact daemon/socket and
+   ledger/rule/storage bindings, operator bootstrap/source-access authority and
+   the existing broker/general issuers with PostgreSQL on general. Metadata or
+   a synthetic fixture is not a restored image or an operator grant. Restore or
+   rebuild affected inputs through existing supply gates; do not first rebuild
+   every unaffected image or alter evidence-reuse rules.
+3. From those same verified inputs freeze the desired static inventory and
+   bounded dynamic allocation/UID/storage/peak envelope. Then jointly migrate
+   the single model, strict decoder/validator, role constructors and commands,
+   three tagged builders and real Provider/core consumers to that one candidate.
+   Delete old runtime branches, rather than creating adapters or skip-validation
+   credentials. This remains subject to independent trust/architecture review;
+   no hold disappears automatically because a field checker or compiler passes.
+4. Continue the existing Slice6step3 after that component/source migration.
+   Observe actual dynamic allocations, identities, storage and peak behavior
+   in the fresh same-run topology under the original scenarios. A desired envelope
+   is not an observed inventory. Old78deployments and draft82static identities
+   are neither the final complete roster nor a reason to weaken closed validation.
+   Only the existing independent step3 acceptance can advance6/15; formalstep4
+   follows it. Preserve the fixed four Slice6 steps and original16 scenarios.
+
+The current shared-core and required root-module passes are component evidence,
+not completion of items2–4. Docker management authority, source-owned operator
+inputs, real Controller/agent/Guest/Provider recovery and full-topology acceptance
+remain independently verified boundaries. Keep the original resource/time,
+9bindings/64barriers, supply/reuse and single-writer constraints, mise or Docker
+development, scheduled tasks OFF, and commit/push each completed source stage.

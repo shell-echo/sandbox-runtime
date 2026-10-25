@@ -46,6 +46,42 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [peer-CRL constructor consolidation](audits/product-phase-6-slice-6-startup.md#2026-10-25-peer-crl-constructor-consolidation)
+now uses one private post-admission provider construction core. Both typed
+entries still perform their own complete validation and private snapshot;
+only that snapshot's digest, bindings and compiled authorizer reach the core.
+The old PostgreSQL constructor now rejects an empty owner before dependencies,
+matching the current-model entry. Previously it could construct an ordinary
+provider through the PostgreSQL API. Command binding checks are additional;
+this is not evidence of a demonstrated production exploit.
+
+Original-code red preserves4named failures (two parents/two children), Goexit1.
+Final component race passes31roots/99named results withzeroSkip and packagevet;
+postpublication7.984248s/90s,outer0. New synthetic fixture inputs establish
+ordinary/PG success, exact owner/source isolation, private-copy protection,
+dependency refusals and the existing public hold. They are not current
+broker/general topology, actual issuer or full-model admission evidence.
+
+At base5a52e9f625574ab78eda14e0a648c060d14d724c plus4Go files, required
+root race passes naturally391.106795s/600s:267unique packages,229passing/
+38without tests,20650Bstdout/0stderr, no signal/timeout/truncation. Fullvet
+passes2.534549s; publication completes3.200131s/90s. All2177source/lock rows
+match before/after; only4policy/progress docs change afterward. The observer's
+40complete samples are passive diagnostics using unpinned ps, not trustedCPU,
+performance gains or a historical timeout-cause finding. Default fixture skips
+in the full run do not replace the explicit99pass component run.
+
+Global Profile consolidation and real service/whole-topology acceptance remain
+open. The [current-model migration sequence](plan/product-v1-phase-6-delivery-and-handoff.md#single-current-profile-migration-2026-10-25)
+first requires source-bound current builder inputs, then a joint model/consumer/
+tagged-harness switch without old runtime aliases, fallbacks or a new generation.
+Desired dynamic/peak bounds and actual same-run observations remain distinct;
+78/82are not final live counts. Phase6 stays **5/15**, Slice6step2; original
+foursteps/16scenarios, holds, twoissuers/PGgeneral, old locks/reuse,9bindings/
+64barriers, miseGo1.26.8 and timersOFF remain. Private evidence:
+slice6-peercrl-constructor-unification-20261025. The eight-file checkpoint's
+commit/push disposition is separate.
+
 The [CRL-required command cleanup](audits/product-phase-6-slice-6-startup.md#2026-10-25-crl-required-command-cleanup)
 removes the unconsumed pre-CRL controller config.v3 and agent config.v2
 startup paths, missing-source/nil-provider successes and the old raw request

@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [CRL-required command cleanup](#2026-10-25-crl-required-command-cleanup).
+Latest investigation checkpoint: [peer-CRL constructor consolidation](#2026-10-25-peer-crl-constructor-consolidation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13098,3 +13098,64 @@ package has no package-defined init/TestMain and zero selected tests; dependency
 initialization can occur. No real tagged Docker or role scenario is claimed.
 No driver/lifecycle or Provider Contract surface changed, so this stage does not
 invoke the unresolved Docker authority path or claim a new Contract qualification.
+
+## 2026-10-25 peer-CRL constructor consolidation
+
+The peer-CRL constructor consolidation
+now uses one private post-admission provider construction core. Both typed
+entries still perform their own complete validation and private snapshot;
+only that snapshot's digest, bindings and compiled authorizer reach the core.
+The old PostgreSQL constructor now rejects an empty owner before dependencies,
+matching the current-model entry. Previously it could construct an ordinary
+provider through the PostgreSQL API. Command binding checks are additional;
+this is not evidence of a demonstrated production exploit.
+
+Original-code red preserves4named failures (two parents/two children), Goexit1.
+Final component race passes31roots/99named results withzeroSkip and packagevet;
+postpublication7.984248s/90s,outer0. New synthetic fixture inputs establish
+ordinary/PG success, exact owner/source isolation, private-copy protection,
+dependency refusals and the existing public hold. They are not current
+broker/general topology, actual issuer or full-model admission evidence.
+
+At base5a52e9f625574ab78eda14e0a648c060d14d724c plus4Go files, required
+root race passes naturally391.106795s/600s:267unique packages,229passing/
+38without tests,20650Bstdout/0stderr, no signal/timeout/truncation. Fullvet
+passes2.534549s; publication completes3.200131s/90s. All2177source/lock rows
+match before/after; only4policy/progress docs change afterward. The observer's
+40complete samples are passive diagnostics using unpinned ps, not trustedCPU,
+performance gains or a historical timeout-cause finding. Default fixture skips
+in the full run do not replace the explicit99pass component run.
+
+Global Profile consolidation and real service/whole-topology acceptance remain
+open. The [current-model migration sequence](../plan/product-v1-phase-6-delivery-and-handoff.md#single-current-profile-migration-2026-10-25)
+first requires source-bound current builder inputs, then a joint model/consumer/
+tagged-harness switch without old runtime aliases, fallbacks or a new generation.
+Desired dynamic/peak bounds and actual same-run observations remain distinct;
+78/82are not final live counts. Phase6 stays **5/15**, Slice6step2; original
+foursteps/16scenarios, holds, twoissuers/PGgeneral, old locks/reuse,9bindings/
+64barriers, miseGo1.26.8 and timersOFF remain. Private evidence:
+slice6-peercrl-constructor-unification-20261025. The eight-file checkpoint's
+commit/push disposition is separate.
+
+The fresh test-only exporter passes once; its two0600 JSON files contain the
+old78-principal/27TLSbinding/48edge fixture with fixed-peer-ca and
+postgres-server-peer sources. This is not the revised two-issuer composition.
+Original red Go exits1 in2.343540s; diagnostic publication3.074730s/90 and outer0
+mean the expected defect was reproduced, not that a gate passed. Green's Go
+finishes7.070711s. Both public ordinary and PG constructors retain private
+source authorization after caller mutation; the shared core has eight focused
+purpose/identity cases, and existing hot read, Unix signing and public-hold
+checks pass. Current full-model public admission remains closed.
+
+An unused export draft lacked an explicit env executable pin; its replacement
+pins absolute env and the existing mise Go executable. An unused green draft
+selected an ordinary TLS subject without a CRL edge for the alias test; independent
+review caught it before execution. Its original test/plan/manifest remain. The
+final alias test explicitly chooses guest-runtime's bound edge; original red
+fixtures and failed results are unchanged and no failed identity is rerun.
+
+The complete race operation takes392.025762s including separately bounded
+pre/post; its600s is the Go lifecycle bound. Vet operation3.199987s and
+postpublication3.200131s fit the shared90. No Go/fixture/lock changes follow
+these checks. No allocation-lifecycle, Docker-driver or Provider Contract source changes
+were made. No real role process was run; no new Docker/Vault/production acceptance.

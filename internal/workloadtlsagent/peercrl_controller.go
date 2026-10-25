@@ -41,6 +41,9 @@ func NewControllerPeerCRLProvider(profile phase6security.Profile, sources phase6
 // that source even when the operator mapping contains it.
 func NewPostgresControllerPeerCRLProvider(profile phase6security.Profile, sources phase6security.PeerCRLSources,
 	owner, subjectDigest string, client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
+	if owner == "" {
+		return nil, ErrUnavailable
+	}
 	return newControllerPeerCRLProvider(profile, sources, subjectDigest, owner, client, now)
 }
 
@@ -53,9 +56,19 @@ func newControllerPeerCRLProvider(profile phase6security.Profile, sources phase6
 	if err != nil {
 		return nil, ErrUnavailable
 	}
+	return newControllerPeerCRLProviderFromSnapshot(copyProfile.ProfileDigest, copyProfile.TLSAgentBindings,
+		identity, subjectDigest, postgresOwner, client, now)
+}
+
+// Both typed entry points fully admit and copy their inputs before calling
+// this core. Bindings come only from that same private snapshot; the compiled
+// authorizer retains immutable scalar authority rather than caller slices.
+func newControllerPeerCRLProviderFromSnapshot(profileDigest string, bindings []phase6security.TLSAgentBinding,
+	identity phase6security.PeerCRLAuthorizer, subjectDigest, postgresOwner string,
+	client PeerCRLControllerClient, now func() time.Time) (*ControllerPeerCRLProvider, error) {
 	found := false
 	if postgresOwner == "" {
-		for _, binding := range copyProfile.TLSAgentBindings {
+		for _, binding := range bindings {
 			if binding.SubjectPrincipalDigest == subjectDigest {
 				found = true
 				break
@@ -68,7 +81,7 @@ func newControllerPeerCRLProvider(profile phase6security.Profile, sources phase6
 	if !found {
 		return nil, ErrUnavailable
 	}
-	return &ControllerPeerCRLProvider{profileDigest: copyProfile.ProfileDigest, identity: identity,
+	return &ControllerPeerCRLProvider{profileDigest: profileDigest, identity: identity,
 		subjectDigest: subjectDigest, postgresOwner: postgresOwner, client: client, now: now}, nil
 }
 
