@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [peer-CRL constructor consolidation](#2026-10-25-peer-crl-constructor-consolidation).
+Latest investigation checkpoint: [current builder source closure](#2026-10-25-current-builder-source-closure).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13159,3 +13159,59 @@ pre/post; its600s is the Go lifecycle bound. Vet operation3.199987s and
 postpublication3.200131s fit the shared90. No Go/fixture/lock changes follow
 these checks. No allocation-lifecycle, Docker-driver or Provider Contract source changes
 were made. No real role process was run; no new Docker/Vault/production acceptance.
+
+## 2026-10-25 current builder source closure
+
+The current builder source-closure inventory
+completes a bounded read-only checkpoint; **current inputs remain incomplete**.
+ImageSupply's exact target/directory and composed builder still cover the old
+78-role model. Generic candidate rebuilding cannot reproduce the current
+Control package alias, independent public pin and probe. Scanner source exists,
+but its target, fixed clamd engine/dependencies/rules and full image recipe are
+not connected. The arm64 resource policy has78assignments and omits the four
+new roles. No current source/production operator approval is inferred.
+
+All2177 previously tested Go/lock rows and43selected direct/script/helper/
+historical inputs match before/after. Fourteen bounded read-only Git commands
+exit0; inventory publication0.520651s/90s,outer0. The historical20,938,752B OCI bytes were hashed; only role/loader/probe
+hashes were compared with old delivery-v2 launch declarations. They are not
+current trust-target candidates, clean-source provenance or production keys;
+no OCI gate, signature or old authorization was replayed. No Go/Docker/network,
+private-key read, build or automation operation occurred. The prior99named
+component,391.106795s full-race and2.534549s vet results are reused under the
+same2177rows, not newly executed or current image qualification.
+
+The [closed input matrix and next implementation boundary](../plan/product-v1-phase-6-delivery-and-handoff.md#current-builder-source-closure-2026-10-25)
+selects fixed offline source-candidate verification into existing ImageSupply/
+VerifySources. The host signer starts120seconds before load; source rebuilding
+or a new source-proof signing authority is not added there. Current independent
+key origin, actual Control/Scanner original inputs and source/Store/daemon
+permissions still require their existing gates. No placeholder digest map,
+extra Profile generation or old runtime fallback is authorized. Only four
+progress/plan documents change. Phase6 remains **5/15**, Slice6step2; formal
+foursteps/16scenarios, public holds, twoissuers/PGgeneral, old locks/reuse,
+9bindings/64barriers, mise/Docker and timersOFF remain. Private evidence:
+slice6-current-builder-source-closure-20261025. This checkpoint's commit/push
+disposition is separate; source code integration has not occurred.
+
+The twelve explicitly read historical files stay at their original paths in
+control-production-delivery-20261012/fixture3 and its reports. Their current full
+hashes and self-consistent old Profile declarations are observed; no new
+archive-validation, source rebuild, independent operator signature or supplier
+acceptance is claimed. The old launch revision differs from current3ec163a2.
+No machine-wide credential search occurred; production public-key origin was
+not established in these reviewed materials, rather than proved nonexistent.
+
+The source review links existing phase6rolecandidate.VerifyArchive and
+VerifyBuildContext to ImageSupply's final reopen, but identifies the old
+closed78 target map and unsupported current Control recipe as actual call-chain
+gaps. Scanner needs its fixed /usr/sbin/clamd and complete rule/config/engine
+inputs; a Go-only target added to generic Alpine would not close the image.
+The signer Run starts120s before load, so moving Go rebuilding there lacks
+critical-path/environment/budget evidence and is outside the selected design.
+
+Current-source integration is therefore refused. Next independently review the
+offline candidate target/recipe/input contract and its rejection tests, retaining
+original source/OCI/public-key bytes and the existing supply/resource/time
+rules. Later builder freeze still reopens originals, and observed whole-topology
+acceptance remains separate. No source/manifest/key/approval is fabricated.

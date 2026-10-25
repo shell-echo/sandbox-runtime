@@ -5,7 +5,8 @@ Date: 2026-10-04
 Status: coordination and delivery plan. Product positioning below is a
 hypothesis to validate, not a comparative performance or production claim.
 
-Current amendment: [single current Profile migration](#single-current-profile-migration-2026-10-25).
+Current amendments: [single current Profile migration](#single-current-profile-migration-2026-10-25) and
+[current source-closure boundary](#current-builder-source-closure-2026-10-25).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1549,3 +1550,53 @@ inputs, real Controller/agent/Guest/Provider recovery and full-topology acceptan
 remain independently verified boundaries. Keep the original resource/time,
 9bindings/64barriers, supply/reuse and single-writer constraints, mise or Docker
 development, scheduled tasks OFF, and commit/push each completed source stage.
+
+## Current builder source closure (2026-10-25)
+
+This read-only checkpoint implements the input audit for migration item2 above,
+not source code integration. At3ec163a247186432e75228040f55ff984444fdd1 the
+entire2177 tested source/lock set is unchanged. Current source closure is
+incomplete, so no current Control/Scanner candidate or running role is admitted.
+
+| Input boundary | Observed state | Required refusal or next evidence |
+| --- | --- | --- |
+| Clean source and exact target inventory | Existing builder/directory/template is old78; new four roles absent | Same clean committed source/platform/Go1.26.8 and exact current target recipe; no caller-created deployment digest map |
+| Control source recipe | build.sh has current trust target, independent public pin, loader/probe; generic verifier maps ./cmd/target and builds no probe/pin | Independently reproduce current fixed package, pin, role/loader/probe and selected OCI from original source; old delivery-v2 archive or labels alone fail |
+| Operator public-key origin | Reviewed historical diagnostics use test keys; no production approval chain established here | Independently approved public source and original public bytes; a supplied digest, private test key or self-asserted declaration is not approval |
+| Scanner source/image | Command exists, but generic recipe lacks target and fixed clamd/dependency/config/rule image composition | Authenticate complete engine/role/dependency/rule inputs through existing supply gates; a Go executable added to Alpine is insufficient |
+| Current identity/resource policy | arm64 policy has78assignments, none for Control/Scanner/their two agents | Re-derive private numeric identities, duty/seccomp/static and bounded dynamic/peak desired fields;78/82are not live completeness |
+| Control source/Store/daemon access | Intent, seal and held reviews constrain declarations; current physical management authority is not supplied by this inventory | Original source/volume/socket/UID/GID/Store and exclusive-control observations under existing operator gates, not metadata equality |
+| Host signature path | Run starts120seconds before load, then observes and signs | Keep its deadline and authority unchanged; Go reconstruction or a new signed source-proof issuer requires separate critical-path/trust review |
+
+Implement the **offline source-candidate verifier to existing ImageSupply**
+boundary next, after independent contract and execution review:
+
+- Use a fixed reviewed target-to-package/stage policy shared by source collection
+  and independent rebuilding. Control's current target must bind the separate
+  approved public-key origin/pin and same-source Go1.26.8 role, loader and probe;
+  no runtime-selected package, environment pin or optional bypass is accepted.
+- Extend original manifest/OCI/source verification and private-input plumbing
+  into LoadImageSupply and ImageSupply.VerifySources. Reopen actual source,
+  public-key and archive bytes at freeze; never accept stored digest projections
+  or an unexported field-only success as launch authority. Candidate metadata
+  stays desired data, not a new source-proof grant or signing authority.
+- Admit Scanner image inputs only with its complete authenticated engine,
+  dependencies, rule manifest/configuration and original bytes. Preserve
+  rule freshness, full signature/source/vulnerability coverage, the existing
+  broker/general issuers and PostgreSQL general; do not first rebuild every image.
+- Reject missing/changed pin or approval source, unknown/old target, dirty or
+  different HEAD, wrong package/platform/toolchain/locks, metadata-only or extra
+  directory entries, changed descriptor/layer/role/loader/probe/engine bytes,
+  missing/stale rules and mutation on reopen. Define positive tests using fresh
+  real originals and negative tests before any target becomes accepted.
+
+No signer API change, new proof issuer, hidden source cache, deadline/quota
+increase, ProfileV3, alias or historical runtime fallback is approved here.
+The previous held diagnostic key/OCI/transcript cannot be copied into a current
+candidate or inherit old one-use authorization. Restoring required original
+artifacts and verifying origin is separate from code wiring. The existing
+strict current model, three tagged builders and real consumers must ultimately
+switch together; desired envelopes and step3 same-run dynamic observations
+remain distinct. Formal Slice6 foursteps/original16, Phase6 5/15 and timersOFF
+are unchanged. Document-only progress does not relabel C=R or change frozen-R
+reuse rules. This inventory did not run any Go/Docker/network/signature gate.

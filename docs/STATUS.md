@@ -1,5 +1,37 @@
 # Project Status
 
+The [current builder source-closure inventory](audits/product-phase-6-slice-6-startup.md#2026-10-25-current-builder-source-closure)
+completes a bounded read-only checkpoint; **current inputs remain incomplete**.
+ImageSupply's exact target/directory and composed builder still cover the old
+78-role model. Generic candidate rebuilding cannot reproduce the current
+Control package alias, independent public pin and probe. Scanner source exists,
+but its target, fixed clamd engine/dependencies/rules and full image recipe are
+not connected. The arm64 resource policy has78assignments and omits the four
+new roles. No current source/production operator approval is inferred.
+
+All2177 previously tested Go/lock rows and43selected direct/script/helper/
+historical inputs match before/after. Fourteen bounded read-only Git commands
+exit0; inventory publication0.520651s/90s,outer0. The historical20,938,752B OCI bytes were hashed; only role/loader/probe
+hashes were compared with old delivery-v2 launch declarations. They are not
+current trust-target candidates, clean-source provenance or production keys;
+no OCI gate, signature or old authorization was replayed. No Go/Docker/network,
+private-key read, build or automation operation occurred. The prior99named
+component,391.106795s full-race and2.534549s vet results are reused under the
+same2177rows, not newly executed or current image qualification.
+
+The [closed input matrix and next implementation boundary](plan/product-v1-phase-6-delivery-and-handoff.md#current-builder-source-closure-2026-10-25)
+selects fixed offline source-candidate verification into existing ImageSupply/
+VerifySources. The host signer starts120seconds before load; source rebuilding
+or a new source-proof signing authority is not added there. Current independent
+key origin, actual Control/Scanner original inputs and source/Store/daemon
+permissions still require their existing gates. No placeholder digest map,
+extra Profile generation or old runtime fallback is authorized. Only four
+progress/plan documents change. Phase6 remains **5/15**, Slice6step2; formal
+foursteps/16scenarios, public holds, twoissuers/PGgeneral, old locks/reuse,
+9bindings/64barriers, mise/Docker and timersOFF remain. Private evidence:
+slice6-current-builder-source-closure-20261025. This checkpoint's commit/push
+disposition is separate; source code integration has not occurred.
+
 The [peer-CRL constructor consolidation](audits/product-phase-6-slice-6-startup.md#2026-10-25-peer-crl-constructor-consolidation)
 now uses one private post-admission provider construction core. Both typed
 entries still perform their own complete validation and private snapshot;
