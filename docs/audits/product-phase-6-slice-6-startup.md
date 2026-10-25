@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Scanner original-rule custody](#2026-10-25-scanner-original-rule-custody).
+Latest implementation checkpoint: [Scanner supply metadata discovery](#2026-10-25-scanner-supply-metadata-discovery).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13446,3 +13446,77 @@ PGgeneral,9bindings/64barriers, hostsigner120, old locks/receipts/reuse remain.
 Development uses existing miseGo1.26.8/Python3.13.16, timersOFF. Private evidence:
 slice6-scanner-rule-custody-20261025. This ten-file source/test/progress
 checkpoint's commit/push disposition is separate.
+
+## 2026-10-25 Scanner supply metadata discovery
+
+Status: candidate metadata checkpoint; complete Scanner supply remains open.
+Phase 6 is **5/15**, Slice 6 step 2. This is not formal step 3 or step 4.
+
+The actual recovered slim directory is below the private recovery root; its
+inventory and 25 optional-artifact entries contain no ClamAV image or rule
+original. The old Downloads location is absent. No adjacent full archive or
+historical metadata was treated as recovered engine bytes.
+
+The independently reviewed anonymous registry discovery pins these originals:
+
+| Object | Raw bytes | SHA-256 (also exact response Docker-Content-Digest) |
+| --- | ---: | --- |
+| Candidate index | 2364 | `6d0680780fd29855cb7018f68272cb520821f614259e2066f8ec669069ac91b3` |
+| Selected arm64 manifest | 2095 | `fe182632e3f8de585c539fb22d84144dd6a7e2bf7d9470607b86ad8c368d1e3b` |
+| Associated attestation manifest | 840 | `6dadffafc3e6c15e055fe8c33744779ff1fe4744d3bc0d8307efed7c268d4552` |
+
+The index run passes naturally in 5.435526 seconds/90 seconds. The manifest
+producer `manifests-v1` remains FAILED, natural worker/outer exit 1 in
+4.024823 seconds. It obtained both exact manifest bodies, then applied its
+1 MiB HTTP response cap to a declared future SPDX blob of 2,099,349 bytes.
+It never fetched that blob and did not reach its producer postcheck. A later
+complete input check and a new offline classification do not supply that
+missing producer postcheck or turn the failed run green.
+
+The new offline policy separates bounded metadata declarations from download
+admission. Its original 4 MiB attestation declaration total also bounds each
+positive integer descriptor; the actual HTTP body cap remains 1 MiB. All
+`fetch_authorized` fields are false; larger declarations explicitly require a
+separately reviewed bounded restore. Nine test methods pass with zero skips,
+including the original 840-byte manifest and refusals for oversized single/
+total declarations, negative/zero/bool sizes, wrong MIME, bad/missing digest
+and alternative URLs. The complete policy stage exits naturally in
+0.737019 seconds/90 seconds. Fresh offline `classify-v1` exits naturally in
+0.743224 seconds/90 seconds without HTTP replay. Original failed identities,
+raw HTTP records and unexecuted/rejected drafts remain preserved.
+
+The arm64 manifest declares a 3919-byte config and seven compressed layers
+summing to 186,275,484 bytes. The associated manifest declares a 241-byte
+config plus SPDX-hinted and SLSA-hinted blobs of 2,099,349 and 7231 bytes.
+None was fetched. Index annotations establish metadata association only;
+config semantics, SBOM/provenance contents, publisher identity/signature,
+source correspondence and complete vulnerability coverage are not verified.
+Official rule signatures, current check within 72 hours and actual same-run
+ClamD loaded-set evidence remain required. These originals cannot qualify a
+Scanner image, authorize a recipe, or bypass the public hold.
+
+Existing mise Python3.13.16 runs with isolated/no-site/no-bytecode flags. Full
+2190 Go/lock rows, 1191 managed runtime files, seven aliases, 108 directories,
+direct inputs and exact clean Git state are checked before/after each passing
+stage. Anonymous tokens stay in memory; auth bodies and unknown headers are
+not persisted. Each HTTP request retains 10 seconds/1 MiB body/64 KiB headers,
+worker 88 seconds and outer 90 seconds. This small no-container discovery
+has its own reviewed scope; it creates no APK/TUF/container startup admission.
+No Docker, Go, build, scan, credential login or automation operation occurred.
+
+No repository Go bytes change at baseline
+`6d07b869fceb9bbc30274483e9ddadf1f902814e`. The preceding custody component
+65 named passes and required full race 399.978324 seconds/600 seconds plus
+vet 2.202584 seconds are reused under the same 2190 rows, not newly run.
+Only four progress documents change after this metadata verification. The
+host signer 120 seconds, public holds, original four steps/16 scenarios,
+broker/general issuers with PostgreSQL on general, old locks/reuse and
+9 bindings/64 barriers remain. Historical 78/82 counts are not final live
+inventory. Timers remain OFF; private originals stay outside Git in
+`slice6-scanner-supply-discovery-20261025`. Commit/push disposition is separate.
+
+Next: independently review bounded recovery for the fixed configs and both
+attestation blobs, including the larger SPDX object, then authenticate actual
+contents and supplier/source/signature/vulnerability evidence before image
+restoration or a complete Scanner recipe. Do not omit the large SBOM, raise
+the response cap, inherit old evidence or infer admission from descriptors.

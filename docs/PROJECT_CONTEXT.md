@@ -46,6 +46,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Scanner supply metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-supply-metadata-discovery)
+identifies one fixed arm64 candidate and its associated attestation manifest.
+The index passed its real bounded HTTP run. Both manifest originals match
+raw SHA-256, response digest and declared size, but their producer run remains
+FAILED: it applied the 1 MiB response cap to an unfetched 2,099,349-byte SPDX
+blob declaration. A new, separately reviewed offline classifier passes without
+replaying HTTP or changing that failure. Nine offline test methods pass;
+classification completes naturally in 0.743224 seconds/90 seconds.
+
+Only metadata is available. Image configs, seven image layers, SPDX/provenance
+contents, publisher signatures, official rules and the actual ClamD loaded set
+remain unverified. Every blob remains unauthorized for fetching; the response
+cap stays 1 MiB and the original attestation declaration total stays 4 MiB.
+The slim inventory has no ClamAV image/rule original. No Go source changes:
+all 2190 tested Go/lock inputs match, so prior race/vet results are reused,
+not rerun. Phase 6 stays **5/15**, Slice 6 step 2; holds and formal scenarios
+remain open. mise Python3.13.16 only; no Docker operation, timers OFF. Private
+evidence: slice6-scanner-supply-discovery-20261025. Next independently review
+bounded config/attestation recovery and authenticated supply/source closure
+before any image restore, recipe integration or current-model admission.
+
 The [Scanner original-rule custody fix](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-original-rule-custody)
 retains the original directory and all three rule file descriptors through a
 complete verification. Native openat/Fstatat checks bind current paths to the

@@ -9,7 +9,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [current source-closure boundary](#current-builder-source-closure-2026-10-25),
 [closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25),
 [held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25), and
-[Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25).
+[Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25), and
+[Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1687,3 +1688,27 @@ cannot make later engine file opens atomic; RO mount and real service gates
 remain. Phase6 **5/15**, Slice6step2, original foursteps/16scenarios, publicholds,
 twoissuers/PGgeneral,9bindings/64barriers, hostsigner120 and oldlocks/reuse stay.
 Existing mise/Docker development policy remains; no Docker operation, timersOFF.
+
+## Scanner supply metadata discovery (2026-10-25)
+
+The new [audit checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-supply-metadata-discovery)
+closes candidate descriptor discovery only. The real index run passes; the
+two manifest originals have exact raw/response digest identity, while their
+producer remains FAILED on an unfetched SPDX declaration. A new reviewed
+offline classification and nine refusal-test methods pass without HTTP replay.
+No config, layer, attestation content, publisher signature or official rule
+set is restored; the complete Scanner recipe/source closure remains open.
+
+Next independently review bounded recovery of the fixed config and attestation
+blobs, including the 2,099,349-byte SPDX object. Keep actual responses at the
+original 1 MiB cap and preserve all failed identities and originals; any
+segmented restore needs its own complete-byte binding and refusal review.
+Validate real contents, supplier/source/signature and vulnerability coverage
+before restoring layers or connecting the Scanner recipe. Metadata association
+alone is insufficient. This adds no current-model admission or new version.
+
+The prior tested 2190 Go/lock bytes remain unchanged; reuse their full race/
+vet evidence without another Go run for these four documentation edits.
+Phase 6 remains **5/15**, Slice 6 step 2. Public holds, host signer 120 seconds,
+original four steps/16 scenarios, two issuers/PG general, old locks/reuse and
+9 bindings/64 barriers remain. Docker is untouched and timers remain OFF.

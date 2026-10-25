@@ -1,5 +1,23 @@
 # Project Status
 
+The [Scanner supply metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-supply-metadata-discovery)
+finds the selected arm64 manifest and its associated attestation metadata.
+The index's real HTTP run passes. The two manifest originals match their
+raw/response digests and sizes; their producer remains FAILED on an unfetched
+SPDX size declaration. A separately reviewed offline classifier passes in
+0.743224 seconds/90 seconds, with nine offline test methods passing in their
+own 0.737019-second stage. No failed run is relabeled or replayed.
+
+No configs, image layers, attestation contents, signatures or official rules
+are restored. The 1 MiB HTTP cap and 4 MiB attestation declaration total stay;
+every blob still requires separate fetch approval. Source/lock bytes remain
+identical across all 2190 rows; prior full race/vet are reused, not rerun.
+Complete Scanner supply/recipe, Control authority/source, current model and
+real topology remain open. Phase 6 is **5/15**, Slice 6 step 2. Development
+uses existing mise Python3.13.16; Docker is untouched, timers OFF. This
+four-document checkpoint records metadata progress only; private originals
+stay outside Git in slice6-scanner-supply-discovery-20261025.
+
 The [Scanner original-rule custody fix](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-original-rule-custody)
 retains the original directory and all three rule file descriptors through a
 complete verification. Native openat/Fstatat checks bind current paths to the
