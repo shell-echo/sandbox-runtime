@@ -14032,3 +14032,73 @@ process action or automation. Timers OFF. Foursteps/16scenarios/publicholds,
 broker/general with PostgreSQL general, host signer120,9bindings64barriers,
 old locks and evidence-reuse rules stay. Normal checkpoint commit/push is
 verified separately and does not constitute formal Slice6 acceptance.
+
+## 2026-10-26 Scanner peeled commit body
+
+Status: independently reviewed complete current peeled JSON and fixed VCS claim
+correspondence PASS. Baseline6547dba1e5e38a8ae97f5a853f50146a60ffc566.
+Phase6 remains **5/15**, Slice6 step2. Bounded step1 stays; step2 remaining
+startup/security/supply closure, step3 fresh inventory/original16 scenarios and
+independent acceptance, then formal step4 remain incomplete.
+
+The new peeled-policy-v2 executes only eight new focused methods, zero skips,
+in0.011 seconds (worker4.333588, whole4.424786 seconds/90). Prior48-method
+results are reused only after all nine common-module SHAs match their natural
+PASS witness, with identical source/runtime inputs. Original HTTP/JSON/body
+implementations and previous33/48 test bytes are unchanged; the old suites are
+not executed again. An unexecuted policy-v1 review rejects a missing cross-check
+of receipt source/publisher authority flags. V2 adds both false-flag checks and
+two mutation cases in the existing receipt test. Original v1 code/plan/rejection
+stay intact, not represented as an executed failure or pass.
+
+The independently reviewed peeled-body-v1 executes exactly one original GET to
+api.github.com `/repos/Cisco-Talos/clamav/commits/clamav-1.4.6`, with the original
+Accept, identity encoding, User-Agent and API2022-11-28 headers and no bearer.
+Auth/release/referrers are not requested. HTTP200 finishes in0.800385 seconds;
+worker3.712636 and whole3.844461 seconds/90 finish naturally0, reaped, without
+timeout/signal/truncation. This is the new response's CL13089, checked at this
+GET, not inherited from the earlier header-only observation. Original canonical
+raw-header agreement, single CL/noTE/noLocation/identity,64KiB header,1MiB body,
+absolute request10 from beforeDNS, all-publicDNS and actual numeric TCP/TLSpeer
+with original SNI/CA checks pass. Header is1342 bytes. Exact body consumption,
+response.length=0, full SHA and strict JSON parsing/secret refusals pass.
+
+Receipt, projection and framed body agree on13089 bytes and
+SHA2568b8fa4c253f86d37e46caad6a234e49321a6079b0806228dc8e86117a9ba9442.
+The reported commit is5853e1396777bae4d909cd3dd44f58352e7cf9b3, matching the
+fixed original provenance claim. There is no DCD or Link. GitHub's nested
+verification reports verified=true/reason=valid; this is the server's statement,
+not a locally verified Git object/signature, authenticated complete source or
+image-to-source proof. All source/publisher/supply/runtime and production
+metadata-admission flags remain false. Body/header originals, signature/payload
+and arbitrary values are not persisted; safe typed facts and full hashes/counts
+only. The real output has one HTTP receipt and12 Git receipts, no body/blob.
+
+The policy identity binds928 direct inputs; the actual identity binds974. Both
+bind14 scripts/four raw originals/three helpers and complete2190 Go/lock rows,
+1191 managed Python files/seven aliases/108 directories before and after, plus
+12 exact Git checks. Only four already reviewed docs from the previous commit
+are updated in the new baseline input bindings. SOURCE/RUNTIME and old manifests
+are not regenerated, and old originals/failure identities are not rewritten or
+replayed. The three old network producers still remain FAILED without their
+own postchecks; the successful new producer proves neither their old cause nor
+a retrospective pass. No conclusion about a future response's framing follows.
+
+Next independently review fixed-digest signature-material binding and a trusted
+acquisition recipe that satisfies existing gates. Auth/release remain held from
+the prior observations; they are not retried here. No qualified alternative,
+new publisher key, unknown cache/index, host/Accept/HEAD/protocol variation or
+chunked/CL waiver is approved. Registry signatures/approved trust material and
+local crypto, source-to-image binding, seven layers/full Scanner recipe, fresh
+vulnerability evidence, official72h rules/current-check and actual loaded-set
+remain separate open gates. This component result is not full supply acceptance.
+
+Only four progress docs change; private diagnostics/evidence are
+slice6-scanner-peeled-body-20261026 outside Git/migration. Prior custody65, full
+race399.978324s/600 and vet2.202584s remain reused for the same2190 rows, not new
+runs. Existing misePython3.13.16-I-B-S only; no Docker/build/scan/global install,
+quota/deadline increase, DNS/proxy/route change, nonpublic exception, unrelated
+process action or automation. Timers OFF. Original foursteps/16scenarios/public
+holds, broker/general with PostgreSQL general, host signer120,9bindings64barriers,
+old locks and evidence-reuse rules stay. Stage commit/push is verified separately,
+not formal Slice6 step4 or acceptance.

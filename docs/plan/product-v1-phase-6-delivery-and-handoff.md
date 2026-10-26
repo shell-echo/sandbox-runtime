@@ -16,7 +16,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26), and
 [Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26), and
 [Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26), and
-[Scanner response framing observations](#scanner-response-framing-observations-2026-10-26).
+[Scanner response framing observations](#scanner-response-framing-observations-2026-10-26), and
+[Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1871,3 +1872,23 @@ four docs only. Existing misePython, timers OFF, no Docker/build/scan/install
 or quota/timeout/DNS/proxy/route changes. Original gates/locks/reuse/foursteps/
 16scenarios/twoissuersPGgeneral/9bindings64barriers and5/15 step2 remain. Stage
 commit/push is a separate checkpoint, not formal acceptance.
+
+## Scanner peeled commit body (2026-10-26)
+
+New peeled-body-v1 passes one complete original GET under fresh framing/body/
+strictJSON gates in3.844461 seconds/90, with HTTP200/13089 bytes and full hash
+matching its receipt/projection. Reported commit5853e139... matches the original
+VCS claim. GitHub's verified=true/valid is a remote statement, not local crypto,
+complete source or image binding. Eight new focused methods pass; old48 evidence
+is reused only for nine unchanged modules, not rerun. Both policy and actual
+source/runtime/direct/Git pre/post checks pass. Old failed producers stay FAILED.
+
+Next independently review signature-material binding and a compliant official
+acquisition path. Auth/release stay held and are not requested here; no waiver,
+new trust key, cache/index/protocol/route change or retry loop is approved. Full
+Scanner supply, signatures/source/image binding and real release gates remain
+open. Four docs only; private evidence/code outside Git. Same2190 source rows
+reuse prior valid Go evidence; existing misePython, no Docker/build/scan/install,
+quota/timeout/DNS/proxy changes, timers OFF. Original5/15 Slice6step2/foursteps/
+16scenarios/twoissuersPGgeneral/9bindings64barriers/locks/reuse rules stay. This
+normal commit/push checkpoint is not formal acceptance.

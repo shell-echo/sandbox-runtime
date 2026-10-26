@@ -1,6 +1,28 @@
 # Project Status
 
-The [Scanner response-framing checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-response-framing-observations)
+The [Scanner peeled-body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-peeled-commit-body)
+passes a new single-GET complete-body run in3.844461 seconds/90. This actual
+response is HTTP200 with CL13089; the original framing, exact body consumption,
+full SHA and strict JSON gates pass. Its reported commit5853e139... matches the
+fixed VCS claim. GitHub verified=true/valid remains a remote declaration;
+local Git signature, source/image binding, publisher/supply/runtime admission
+remain unproved. Unknown body and raw headers remain RAM-only.
+
+Eight new focused methods pass in4.424786 seconds including full input checks;
+test execution takes0.011 seconds. Prior48 methods are reused for nine identical
+common modules, not rerun. Actual pre/post checks cover974 direct inputs,
+14 scripts, four originals, three helpers,2190 source/lock rows,1191 runtime
+files and12 Git receipts. Previous failed producers remain FAILED; this new
+identity does not repair their missing postchecks or prove old header causes.
+
+Next independently review signature-material binding and a compliant official
+acquisition path while auth/release remain held; no new publisher authority,
+chunked/CL waiver, alternate route or retry loop is approved. Only four progress
+docs change; private evidence: slice6-scanner-peeled-body-20261026. Prior valid
+Go tests reused, existing mise Python only, timers OFF. Phase6 **5/15**, Slice6
+step2; original formal gates and acceptance order stay unchanged.
+
+The [previous Scanner response-framing checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-response-framing-observations)
 passes48 offline methods and a new four-GET header-only run in1.745659 and
 9.213936 seconds/90. Current anonymous-auth and release responses each declare
 chunked transfer with no Content-Length: the unchanged noTE/requiredCL gate
