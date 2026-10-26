@@ -46,6 +46,14 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Scanner official-path review](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-official-path-and-http-framing-review)
+completes bounded official documentation research. No alternative satisfying
+the original framing gate is demonstrated; B2 remains FAILED and B3 unexecuted.
+Next independently audit the exact framing guard's authority, callers and
+security invariants read-only. No parser or gate change is approved. No new
+candidate request or test run; four docs only, private
+slice6-scanner-auth-paths-20261026. Phase6 **5/15**, Slice6 step2, timers OFF.
+
 The [fixed Scanner token checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-fixed-scanner-token-boundary-and-framing-refusal)
 passes25 new synthetic methods in1.650444seconds/90, but the single real B2
 request remains FAILED. HTTP200 declares chunked transfer and no Content-Length;

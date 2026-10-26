@@ -1994,3 +1994,16 @@ and unchanged budgets, never disk/oldbearer inheritance. No gate, resource,
 cache/index or evidence-reuse change. Prior48/31/9/23 and validGo evidence reused,
 not rerun. Only four docs; private slice6-scanner-base-token-20261026, misePython,
 timersOFF. Phase6 remains5/15, Slice6step2; topology16/acceptance/step4 stayopen.
+
+#### 2026-10-26 official retrieval-path research checkpoint
+
+The [official-path review](../audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-official-path-and-http-framing-review)
+demonstrates no alternate route satisfying the original framing gate. It is
+documentation discovery only: B2 remains FAILED and B3 unexecuted. Next
+independently audit the exact guard's normative source, callers and security
+invariants read-only before proposing any boundary decision. Do not repeat
+failed requests or treat protocol-valid framing as automatic gate approval.
+No candidate request, new test, parser change or supply/runtime acceptance.
+Four docs only; private slice6-scanner-auth-paths-20261026, mise Python,
+timers OFF. Original budgets, resources, trust, reuse and formal holds stay;
+Phase6 **5/15**, Slice6 step2, topology/16 scenarios/acceptance/step4 still open.

@@ -14389,3 +14389,55 @@ vet2.202584s are reused for unchanged2190 source, not rerun. TimersOFF,
 Phase6 remains5/15, Slice6step2/foursteps/original16/publicholds/twoissuersPGgeneral/
 9bindings64barriers/oldlocks intact; normal checkpoint commit/push is not formal
 Slice6step4 or acceptance.
+
+### 2026-10-26 Scanner official-path and HTTP framing review
+
+The separately reviewed research identity
+`slice6-scanner-auth-paths-20261026` reads official documentation only. It sends
+no controlled token, manifest, blob or other candidate request. The earlier B2
+identity remains FAILED at the original noTE header guard; no token JSON/TTL
+acceptance, usable bearer or B3 execution is added.
+
+The [Registry authentication documentation](https://docs.docker.com/reference/api/registry/auth/)
+supports challenge-directed GET with realm/service/scope, but the reviewed
+sections provide no live token-response framing guarantee. The
+[optional OAuth POST](https://distribution.github.io/distribution/spec/auth/oauth/)
+describes password/refresh grants. The
+[Hub token operation](https://docs.docker.com/reference/api/hub/latest/operations/AuthCreateAccessToken/)
+requires identifier and secret. Neither establishes an authorized anonymous
+replacement. No credentials, login or POST were used.
+
+[Hub tag details](https://docs.docker.com/reference/api/hub/latest/operations/GetRepositoryTag/)
+are distinct from [Registry manifest/blob retrieval](https://distribution.github.io/distribution/spec/api/).
+A tag view, HEAD or length-bearing example cannot supply the missing complete
+fixed object or guarantee B2 framing. The [vendor repository](https://github.com/Cisco-Talos/clamav-docker)
+and [Debian README](https://github.com/Cisco-Talos/clamav-docker/blob/main/clamav/README-debian.md)
+point to Docker Hub. This bounded review demonstrates no compliant alternate
+exact-material route; it does not prove that none exists. No current tag,
+download-package signature or different candidate substitutes for the frozen
+base digest or supplies its source/publisher authentication.
+
+[RFC 9112 sections 6.1–6.3 and 7.1](https://www.rfc-editor.org/rfc/rfc9112.html#section-6.1)
+permit chunked HTTP/1.1 framing and prohibit a sender from combining
+Transfer-Encoding with Content-Length. The previous header pattern alone is
+therefore not proof of malformed HTTP. The unread entity's completeness and
+chunk correctness remain unknown. No verified server implementation establishes
+why this response used chunking; a server-size threshold is not a finding.
+
+No official path shown here satisfies the frozen noTE plus required-CL gate.
+Next independently review a read-only audit of that exact guard's normative
+source, callers, threat model and completion/bounds invariants. Any future
+chunked handling changes the accepted framing set and needs its own explicit
+boundary decision, design, refusal tests and new-run review; this research does
+not authorize it. Do not repeat the failed route, vary URL/headers or use an
+unofficial proxy to bypass the refusal. B2 stays FAILED; B3 stays unexecuted.
+
+Private REPORT, finite official-source/route matrices and pinned prior
+references remain outside Git/migration. Web observations are discovery, not
+local transport/raw-artifact custody or supply evidence. No new tests, full Go
+run, APK/TUF, Docker, scan, build or crypto were executed. Prior valid Go and
+component evidence are reused only for unchanged covered inputs. Original
+10/88/90 budgets, network, resource, trust, reuse and all formal holds remain;
+9 bindings/64 barriers, old locks and failures remain. Only four progress docs
+change, existing mise Python, timers OFF. Phase6 remains **5/15**, Slice6 step2;
+the original four steps and 16 scenarios remain open as previously scoped.
