@@ -1,6 +1,28 @@
 # Project Status
 
-The [Scanner declared-base discovery checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-declared-base-source-discovery)
+The [fixed Scanner base metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-fixed-scanner-base-metadata-and-401-observation)
+passes23 new focused methods and one new unauthenticated GET, naturally in
+5.226318 and4.809703 seconds/90 including full input checks. The actual request
+takes0.730643 seconds/10 and receives401 with a complete163-byte JSON body.
+Original framing/strictJSON/challenge guards accept only the exact
+clamav/clamav-debian pull challenge naming the existing token endpoint.
+
+This is a challenge observation, not base existence, OCI kind, publisher
+signature or source/supply/runtime acceptance. Unknown headers and401 body
+stay in RAM; only safe typed facts/hashes persist. No token, child object,
+Docker/build/scan or crypto executes. Complete2190 source/1191 runtime and
+1142 direct inputs pass pre/post checks with12 Git receipts. Prior48/31/9
+and valid Go evidence are reused unchanged, not rerun; old failures remain.
+
+Next independently review this actual challenge and the B2 anonymous-token
+refusals/TTL/RAM-only lifetime and B3 continuation scheme. No bearer persistence,
+scope expansion or automatic token acquisition is approved. Original metadata
+10/88/90 and network/supply guards stay; heavy APK/TUF host admission is not
+silently imported into this light observer. Four docs only; private
+slice6-scanner-base-metadata-20261026, mise Python, timers OFF. Phase6 stays
+**5/15**, Slice6 step2 and all formal holds unchanged.
+
+The [previous Scanner declared-base discovery checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-declared-base-source-discovery)
 locates the official Debian recipe path and distinguishes download-package GPG
 instructions from OCI publisher authentication. Both are discovery only:
 basea3cbbbc2...'s OCI kind, exact source commit and image signature stay UNKNOWN.

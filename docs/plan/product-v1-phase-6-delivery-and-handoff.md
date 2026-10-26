@@ -19,7 +19,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner response framing observations](#scanner-response-framing-observations-2026-10-26), and
 [Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26), and
 [Scanner embedded recipe and material boundaries](#scanner-embedded-recipe-and-material-boundaries-2026-10-26), and
-[Scanner declared-base source discovery](#scanner-declared-base-source-discovery-2026-10-26).
+[Scanner declared-base source discovery](#scanner-declared-base-source-discovery-2026-10-26), and
+[fixed Scanner base metadata and401 observation](#fixed-scanner-base-metadata-and-401-observation-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1944,3 +1945,29 @@ B1–B3 are proposals, with no automatic fetch, scope/key/issuer addition,
 mutabletag choice or layer/descriptor traversal. Four docs only; private
 slice6-scanner-base-discovery-20261026, mise Python, timers OFF. Phase6 stays
 5/15 and Slice6step2; formal topology/original16/acceptance/step4 remain open.
+
+
+## Fixed Scanner base metadata and 401 observation (2026-10-26)
+
+New23 focused methods pass; one independently reviewed fixed unauthenticated
+base request passes original framing/strictJSON/challenge guards with401,
+163 entity bytes and exact clamav/clamav-debian pull realm/service/scope.
+Whole policy/actual stages take5.226318/4.809703seconds/90 naturally; the GET
+itself0.730643seconds/10. Complete1142direct/2190source/1191runtime and12Git
+pre/post checks pass. Raw401 body/headers stay RAM-only; safe typed/hash
+receipts persist, with no token or downstream object fetched.
+
+This is no base existence/kind/source/signature/supply/runtime qualification.
+The200 path only has synthetic byte-binding and closed-kind component tests;
+public acceptance requires the actual fixed rawSHA/DCD/MIME/JSON guards.
+Failure handling preserves firsterror and full-budget postcheck failure;
+old producer failures stay FAILED. Preparation errors remain as unexecuted
+snapshots/rejections; formal policy-v2 and observe-v1 each run once.
+
+Next separately review actual challenge and B2 exact token scope/TTL/refusals,
+RAM-only lifetime and B3 handoff; no disk bearer, oldscope/token reuse,
+mutabletag selection or automatic next request. No APK/TUF heavy workload
+runs or host-gate change; original metadata10/88/90/framing/public-peer/supply
+limits remain. Prior48/31/9 and valid Go results reused, not rerun. Four docs
+only; private slice6-scanner-base-metadata-20261026, mise Python, timersOFF.
+Phase6 stays5/15, Slice6step2; original topology16/acceptance/step4 remain open.

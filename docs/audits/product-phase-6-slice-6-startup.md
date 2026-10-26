@@ -14260,3 +14260,68 @@ Timers OFF; Phase6 remains5/15, Slice6step2, original foursteps/16scenarios,
 twoissuers/PGgeneral/9bindings64barriers/publicholds intact. Source/base/rules/
 publisher/supply/runtime admission stays false. Commit and normal push are a
 separate intermediate checkpoint, not formal Slice6step4 or acceptance.
+
+
+## 2026-10-26 fixed Scanner base metadata and 401 observation
+
+B1 now has a frozen no-credential observer and23 focused policy methods. The
+new policy-v2 run passes all23/no skips naturally in5.226318seconds/90,
+including full input checks. Positive200 tests use known synthetic byte
+binding and direct closed-kind semantic validation; the public classifier
+always checks the hard-coded a3c digest and does not claim its preimage or a
+real200 base response. Tests also cover exact scope/noBearer, malformed or
+duplicate challenge/JSON, forbidden metadata/descriptor fields, declared size
+bounds, TE/noCL/encoding/redirect, secrets, truncation, mixed private DNS,
+close failures/late close/cancellation and first-error plus postcheck failures.
+
+After independent exact-code/input/new-identity review, one fixed unauthenticated
+GET for clamav/clamav-debian material
+`sha256:a3cbbbc2b17a3871862689c0773bc9f5d70a1e4914ada7c8a05e157722ee8a9d`
+passes the original raw-header/framing, full body, strictJSON and challenge guards.
+HTTP401 takes0.730643seconds/10; complete163-byte entity SHA is
+`sha256:ef184a1c0095506ffc016db5c48604041fc03d705f4376bfd154bea3373b7a57`.
+The407-byte raw header block and original entity stay in RAM; safe hashes and
+typed fields only persist. The sole accepted realm ishttps://auth.docker.io/token,
+service registry.docker.io, scope repository:clamav/clamav-debian:pull.
+All returned DNS addresses and actual numeric TCP/TLS peer are public; original
+Host/SNI/CA checks pass. No Authorization, login, token or local account credential
+is used. Whole new observe-v1 exits naturally0/reaped in4.809703seconds/90,
+without timeout/signal/truncation; full postcheck completes.
+
+A401 challenge proves neither object existence nor OCI object kind. Exact base
+source/actual OS, publisher signatures, source/supply/runtime admission remain
+unproved and external signature existence UNKNOWN. No B2/B3 request, child
+manifest/config/layer/referrer, GPG/Cosign or Docker/build/scan occurs.200 support
+is only component evidence until a separately reviewed actual fixed-SHA/DCD/
+MIME/closed-kind response. Runtime layer declaration limits retain the original
+2GiB integer bounds; they do not authorize downloads or larger resource quotas.
+
+Pre/post checks cover1142 direct inputs,16 scripts,4 original raw objects,
+3 helpers,2190 source/lock rows and1191 runtime files/7aliases/108directories,
+plus12 clean local Git receipts at9e7df5a1.... New lifecycle handling attempts
+full postchecks under the original budget and retains first and postcheck
+errors; successful postchecks never turn a failed request green. Existing old
+failed producers are preserved and do not inherit this result. Two preparation
+SyntaxErrors and an inherited supervisor filename were rejected before formal
+execution, with snapshots/rejection records retained. Policy-v2 and observe-v1
+each execute once under unused identities; no failed run identity is replayed.
+
+The independent host applicability review confirms this is light metadata,
+not APK/TUF or heavy Docker/build/scan admission. Original request10/body1MiB/
+headers64KiB/worker88/outer90 including publication/5-second postcheck reserve,
+1MiB streams, Git10/64KiB, full input, network and supply guards stay. This stage
+accepts no expiring bearer/Location/TUF/DB/rules evidence and does not renew old
+freshness; a projected HTTPDate is only an unsigned server declaration.
+
+Next independently review the real challenge and exact B2 token field/scope/TTL
+refusals, RAM-only lifetime and B3 continuation. Do not persist a bearer to bridge
+reviews, reuse oldrepo/expired tokens, expand scope, substitute mutable tags or
+waive auth/framing. B2/B3 remain unexecuted and require their own new identities
+and complete inputs. Prior48/31/9 methods, custody65, fullrace399.978324s/600 and
+vet2.202584s are reused unchanged, not rerun. Only four progressdocs change;
+private code/tests/receipts are slice6-scanner-base-metadata-20261026 outside
+Git/migration. No global install, DNS/proxy/route edit, nonpublic exception,
+quota/deadline increase or unrelated process action. Phase6 remains5/15,
+Slice6step2/foursteps/original16/publicholds/twoissuersPGgeneral/9bindings64
+barriers/oldlocks and evidence reuse stay; timers OFF. Normal commit/push is
+an intermediate checkpoint, not formal Slice6 acceptance or step4 closure.
