@@ -14,7 +14,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26), and
 [current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26), and
 [Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26), and
-[Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26).
+[Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26), and
+[Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1824,3 +1825,27 @@ step2; original foursteps/16scenarios and public holds remain. Existing mise,
 no Docker/build/scan, timers OFF. Four docs only; unchanged2190 Go/lock rows
 reuse prior valid Go evidence without reruns. Private evidence stays outside
 Git; stage commit/push does not constitute formal Slice6 acceptance.
+
+## Scanner signature metadata and source mapping (2026-10-26)
+
+The independently reviewed metadata-policy-v5 passes33 methods, including exact
+linear token-shape refusals and fixed annotated-tag/failed-parent discovery.
+The actual referrers, source-map and followup producers all remain FAILED at
+unchanged response framing; referrers/signature payloads are not fetched.
+Official API metadata reports the claimed5853e139... commit and an annotated
+clamav-1.4.6 tag pointing to it. This finite correspondence and the fully read
+fixed-commit README do not prove image source or local signatures; GitHub's
+verification is only a remote declaration. Release correspondence remains open.
+A separate fresh full2190 source/1191 runtime/Git check passes after the failures,
+without becoming their missing producer postchecks. See the startup audit for
+exact identities, timing, preserved failures and private evidence boundaries.
+
+Next independently design safe typed framing-rejection observations and check
+existing official retrieval paths; no inferred old raw-header cause or replay
+of failed identities. Original framing,10/88/90,1MiB/64KiB, public-DNS/TLS and
+supply gates remain. No new publisher key, crypto admission or runtime approval.
+Only four progress docs change; private code/evidence stays outside Git. Existing
+misePython only, no Docker/build/scan or global install; timers OFF. All original
+foursteps/16scenarios/publicholds/twoissuersPGgeneral/9bindings64barriers/oldlocks
+and evidence-reuse rules stay; Phase6 **5/15**, Slice6 step2. This checkpoint is
+not formal step4 or Slice6 acceptance. Normal commit/push is verified separately.

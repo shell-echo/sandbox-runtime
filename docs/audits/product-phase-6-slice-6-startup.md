@@ -13853,3 +13853,96 @@ remain OFF. Original public holds/foursteps/16scenarios, broker/general with
 PostgreSQL general, host signer120,9bindings/64barriers and old locks/reuse stay.
 Private evidence: `slice6-scanner-content-20261026`, outside Git/migration.
 Commit/push disposition is separate from formal acceptance.
+
+## 2026-10-26 Scanner signature metadata and source mapping
+
+Status: policy33 PASS, three actual network stages FAILED, later independent
+local closure PASS. Baseline6454989e3b91e3dbec9ef074d7a20dadd9005414.
+Phase6 remains **5/15**, Slice6 step2. Prior bounded step1 stays unchanged;
+step2 security/supply/startup closure, step3 fresh inventory/original16 scenarios
+and independent acceptance, then formal step4 all remain open. This is an
+intermediate checkpoint, not Slice6 acceptance.
+
+The fixed index6d068078..., arm64 manifestfe182632... and associated
+attestation6dadffaf... are the existing candidates, not new tag selections.
+Independent design/code/input review precedes every new identity. All new
+unknown response entities and arbitrary headers stay in RAM, including token,
+GitHub signature and message fields. Persist only complete SHA/size, safe typed
+projections and public-DNS/TLS/time/cleanup facts. No descriptor/link is followed
+automatically, no local credential is loaded and no crypto verifier executes.
+
+| New identity | Actual disposition | Whole elapsed seconds/90 |
+| --- | --- | ---: |
+| metadata-policy-v2 | FAILED owned-worker wall time; no postcheck | 87.030254 |
+| metadata-policy-v3 | FAILED supervisor self-pin, before worker/tests/network | 0.033491 |
+| metadata-policy-v4 | PASS31 offline methods, zero skips, full postchecks | 1.706767 |
+| referrers-v1 | FAILED anonymous-auth framing; zero referrers requested | 5.928289 |
+| source-map-v1 | FAILED peeled-commit framing after two complete observations | 2.899514 |
+| metadata-policy-v5 | PASS33 offline methods, zero skips, full postchecks | 1.701123 |
+| source-followup-v1 | FAILED release framing after tag/README observations | 2.746507 |
+| final-closure-v3 | PASS fresh local-only closure, no network/test | 1.256510 |
+
+Policy-v2's synthetic1MiB no-dot test stops at the token-shape scan. The old
+unanchored three-segment regex can retry at every start with quadratic work;
+that is a high-confidence code/test inference, not uniquely measured stack
+attribution. An independently reviewed single-pass ASCII state machine keeps
+the exact three-adjacent-base64url-segment >=16 matching semantics. Bounded short
+strings compare against the old regex; large absent/near-match strings use only
+the linear implementation. Original29 methods are retained, first31 then33
+pass. The original worker hard stop kills/reaps v2; no manual or unrelated
+process signal occurs. V3 is correctly rejected because an unnecessary same-mode
+chmod changed ctime and redundant supervisor alias pins were stale. New unused
+v4/v5 plans bind every alias to the same complete script-pin row. Old code,
+rejections, plans and raw receipts remain unchanged, never replayed or relabeled.
+
+The registry challenge401 is complete, but auth200 is rejected at framing
+before reading its body or accepting a token. Neither the three referrers nor
+legacy signature paths run. Source-map-v1 reads complete official commit2631B
+and tag-ref355B responses, then rejects peeled200 at framing/body0. Its failed
+producer has no RESULT or own postcheck. The ref reports annotated object
+26071af7b26cd71e66b13dcbe4bcb6bae8a8c2be; it is pinned only as the next
+read-only discovery target, with no inherited admission.
+
+The independently reviewed followup fixes that exact tag path and explicitly
+sends no bearer. Complete tag200/1410B reports target commit
+5853e1396777bae4d909cd3dd44f58352e7cf9b3, matching the original BuildKit VCS
+claim. Both commit and tag API metadata claim verified=true/reason=valid;
+local_Git_signature_verified, source_authenticated and release-to-image binding
+remain false. Fixed-commit README200/19271B has whole SHA256
+f395daad1e4b8e8cbea8c3f4d02d064b0ac8550e8c12ee0418f6fa6ee3bda9ca and a
+known Docker-repository-link boolean. No original text or signature is saved.
+The release200 again stops at framing/body0. Safe header projections cannot
+uniquely distinguish missing Content-Length from Transfer-Encoding or another
+framing refusal. Do not claim that root cause, release mapping, signature
+absence/presence, image source authentication or full supply verification.
+
+All three network producers remain FAILED without their own postchecks.
+Afterward, final-closure-v3 separately validates two full rounds of719 direct
+pins, four raw originals,12 scripts, three helpers, all2190 Go/lock rows and1191
+managed runtime files/seven aliases/108 directories. Twelve new read-only Git
+receipts show clean baseline HEAD/upstream/branch/origin before and after.
+This later result does not manufacture producer postchecks. Its dedicated
+local-only JSON/code authority excludes network; the linked PLAN-v2 is background
+only. All successful runs finish naturally/reaped without signal, timeout or
+truncation. The failed framing runs also exit naturally/reaped; the v2 timeout
+is kept as a timeout failure.
+
+Next independently review safe typed framing-rejection observations and existing
+official retrieval paths. Old projections cannot reconstruct discarded raw
+headers; any new observation needs a new reviewed identity and complete inputs.
+Keep exact Content-Length/noTE/no redirect, request10s/body1MiB/headers64KiB,
+worker88/outer90 and5s postcheck reserve, all-public DNS/numeric peer/original
+SNI/CA checks. Do not repeat auth/peeled/release failures just to produce output.
+Actual approved publisher trust material and covered index/manifest/attestation
+signatures, seven layers, complete Scanner recipe, fresh vulnerability evidence,
+official72h rules/current check and actual loaded-set remain separate open gates.
+
+Only four progress docs change; private diagnostic implementation/evidence is
+slice6-scanner-signature-metadata-20261026 outside Git/migration. Prior custody65
+component results, full race399.978324s/600 and vet2.202584s are reused against
+unchanged2190 source/lock rows, not newly run. Existing misePython3.13.16 only;
+no Docker/build/scan, global install, DNS/proxy/route edit, nonpublic exception,
+quota/deadline increase, unrelated process action or automation. Timers OFF.
+Public holds, foursteps/16scenarios, broker/general with PostgreSQL general,
+host signer120,9bindings/64barriers, old locks and evidence reuse stay unchanged.
+Commit/push disposition is separate from formal acceptance.

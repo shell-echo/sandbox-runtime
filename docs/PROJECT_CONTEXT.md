@@ -46,7 +46,32 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Scanner JSON and trust-boundary checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-json-and-trust-boundary)
+The [Scanner signature-metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-signature-metadata-and-source-mapping)
+passes 33 offline policy methods in 1.701123 seconds/90, including the retained
+refusals, linear token-shape scanning and exact annotated-tag discovery guards.
+Three actual network stages remain FAILED: registry anonymous auth, GitHub
+peeled commit and release responses stop at the unchanged framing gate. No
+referrers are queried and no signature payload or image layer is fetched.
+
+Limited complete responses report the claimed commit and show that official
+tag clamav-1.4.6 points through annotated object26071af7... to the same
+5853e139... commit. Fixed-commit README bytes are fully read and hashed.
+GitHub's verified=true is a remote declaration; no local signature, image-to-source
+binding, release correspondence or complete source authentication is established.
+Original unknown bodies/headers remain RAM-only; hashes and typed facts persist.
+
+A separate fresh read-only closure passes both complete2190 source/lock and1191
+runtime-file checks plus12 exact Git receipts. That is a later local check,
+not a postcheck or PASS for the failed producers. Old failures and exact inputs
+remain intact. Next independently design safe typed framing-rejection observations
+and check compliant official retrieval paths before any new metadata identity;
+do not infer the missing raw-header cause, retry failed identities or relax framing.
+Only four progress docs change; prior valid Go tests are reused. Existing mise
+Python only, no Docker/build/scan, DNS/proxy/route or quota/deadline change;
+timers OFF. Private evidence: slice6-scanner-signature-metadata-20261026.
+Phase6 remains **5/15**, Slice6 step2; source/signature/supply/runtime gates held.
+
+The [previous Scanner JSON and trust-boundary checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-json-and-trust-boundary)
 passes 31 policy methods (positive and refusal cases, zero skips) and a new
 full-original offline run, naturally in 1.948730 and 1.405507 seconds under the original 90-second bounds. Four
 fixed JSON objects match their descriptors; the statements share ten unique
