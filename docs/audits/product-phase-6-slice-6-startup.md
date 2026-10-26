@@ -14542,3 +14542,54 @@ failures, locks, budgets/resources/trust/reuse,9bindings64barriers and all
 formal holds remain. Existing mise Python, timers OFF; Phase6 **5/15**, Slice6
 step2. Bounded historicalE only remains accepted; fulltopology/original16 and
 formal acceptance/step4 closure remain incomplete.
+
+### 2026-10-26 held token-controller integration
+
+New `controller-policy-v2` passes24 frozen methods without skips or expected
+failures. Raw stderr reports10.044seconds for tests; RESULT internal time is
+11.584054seconds and tool outer11.638106seconds/90 including publication,
+natural0/reaped/no outer timeout, forcedsignal or truncation. Complete1242
+direct/21script/raw4/helper3/source2190/runtime1191/7alias/108directory pre/post
+checks and12readonlyGit receipts pass. Prior38/25/48/31/9/23 and valid Go are
+scoped unchanged reuse, not rerun or relabelled as new full gates.
+
+One actual owned-pipe negative blocks raw body consumption under the original
+10second target:9.999990seconds remaining were armed after setup, one internal
+SIGALRM fired, and the request was FAILED as expected. Actual fixture elapsed
+10.005125seconds includes cleanup; no successful10second response is claimed.
+Both original pipe ends are identity-checked before their2close attempts and
+confirmed closed; prior handler and elapsed-deducted worker timer are restored.
+Any outer intervention would still fail the whole stage. Other clock/close
+faults are simulated; this is no real DNS/TCP/TLS or B2 acceptance result.
+
+The fixture-only controller parses original headers through HTTPResponse and
+passes the same raw buffered stream to the tested frame/claim bridge, forbids
+automatic read/read1 decoding and fakeCL, and retains the old noTE REJECT
+observation for chunked. Socket-audit canary passes, unexpected socket events0;
+this is a reviewed-code fail-safe, not an OS sandbox. No real request or bearer
+transfer occurs. The old operational TokenHTTP/sharedmetadata remain unchanged.
+
+First-error preservation, entity disposal, postreceipt clock/TTL and final
+return checks cover close/save/late/rollback/timer failures. Disk receipts are
+preliminary and cannot claim final accepted return; no arbitrary raw header,
+token/claim or exception text is saved. Timer restoration deducts actual
+monotonic_ns elapsed; injected logical elapsed can only shorten it. No
+physical-erasure/swap or whole-connection EOF guarantee is inferred.
+
+V1 preflight caught possible repeated close of a reused FD number and was
+rejected without execution; its original bytes/plan/list remain. V2 uses one
+PipeOwner, bound FIFO/dev/inode/mode/uid/gid before close, attempted-before-
+syscall and confirmed-only-after-return. Drift/unknown close refuses without
+retrying old integers, while the other owned end is attempted. Three extra
+fully mocked tests cover reuse, drift and uncertainty; only the original one
+pipe pair is real. Handler/timer restoration is in nested finally.
+
+Next independently review the fixed real-B2 entry's explicit accepted-framing
+boundary, minimal activation, publicTLS/actual-peer receipt and new-run input
+plan. Fixture success does not grant that admission or B3; fresh same-process
+token use and later crypto/source/supply/runtime gates remain separate.
+Four progress docs only; private code/evidence stays in
+slice6-scanner-token-controller-held-20261026 outside Git/migration. Existing
+mise Python, timers OFF; original budgets/resources/trust/reuse/oldlocks,
+9bindings64barriers/twoissuersPGgeneral/publicholds remain. Phase6 **5/15**,
+Slice6 step2; fulltopology/original16/formalacceptance/step4 stay incomplete.

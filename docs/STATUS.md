@@ -1,5 +1,14 @@
 # Project Status
 
+The [held-controller checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-held-token-controller-integration)
+passes24 new methods, including one original10second owned-pipe refusal,
+within11.638106seconds/90 overall. In-memory HTTP parsing and actual pipe
+refusal are component evidence; no real token/TLS request or operational gate
+change. B2 remains FAILED, B3 unexecuted. Next review the fixed real-entry
+boundary and publicTLS/peer/new-run inputs. Private
+slice6-scanner-token-controller-held-20261026, four docs only, mise Python,
+timers OFF; Phase6 **5/15**, Slice6 step2.
+
 The [offline token-frame candidate](audits/product-phase-6-slice-6-startup.md#2026-10-26-offline-token-frame-candidate)
 passes38 new methods:0.037seconds test execution,1.793398seconds/90 with
 complete input checks. Component framing/claim evidence does not qualify a

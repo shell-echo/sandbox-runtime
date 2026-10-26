@@ -2030,3 +2030,15 @@ all input locks/trust/reuse/resource limits and original four formal steps.
 Four docs only; private slice6-scanner-token-frame-candidate-20261026,
 mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; fulltopology16 and formal
 acceptance/closure remain open.
+
+#### 2026-10-26 held-controller component checkpoint
+
+The [held integration checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-held-token-controller-integration)
+passes24 new methods under original bounds; its actual pipe request is an
+expected10second refusal, not a successful endpoint observation. No real B2
+activation or operational framing change; B3 remains unexecuted. Next review
+the exact real-entry boundary, publicTLS/peer receipt and new-run inputs before
+any fixed GET. Preserve old failures, all custody/resource/trust/reuse gates
+and original four steps/16scenarios. Four docs only; private
+slice6-scanner-token-controller-held-20261026, mise Python, timers OFF.
+Phase6 **5/15**, Slice6 step2; formal acceptance and closure remain open.
