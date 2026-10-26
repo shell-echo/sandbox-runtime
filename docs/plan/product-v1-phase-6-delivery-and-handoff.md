@@ -13,7 +13,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25), and
 [Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26), and
 [current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26), and
-[Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26).
+[Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26), and
+[Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1790,3 +1791,36 @@ locks remain. Unchanged2190 Go/lock rows retain prior valid component/fullrace/
 vet results; no new Go command runs. Existing mise only, no Docker/build/scan,
 timers OFF. Four progress documents change; private evidence stays outside Git.
 Commit/push disposition is separate from formal Slice6 acceptance.
+
+## Scanner JSON and trust boundary (2026-10-26)
+
+The [new audit checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-json-and-trust-boundary)
+passes 31 policy methods (positive and refusal cases, zero skips) and a
+separate full-original offline content run in 1.948730/1.405507s under original90s bounds. Four object descriptors, ten subject
+aliases bound to the selected arm64 manifest and SPDX113/2722/3343/104 internal
+package/file/relationship/license records are checked. Actual file contents,
+compressed-layer diffIDs, installed set and legal/vulnerability completeness
+are not verified. Seven image layers remain missing.
+
+A corrected new identity distinguishes missing configSource digest from a
+present but unauthenticated BuildKit VCS revision/source claim. The old
+content-v1 inaccurate summary and its natural execution receipts are retained
+with audit rejection, not rewritten or reused. Materials has two entries but
+declares completeness false and reproducible false. Builder amd64 and output
+arm64 are separate facts. No publisher signature envelope exists in the four
+objects; external signatures remain UNKNOWN and crypto verification is not run.
+Source, publisher, complete Scanner supply and runtime admission stay closed.
+
+Next independently review fixed official registry referrer/legacy-signature
+metadata and official source-commit/release correspondence under new identities
+and complete input locks. Do not automatically follow unverified source URLs,
+select self-asserted trust roots or replace the locked candidate to obtain green.
+Only reviewed actual signature format, publisher key/identity approval and exact
+artifact coverage may enter crypto verification. Preserve original10s/1MiB/
+64KiB/88s/90s, all-public networking, old failures and trust/reuse rules. Rules72h,
+real ClamD loaded-set, current vulnerability evidence and the complete nonroot/
+private-socket Scanner recipe remain separate. Phase6 stays **5/15**, Slice6
+step2; original foursteps/16scenarios and public holds remain. Existing mise,
+no Docker/build/scan, timers OFF. Four docs only; unchanged2190 Go/lock rows
+reuse prior valid Go evidence without reruns. Private evidence stays outside
+Git; stage commit/push does not constitute formal Slice6 acceptance.

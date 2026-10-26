@@ -46,7 +46,38 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Scanner CDN raw-object checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-cdn-raw-object-recovery)
+The [Scanner JSON and trust-boundary checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-json-and-trust-boundary)
+passes 31 policy methods (positive and refusal cases, zero skips) and a new
+full-original offline run, naturally in 1.948730 and 1.405507 seconds under the original 90-second bounds. Four
+fixed JSON objects match their descriptors; the statements share ten unique
+subject names bound to the selected arm64 manifest. SPDX internally checks
+113 packages, 2722 file declarations, 3343 relationships and 104 LicenseRef
+records, including the exact declared document root. This is candidate-specific
+structure/reference evidence, not full SPDX conformance or actual file proof.
+
+Provenance has two materials but declares materials completeness and
+reproducibility false. Its configSource lacks a digest; the BuildKit VCS
+extension does contain a 40-hex revision/source claim. That claim is parsed and
+hashed, not authenticated. An earlier diagnostic incorrectly reported no
+revision; its original receipts remain audit-rejected for that field. Private
+diagnostic code/tests and a new actual identity correct it without rewriting old evidence.
+The builder's declared linux/amd64 environment is separate from the selected
+linux/arm64 output. The upstream /init, unspecified User and exposed TCP ports
+do not approve the final Scanner runtime configuration.
+
+The four supplied objects contain no publisher signature envelope; external
+registry signatures remain UNKNOWN and no cryptographic verifier runs here.
+Source, signature, full Scanner supply and runtime admission remain held.
+Next independently review fixed official registry signature/referrer metadata
+and source-commit/release correspondence, then actual trust inputs and exact
+signature coverage. Seven image layers, vulnerability coverage, official72h
+rule/current-check and actual loaded-set gates stay open. All2190 Go/lock rows
+remain identical; prior valid Go tests are reused, not rerun. Actual diagnostic
+runs are offline, existing mise Python only; no Docker/build/scan or network
+configuration change, timers OFF. Four progress docs change; private evidence
+is slice6-scanner-content-20261026. Phase6 remains **5/15**, Slice6 step2.
+
+The [previous Scanner CDN raw-object checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-cdn-raw-object-recovery)
 recovers all four fixed objects under two new independently reviewed identities.
 The two configs and provenance pass whole-object size/SHA checks at
 3919/241/7231 bytes; SPDX passes three exact 206 ranges and the complete

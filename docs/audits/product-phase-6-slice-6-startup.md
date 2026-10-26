@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Scanner CDN raw-object recovery](#2026-10-26-scanner-cdn-raw-object-recovery).
+Latest implementation checkpoint: [Scanner JSON and trust boundary](#2026-10-26-scanner-json-and-trust-boundary).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13760,3 +13760,96 @@ only broker/general with PostgreSQL general, host signer120,9bindings/64barriers
 old locks and evidence-reuse rules remain. Only four progress documents change.
 Private evidence: `slice6-scanner-cdn-current-20261026`, outside Git and migration
 materials. Commit/push disposition is verified separately.
+
+## 2026-10-26 Scanner JSON and trust boundary
+
+Status: independently reviewed candidate-specific JSON/internal declarations,
+not authenticated source or publisher signatures. Baseline is clean
+`1b1440fa2ce3dfc2bdefe84f9f8711ca9b9e8373`. Phase6 remains **5/15**, Slice6
+step2. Prior bounded Guest/step1 is unchanged; step2 supply/security/startup
+closure, step3 complete fresh inventory/original16 independent scenarios and
+formal step4 remain incomplete. This intermediate doc checkpoint is not formal
+Slice6 acceptance or handoff.
+
+The new policy-v4 identity passes 31 methods with zero skips in a natural
+1.948730-second complete run/90 seconds. The separate content-v2 original-data
+run finishes naturally in 1.405507 seconds/90 seconds. Worker times are
+1.893929 and 1.343256 seconds respectively; complete source/runtime/direct/Git
+checks precede and follow both stages. The actual content plan binds404 direct
+files, four original blobs, three helper modules and the script/index closure.
+All2190 Go/lock rows and1191 managed Python files/seven aliases/108 directories
+match. Both owned worker/outer paths exit0 and reap without signal, truncation
+or timeout. Each stage's12 Git receipts preserve branch, HEAD/upstream/origin
+and clean status. HTTP request/body/header limits stay unchanged and no
+candidate HTTP request occurs in these runs. JSON input is fully read within
+the pre-existing4MiB object bound; this does not increase the1MiB HTTP cap.
+
+The original fixed index/arm64/attestation manifests bind all four restored
+raw object sizes and hashes. Runtime image config declares linux/arm64,
+seven diff IDs and14 history entries, of which seven represent layers. Those
+counts match seven compressed descriptors, not actual decompressed content:
+the seven image layers are still missing. Artifact config is unknown/unknown
+with an empty execution config; its two ordered diff IDs match whole SPDX and
+provenance bytes in manifest order. Both plain in-toto v0.1 statements have ten
+unique subject aliases and the same selected arm64 manifest digest. Repeated
+digest across unique aliases is legitimate and does not bind the index instead.
+
+SPDX2.3 traversal checks113 packages,2722 file checksum declarations,3343
+internal relationships and104 extracted-license records. IDs and LicenseRef
+references resolve, OTHER carries a comment, and the single DESCRIBES points
+exactly to SPDXRef-DocumentRoot-Directory-sbom (name sbom, purpose FILE,
+filesAnalyzed=false). This is the declared document root, not an observed
+runtime filesystem root. The112 filesAnalyzed=true packages require syntactic
+verification codes; the one false package has none. No actual package/file
+content, verification code, installed set, license catalog/legal compliance or
+vulnerability completeness is verified. LLB checks three internal node and
+mapping references, not authenticated Op hashes or real build execution.
+
+Source facts are separated correctly: invocation.configSource contains only
+entryPoint and no digest. BuildKit extension metadata.vcs does contain a
+40-hex revision and source URI plus two localdir declarations. Full original
+VCS revision/source hashes match the new result; the values remain unauthenticated
+claims and no declared URL/path is followed. There are two material records,
+with completeness.materials=false and reproducible=false. Builder environment
+linux/amd64 is distinct from runtime output linux/arm64. Neither that declaration,
+Jenkins builder URI nor registry byte equality proves complete clean source.
+
+The first content-v1 run ended naturally but its flat source_revision_present
+field incorrectly summarized the whole statement as having no revision. Actual
+independent review rejected that field. Original RESULT/OUTER remain unchanged,
+with a separate audit-rejection record. Private diagnostic code now derives configSource digest
+absence separately from VCS claim presence/hash/authentication; three new tests
+cover that distinction. Earlier preparation errors and unexecuted rejected
+plans/code are retained. This result uses new policy-v4/content-v2 identities,
+not a replay or relabeling of the old source-summary error or older small and
+manifest producer failures.
+
+The four supplied objects have no DSSE/publisher signature envelope or approved
+publisher trust material. External registry signature existence is UNKNOWN;
+no cryptographic verifier was run. Source/publisher/supply/runtime flags remain
+false. Upstream config declares /init, no User and3310/tcp/7357/tcp; it is not
+approved for final nonroot/private-socket Scanner composition. The official
+[BuildKit storage](https://github.com/moby/buildkit/blob/master/docs/attestations/attestation-storage.md)
+and [provenance format](https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-provenance.md)
+references were used only to discover format context, not to authenticate this
+candidate or substitute current upstream text for original inputs.
+
+Next independently freeze a new identity for fixed official registry referrer/
+legacy signature metadata and official source-commit/release mapping. Do not
+automatically follow a statement URI or trust a discovered key. Actual signature
+format, approved publisher identity/key origin and exact covered index/manifest/
+attestation must be independently reviewed before crypto verification. Keep
+10-second requests,1MiB bodies,64KiB headers, all-public-address/CA/peer checks,
+original outer limits and no credentials/proxy/DNS/route changes or nonpublic
+exception. Seven layers, full Scanner recipe, fresh vulnerability evidence,
+official rule signatures/current check within72h and actual ClamD loaded-set
+remain separate open gates.
+
+Only four progress docs change. Prior custody65 named component results, full
+race399.978324s/600 and vet2.202584s are reused for the same2190 rows, not newly
+run. Existing mise Python3.13.16-I-B-S only; no Docker, build, scan, global
+install, quota/deadline growth, unrelated process action or automation. Timers
+remain OFF. Original public holds/foursteps/16scenarios, broker/general with
+PostgreSQL general, host signer120,9bindings/64barriers and old locks/reuse stay.
+Private evidence: `slice6-scanner-content-20261026`, outside Git/migration.
+Commit/push disposition is separate from formal acceptance.
