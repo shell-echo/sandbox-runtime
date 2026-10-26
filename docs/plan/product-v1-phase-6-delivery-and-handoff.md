@@ -17,7 +17,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26), and
 [Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26), and
 [Scanner response framing observations](#scanner-response-framing-observations-2026-10-26), and
-[Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26).
+[Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26), and
+[Scanner embedded recipe and material boundaries](#scanner-embedded-recipe-and-material-boundaries-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1892,3 +1893,27 @@ reuse prior valid Go evidence; existing misePython, no Docker/build/scan/install
 quota/timeout/DNS/proxy changes, timers OFF. Original5/15 Slice6step2/foursteps/
 16scenarios/twoissuersPGgeneral/9bindings64barriers/locks/reuse rules stay. This
 normal commit/push checkpoint is not formal acceptance.
+
+## Scanner embedded recipe and material boundaries (2026-10-26)
+
+New offline policy9 and actual original-byte audit pass in1.548265/3.972352
+seconds/90. Fixed provenance embeds159B/five-line Dockerfile.add-db, not a
+verified complete engine compilation recipe. Its tagged BASE_IMAGE/material
+declares clamav-debian1.4.6_base digest a3cbbbc2..., distinct from metadata
+scanner ae4f3b55.... The freshclam syntax allows ignored failure; actual update,
+rule signature/72h, base bytes and full source/dependency lineage stay unproved.
+Original descriptor association and declaration checks do not authenticate the
+plain statement or publisher. External signatures remain UNKNOWN.
+
+Next independently review that declared base's official source, OCI digest kind
+and signature/acquisition entry; do not auto-adopt a new candidate/key/issuer,
+fetch layers or waive old auth/framing. Generic Alpine documentation, CVD
+signatures and GitHub verified metadata cannot fill the trust gaps. Policy9
+runs; unchanged old31/SPDX evidence is reused without reruns. Actual1099direct,
+2190source/1191runtime and pre/post Git guards pass. Reviewer capacity errors
+are retained; original configuration recovered before exact-plan approval, no
+model switch or bypass. Only four progressdocs change; private code/evidence
+outsideGit. SameGo evidence, misePython, timersOFF, no Docker/build/scan/install
+or DNS/proxy/route/quota/deadline changes. Phase6 5/15 Slice6step2 and original
+foursteps/16scenarios/publicholds/twoissuersPGgeneral/9bindings64barriers/locks/
+reuse rules unchanged; this checkpoint is not formal acceptance.

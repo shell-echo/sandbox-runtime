@@ -14102,3 +14102,96 @@ process action or automation. Timers OFF. Original foursteps/16scenarios/public
 holds, broker/general with PostgreSQL general, host signer120,9bindings64barriers,
 old locks and evidence-reuse rules stay. Stage commit/push is verified separately,
 not formal Slice6 step4 or acceptance.
+
+## 2026-10-26 Scanner embedded recipe and material boundaries
+
+Status: new offline saved-recipe/material declaration audit PASS, not source,
+base-image, rules, publisher signature or supply authentication. Baseline is
+404d0950b6ef7464b3fd8d22fd643aa6d8ab31f9. Phase6 stays **5/15**, Slice6 step2;
+step1 bounded scope is unchanged, remaining step2 security/supply/startup, step3
+fresh inventory/original16 independent scenarios, then formal step4 stay open.
+
+New recipe-policy-v1 executes9 focused methods, zero skips, in0.006 seconds;
+worker1.500486 and whole1.548265 seconds/90. New recipe-audit-v1 finishes with
+worker3.821256/whole3.972352 seconds/90. Both worker and outer naturally exit0,
+reaped, with no timeout/signal/truncation and complete input/Git pre/post checks.
+The policy input binds1053 direct files; actual binds1099. Both include9 scripts,
+four raw originals, three helpers,2190 Go/lock rows and1191 managed Python files/
+seven aliases/108 directories. Each has12 exact local Git checks. Prior31
+content-policy methods are reused only after original content/registry/blob SHA
+identity and prior natural PASS witness are checked; whole SPDX and old suites
+are not executed again. No candidate network, Docker, shell recipe or crypto
+runs in either identity.
+
+The original index6d068078...→selected arm64fe182632...→associated attestation
+6dadffaf...→provenance descriptor association passes unchanged fixed_blobs and
+whole original7231B SHA2564a66b1532ee5aa5612cfa1bdf4813c9dda934e62bc5180c7e3144bf4913dddbb.
+All ten unique statement subjects bind that selected manifest, not the index
+or the two dependency material digests. Strict JSON and original internal typed
+checks remain unchanged. Config-source entryPoint and the unique BuildKit
+source-info filename are Dockerfile.add-db, language Dockerfile. Canonical
+Base64 decodes159 bytes/five physical lines with SHA256
+38ff2bca822628339a40200efcf50dfe12f01c98587c060a3860282b7b21b6c4;
+encoded87384-byte/decoded65536-byte bounds, round-trip encoding and exact SHA
+are checked.
+Logical classes are ARG/FROM/RUN. The recipe uses a variable FROM and the actual
+argument is tagged docker.io/clamav/clamav-debian:1.4.6_base without a digest
+pin. Its freshclam command permits ignored failure. This is a static syntax
+observation, not evidence of actual execution, failure, success, valid rules or
+freshness. No source text is executed or added as a new source authority.
+
+Two exact distinct material declarations are preserved separately:
+
+| Declared role | URI | Declared SHA256 |
+| --- | --- | --- |
+| Runtime base | pkg:docker/clamav/clamav-debian@1.4.6_base?platform=linux%2Farm64 | a3cbbbc2b17a3871862689c0773bc9f5d70a1e4914ada7c8a05e157722ee8a9d |
+| Metadata generator | pkg:docker/docker/buildkit-syft-scanner@stable-1 | ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 |
+
+These are claims inside a plain statement without an embedded signature envelope.
+The base digest's actual
+OCI kind/bytes, complete engine/dependency build recipe and source-to-base/image
+binding remain unverified. The metadata generator is not the running ClamD.
+The VCS5853e139... context claim and previously matched GitHub metadata cannot
+be expanded into proof of that base's compilation. Original materials
+completeness=false and reproducible=false remain. No publisher crypto executes;
+all base/source/rule/signature/supply/runtime authority remains false. External
+OCI signature existence is UNKNOWN: the old referrers producer never got past
+auth and its failed identities are not replayed or relabeled here.
+
+Bounded official research reads the [vendor Docker page](https://docs.clamav.net/manual/Installing/Docker.html),
+[official recipe repository](https://github.com/Cisco-Talos/clamav-docker), its
+Alpine/Debian READMEs and the fixed ClamAV Jenkinsfile. Those pages identify
+recipe/publication entry points, not this digest's signed publication record.
+No OCI signer/key/identity instructions were located in that read scope; this
+is not a global absence claim. The [signature-format documentation](https://docs.clamav.net/manual/Signatures.html)
+describes database signatures, which cannot substitute for OCI publisher
+signatures. Mutable generic Alpine recipes do not bind this candidate's
+Debian-base declaration. Web cache misses are retained as unavailable views,
+not file404 or signature absence. Web research is discovery only and has no
+local controlled-transport or artifact-authentication status.
+
+The independent reviewer twice returned model-capacity errors before actual
+preflight. Those events and the earlier NOT-RUN preparation packet remain;
+the original configuration recovered on the third attempt and then approved
+this exact new actual identity. No model switch, review bypass or unapproved
+execution occurs. The current actual RESULT supersedes that packet's earlier
+execution status without rewriting it. Original SOURCE/RUNTIME/manifests/old
+failures remain byte-original; only four already reviewed progress-doc bindings
+move into the new baseline plan. Old failed producers still lack their own
+postchecks and do not inherit this offline result.
+
+Next independently review declared basea3cbbbc2...'s official source, digest
+object kind and signature/acquisition entry before any new scope/URL or byte
+recovery. A material claim is not approval to change candidate/key/issuer,
+fetch layers, accept a generic recipe or bypass auth/CL/noTE. Complete trusted
+source, publisher signatures, seven layers/full Scanner recipe, fresh
+vulnerabilities, official72h rules/current-check and actual loaded set stay
+open. Existing10s requests/1MiB bodies/64KiB headers/worker88/outer90/5s reserve,
+network/UID/GID/permission/reuse gates remain. No build/scan/install, quota or
+deadline increase, DNS/proxy/route edit, nonpublic exception or unrelated
+process action. Existing misePython3.13.16-I-B-S, timers OFF. Prior custody65,
+fullrace399.978324s/600 and vet2.202584s reused for the same2190 rows, not rerun.
+Four docs only; private evidence/code is slice6-scanner-recipe-binding-20261026
+outside Git/migration. Original foursteps/16scenarios/publicholds/twoissuers with
+PostgreSQL general/hostsigner120/9bindings64barriers/oldlocks stay. Normal
+commit/push is a separate intermediate checkpoint, not formal Slice6 acceptance.

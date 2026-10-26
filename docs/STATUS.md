@@ -1,6 +1,29 @@
 # Project Status
 
-The [Scanner peeled-body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-peeled-commit-body)
+The [Scanner embedded-recipe checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-embedded-recipe-and-material-boundaries)
+passes9 new focused methods and a separate saved-original audit in1.548265 and
+3.972352 seconds/90. The fixed provenance embeds Dockerfile.add-db:159 bytes,
+five lines, ARG/FROM/RUN. Its tagged BASE_IMAGE declares clamav-debian1.4.6_base
+with material digesta3cbbbc2..., distinct from the SBOM generatorae4f3b55....
+The update syntax permits ignored failure; it does not prove an update failed,
+succeeded, passed signatures or met the72h gate.
+
+This describes database augmentation, not a verified complete engine build.
+The embedded recipe's byte association, VCS5853e139... claim and current peeled
+API correspondence do not authenticate the declared base, compiler/dependencies
+or published OCI signature. All source/base/rules/publisher/supply/runtime
+approval remains false; external signature existence stays UNKNOWN. Generic
+Alpine documentation cannot substitute for this fixed candidate's declarations.
+
+Next independently review the declared base's official source, digest object
+kind and signature/acquisition entry. Do not auto-fetch or promote that material
+to a new trusted candidate/key, change the original image or waive auth/framing.
+Prior31 content tests are reused, not rerun;1099 actual direct inputs plus2190
+source/lock rows and1191 runtime files pass pre/post checks. Private evidence:
+slice6-scanner-recipe-binding-20261026. Four docs only, mise Python, timers OFF;
+Phase6 **5/15**, Slice6 step2 unchanged.
+
+The [previous Scanner peeled-body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-peeled-commit-body)
 passes a new single-GET complete-body run in3.844461 seconds/90. This actual
 response is HTTP200 with CL13089; the original framing, exact body consumption,
 full SHA and strict JSON gates pass. Its reported commit5853e139... matches the
