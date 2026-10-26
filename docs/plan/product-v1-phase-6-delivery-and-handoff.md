@@ -20,7 +20,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26), and
 [Scanner embedded recipe and material boundaries](#scanner-embedded-recipe-and-material-boundaries-2026-10-26), and
 [Scanner declared-base source discovery](#scanner-declared-base-source-discovery-2026-10-26), and
-[fixed Scanner base metadata and401 observation](#fixed-scanner-base-metadata-and-401-observation-2026-10-26).
+[fixed Scanner base metadata and401 observation](#fixed-scanner-base-metadata-and-401-observation-2026-10-26), and
+[fixed Scanner token boundary and framing refusal](#fixed-scanner-token-boundary-and-framing-refusal-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1971,3 +1972,25 @@ runs or host-gate change; original metadata10/88/90/framing/public-peer/supply
 limits remain. Prior48/31/9 and valid Go results reused, not rerun. Four docs
 only; private slice6-scanner-base-metadata-20261026, mise Python, timersOFF.
 Phase6 stays5/15, Slice6step2; original topology16/acceptance/step4 remain open.
+
+
+## Fixed Scanner token boundary and framing refusal (2026-10-26)
+
+B2 component25 synthetic methods pass in1.650444s/90. The independently
+reviewed single real anonymousauth GET remains FAILED:200/chunked/noCL, first
+refusal at original noTE guard before applicationbody reads. HTTP0.367607s/10,
+whole2.017721s/90, naturalexit1/reaped without timeout/signal/truncation.
+No usable token/JSONclaim/TTL acceptance or B3; safe typed/hash evidence only,
+with no original token/body/headers persisted. Buffer prefetch is not excluded.
+Full1169direct/2190source/1191runtime and12Git postchecks complete without
+changingFAILED. Worker-only core0/0 and RAM-reference cleanup are scoped facts,
+not physical-erasure/OS-swap promises. Oldfailedproducers stayFAILED.
+
+Next independently review read-only official compliant-path research; keep
+current failure and do not blind-retry URL/headers, parsechunked/waiveCL or use
+unofficial proxy/credentials/scope. No alternative is accepted and B3 stays
+blocked. A future fresh-token same-process run needs new identity/input review
+and unchanged budgets, never disk/oldbearer inheritance. No gate, resource,
+cache/index or evidence-reuse change. Prior48/31/9/23 and validGo evidence reused,
+not rerun. Only four docs; private slice6-scanner-base-token-20261026, misePython,
+timersOFF. Phase6 remains5/15, Slice6step2; topology16/acceptance/step4 stayopen.

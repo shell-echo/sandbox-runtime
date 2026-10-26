@@ -1,6 +1,26 @@
 # Project Status
 
-The [fixed Scanner base metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-fixed-scanner-base-metadata-and-401-observation)
+The [fixed Scanner token checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-fixed-scanner-token-boundary-and-framing-refusal)
+passes25 new synthetic methods in1.650444seconds/90, but the single real B2
+request remains FAILED. HTTP200 declares chunked transfer and no Content-Length;
+the original noTE guard refuses before application body reads. Request0.367607
+seconds/10; whole failed stage2.017721seconds/90, naturalexit1/reaped without
+timeout/signal/truncation. Complete input postchecks do not convert it to PASS.
+
+No token JSON/TTL check, usable bearer, registry request or B3 executes. Raw
+headers/body stay unpersisted; safe typed framing/hash/count evidence remains.
+Zero application reads do not prove absence of network-buffer prefetch. Worker
+core limits are local0/0; no physical-erasure or OS-swap guarantee is claimed.
+Prior48/31/9/23 and valid Go results are reused unchanged, not rerun.
+
+Next independently review read-only official retrieval-path research. Keep the
+current failed identity untouched; no blind URL/header retry, chunked parsing,
+CL waiver, unofficial proxy or B3 before a compliant path and new input review.
+Original10/88/90/public-peer/supply/resource/reuse guards stay. Four docs only;
+private slice6-scanner-base-token-20261026, mise Python, timersOFF. Phase6 stays
+**5/15**, Slice6step2; base/source/signature/supply/runtime holds remain.
+
+The [previous fixed Scanner base metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-fixed-scanner-base-metadata-and-401-observation)
 passes23 new focused methods and one new unauthenticated GET, naturally in
 5.226318 and4.809703 seconds/90 including full input checks. The actual request
 takes0.730643 seconds/10 and receives401 with a complete163-byte JSON body.

@@ -14325,3 +14325,67 @@ quota/deadline increase or unrelated process action. Phase6 remains5/15,
 Slice6step2/foursteps/original16/publicholds/twoissuersPGgeneral/9bindings64
 barriers/oldlocks and evidence reuse stay; timers OFF. Normal commit/push is
 an intermediate checkpoint, not formal Slice6 acceptance or step4 closure.
+
+
+## 2026-10-26 fixed Scanner token boundary and framing refusal
+
+B2's25 new synthetic methods pass naturally in1.650444seconds/90, including
+complete source/runtime/input checks. They exercise exact B1 challenge/URL,
+anonymous scope, typed/canonical JSON/JWT, agreement/TTL/clocks, safe projection,
+no credential/unknown body-header output, TE/noCL body-read refusal, cancellation,
+close/lateclose/post-close lifetime and worker core preconditions. The validJWT
+case is synthetic shape/scope/lifetime evidence, not JWT signature, actual token
+or OCI publisher verification. Shared48/31/9/B1lifecycle23 and valid Go evidence
+are reused by unchanged module/source bytes, not rerun.
+
+After exact code/identity/input review, one fixed auth.docker.io anonymouspull
+GET for repository:clamav/clamav-debian:pull returnsHTTP200 in0.367607seconds/10.
+The736-byte canonical header block declares Transfer-Encoding:chunked once and
+no Content-Length, with no Location, content encoding or duplicate fixedfields.
+The original noTE guard is the first actual refusal; missingCL is separately
+observed and is not claimed as a later executed check. Typed framing diagnostics
+remain observations and never authorize the response. The failed stage takes
+2.017721seconds/90 naturallyexit1/reaped, no timeout/signal/truncation;
+worker1.966812seconds/88. It has FAILURE and no RESULT.
+
+Application entity reads are0, entity_complete=false, and token JSON/claim/TTL
+parsing never runs. Socket/TLS buffers may prefetch, so this is not proof that
+no token bytes entered RAM. Empty-read-buffer SHA is not the complete server
+entity hash. Unknown original headers/body/claims/bearer are not written;
+only safe finite framing categories/counts/hashes and error types persist.
+No usable token returns or crosses argv/env/stdout/stderr/files/other outbound
+sockets/IPC; no registry request, child object or B3 runs. Worker-local core
+hard/soft limits0/0 are verified, not OS-global configuration, physical erasure
+or a no-swap guarantee. Python logical reference cleanup does not overclaim it.
+
+The firsterror remains Refused at HTTPframing; complete postchecks succeed
+with no postcheck_error and preserve FAILED. Pre/post checks cover1169direct,
+17scripts,4raw/3helpers,2190source/lock rows and1191runtime files/7aliases/
+108directories plus12 clean read-only Git receipts at8ac76302.... This verifies
+this new failure's closure, not missing postchecks or a PASS for older network
+producers. The one preparation NameError and a historical-B1 result-string
+self-review correction are retained, with no formal identity execution at those
+points; a separate clarifier records that the HTTP nullbyte literal was already
+correct. Formal policy-v1 and observe-v1 each execute once; no failed identity
+replay or extended timeout. ActualB2 token acceptance remains failed/unproved.
+
+Next independently review read-only official-source research for a compliant
+retrieval path. Do not repeat the unchanged failed URL under another spelling/
+header, parse chunked or waiveCL to make it green, use unofficial proxies,
+local account/AWS credentials or wider scope, or startB3. A futureB3 would need
+its own reviewed new run, fresh token acquired/used in one process and the
+original budget; no persisted/old B2 bearer or acceptance inheritance. No
+compliant alternative is established by this checkpoint. Base existence/kind,
+source/JWT/OCI publisher signatures, supply/runtime qualification stay unproved.
+
+Original request10s/body1MiB/header64KiB/worker88/outer90 including publication,
+5s postcheck reserve/streams1MiB/Git10s64KiB and all network/supply/resource/reuse
+gates stay. Light metadata host applicability does not waive APK/TUF heavywork
+admission. Existing misePython only; no Docker/build/scan/crypto/install,
+DNS/proxy/route edit, nonpublic exception or unrelated process action. Only
+four progressdocs change; privatecode/tests/receipts remain outsideGit/migration
+in slice6-scanner-base-token-20261026. Prior custody65/fullrace399.978324s/600/
+vet2.202584s are reused for unchanged2190 source, not rerun. TimersOFF,
+Phase6 remains5/15, Slice6step2/foursteps/original16/publicholds/twoissuersPGgeneral/
+9bindings64barriers/oldlocks intact; normal checkpoint commit/push is not formal
+Slice6step4 or acceptance.
