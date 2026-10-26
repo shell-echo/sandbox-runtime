@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-25
+Updated: 2026-10-26
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -45,6 +45,26 @@ inventory private evidence and local artifacts separately from Git. Resume
 Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
+
+The [Scanner blob checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-blob-discovery-and-address-guard)
+passes four header-only registry Location observations and 14 new offline
+restore-policy methods, including synthetic complete-body and 1 MiB reads.
+The real three-small-blob run fails before its first CDN HTTP response:
+zero body bytes and zero restored blobs, with no producer postcheck. A new
+single-DNS observation returns one non-global benchmarking-range address and
+the unchanged address guard rejects it. This reproduces a current access
+blocker; the original small-run cause remains unproven. No failed identity
+is replayed or relabeled, and SPDX is not run.
+
+Next independently review read-only resolver/route attribution and a compliant
+access proposal. Do not connect to that address, replace the system resolver,
+alter a proxy, or infer supply approval from the Location. Full JSON contents,
+publisher/source/signature, vulnerability/rule and actual loaded-set gates
+remain open. All 2190 Go/lock rows remain unchanged; prior race/vet are reused,
+not rerun. Phase 6 stays **5/15**, Slice 6 step 2. Existing mise Python3.13.16
+only; no Docker/Go/build/scan, quota/deadline increase or automation change.
+Private originals: slice6-scanner-blob-recovery-20261026 and
+slice6-scanner-blob-restore-20261026; only four progress documents change.
 
 The [Scanner supply metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-25-scanner-supply-metadata-discovery)
 identifies one fixed arm64 candidate and its associated attestation manifest.

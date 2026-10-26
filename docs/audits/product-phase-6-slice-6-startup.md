@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Scanner supply metadata discovery](#2026-10-25-scanner-supply-metadata-discovery).
+Latest implementation checkpoint: [Scanner blob discovery and address guard](#2026-10-26-scanner-blob-discovery-and-address-guard).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13520,3 +13520,81 @@ attestation blobs, including the larger SPDX object, then authenticate actual
 contents and supplier/source/signature/vulnerability evidence before image
 restoration or a complete Scanner recipe. Do not omit the large SBOM, raise
 the response cap, inherit old evidence or infer admission from descriptors.
+
+## 2026-10-26 Scanner blob discovery and address guard
+
+Status: raw restoration **blocked**, no Scanner image or blob admitted. Phase 6
+remains **5/15**, Slice 6 step 2. Prior bounded Guest evidence is unchanged;
+step 3 fresh complete inventory/original 16 scenarios/independent acceptance
+and formal step 4 remain incomplete. This checkpoint is not formal sealing.
+
+The four fixed descriptors are independently re-derived from the original
+index and both exact manifest/HTTP pairs, then checked against their fixed
+digests, sizes and types. Header-only discovery passes naturally in
+5.729400 seconds/90 seconds: four 307 responses point to the fixed digest
+path on `production.cloudfront.docker.com`. No response has DCD and none is
+called blob identity proof. URLs and signed query values stay in RAM; saved
+records contain bounded safe structure/hashes only. No redirect is followed
+in that run. Its nine new offline policy methods pass with zero skips in
+1.120897 seconds/90 seconds.
+
+The separately reviewed raw restoration policy keeps the original response
+cap and checks fresh exact host/path/query structure, KeyID hash and access
+window. Its CDN path would require every DNS answer to be globally reachable,
+select one numeric IP and verify the actual peer across TLS with the original
+host SNI/Host/CA checks. No live CDN peer was reached in small-v1. Bearer/Cookie/Referer/proxy/second-DNS/redirect forwarding is absent.
+Small objects require 200, exact Content-Length and whole SHA-256; SPDX
+requires three exact 206 Content-Range responses and the final 2,099,349-byte
+SHA before any segment is saved. Present wrong/duplicate DCD, encoding,
+malformed headers, inconsistent ETag and incomplete bytes fail closed. The
+access-token query is not a locally verified publisher signature. Network
+work reserves five seconds within the same 88-second worker; outer remains
+90 seconds, each request 10 seconds, entity 1 MiB and headers 64 KiB.
+
+The first unexecuted policy draft is preserved after independent review found
+missing successful downloader tests. The final 14-method suite passes with
+zero skips in 1.159664 seconds/90 seconds. Its synthetic 3919-byte whole and
+exact 1 MiB partial positives exercise getresponse/read1/SHA/return, byte caps,
+original request-target, close and credential exclusion. These are component
+tests, not real candidate recovery. Reads stop at the exact framed length;
+there is no CAP+1 probe. Small-stage acceptance requires all three output
+pins, complete postcheck and natural outer success, never file existence.
+
+The real `small-v1` run remains FAILED: worker/outer exit 1 naturally in
+3.393785 seconds, without timeout/signal/truncation. Challenge/auth/fresh
+Location succeed, then `image-config-raw-body` is refused before any CDN HTTP
+status, TLS-peer record or entity byte. Outputs are empty and the producer
+postcheck is not reached. The generic original error frame does not identify
+which preceding clock/DNS/budget check failed; no historical cause is claimed.
+SPDX and image-layer downloads are not started. All four blobs remain absent.
+
+A separately reviewed new `dns-observe-v1` identity performs one fixed-host
+system getaddrinfo call under a 10-second owned process group/64 KiB capture.
+The complete stage passes naturally in 1.206395 seconds/90 seconds. It observes
+one IPv4 result in IANA's non-globally-reachable `198.18.0.0/15` benchmarking
+range; the original selector returns `NON_GLOBAL_UNICAST`. Address and canonical
+name plaintext are omitted. No connect, TLS, HTTP, alternative resolver or
+network/process configuration change occurs. This demonstrates the current
+address guard blocker, not the exact cause of the earlier failed run. The
+new source/runtime/Git postcheck cannot replace that missing producer check.
+
+Full 2190 Go/lock rows, 1191 managed Python runtime files/seven aliases/108
+directories and direct inputs remain bound before/after passing stages.
+Repository Go bytes are unchanged at baseline
+`4863dbd05b3a1fbd8dfc809319a23377e7ea0645`; prior custody 65 named component
+passes, full race 399.978324 seconds/600 seconds and vet 2.202584 seconds are
+reused under the same rows, not newly run. Only four progress documents change.
+Private evidence stays outside Git and the migration package in
+`slice6-scanner-blob-recovery-20261026` and
+`slice6-scanner-blob-restore-20261026`. Scheduled work remains OFF; no Docker,
+Go, build, scan, global install, fee, quota or deadline change occurs.
+
+Next independently review read-only attribution of the existing resolver and
+network route, then a compliant isolated access proposal. Do not assume a
+particular proxy is responsible, silently swap resolvers, allow non-global
+addresses or loop the failed identity. Actual JSON/source/publisher signatures,
+complete vulnerability coverage, official rules/current check within 72 hours,
+ClamD loaded set and complete Scanner recipe remain open. Public holds, host
+signer 120 seconds, broker/general with PG general, old locks/reuse and
+9 bindings/64 barriers stay. Historical 78/82 counts are not final inventory.
+Commit/push disposition is separate.

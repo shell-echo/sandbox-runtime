@@ -10,7 +10,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [closed local-role build recipes](#closed-local-role-build-recipes-2026-10-25),
 [held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25), and
 [Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25), and
-[Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25).
+[Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25), and
+[Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1712,3 +1713,25 @@ vet evidence without another Go run for these four documentation edits.
 Phase 6 remains **5/15**, Slice 6 step 2. Public holds, host signer 120 seconds,
 original four steps/16 scenarios, two issuers/PG general, old locks/reuse and
 9 bindings/64 barriers remain. Docker is untouched and timers remain OFF.
+
+## Scanner blob restoration and address guard (2026-10-26)
+
+The [new checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-blob-discovery-and-address-guard)
+completes four header-only Location observations and new offline restore-policy
+tests. Real raw restoration remains blocked: the first small run fails before
+CDN HTTP with zero bytes/outputs and no producer postcheck; SPDX is not run.
+A separate DNS observation reproduces current rejection of one non-global
+benchmarking-range result, without proving the earlier failure's exact cause.
+
+Next independently review read-only resolver/route attribution and a compliant
+access proposal. Do not change proxy/DNS configuration, accept non-global IPs,
+reuse expired signed URLs or repeat the failed identity. Any future execution
+needs new identity/full inputs/dynamic target review under the same request10,
+body1MiB/header64KiB/worker88/outer90 boundaries and complete hash/postcheck gates.
+Location/query access checks do not qualify supplier signatures or Scanner
+supply; actual configs/SBOM/provenance bytes, source, vulnerability coverage,
+official current rules and loaded-set evidence remain open. No current-model
+admission, version or public hold change is added. Phase 6 remains **5/15**,
+Slice 6 step 2, with original four steps/16 scenarios still open. Go/lock bytes
+remain the same 2190 rows; reuse prior matching tests. mise/Docker policy and
+scheduled work OFF remain; only four progress documents change.
