@@ -46,7 +46,32 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [current DNS/route checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-current-dns-route-and-service-candidates)
+The [Scanner CDN raw-object checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-cdn-raw-object-recovery)
+recovers all four fixed objects under two new independently reviewed identities.
+The two configs and provenance pass whole-object size/SHA checks at
+3919/241/7231 bytes; SPDX passes three exact 206 ranges and the complete
+2,099,349-byte SHA. Both runs finish naturally with full input postchecks in
+8.168748/9.118952 seconds under their original 90-second bounds.
+
+Fresh anonymous pull credentials and per-object registry Locations stay in RAM.
+Every CDN response uses fresh all-public DNS, numeric-IP/TLS peer checks and
+original Host/SNI/CA verification. Request10s/body1MiB/headers64KiB/worker88s/
+outer90s and the five-second postcheck reserve stay. The original 14-method
+policy evidence is reused for unchanged code; no test or Go command is rerun.
+The prior small-v1 and manifest-producer failures remain FAILED and are not
+replayed. This result does not explain the historical non-public DNS answer.
+
+Only fixed raw bytes are recovered. Next independently inspect the complete
+JSON/attestation content and establish publisher/source/signature and complete
+Scanner supply/recipe evidence. Seven image layers, fresh vulnerability
+coverage, official rules/current check within72h and actual ClamD loaded-set
+gates remain open. Phase6 stays **5/15**, Slice6 step2; original foursteps/16
+scenarios and public holds remain. No system DNS/proxy/route edit, alternate
+resolver, Docker, build or scan; existing mise Python only, timers OFF.
+All2190 Go/lock rows match prior valid tests. Only four progress documents
+change; private originals stay in slice6-scanner-cdn-current-20261026.
+
+The [previous DNS/route checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-current-dns-route-and-service-candidates)
 finds four public IPv4 answers in each new A/B sampling window. DNS/interface/
 route facts are stable within each window. For one fresh selected public IPv4,
 two kernel queries return en5; configuration maps it to the enabled first USB

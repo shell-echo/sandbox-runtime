@@ -12,7 +12,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25), and
 [Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25), and
 [Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26), and
-[current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26).
+[current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26), and
+[Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1760,3 +1761,32 @@ loaded-set gates remain open. Phase 6 stays **5/15**, Slice 6 step 2; original
 four steps/16 scenarios, public holds and trust/reuse limits remain. Existing
 mise/Docker policy and timers OFF stay. Only four documents change; unchanged
 2190 Go/lock rows retain their earlier valid test evidence.
+
+## Scanner CDN raw-object recovery (2026-10-26)
+
+The [new audit checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-cdn-raw-object-recovery)
+closes retrieval of the four fixed raw objects. New independently reviewed
+small and SPDX identities pass naturally in8.168748/9.118952s under original90s
+bounds. Two config objects and the provenance object (3919/241/7231 bytes)
+pass whole SHA checks; SPDX passes three exact206 ranges and the full2099349B
+SHA before persistence.
+The complete prior small success and raw receipts are bound in the new SPDX
+plan, with full source/runtime/direct input checks before/after both stages.
+
+Fresh anonymous credentials and Locations remain RAM-only; original global
+public DNS/numeric-IP/TLS peer/Host/SNI/CA/framing/size/SHA checks and10/88/90s,
+1MiB/64KiB/5sreserve remain. No DNS/proxy/route change, alternate resolver or
+non-public exception is used. No APK/TUF Docker host prerequisite is invented
+for this unchanged HTTP plan. Original14 policy methods are reused for identical
+code; old small/manifest failures remain FAILED, unreplayed and unmodified.
+
+Next independently inspect complete config/provenance/SPDX semantics and close
+publisher/source/signature plus complete Scanner supply/recipe gates. Seven
+image layers, current vulnerability evidence, official72h rule/current-check
+and actual ClamD loaded-set are still open. Four raw objects do not qualify
+Scanner, public admission or production. Phase6 stays **5/15**, Slice6 step2;
+original foursteps/16scenarios, public holds, trust/reuse boundaries and Go1.26.8
+locks remain. Unchanged2190 Go/lock rows retain prior valid component/fullrace/
+vet results; no new Go command runs. Existing mise only, no Docker/build/scan,
+timers OFF. Four progress documents change; private evidence stays outside Git.
+Commit/push disposition is separate from formal Slice6 acceptance.

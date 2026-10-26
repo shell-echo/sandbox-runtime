@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Current DNS route and service candidates](#2026-10-26-current-dns-route-and-service-candidates).
+Latest implementation checkpoint: [Scanner CDN raw-object recovery](#2026-10-26-scanner-cdn-raw-object-recovery).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13685,3 +13685,78 @@ newly run. Only four progress documents change. Public holds, host signer
 120 seconds, broker/general with PG general, old locks/reuse and 9 bindings/
 64 barriers remain. Private evidence: `slice6-dns-route-attribution-20261026`,
 outside Git and the migration package. Commit/push disposition is separate.
+
+## 2026-10-26 Scanner CDN raw-object recovery
+
+Status: fixed raw-byte recovery passes under two new independently reviewed
+identities at clean baseline `66d46ce8375d801360804143f7d17e790dfcc781`.
+This closes the four-object retrieval subtask only. Phase6 remains **5/15**,
+Slice6 step2. The prior bounded Guest result/step1 is unchanged; step2 still
+needs remaining startup and true security/supply closure. Step3 fresh complete
+inventory/original16 scenarios/independent acceptance and formal step4 remain
+incomplete. This document checkpoint is not the formal Slice6 handoff.
+
+| Fixed raw object | Bytes | Complete SHA-256 |
+| --- | ---: | --- |
+| Image config | 3919 | `2b9aaa241269f3dbb7254c88a1912387d74ad5381bf1f90b15a7504bb8e83dfa` |
+| Attestation config | 241 | `27a7efedc5f760d7afde314542f052c0009a70ed773bea444247f23c8d61536c` |
+| Provenance | 7231 | `4a66b1532ee5aa5612cfa1bdf4813c9dda934e62bc5180c7e3144bf4913dddbb` |
+| SPDX | 2099349 | `b5c9fd058e58b42ba76bde3b1429cc23a247ebd4763cf571ded460c7d224bb66` |
+
+The small-current-v1 identity recovers three200 entities and passes complete
+postchecks. Worker8.123719s and outer8.168748s finish naturally. An independent
+actual review checks the output identities,0600 modes and all raw hashes before
+SPDX is admitted. The SPDX plan binds64 new small-stage result/blob/HTTP/Git/
+outer/review records in addition to the original116 direct pins; exact input
+checks preserve that accepted prior state before and after the new run.
+
+The separate spdx-current-v1 identity obtains one new307 Location and reads only
+206 ranges0-1048575,1048576-2097151,2097152-2099348, each with the exact total
+2099349 and entity sizes1048576/1048576/2197. The complete SHA is checked in RAM
+before writing the whole and three parts. Worker9.073631s and outer9.118952s
+finish naturally; independent actual review verifies each part's identity,
+size/SHA, exact whole slice and complete byte-for-byte concatenation. Both
+workers and their enclosing captures exit0/reap without timeout, signal or
+truncation. Each stage's12 pre/post Git receipts confirm the same clean branch,
+HEAD/upstream and origin. All2190 Go/lock rows,1191 runtime files/seven aliases/
+108 directories and complete helper/tool/direct inputs pass before/after.
+
+The current controller differs from its previous source only in the HEAD
+literal. The original14-method restore-policy result and its tested code hashes
+are unchanged and reused, not rerun. Request10s/body1MiB/headers64KiB/worker88s/
+outer90s and network budget reserving5s for postcheck/publication remain. The
+APK/TUF dual-host/Docker readiness gate was not part of this HTTP plan and is
+not newly introduced. No quota or deadline is increased.
+
+Original fixed index/manifest byte and digest bindings define these download
+targets; they are not fresh publisher or runtime authority. Each stage obtains
+fresh anonymous pull credentials, checks issued_at/JWT time/scope refusal
+conditions and marks JWT signatures unverified. Each object gets a fresh RAM
+registry307 Location with the original host/digest-path/query/KeyID/expiry/
+wall-monotonic checks. Every CDN request checks all resolved addresses as global
+public unicast before numeric-IP TCP and actual TLS-peer/SNI/Host/CA validation.
+All six CDN body requests observe four public IPv4 answers and valid peer checks.
+No signed URL/query values/auth body are persisted. Sensitive response headers
+stay in RAM; safe hashes and selected fields remain. Exact Content-Range/CL/ETag
+acceptance is supported by the pinned parser and natural passing run, rather
+than a saved raw Content-Range header. This does not establish the owner/cause
+of the earlier benchmarking DNS answer or guarantee future network access.
+
+The old small-v1 and manifests-v1 producer failures, missing producer postchecks,
+old originals, candidate locks and migration package remain untouched. They are
+not replayed or relabeled. The new four blobs are private raw candidates only:
+complete JSON/attestation semantics, source/publisher cryptographic signatures,
+seven image layers/complete OCI image, current vulnerability coverage, official
+rules/current check within72h, ClamD loaded-set and the full Scanner recipe are
+still open. Transport TLS and matching descriptor hashes do not close those
+trust gates. No Profile/Provider or production admission follows this result.
+
+Existing mise Python3.13.16-I-B-S only; no system DNS/proxy/route edits,
+alternative resolver, non-public address exception, unrelated process action,
+installation, Docker, Go, build, scan or automation. Timers remain OFF. Prior
+custody65 named component results, full race399.978324s/600 and vet2.202584s are
+reused against the same2190 Go/lock rows; they are not new runs. Public holds,
+only broker/general with PostgreSQL general, host signer120,9bindings/64barriers,
+old locks and evidence-reuse rules remain. Only four progress documents change.
+Private evidence: `slice6-scanner-cdn-current-20261026`, outside Git and migration
+materials. Commit/push disposition is verified separately.
