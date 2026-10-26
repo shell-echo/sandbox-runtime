@@ -14195,3 +14195,68 @@ Four docs only; private evidence/code is slice6-scanner-recipe-binding-20261026
 outside Git/migration. Original foursteps/16scenarios/publicholds/twoissuers with
 PostgreSQL general/hostsigner120/9bindings64barriers/oldlocks stay. Normal
 commit/push is a separate intermediate checkpoint, not formal Slice6 acceptance.
+
+
+## 2026-10-26 Scanner declared-base source discovery
+
+This is bounded official-source discovery plus a fresh local custody closure,
+not a recovered/verified base image, publisher signature or runtime acceptance.
+The saved material remains
+`sha256:a3cbbbc2b17a3871862689c0773bc9f5d70a1e4914ada7c8a05e157722ee8a9d`
+for `clamav/clamav-debian:1.4.6_base`; its OCI object kind is UNKNOWN. The prior
+originals/descriptor/recipe associations and material-role distinctions remain.
+
+The [official Debian README](https://raw.githubusercontent.com/Cisco-Talos/clamav-docker/main/clamav/README-debian.md)
+distinguishes updateable patch tags from build-revision tags. No tag is promoted
+to this project's immutable pin. The
+[current Debian recipe](https://raw.githubusercontent.com/Cisco-Talos/clamav-docker/main/clamav/1.4/debian/Dockerfile)
+is a discoverable source path with Debian/apt/Rust/CMake inputs, not the
+authenticated recipe/commit or complete dependency lock for the fixed base.
+The [Hub tag view](https://hub.docker.com/r/clamav/clamav-debian/tags) reports
+arm64 prefix019e3433ed20 for1.4.6_base. Because a3c...'s kind is unknown, this
+view neither replaces that material nor proves historical drift/deletion.
+
+The [ClamAV GPG instructions](https://docs.clamav.net/manual/Installing.html#verifying-clamavnet-downloads-with-gpg)
+cover release download packages and detached.sig, not OCI image coverage.
+No key import, GPG/Cosign verification or new trust identity occurs. The bounded
+read scope did not locate an OCI publisher key/identity and coverage policy;
+external signature existence remains UNKNOWN, not absent. GitHub directory/
+commit API and filtered Hub views were unavailable to the web tool; guessed
+add-db and detail views returned cache misses. These are not controlled404 or
+nonexistence evidence. Mutable GitHub/raw views are not byte-equated.
+
+[Docker's manifest endpoint](https://docs.docker.com/reference/api/registry/latest/operations/GetImageManifest/)
+and [authentication protocol](https://docs.docker.com/reference/api/registry/auth/)
+identify a fixed repository/digest route and challenge-scoped anonymous pull.
+This is path discovery, not successful local access. Proposed B1 observes only
+that fixed base metadata/401challenge; B2 requires separately reviewed actual
+realm/service/repo scope before a RAM-only anonymous token; B3 separately
+reviews that token/input state before a fixed-digest body. No implicit layers,
+child descriptors, mutabletag substitution, login or reuse of oldrepo tokens.
+The exact B1 implementation/new identity and applicable host prerequisites still
+need review; generic APK/TUF host conditions are not silently imported or waived.
+Original HTTP request10s/body1MiB/headers64KiB/worker88/outer90 including publication,
+5s postcheck reserve, requiredCL/noTE and public-DNS/numeric-peer/TLS gates stay.
+
+The initial prepared closure planv2 failed preflight because its active-plan
+pointer still named the prior stage. It was never executed and remains stored
+with its rejection. Minimal-field planv3 points to the current plan; the new
+v4 controller differs from the previously reviewed closure only in output/
+identity literals. The independently reviewed new identity passes two full
+checks of1118 direct inputs,9 historical scripts,4 raw objects,3 helpers,
+2190 source/lock rows and1191 runtime files/7aliases/108directories plus12 Git
+queries. Outer1.800612seconds/90 exits naturally0/reaped with no timeout,
+signal or truncation. This later local closure is not a missing postcheck or
+PASS for any old failed network producer; web HTTP research is distinct from
+local controlled candidate HTTP, which did not execute this stage.
+
+No application Go, Contract, image/release/toolchain lock or evidence-reuse rule
+changes. Prior9/31 focused methods, custody65, fullrace399.978324s/600 and
+vet2.202584s are reused for the same source, not rerun. No Docker/build/scan,
+crypto, global install, DNS/proxy/route edit, nonpublic exception or unrelated
+process intervention. Four progress documents only; private research/proposals/
+raw receipts stay in slice6-scanner-base-discovery-20261026 outside Git/migration.
+Timers OFF; Phase6 remains5/15, Slice6step2, original foursteps/16scenarios,
+twoissuers/PGgeneral/9bindings64barriers/publicholds intact. Source/base/rules/
+publisher/supply/runtime admission stays false. Commit and normal push are a
+separate intermediate checkpoint, not formal Slice6step4 or acceptance.

@@ -18,7 +18,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26), and
 [Scanner response framing observations](#scanner-response-framing-observations-2026-10-26), and
 [Scanner peeled commit body](#scanner-peeled-commit-body-2026-10-26), and
-[Scanner embedded recipe and material boundaries](#scanner-embedded-recipe-and-material-boundaries-2026-10-26).
+[Scanner embedded recipe and material boundaries](#scanner-embedded-recipe-and-material-boundaries-2026-10-26), and
+[Scanner declared-base source discovery](#scanner-declared-base-source-discovery-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1917,3 +1918,29 @@ outsideGit. SameGo evidence, misePython, timersOFF, no Docker/build/scan/install
 or DNS/proxy/route/quota/deadline changes. Phase6 5/15 Slice6step2 and original
 foursteps/16scenarios/publicholds/twoissuersPGgeneral/9bindings64barriers/locks/
 reuse rules unchanged; this checkpoint is not formal acceptance.
+
+
+## Scanner declared-base source discovery (2026-10-26)
+
+Official Debian recipe/tag and package-GPG paths are now identified as bounded
+research context. They do not authenticate fixed materiala3cbbbc2...'s source,
+OCI object kind or publisher signature; those stay UNKNOWN/unverified. Current
+Hub platform listings and mutable source cannot replace the old material or
+prove its history. No OCI trust identity was located in the bounded read scope;
+this is not evidence that external signatures do not exist.
+
+A corrected independently reviewed local-only closure passes in1.800612s/90,
+with two full1118direct/2190source/1191runtime checks and12 Git receipts. The
+old-pointer preflight rejection is retained/unrun; v4 uses a new identity and
+current plan. Earlier failed producers remain FAILED. Prior9/31 and valid Go
+evidence are reused, not rerun. Web source research is not local metadata,
+signature, supply or runtime acceptance; no local candidate HTTP executes.
+
+Next implement and independently review only a fixed clamav/clamav-debian
+metadata/challenge observer under a new identity. Actual challenge, anonymous
+pull token and fixed-digest body are separately reviewed stages; assess exact
+host prerequisites and keep existing HTTP10/88/90/CL/noTE/public-peer limits.
+B1–B3 are proposals, with no automatic fetch, scope/key/issuer addition,
+mutabletag choice or layer/descriptor traversal. Four docs only; private
+slice6-scanner-base-discovery-20261026, mise Python, timers OFF. Phase6 stays
+5/15 and Slice6step2; formal topology/original16/acceptance/step4 remain open.

@@ -46,7 +46,27 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Scanner embedded-recipe checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-embedded-recipe-and-material-boundaries)
+The [Scanner declared-base discovery checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-declared-base-source-discovery)
+locates the official Debian recipe path and distinguishes download-package GPG
+instructions from OCI publisher authentication. Both are discovery only:
+basea3cbbbc2...'s OCI kind, exact source commit and image signature stay UNKNOWN.
+The current Hub arm64 tag view cannot replace that fixed material or prove drift.
+
+A separately reviewed new local closure passes two complete2190 source/lock and
+1191 runtime-file checks,7aliases/108directories and12 Git queries in1.800612
+seconds/90. Its first prepared plan was rejected before execution for an old
+active-plan pointer; the corrected plan uses the current stage and newv4 output.
+Original failures stay intact. Prior9/31 methods and valid Go evidence are reused,
+not rerun; no local candidate HTTP, Docker/build/scan or crypto executes.
+
+Next freeze and independently review the fixed clamav/clamav-debian metadata/
+challenge implementation, new identity and complete inputs. B1–B3 remain a
+proposal; assess applicable host gates before execution and preserve original
+HTTP10/88/90, framing, public-peer and supply gates. Four docs only; private
+slice6-scanner-base-discovery-20261026, existing mise Python, timers OFF.
+Phase6 remains **5/15**, Slice6 step2; all formal/source/supply/runtime holds stay.
+
+The [previous Scanner embedded-recipe checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-embedded-recipe-and-material-boundaries)
 passes9 new focused methods and a separate saved-original audit in1.548265 and
 3.972352 seconds/90. The fixed provenance embeds Dockerfile.add-db:159 bytes,
 five lines, ARG/FROM/RUN. Its tagged BASE_IMAGE declares clamav-debian1.4.6_base
