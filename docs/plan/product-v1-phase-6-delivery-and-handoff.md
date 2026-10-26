@@ -2007,3 +2007,14 @@ No candidate request, new test, parser change or supply/runtime acceptance.
 Four docs only; private slice6-scanner-auth-paths-20261026, mise Python,
 timers OFF. Original budgets, resources, trust, reuse and formal holds stay;
 Phase6 **5/15**, Slice6 step2, topology/16 scenarios/acceptance/step4 still open.
+
+#### 2026-10-26 framing authority/invariant checkpoint
+
+The [read-only authority audit](../audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-framing-authority-and-invariants)
+identifies both B2 framing checks and their frozen private provenance. A
+token-only bounded raw-framing proposal is ready for separate boundary review;
+it changes the accepted framing set and is not an already-authorized equivalent
+to noTE/requiredCL. No shared or production protocol change, new request or
+test run. Keep B2 FAILED/B3 unexecuted, original10/88/90 and all trust/resource/
+reuse holds. Four docs only, private slice6-scanner-framing-authority-20261026,
+mise Python, timers OFF; Phase6 **5/15**, Slice6 step2, formal steps still open.

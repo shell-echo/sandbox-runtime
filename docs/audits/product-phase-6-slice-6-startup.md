@@ -14441,3 +14441,54 @@ component evidence are reused only for unchanged covered inputs. Original
 9 bindings/64 barriers, old locks and failures remain. Only four progress docs
 change, existing mise Python, timers OFF. Phase6 remains **5/15**, Slice6 step2;
 the original four steps and 16 scenarios remain open as previously scoped.
+
+### 2026-10-26 Scanner framing authority and invariants
+
+The independently reviewed read-only audit identity
+`slice6-scanner-framing-authority-20261026` locates B2's first refusal at
+`token_http.py:69` calling `metadata_policy.framing`: noTE precedes requiredCL
+and body ingestion. `token_policy.classify` calls that helper again before
+JSON/claim checks. Removing only the transport check would still fail policy.
+The preserved B2 remains FAILED; no unread-body validity is inferred.
+
+The inspected private signature-metadata design explicitly froze exactCL/noTE.
+Static source comparison finds the same framing function in four pinned
+signature-metadata/framing/peeled/B2 copies. This establishes local inheritance,
+not a global first origin. The current private design remains binding.
+
+A finite search of22 pinned repository authority/dependency files finds
+scoped rules: Provider capabilities require an empty inbound request;
+Scanner `/scan` requires exactCL/noTE plus digest binding; Provider-Control
+requires canonical exactCL/noTE responses. ADR0055 and Docker create handling
+explicitly allow complete bounded chunked JSON. That is evidence against a
+universal project prohibition, not permission to transfer Docker's rule to B2.
+No blanket outbound-token CL/noTE prescription was found in the reviewed
+primary sections; this bounded nonfinding is not global absence or approval.
+
+Read-only inspection of the frozen mise Python HTTP parser finds automatic
+extension removal/trailer discard and permissive terminator handling. Its
+chunk mode leaves `length=None`, so the old `length==0` completion condition
+also cannot be reused. Default dechunking alone cannot supply strict raw-frame
+evidence. Do not synthesize CL or remove TE from observed headers to pass.
+Current CL completion proves a framed entity, not whole-connection EOF or
+absence of all unread tail bytes.
+
+The private proposal limits any future change to the one anonymous token GET:
+retain CL mode and original raw-header checks; explicitly bound and validate
+chunk sizes/data/CRLF/terminal framing; reject ambiguous TE/CL, extensions and
+trailers; keep raw and decoded caps within1MiB and original10/88/90 budgets.
+It leaves shared metadata, source/blob and protected production protocols
+unchanged. This changes the frozen accepted framing set and needs a separate
+boundary decision reconciling the no-relaxation constraint, followed by exact
+implementation/refusal-test/new-input/identity reviews. No such implementation
+or execution is approved by this audit; B3 remains unexecuted.
+
+The56 initial and17 dependency pins pass postchecks before documentation edits;
+only three frozen runtime-source files were inspected. No new test, full
+source/runtime sweep, token/candidate request, Docker, scan, build or crypto
+result is claimed by the audit. Old evidence/failures remain intact; scoped
+old tests are not rerun for reporting. Four progress docs only; private
+matrices/proposal/report stay outside Git/migration. Existing mise Python,
+timers OFF,9 bindings/64 barriers, original locks/resources/reuse and all
+source/base/publisher/supply/runtime holds stay. Phase6 remains **5/15**,
+Slice6 step2; this intermediate checkpoint is not formal step4 acceptance.

@@ -1,5 +1,13 @@
 # Project Status
 
+The [Scanner framing authority audit](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-framing-authority-and-invariants)
+locates both B2 refusal sites and distinguishes private observation policy
+from scoped Contract/Control/Scanner rules. A token-only bounded raw-framing
+proposal awaits its separate boundary decision and implementation/test/input
+reviews. No new requests, tests or gate changes; B2 remains FAILED and B3
+unexecuted. Four docs only, private slice6-scanner-framing-authority-20261026,
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2 and all formal holds stay.
+
 The [Scanner official-path review](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-official-path-and-http-framing-review)
 completes bounded official documentation research. No alternative satisfying
 the original framing gate is demonstrated; B2 remains FAILED and B3 unexecuted.

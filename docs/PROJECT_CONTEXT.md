@@ -46,6 +46,15 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Scanner framing authority audit](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-framing-authority-and-invariants)
+traces the B2 refusal to the frozen private metadata helper, called before
+body ingestion and again by token policy. Other protocols retain their own
+framing rules. A token-only bounded raw-framing proposal is prepared for a
+separate boundary decision; it changes the current accepted set and is not
+approved for implementation. No requests, tests or gate changes; private
+slice6-scanner-framing-authority-20261026. Phase6 **5/15**, Slice6 step2,
+timers OFF. See the audit for exact scope and remaining checks.
+
 The [Scanner official-path review](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-official-path-and-http-framing-review)
 completes bounded official documentation research. No alternative satisfying
 the original framing gate is demonstrated; B2 remains FAILED and B3 unexecuted.
