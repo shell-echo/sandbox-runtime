@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Scanner blob discovery and address guard](#2026-10-26-scanner-blob-discovery-and-address-guard).
+Latest implementation checkpoint: [Current DNS route and service candidates](#2026-10-26-current-dns-route-and-service-candidates).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -13598,3 +13598,90 @@ ClamD loaded set and complete Scanner recipe remain open. Public holds, host
 signer 120 seconds, broker/general with PG general, old locks/reuse and
 9 bindings/64 barriers stay. Historical 78/82 counts are not final inventory.
 Commit/push disposition is separate.
+
+## 2026-10-26 Current DNS route and service candidates
+
+Status: independently reviewed read-only attribution and access proposal;
+no blob recovered and no CDN access admitted. Phase 6 remains **5/15**, Slice 6
+step 2. Prior bounded Guest scope, original four-step order and 16 final
+scenarios remain; fresh topology/independent acceptance and formal step 4 are
+incomplete. A stage commit is not that formal handoff.
+
+New A observations pass naturally in 4.695594 seconds/90 seconds. Seven fixed
+native commands and one getaddrinfo call show four public IPv4 answers, stable
+DNS/NWI/IPv4 routing facts before/after and no benchmarking-range answer in
+that window. The global DNS candidate is on en5 with two private-address
+nameservers; scoped en5/en0 candidates use the same pair. Other supplemental
+mDNS domains do not match the fixed CDN hostname. The DNS configuration lists
+candidates; it does not prove which server answered the query.
+
+The system proxy snapshot reports HTTP/HTTPS/SOCKS enable fields and
+ProxyAutoConfigEnable all 0. This is a single configuration snapshot; the
+custom downloader does not consume the dictionary. The known longest-prefix
+IPv4 route candidates are /0: unscoped en5 plus scoped en0. Short network masks
+are not guessed, and ifscope/NE policy prevents treating that table alone as
+proof of the effective route or a software owner. No process/port sweep follows.
+
+New B observations pass naturally in 1.417593 seconds/90 seconds. A fresh
+lookup again returns four public IPv4 answers. After checking every answer,
+the observer chooses one canonical IPv4 and makes two read-only kernel route
+queries for that same address. Both report en5 with UP/GATEWAY/DONE/STATIC/
+PRCLONING/GLOBAL flags. DNS/NWI/kernel-route facts remain identical across the
+window. These are kernel queries for one selected address, not actual packet
+traffic or proof that all four answers share a path.
+
+The configured hardware/service snapshots map en5 to USB Ethernet, enabled and
+service order 1. The global DNS candidate's first nameserver hash equals the
+kernel gateway hash. Device labels, service names, MACs, UUIDs and all address
+literals stay hashed or classified in saved evidence. The configured network
+connection list has one disconnected PPP record and zero connected records;
+this does not establish absence of transparent Network Extensions or VPNs.
+The actual answering DNS server, packet/NE/proxy owner and historical cause/
+owner of the earlier 198.18/15 answer remain UNKNOWN. No particular proxy App
+is blamed. The old small-v1 failure and its missing producer postcheck remain.
+
+A14 parser/privacy/RAM-capture methods pass with zero skips in 1.353713 seconds;
+B9 kernel/service/privacy/drift methods pass with zero skips in 1.373821 seconds.
+An unexecuted B draft is retained after the main reviewer required DNS, NWI and
+kernel-route stability all to be explicitly true before exposing a qualified
+interface candidate. Current code and its added test preserve UNKNOWN on drift.
+The draft's eight-test text is historical; actual B policy strictly runs nine.
+
+Raw native output and child DNS records stay in bounded RAM; only safe facts,
+complete-output hashes, timing and natural cleanup receipts are persisted.
+Each command retains 10 seconds/64 KiB per stream and an owned process group;
+the worker/outer remain 88/90 seconds, with an early budget refusal reserving
+postcheck/cleanup. Complete 2190 Go/lock rows, 1191 managed runtime files/seven
+aliases/108 directories, tools, manuals and Git state are bound before/after
+all passing stages. The observer performs the intended OS DNS lookups and
+local read-only configuration/kernel queries. It makes no target TCP/TLS/HTTP
+or PAC requests and reads no credentials. There is no sudo, system DNS/proxy/
+route edit, unrelated process intervention, installation, Docker, Go, build
+or scan. Only existing mise Python and native read-only tools are used. Timers remain OFF; old failures, manifests and locks stay intact.
+
+The independently reviewed proposal keeps the current macOS resolver and route.
+It adds no alternative DNS/DoH/proxy/SOCKS/tunnel fallback. Future recovery must
+use a new unused identity and freeze the actual current HEAD/complete input
+closure, then re-obtain fresh registry URLs in RAM. All DNS answers still must
+pass the original global-unicast/no-mapped/no-scope checks; numeric-IP TCP,
+original SNI/Host/CA and actual peer, no credential/redirect forwarding, exact
+status/CL/Content-Range and whole fixed SHA remain mandatory. Request 10s,
+body 1 MiB, headers 64 KiB, worker 88s, outer 90s and the existing five-second
+network/postcheck reservation remain. Any new refusal stops that identity.
+A/B observations are not an access token or a substitute for fresh admission.
+
+No body run is created here. All three small blobs still need their complete
+joint stage/postcheck/natural outer success and independent actual review;
+SPDX then needs a separately reviewed new run and its original three exact
+206 ranges/full SHA before persistence. Actual JSON/source/publisher signature,
+vulnerability coverage, official rules/current check within 72 hours, ClamD
+loaded-set and complete Scanner recipe gates remain open. The proposal is
+conditional and makes no CDN reachability or completion-time promise.
+
+Baseline is `5b9dcaeaa82e53b808beab14a7f9dd3cefa0e785`; Go/lock bytes match all
+2190 previously tested rows. Prior custody 65 named component passes, full
+race 399.978324 seconds/600 seconds and vet 2.202584 seconds are reused, not
+newly run. Only four progress documents change. Public holds, host signer
+120 seconds, broker/general with PG general, old locks/reuse and 9 bindings/
+64 barriers remain. Private evidence: `slice6-dns-route-attribution-20261026`,
+outside Git and the migration package. Commit/push disposition is separate.

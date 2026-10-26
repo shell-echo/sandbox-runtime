@@ -46,6 +46,29 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [current DNS/route checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-current-dns-route-and-service-candidates)
+finds four public IPv4 answers in each new A/B sampling window. DNS/interface/
+route facts are stable within each window. For one fresh selected public IPv4,
+two kernel queries return en5; configuration maps it to the enabled first USB
+Ethernet service. The global DNS candidate also binds en5 and two private-address
+nameservers. The earlier benchmarking answer's cause and owner remain unproven.
+
+A system proxy snapshot reports HTTP/HTTPS/SOCKS and automatic-PAC disabled.
+The configured-connection list has one disconnected PPP entry; neither result
+proves absence of transparent NE/VPN software. Actual answering resolver and
+packet/NE ownership remain UNKNOWN. No unrelated processes are enumerated.
+
+The reviewed access proposal keeps the existing resolver and route unchanged.
+A future body run needs a new identity, complete current inputs, fresh all-public
+DNS, numeric-IP/TLS peer checks and the original size/SHA/time gates. No body,
+DoH, proxy or DNS change occurs here; prior small-v1 remains FAILED and SPDX is
+not run. A14/B9 offline methods pass; real A/B stages complete naturally in
+4.695594/1.417593 seconds under their original 90-second bounds. All 2190 Go/lock
+rows match; prior Go race/vet are reused, not rerun. Phase 6 stays **5/15**,
+Slice 6 step 2. Existing mise Python only, no install/Docker/build/scan, timers
+OFF. Private evidence: slice6-dns-route-attribution-20261026. Only four progress
+documents change; this checkpoint does not authorize actual CDN recovery.
+
 The [Scanner blob checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-blob-discovery-and-address-guard)
 passes four header-only registry Location observations and 14 new offline
 restore-policy methods, including synthetic complete-body and 1 MiB reads.

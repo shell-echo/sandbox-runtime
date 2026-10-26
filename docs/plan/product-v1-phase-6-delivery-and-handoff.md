@@ -11,7 +11,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [held Control source-candidate correspondence](#held-control-source-candidate-correspondence-2026-10-25), and
 [Scanner original-rule custody](#scanner-original-rule-custody-2026-10-25), and
 [Scanner supply metadata discovery](#scanner-supply-metadata-discovery-2026-10-25), and
-[Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26).
+[Scanner blob restoration and address guard](#scanner-blob-restoration-and-address-guard-2026-10-26), and
+[current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1735,3 +1736,27 @@ admission, version or public hold change is added. Phase 6 remains **5/15**,
 Slice 6 step 2, with original four steps/16 scenarios still open. Go/lock bytes
 remain the same 2190 rows; reuse prior matching tests. mise/Docker policy and
 scheduled work OFF remain; only four progress documents change.
+
+## Current DNS route observations and unchanged access plan (2026-10-26)
+
+The [new audit checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-current-dns-route-and-service-candidates)
+records two new read-only windows with four public IPv4 answers each. For one
+selected new IPv4, the kernel chooses en5 twice; configuration maps en5 to the
+enabled USB Ethernet service at order 1 and the global DNS candidate. Current
+system proxy enable fields are 0. Effective answering resolver, actual packet/
+NE/proxy ownership and the historical benchmarking-answer cause remain unknown.
+No unrelated process scan or network configuration change is justified.
+
+Keep the existing system resolver and route. A future new recovery identity
+must bind current complete inputs, check fresh all-public answers and retain
+original numeric-IP/TLS peer/status/size/full-SHA and 10s/1MiB/64KiB/88s/90s
+gates. No alternative resolver/proxy/route fallback or non-public exception is
+added. This is a proposal, not real CDN access evidence; no body run or SPDX
+range executes in this checkpoint. Original failed identities are preserved.
+After a newly reviewed complete three-small stage passes, SPDX still requires
+its separate fresh identity, three exact 206 ranges and whole-object SHA.
+All JSON, publisher/source/signature, vulnerability, official current rule and
+loaded-set gates remain open. Phase 6 stays **5/15**, Slice 6 step 2; original
+four steps/16 scenarios, public holds and trust/reuse limits remain. Existing
+mise/Docker policy and timers OFF stay. Only four documents change; unchanged
+2190 Go/lock rows retain their earlier valid test evidence.
