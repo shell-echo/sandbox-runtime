@@ -1,5 +1,13 @@
 # Project Status
 
+The [offline token-frame candidate](audits/product-phase-6-slice-6-startup.md#2026-10-26-offline-token-frame-candidate)
+passes38 new methods:0.037seconds test execution,1.793398seconds/90 with
+complete input checks. Component framing/claim evidence does not qualify a
+real token request. Original B2 remains FAILED, its gate unchanged, B3
+unexecuted. Next review held-controller integration and failure/privacy
+coverage. Four docs only; private slice6-scanner-token-frame-candidate-20261026,
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; formal holds stay.
+
 The [Scanner framing authority audit](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-framing-authority-and-invariants)
 locates both B2 refusal sites and distinguishes private observation policy
 from scoped Contract/Control/Scanner rules. A token-only bounded raw-framing

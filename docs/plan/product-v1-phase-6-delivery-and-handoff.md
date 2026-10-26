@@ -2018,3 +2018,15 @@ to noTE/requiredCL. No shared or production protocol change, new request or
 test run. Keep B2 FAILED/B3 unexecuted, original10/88/90 and all trust/resource/
 reuse holds. Four docs only, private slice6-scanner-framing-authority-20261026,
 mise Python, timers OFF; Phase6 **5/15**, Slice6 step2, formal steps still open.
+
+#### 2026-10-26 offline frame-candidate component checkpoint
+
+The [offline candidate checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-26-offline-token-frame-candidate)
+passes38 new methods under the original bounds with full input pre/post checks.
+No real B2 request or gate change; B3 stays unexecuted. Next review held B2
+controller integration and close/deadline/privacy/refusal coverage before an
+explicit real-admission decision. Preserve old failed/v1preflight evidence,
+all input locks/trust/reuse/resource limits and original four formal steps.
+Four docs only; private slice6-scanner-token-frame-candidate-20261026,
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; fulltopology16 and formal
+acceptance/closure remain open.

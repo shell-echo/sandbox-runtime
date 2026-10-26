@@ -14492,3 +14492,53 @@ matrices/proposal/report stay outside Git/migration. Existing mise Python,
 timers OFF,9 bindings/64 barriers, original locks/resources/reuse and all
 source/base/publisher/supply/runtime holds stay. Phase6 remains **5/15**,
 Slice6 step2; this intermediate checkpoint is not formal step4 acceptance.
+
+### 2026-10-26 offline token-frame candidate
+
+The separately approved offline-only candidate identity `frame-policy-v2`
+passes all38 frozen methods without skips or expected failures. Raw unittest
+stderr reports0.037seconds; worker1.723429seconds/88 and tool outer1.793398seconds/90
+exit naturally0/reaped, without timeout, signal or truncation. Complete1205
+direct/19script/4raw/3helper,2190source-lock/1191runtime/7alias/108directory
+pre/post checks and12readonlyGit receipts pass. Prior25/48/31/9/23 and valid
+Go evidence are reused only for unchanged covered inputs, not rerun.
+
+The pure raw reader preserves original header binding and CL behavior, with
+a candidate-only HTTP1.1 singlechunked/noCL mode. Raw framing overhead and
+decoded bytes each stay within1MiB; size-line64bytes/1..8hex/nonzerochunks4096,
+header64KiB/100rows. DataCRLF/zero/emptytrailer completion is explicit;
+ambiguous TE/CL, duplicates, lists/codings, extensions/trailers, malformed
+sizes, truncation and IO/checkpoint failures are refused. No automatic
+dechunk, fakeCL or extra EOF drain is used. Pure checkpoints do not prove
+blocked-IO hard interruption or a real10second request result.
+
+The frozen strictJSON/unsigned claim checks run only after consistent framing.
+An initial preflight found directly constructible completion and stale summary
+state. V1 was rejected before tests; its bytes/plan/list remain preserved.
+V2 registers completion only after the reader finishes and rechecks the private
+weak-key snapshot, original headers, counters and current payload hash. Direct
+construction/manual flags and alias modification are rejected; summaries
+withdraw completion and digest on inconsistency. This is local bookkeeping,
+not external authentication or resistance to hostile Python execution.
+Mutable payload cleanup is explicit; no physical-erasure/swap claim is made.
+
+An earlier preparation-only substring assertion failure is also retained; it
+did not execute tests or a candidate request. Git containment wording is now
+accurate: per-command10s/64KiB capture shares the owned worker PG; the supervisor
+provides its88s group hard stop. No per-Git independent PG is claimed.
+
+The executor is policy-only, requests empty/network false, without an observe
+branch or TokenHTTP invocation. Old token transport and shared metadata
+framing remain byte-identical; tests confirm the old noTE predicate still
+refuses chunked. No new B2/B3 or supply/runtime admission is created. Next
+independently review held B2 controller integration, both framing sites and
+close/deadline/privacy/first-error tests. Real accepted-set change and new
+request/input/identity/actual-result reviews remain separate; no saved bearer
+or old receipt grants B3 authority.
+
+Only four progress docs change in Git. Candidate/code/tests/receipts remain
+private in slice6-scanner-token-frame-candidate-20261026. Original manifests,
+failures, locks, budgets/resources/trust/reuse,9bindings64barriers and all
+formal holds remain. Existing mise Python, timers OFF; Phase6 **5/15**, Slice6
+step2. Bounded historicalE only remains accepted; fulltopology/original16 and
+formal acceptance/step4 closure remain incomplete.
