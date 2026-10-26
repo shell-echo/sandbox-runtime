@@ -13946,3 +13946,89 @@ quota/deadline increase, unrelated process action or automation. Timers OFF.
 Public holds, foursteps/16scenarios, broker/general with PostgreSQL general,
 host signer120,9bindings/64barriers, old locks and evidence reuse stay unchanged.
 Commit/push disposition is separate from formal acceptance.
+
+## 2026-10-26 Scanner response framing observations
+
+Status: independently reviewed current header observations PASS; original
+metadata/body/signature/source/supply/runtime gates remain HELD. Baseline is
+964e3b65f02db9dfe572e24a66e26e1519255d8c. Phase6 stays **5/15**, Slice6 step2.
+Bounded step1 is unchanged; step2 closure, step3 fresh inventory/original16
+scenarios/independent acceptance and formal step4 are still incomplete.
+
+The new probe-policy-v1 passes48 methods, zero skips: the previous33 are copied
+byte-for-byte and15 additions cover exact old GET templates, fixed paths/no
+Bearer, original framing equivalence, distinct duplicate/CL+TE/raw-header guards,
+CL1MiB/headers64KiB, secret omission, DNS, no body reads and explicit cleanup.
+The complete run takes1.745659 seconds/90 (worker1.701440; test0.355). The new
+headers-v1 takes9.213936 seconds/90 (worker9.157886). Both finish naturally0,
+reaped, without timeout/signal/truncation, with full source/runtime/direct/Git
+checks before and after. Real observations are:
+
+| Fixed GET | Status | Content-Length | Transfer-Encoding | Unchanged framing result |
+| --- | ---: | --- | --- | --- |
+| Registry index challenge control | 401 | 156 | absent | ACCEPT headers only |
+| Anonymous auth, original pull scope | 200 | absent | chunked | REJECT closed TE guard |
+| Fixed clamav-1.4.6 peeled commit | 200 | 13089 | absent | ACCEPT headers only |
+| Fixed clamav-1.4.6 release | 200 | absent | chunked | REJECT closed TE guard |
+
+All four have complete canonical raw/parsed header agreement, no duplicate
+fixed fields, no Location or Content-Encoding. Header blocks are400/736/1341/
+1347 bytes in request order. Every request stays below10 seconds; the longest
+is peeled5.339651 seconds. Actual numeric TCP/TLS peers, original SNI/CA and
+fresh all-public DNS checks remain, not just a static endpoint declaration.
+Only fixed field counts and finite categories, hashes/sizes and transport/time
+facts persist. Original headers, arbitrary values, cookies, token/body content,
+URLs and error text do not. There are zero application body read/read1 calls;
+socket buffering may still prefetch bytes, so this is not a claim of zero body
+bytes arriving on the wire. Connections and responses explicitly close.
+
+The original raw_headers and framing implementations are unchanged and actually
+called. Header ACCEPT is still entity_complete=false, token_accepted=false,
+metadata_admission=false and all source/publisher/supply/runtime flags false.
+No token is validated/forwarded, no referrers or signature payload is fetched,
+no JSON candidate body or crypto check runs. The old three network producers
+remain FAILED without their own postchecks. New TE/length facts explain only
+these current responses; the discarded historical raw headers cannot be
+reconstructed and the old failure's unique cause is unproven. In particular,
+peeled's header behavior can vary: its current CL is not a retrospective pass
+or a guarantee of the next response.
+
+Official design sources confirm existing path forms: [Docker registry auth](https://docs.docker.com/reference/api/registry/auth/),
+[GitHub commits](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)
+and [release by tag](https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28).
+[RFC9112 framing](https://www.rfc-editor.org/rfc/rfc9112.html#name-message-body-length)
+is protocol context, not authorization to accept transfer coding under the
+frozen requiredCL/noTE gate. Current examples use a newer API version; this
+observation deliberately keeps the original2022-11-28 request version and all
+other outbound fields. No alternate official route is proved compatible here;
+no HEAD/Accept/protocol/host/cache/resolver variation is attempted.
+
+The header identity binds843 direct files; the policy identity binds797. Both
+bind14 scripts, four raw originals, three helpers, all2190 source/lock rows
+and1191 managed runtime files/seven
+aliases/108 directories. Twelve exact Git receipts per stage verify clean
+baseline HEAD/upstream/branch/origin. Initial preparation correctly rejects an
+old snapshot's progress-doc identity: only the four already reviewed/committed
+doc rows are bound to baseline964e in the new input plan. Original manifests,
+SOURCE/RUNTIME bytes, old locks, failures and receipts are never rewritten.
+
+Next independently freeze a single peeled-commit body identity using the
+already reviewed original body implementation and complete inputs. Fresh GET
+must independently satisfy original framing, full bounded body read/hash,
+strict JSON and source-claim checks, then input/Git postchecks and actual
+review. Stop on any refusal; this header run grants no admission or retry loop.
+Keep auth/release held while investigating a compliant official acquisition
+path, not modifying the noTE/CL policy. Signature discovery, approved publisher
+trust inputs/crypto, source-to-image binding, seven layers/full Scanner recipe,
+fresh vulnerabilities, official72h rules/current-check and actual loaded-set
+remain separate open gates.
+
+Only four progress docs change; private diagnostics/evidence are
+slice6-scanner-framing-20261026 outside Git/migration. Prior custody65, full
+race399.978324s/600 and vet2.202584s are reused for unchanged2190 rows, not rerun.
+Existing misePython3.13.16-I-B-S only; no Docker/build/scan/global install,
+quota/deadline increase, DNS/proxy/route edit, nonpublic exception, unrelated
+process action or automation. Timers OFF. Foursteps/16scenarios/publicholds,
+broker/general with PostgreSQL general, host signer120,9bindings64barriers,
+old locks and evidence-reuse rules stay. Normal checkpoint commit/push is
+verified separately and does not constitute formal Slice6 acceptance.

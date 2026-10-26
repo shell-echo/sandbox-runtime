@@ -1,6 +1,28 @@
 # Project Status
 
-The [Scanner signature-metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-signature-metadata-and-source-mapping)
+The [Scanner response-framing checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-response-framing-observations)
+passes48 offline methods and a new four-GET header-only run in1.745659 and
+9.213936 seconds/90. Current anonymous-auth and release responses each declare
+chunked transfer with no Content-Length: the unchanged noTE/requiredCL gate
+rejects them. This time peeled-commit reports CL13089 without TE; the401 control
+reports CL156. Header acceptance does not read or approve either body.
+
+The four original request templates and all-public DNS/numeric-peer/TLS checks
+stay. No body API, token acceptance, raw response-header/entity persistence,
+redirect or alternate resolver is used; socket buffering may prefetch bytes.
+These are current response facts, not reconstruction of the old failed headers.
+Original metadata/signature/source/supply/runtime admission remains false and
+all three prior network producer failures remain FAILED.
+
+Next independently review a single peeled-commit body run with a new identity
+and fresh original framing/body/JSON gates. Its current length is no promise
+about the next GET. Auth/release still require a compliant official retrieval
+path; no alternate is verified and no protocol waiver is approved. Complete
+2190 source/lock and1191 runtime checks pass before/after; prior valid Go tests
+are reused. Private evidence: slice6-scanner-framing-20261026. Four docs only,
+existing mise Python, timers OFF; Phase6 **5/15**, Slice6 step2 unchanged.
+
+The [previous Scanner signature-metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-scanner-signature-metadata-and-source-mapping)
 passes 33 offline policy methods in 1.701123 seconds/90, including the retained
 refusals, linear token-shape scanning and exact annotated-tag discovery guards.
 Three actual network stages remain FAILED: registry anonymous auth, GitHub

@@ -15,7 +15,8 @@ Current amendments: [single current Profile migration](#single-current-profile-m
 [current DNS route observations and unchanged access plan](#current-dns-route-observations-and-unchanged-access-plan-2026-10-26), and
 [Scanner CDN raw-object recovery](#scanner-cdn-raw-object-recovery-2026-10-26), and
 [Scanner JSON and trust boundary](#scanner-json-and-trust-boundary-2026-10-26), and
-[Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26).
+[Scanner signature metadata and source mapping](#scanner-signature-metadata-and-source-mapping-2026-10-26), and
+[Scanner response framing observations](#scanner-response-framing-observations-2026-10-26).
 The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
@@ -1849,3 +1850,24 @@ misePython only, no Docker/build/scan or global install; timers OFF. All origina
 foursteps/16scenarios/publicholds/twoissuersPGgeneral/9bindings64barriers/oldlocks
 and evidence-reuse rules stay; Phase6 **5/15**, Slice6 step2. This checkpoint is
 not formal step4 or Slice6 acceptance. Normal commit/push is verified separately.
+
+## Scanner response framing observations (2026-10-26)
+
+New independently reviewed policy48 and four-GET header-only observation pass
+in1.745659/9.213936 seconds under the original90 bounds. Auth/release currently
+use chunked transfer without Content-Length and remain rejected by the unchanged
+CL/noTE gate. Peeled-commit currently reports CL13089, but its body is not read
+or admitted. No token, metadata/source/signature/supply/runtime approval follows.
+The old failed producers remain FAILED and old raw-header causes remain unknown.
+
+Next independently review one new peeled-commit body identity, checking original
+framing again on that actual GET, complete body/hash/JSON/source claims and
+input postchecks. No repeated failure identity or retry loop, no trust in the
+current header as future-body evidence. Auth/release need an independently
+verified compliant official acquisition path; no alternative or waiver is
+approved. All2190 source/1191 runtime/full direct/Git checks pass before/after;
+prior valid Go tests reused, not rerun. Private evidence/code stays outside Git;
+four docs only. Existing misePython, timers OFF, no Docker/build/scan/install
+or quota/timeout/DNS/proxy/route changes. Original gates/locks/reuse/foursteps/
+16scenarios/twoissuersPGgeneral/9bindings64barriers and5/15 step2 remain. Stage
+commit/push is a separate checkpoint, not formal acceptance.
