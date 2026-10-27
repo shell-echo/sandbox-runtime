@@ -46,6 +46,19 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [same-process fixed-base checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-same-process-fixed-base-observation)
+passes141 current component methods and one new fixed token→B3 observation.
+Both GETs share the original10s budget: joint3.158150s, whole4.923640s/90,
+HTTP200/TLS1.3/nativepeer/FD and complete pre/post checks. B3 preserves original
+noTE/exactCL and verifies Docker-Content-Digest=raw-body SHA=fixeda3c for
+2364bytes: OCI index,6descriptors, none followed. Token is used once in-process then cleared; token/raw responses
+are not saved or returned. The old clock-restoration failure remains FAILED.
+Source/publisher signature/platform/OS/supply/runtime acceptance stays unproved.
+Next independently review typed index descriptors and exact child/platform/
+source-signature association. Private slice6-scanner-base-use-20261027;
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; formal topology16,
+independent acceptance and step4 remain open.
+
 The [strict fixed-token checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-strict-fixed-token-observation)
 passes108 component methods and one new anonymous token GET. Actual native
 TLS1.3/peer/FD transfer and strict chunked completion pass; request0.478817s/10,

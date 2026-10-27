@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [strict fixed-token observation](#2026-10-27-strict-fixed-token-observation).
+Latest implementation checkpoint: [same-process fixed-base observation](#2026-10-27-same-process-fixed-base-observation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14732,3 +14732,87 @@ step1 retains historical bounded E acceptance, step2 continues, step3 full curre
 inventory/original16/independent formal acceptance is incomplete, formalstep4
 not started. Broker/general with PostgreSQLgeneral,9bindings/64barriers and all
 old evidence/reuse/resource/timeout rules remain unchanged.
+
+
+## 2026-10-27 same-process fixed-base observation
+
+Independent design/code/input and actual-result reviews accept one bounded
+same-process B2 token acquisition and B3 fixed-base metadata observation. A
+single current BaseFlow owns a common Exchange, private one-use RAM Lease and
+one absolute10second Budget across both GETs, closes, saves and final return.
+The Lease binds source owner/mode/Budget/target/expiry/material snapshot,
+activates only after exact original token response/file/socket cleanup, and
+consumes before the only Authorization attempt. No arbitrary consumer/target,
+retry, fallback, token export/IPC/persistence or raw-response persistence exists.
+Existing misePython3.13.16 only; original88/90/reserve5/byte limits remain.
+
+Token-only strictchunked framing remains separately scoped; B3 preserves the
+original noTE/exactCL guard. Actual source-owned CA/nativeTLS/public selected
+peer/SNI and connected FD transfer are verified for each phase. A finite audit
+allows only the fixed auth then registry DNS/raw-init/connect/TLS-init sequence,
+after the first owned resources close, and refuses later sockets. This is
+trusted pinned Python defense in depth, not an OS sandbox. B3 requires200,
+one of four metadata MIME kinds and Docker-Content-Digest=whole raw SHA=fixed
+a3c before original closed metadata semantics and actual-bearer secret_scan.
+B1's no-bearer classifier is not reused to authorize B3.
+
+The final deadline check samples monotonic before wall, advances the wall
+sample conservatively to latest monotonic and takes the maximum with original
+startwall+elapsed for the >30second remaining-life check. It validates latest
+elapsed<=10 after final projection/scope work, without resetting the timer.
+This is a bounded sampled-clock model, not a physical future-clock guarantee.
+Uncertain send facts are explicitly null with attempted/consumed flags; only
+completed outbound headers produce B3/registry true. Pure frame summaries
+state frame_only_scope/grants_execution=false and carry no transport counters.
+Saved per-leg/joint receipts remain preliminary; final success follows all
+close/save/clock/TTL/timer checks and contains only safe projections.
+
+The first executed v5 component run remains FAILED:141methods/10.556seconds,
+whole12.668746seconds/90, exactly one existing clock-rollback assertion found
+worker_timer_restored=false, complete postcheck and naturalexit1/reaped/no
+outer flags. Independent repair restores the original worker deadline from
+native monotonic_ns while recording logical elapsed failure separately; the
+request still rejects. Old141 assertions stay intact. v6 then passes; live-v1
+is held before execution while a frame-summary ambiguity is corrected. Current
+v7 passes141methods in10.569seconds, whole12.767437seconds/90, natural0/reaped/
+no timeout/signal/truncation with full postchecks and12readonlyGit commands.
+Original42 assertion ASTs survive test-onlyadapter substitution to production
+Exchange+Budget,38frame/16policy testbytes stay original,14native and31joint
+methods cover Lease, destination, replay, first-error/cleanup, reflection,
+shared10/finalTTL and truthful receipts. The sole ownedpipe negative targets10s
+and remains FAILED as expected at10.007485s includingcleanup,1alarm/2FDclosed.
+Offline socketveto canary passes with zero unexpected events; it is no liveTLS
+or fixeda3c positive. Synthetic digest seams exist only in tests.
+
+After separate current-code/new-run/freshness review, exactly one live-v2 run
+performs fresh tokenHTTP200 then B3HTTP200. Both useTLS1.3 with native peer and
+original FD transfer; the two expected audit sequences, canary/closed checks
+and zero unexpected events pass. Joint request3.158150seconds/10, whole stage
+4.923640seconds/90, all three layers natural0/reaped/no flags; fullpostcheck
+and12readonlyGit pass. B3 raw=decoded2364bytes, Docker-Content-Digest=raw-body SHA=fixed
+sha256:a3cbbbc2b17a3871862689c0773bc9f5d70a1e4914ada7c8a05e157722ee8a9d,
+originalheadergateACCEPT with noTE/exactCL. Header-block SHA is recorded
+separately. Parsed kind is OCIindex containing
+6descriptors; no child object is fetched or platform selected. Token is consumed
+once then closed/overwritten/unregistered. No raw token/metadata/header/cert
+is stored or returned; clearing is logical, not physical erasure/swap protection.
+
+Original2190source/locks,1191runtime/7aliases108dirs,27current scripts and full
+helpers/four raw materials/direct inputs remain completely checked before and
+after. Live has1660direct inputs; originalSOURCE/RUNTIME bytes are unchanged.
+Only four committed progress-doc deltas are explicitly bound; no unknown drift
+or manifest regeneration. Shared unchanged metadata/Go evidence stays scoped
+reuse only; no broad Go or image build rerun. Failed v5 code/raw receipts and
+all unexecuted/superseded identities remain immutable. Existing locks, quotas,
+R/C reuse, twoissuers broker/general with PostgreSQLgeneral and9bindings/
+64barriers remain. Timers OFF; private slice6-scanner-base-use-20261027 holds
+all evidence, with only four safe progressdocs committed to Git.
+
+This closes only the fixed metadata observer. Source/publisher signature,
+external signature existence, platform/actual OS/image layers, vulnerability,
+supply/runtime and production acceptance remain false or unknown. Next
+independently review typed index descriptor recovery and exact selected child/
+platform/source-signature association without automatic traversal or token
+reuse. Phase6 stays5/15; Slice6step1 historical boundedE unchanged, step2 ongoing,
+step3 current full topology/original16/independent formal acceptance incomplete,
+formalstep4 not started. This intermediate commit/push is not formalstep4.
