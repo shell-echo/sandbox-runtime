@@ -26,6 +26,25 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Held token peer lifecycle (2026-10-27)
+
+The [startup audit](../audits/product-phase-6-slice-6-startup.md#2026-10-27-held-token-peer-lifecycle)
+records42 offline component methods passing in12.542392 seconds/90, with
+source-owned CA/context, one dial, original response-file ownership, cleanup
+failure and privacy checks. The owned-pipe negative remains a refused request,
+not live TLS evidence. Previous24 assertions are retained; full source/runtime
+and raw-input checks pass without regenerating their manifests. Private
+slice6-scanner-token-peer-held-20261027; no production entry or gate change.
+
+The previously pending79962b11 checkpoint is now verified on the remote and
+locally reconciled by a separately reviewed exact tracking CAS. Next decide
+the original noTE/exactCL versus candidate raw-framing real-entry boundary
+independently, then review actual public TLS/peer and new complete run inputs.
+Do not infer that approval from the42 methods. Old B2 stays FAILED and B3 is
+unexecuted. No code-compatible fallback, third issuer, budget increase,
+changed reuse rule or formal Slice acceptance is introduced. Phase6 remains
+**5/15**, Slice6 step2; existing mise Python, timers OFF.
+
 ## Purpose and authority
 
 Finish the existing Slice 6 acceptance scope without extending it into an

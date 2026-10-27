@@ -1,5 +1,16 @@
 # Project Status
 
+The [held peer lifecycle checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-held-token-peer-lifecycle)
+passes 42 component methods in 12.542392 seconds/90 including complete input
+checks. It binds source-owned CA/context and one selected peer, rejects hidden
+redials, and covers the actual HTTP client response-file handoff with controlled
+sockets. This is offline evidence, not real TLS peer verification. The owned-pipe
+negative targets 10 seconds and is refused after 10.007898 seconds including
+cleanup. Real B2 stays FAILED, B3 unexecuted, and the original noTE/exactCL gate
+is unchanged. Next independently decide the real token framing/entry boundary
+before any live request. Private slice6-scanner-token-peer-held-20261027;
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; formal holds stay.
+
 The [held-controller checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-held-token-controller-integration)
 passes24 new methods, including one original10second owned-pipe refusal,
 within11.638106seconds/90 overall. In-memory HTTP parsing and actual pipe

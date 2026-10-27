@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Scanner JSON and trust boundary](#2026-10-26-scanner-json-and-trust-boundary).
+Latest implementation checkpoint: [held token peer lifecycle](#2026-10-27-held-token-peer-lifecycle).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14593,3 +14593,72 @@ slice6-scanner-token-controller-held-20261026 outside Git/migration. Existing
 mise Python, timers OFF; original budgets/resources/trust/reuse/oldlocks,
 9bindings64barriers/twoissuersPGgeneral/publicholds remain. Phase6 **5/15**,
 Slice6 step2; fulltopology/original16/formalacceptance/step4 stay incomplete.
+
+## 2026-10-27 held token peer lifecycle
+
+This is an intermediate Slice6 step2 checkpoint; Phase6 remains **5/15**.
+Independent design and final-input reviews permit the offline S1 component
+only. The new private candidate constructs TLS context from the original
+identity/hash-checked CA bytes in memory, binds its own context/settings/anchor
+snapshot, and compares the original selected socket and safe leaf observations
+with the transport receipt. An injected receipt or local weak registry is not
+unforgeable authority against hostile Python, and fixtures do not prove real
+CA/peer verification.
+
+The token connection explicitly dials once with auto-open disabled. It preserves
+the original socket and exact response/file/reader association when the actual
+pinned HTTPConnection.getresponse path transfers ownership for will_close.
+connection.sock may legitimately become None; that transition neither permits
+a redial nor resets the absolute deadline. Replacement sockets/files are not
+closed as owned resources. Cleanup-helper errors retain the first error, close
+the original constructed response/file and continue connection cleanup.
+
+The new run executes **42 methods**: all previous24 semantic assertion bodies
+are retained apart from the source-owned context fixture, with18 new methods
+covering CA/context rejection, IPv4/IPv6 and TLS1.2/1.3 controlled observations,
+peer/SNI/context/certificate drift, single dial, real HTTP-client orchestration,
+wrong leases, post-handoff deadline failures, cleanup exceptions and privacy.
+No TLS socket or real request is created. The unconditional socket veto canary
+passes and records zero unexpected socket events. Unit output is
+`Ran 42 tests in 10.305s`, `OK`; whole execution including full checks is
+**12.54239187494386 seconds/90**, natural0/reaped with no outer timeout,
+active signal or truncation. All12 readonly Git commands naturally pass.
+
+The only real I/O fixture is the owned blocking pipe negative. One internal
+alarm targets the original10 seconds; actual duration including cleanup is
+**10.007898208976258 seconds**. The request remains FAILED as expected,
+candidate_complete=false, both identity-bound FDs close and the prior handler
+and remaining worker timer are restored. This is no successful request inside
+10 seconds, real network evidence or extra timeout allowance.
+
+Full pre/post checks preserve1262 direct input pins,22 scripts, original2190
+source/lock rows,1191 runtime files/7 aliases/108 directories and4 original raw
+material files. Original SOURCE/RUNTIME bytes are unchanged. The four already
+committed progress docs have an explicit old-to-current input delta. Prior
+38/25/48/31/9/23 and Go evidence is reused only in unchanged dependency scope;
+no full-repository test was rerun. Preparationv1 was rejected before execution
+for its response fixture, and v2 was superseded before execution to close the
+cleanup exception path; their exact bytes remain in private snapshots. Only
+peer-policy-v3 executes; failed identities and old receipts are untouched.
+
+Before this run, new SSH443 observations confirmed that the earlier timed-out
+push had reached79962b11e8a947fcbae0e71fc93f976225a6d06b. A separately reviewed
+exact local tracking CAS then made HEAD/upstream/live equal and clean0/0 in
+8.844400500005577 seconds/90, with no new push. That later custody proof does
+not retroactively turn the original timed-out push command into a natural pass.
+
+Private evidence: slice6-scanner-token-peer-held-20261027, including the original
+worker stderr/results, ROOT-COMPONENT-ACTUAL-v1 and exact input plans. Only four
+repository-safe progress docs enter Git. No Go, Contract, public protocol,
+production entry, resource allowance, evidence reuse or old publication lock
+changes. Existing mise Python3.13.16 is used; timers remain OFF.
+
+Next independently decide the token-only real framing/entry boundary versus
+the original noTE/exactCL rule. Do not fabricate CL, remove TE or treat42
+component passes as that decision. Actual public TLS/peer observations and a
+new complete run/input review remain necessary. Old B2 remains FAILED, B3
+unexecuted, source/signature/supply/runtime holds closed. Slice6 step1 retains
+its bounded historical acceptance; step2 continues, step3's new full inventory,
+original16 scenarios and independent acceptance remain open, and formal step4
+has not started. Only broker/general issuers remain, PostgreSQL uses general;
+9 bindings/64 barriers and all original evidence/reuse rules stay.

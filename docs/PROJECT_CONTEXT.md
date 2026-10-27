@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-26
+Updated: 2026-10-27
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -45,6 +45,17 @@ inventory private evidence and local artifacts separately from Git. Resume
 Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
+
+The [held peer lifecycle checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-held-token-peer-lifecycle)
+passes 42 component methods in 12.542392 seconds/90 including complete input
+checks. It binds source-owned CA/context and one selected peer, rejects hidden
+redials, and covers the actual HTTP client response-file handoff with controlled
+sockets. This is offline evidence, not real TLS peer verification. The owned-pipe
+negative targets 10 seconds and is refused after 10.007898 seconds including
+cleanup. Real B2 stays FAILED, B3 unexecuted, and the original noTE/exactCL gate
+is unchanged. Next independently decide the real token framing/entry boundary
+before any live request. Private slice6-scanner-token-peer-held-20261027;
+mise Python, timers OFF. Phase6 **5/15**, Slice6 step2; formal holds stay.
 
 The [held token-controller checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-26-held-token-controller-integration)
 passes24 new methods in11.638106seconds/90 including input checks. Its one
