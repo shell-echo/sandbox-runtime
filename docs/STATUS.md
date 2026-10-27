@@ -1,5 +1,18 @@
 # Project Status
 
+The [attestation carrier checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-attestation-manifest-carrier)
+passes81 current component methods (31 joint/14 native/36 attestation); old96
+are scoped reuse only. A new twoGET run completely verifies841B OCI carrier
+4c20411f…e63f type/size/DCD/rawSHA and parenta3c's declared reference to image1b9.
+Joint2.492999s/10, whole7.700165s/90; fullpostcheck and independent actual review.
+It records SPDX2099399B and SLSAv0.2 provenance25187B descriptor declarations,
+without fetching them or verifying statement subjects/source/signatures.
+External signatures remain UNKNOWN; supply/runtime/actualOS remain unproved.
+Next independently review locked25187B provenance recovery and source/signature
+subject coverage. Private slice6-scanner-attestation-manifest-20261027;
+mise Python/timersOFF, old failures preserved. Phase6 **5/15**, Slice6step2;
+full topology16/independent acceptance/formalstep4 remain open.
+
 The [selected-child body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-selected-child-manifest-body)
 passes82 current component methods (31 joint/14 native/37 child); old96 are
 scoped reuse only. A new twoGET run completely reads1901B OCI manifest1b9f632f…fcec4

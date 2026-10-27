@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [selected-child manifest body](#2026-10-27-selected-child-manifest-body).
+Latest implementation checkpoint: [attestation manifest carrier](#2026-10-27-attestation-manifest-carrier).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14956,3 +14956,80 @@ associated841B attestation/body and exact source/signature subjects, approved
 signer policy, new identity and fullinputs without auto-traversal/token reuse.
 Original10/88/90/reserve5/bytes/resources/R-C rules, tool/release locks,
 broker/general only/PGgeneral and9bindings64barriers remain.
+
+## 2026-10-27 attestation manifest carrier
+
+Slice6step2 C PASS for fixed carrier bytes/declared references only, after
+independent design/final implementation/refusal-test/newidentity/fullinput/
+actual-result review. FormalPhase6 remains5/15; step1 historical boundedE
+unchanged, step2 ongoing; current fulltopology/original16/independent acceptance/
+formalstep4 open. This checkpoint is not Slice6step4. TimersOFF, existing
+misePython3.13.16 only; no Docker/build/scan/global tools or policy relaxation.
+
+Fixed attestation target is841B OCI manifest
+sha256:4c20411fde996d1cfa7fc0326d6d0105612af80e93de13dc5c589901fd01e63f,
+ordinal4 unknown/unknown/no variant in previously verified parentindexa3c.
+Its index annotation references selectedimage1b9 (ordinal1/1901B), whose body
+was separately verified in B. New metadata target is only4c2; token material/
+scope anchor staysa3c. Target role explicitly attestation-manifest; it is not
+a runnable image or signed statement. Existing Scanner6d/fe18/6dad and
+build generatorae4f remain different DAG/material roles.
+
+The new dedicated closed validator retains original field/descriptor primitives
+without widening the image schema; the image parser still rejects in-toto
+layers. Original noTE/exactCL plus841/OCI/DCD/Entity snapshot/whole rawSHA
+binding precede strictJSON/actual-bearer reflection/attestation envelope checks.
+Config OCIimageconfig<=1MiB,1..64 unique in-toto descriptors<=existing4MiB
+metadata declaration bound/aggregate<=256MiB do not grant payload download.
+Unknownfields/URLs/data/modernsubject/artifactType/emptyconfig reject without
+fallback. Known predicate annotation is enum only, unknown URI hash/count
+only, never auto-followed. Full generic OCI conformance is not claimed.
+
+Current attestation-policy-v1 passes81 methods:31joint (30 assertion ASTs same,
+one positive role narrowed),14 original native/audit methods for changed target,
+36 new schema/reference/predicate/privacy/bounds/nonclaim tests. Realistic
+synthetic raw/escaped/header bearer reflections fit841 and reach original
+consumed Lease secret_scan; wrongtype/length bodyread0, productionSHA refuses
+syntheticpreimage, entity drift rejects beforehash, processing staysshared10,
+original edgeOWS normalization preserved. Unit5.731s, wholeRESULT14.074685s,
+natural tool14.506609s/90, no skip/xfail/timeout/signal/truncation; fullpostcheck/
+12Git pass. Old96 token42/frame38/policy16 is scoped unchanged-source/AST/old
+natural-witness reuse only; no ownedpipe10/fullGo/build rerun. Old B FAILED81
+and G FAILEDpush-v4/149 originals stay failed; current81 is a different C run.
+
+Separately reviewed attestation-observe-v1 performs exactly fresh tokenGET and
+fixed4c2GET, bothHTTP200/TLS1.3/publicDNS/nativepeer/FD. Shared final return
+2.492999s/10, completeRESULT7.700165s, natural tool7.839874s/90; all layers
+reaped/no flags, fullpostcheck and12localGit pass. Raw=decoded841 and DCD=
+whole rawSHA=fixed4c2, OCIcarrier MIME. Two-phase finite audit/canary/closed/
+nativeFDtrue, unexpected0; Leaseclosed/original worker timer restored. Three
+preliminary receipts remainpre-publication false; final result follows all
+close/save/clock/TTL work. Token/originalheaders/body remain RAM-only, logical
+clearing is not physical erasure or OS swap protection. No third request.
+
+The carrier declares config241B at
+sha256:f83bd93a98c5c6c4bf2e3e747878969a71bf0ef8183f8b1bafd18f5c0fa1a379.
+Two ordered application/vnd.in-toto+json payload descriptors total2124586
+DECLAREDbytes: SPDX ordinal0,size2099399,digest
+sha256:930252bd9b4b05f6dca3f46c6a235b7b7705c4ec41eb4b353cdd20c0f95df0fc;
+SLSAv0.2 provenance ordinal1,size25187,digest
+sha256:32cbae41394dc3e9da46cfba640d3750cb7ef170345cbab84979c79d86cc7cb5.
+No config/payload bytes are fetched. Their expected subject is selected1b9,
+but statement.subject/predicate/sourceURI/VCS/materials/DSSE/signature content
+remain unverified/UNKNOWN. Old Scanner SPDX2099349/provenance7231 inputs are
+not these base payloads and cannot be relabelled. No marker/plainstatement/
+TLS/DCD/GitHub tag substitutes for approved publisher trust and crypto.
+
+Full pre/post original2190source/1191runtime/7aliases108dirs,29scripts/3helpers/
+4raw and all directinputs (policy1837/live1843) pass. Original SOURCE/RUNTIME
+and old failures unchanged; only known B fourdoc63→c32 delta linked explicit
+pins/Gitblobs/singleparent, no regenerated manifests. Private
+slice6-scanner-attestation-manifest-20261027 holds code/original receipts/
+DERIVED-RESULT/PAYLOAD-DESCRIPTORS/source-signature coverage; only four safe
+progressdocs belong in Git. Source/publisher signature/actualOS/platform/
+supply/runtime remain unproved, external signaturesUNKNOWN, no signer policy
+invented. Next independently review fixed25187B provenance retrieval path,
+new identity/fullinputs and exact subject/source/signature mapping, no auto
+payload/redirect traversal or token reuse. Original10/88/90/reserve5/bytes/
+resources/R-C, old release/Go locks, broker/general only/PGgeneral and9bindings/
+64barriers remain. Documentation format research is not producer authenticity.
