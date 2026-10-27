@@ -1,5 +1,17 @@
 # Project Status
 
+The [provenance body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)
+passes219 current component methods and a new threeGET observation in3.534628s/10
+(whole5.499707s/90). Complete25187B SHA matches locked32c;10 statement subjects
+all name selected image1b9. Full postchecks and independent actual review pass.
+The CDN constructor now requires the same active unused source Target; generic
+HOSTS remain unchanged. Both old body failures remain FAILED. Source URL/revision
+declarations agree with the locked ClamAV mapping but are unauthenticated;
+external signatures UNKNOWN, supply/runtime/platform/actualOS HELD. Next review
+official signing policy and exact signature-object/subject binding. Private
+slice6-scanner-base-provenance-body-20261028-v4; mise Python, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 still open.
+
 The [attestation carrier checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-attestation-manifest-carrier)
 passes81 current component methods (31 joint/14 native/36 attestation); old96
 are scoped reuse only. A new twoGET run completely verifies841B OCI carrier

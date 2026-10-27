@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-27
+Updated: 2026-10-28
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -45,6 +45,20 @@ inventory private evidence and local artifacts separately from Git. Resume
 Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
+
+The [provenance body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)
+passes219 current component methods, including10 real-constructor/no-connect
+cases, and a fresh token200→registry307→CDN200 observation. Joint3.534628s/10,
+whole5.499707s/90; complete25187B SHA matches locked32c, and10 statement subjects
+all name selected image1b9. Full input postchecks and independent actual review
+pass. A precise Target-bound constructor repair preserves the original HOSTS;
+old auth-timeout and constructor-refusal runs stay FAILED. The public ClamAV
+Git URL hash and revision5853 match passive source declarations, without source
+or publisher authentication. External signatures remain UNKNOWN; supply/runtime/
+platform/actualOS stay HELD. Next independently review official signing policy
+and exact signature-object/subject binding. Private
+slice6-scanner-base-provenance-body-20261028-v4; mise Python/timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
 
 The [attestation carrier checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-27-attestation-manifest-carrier)
 passes81 current component methods (31 joint/14 native/36 attestation); old96

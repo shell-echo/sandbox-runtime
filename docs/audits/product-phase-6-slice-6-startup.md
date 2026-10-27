@@ -4,7 +4,58 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [attestation manifest carrier](#2026-10-27-attestation-manifest-carrier).
+Latest implementation checkpoint: [fixed provenance body](#2026-10-28-fixed-provenance-body).
+
+## 2026-10-28 fixed provenance body
+
+After independent design, final-code and full-input/new-identity review,219
+current offline methods pass (0.692s unit,2.682556s/90 whole), retaining209 and
+adding10 real-constructor/no-connect cases. A new threeGET run obtains a fresh
+RAM-only token and307 Target, then verifies the complete25187B provenance:
+SHA256 `32cbae41394dc3e9da46cfba640d3750cb7ef170345cbab84979c79d86cc7cb5`.
+The locked descriptor type is in-toto JSON; delivery is octet-stream. CDN DCD
+is absent, so the proof is the complete-body SHA matching the locked descriptor.
+Token200→registry307→CDN200 share10seconds: latest return3.534628s, whole5.499707s/90.
+Three native TLS1.3/FD phases close with zero unexpected network events; Lease,
+Target, entity and original socket/response close, and the worker alarm restores.
+Full2190-source/1191-runtime/direct/code/helper/raw-input checks and12 read-only
+Git queries pass before/after; independent actual review confirms this scope.
+
+All10 statement subject digests name selected image1b9f632f…fcec4. The parser
+checks strict JSON, in-toto v0.1/SLSA v0.2,2 material declarations and11 LLB rows;
+nested op/source/layers remain opaque, with no full BuildKit semantic claim.
+The VCS URI declaration hash equals the public ClamAV Git URL string and its
+revision5853e139…f9b3 equals the locked mapping. This is declaration consistency,
+with the original UNKNOWN_HASHED parser category retained. Builder platform
+`linux/amd64` is a declaration, not verification of the selected image platform.
+Material completeness is declared false. Source/subject/builder authentication,
+publisher signature, clean-source closure and supply/runtime/platform/actualOS
+remain unproved; external signature existence is UNKNOWN and publisher policy
+is NOT_ESTABLISHED. No token, signed URL or raw headers/body are persisted.
+
+The first body run remains FAILED at auth TLS10.004808s; its precise historical
+wait cause is unknown. A separately scoped24-method TLS diagnostic and native
+probe pass, without HTTP or body admission. The second body run remains FAILED:
+CDN DNS succeeded, but the inherited constructor rejected the fixed CDN before
+TCP. The repaired default `_admit_host` preserves original HOSTS; only the
+SingleDialConnection payload branch admits that fixed CDN with an exact active,
+unused source Target/same Budget-mode/consumed Lease. Temporary capability
+bindings clear in finally; legacy hosts reject mixed capability arguments.
+Held drafts, both failures and the preparation-only log-count assertion refusal
+are preserved. The existing wrong-response negative's unraisable warning is
+retained;219 tests themselves pass without skips or failures.
+
+Private evidence: `slice6-scanner-base-provenance-body-20261028-v4/REPORT-v2.md`,
+`DERIVED-RESULT-v1.json`, `SOURCE-SIGNATURE-COVERAGE-v1.json` and actual independent
+review. Only four safe progress documents enter Git. No Product Go/Contract/
+driver change requires a fresh whole-Go/vet/Docker/build/scan run; earlier
+results retain their original scope. Existing mise Python3.13.16, timersOFF,
+original10/88/90 bounds, quota, source/release locks and reuse rules are unchanged.
+Next independently review official publisher signing policy and exact signature
+object/subject binding. This provenance threeGET run did not additionally fetch
+config/layer/SPDX bytes; older retained objects keep their original scope, and
+objects from another DAG cannot substitute for these inputs. Phase6 remains
+**5/15**, Slice6step2; step3 topology16/independent acceptance and formalstep4 open.
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a

@@ -26,6 +26,22 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Fixed provenance body (2026-10-28)
+
+The [provenance body checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)
+passes219 current component methods and a fresh threeGET body observation.
+Joint3.534628s/10, whole5.499707s/90; complete25187B SHA matches locked32c and
+all10 statement subject digests name selected image1b9. Full postchecks and
+independent actual review pass. The precise Target-bound CDN constructor repair
+preserves generic HOSTS and all original limits; old failures remain FAILED.
+Source URL/revision declarations agree with locked ClamAV mapping, without
+authenticating their producer. External signatures remain UNKNOWN; source,
+publisher, clean-build-source, platform/actualOS and supply/runtime admission
+remain unproved. Next independently establish official signing policy and exact
+signature-object/subject binding; declaration agreement is not that gate.
+Private slice6-scanner-base-provenance-body-20261028-v4; mise Python/timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 ## Attestation manifest carrier (2026-10-27)
 
 The [attestation carrier checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-attestation-manifest-carrier)
