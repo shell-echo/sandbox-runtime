@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [same-process fixed-base observation](#2026-10-27-same-process-fixed-base-observation).
+Latest implementation checkpoint: [typed fixed-index descriptors](#2026-10-27-typed-fixed-index-descriptors).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14816,3 +14816,67 @@ platform/source-signature association without automatic traversal or token
 reuse. Phase6 stays5/15; Slice6step1 historical boundedE unchanged, step2 ongoing,
 step3 current full topology/original16/independent formal acceptance incomplete,
 formalstep4 not started. This intermediate commit/push is not formalstep4.
+
+## 2026-10-27 typed fixed-index descriptors
+
+Step2 intermediate A PASS after independent design, complete-input/new-identity,
+final-code and actual-result review. Phase6 remains5/15; historical boundedE
+step1 unchanged, step2 ongoing. Current full topology/original16/independent
+acceptance and formalstep4 remain open. TimersOFF; existing misePython3.13.16.
+
+The fixed declared runtime base a3cbbbc2…ee8a9d is a separate DAG from Scanner
+candidate6d068078/childfe182632/attestation6dadffaf. A new current pure typed
+projection retains the original complete closed metadata validation, then
+records exact ordinal/MIME/size/digest/platform and declared Docker reference
+edges. Reserved type/digest annotations must form an exact pair naming a distinct
+indexed image; orphan/self/cross-role/cyclic/fake runnable attestations refuse.
+No-match/ambiguous platforms never select first; absent variant stays absent.
+Unknown annotations are count-only and signature marker presence grants no trust.
+
+72 current methods pass (31 original joint assertion methods +41 new typed/
+selection/graph/privacy/refusal methods), no skip/xfail. Test portion2.407s,
+worker result55.179405s, natural outer55.378816s/90. Old110 token/frame/policy/
+native methods are reused only after exact dependency/assertion/old natural141
+witness binding, not rerun or added to current72. Old42 owned-pipe timeout is
+not rerun for broadcast; old failures and original27 files remain unchanged.
+No Go/Contract/driver behavior changes, full Go/build tests not repeated.
+
+Separately preflighted index-observe-v1 performs exactly fresh token GET then
+fixed parent GET, both HTTP200/TLS1.3/nativepeer/FD-bound/public DNS. Shared
+actual final return5.945972s/10, worker result20.271798s, natural tool21.116642s/90;
+all layers reaped with no timeout/signal/truncation. Original B3 noTE/exactCL
+accepts raw2364B, DCD=whole rawSHA=fixed parent
+sha256:a3cbbbc2b17a3871862689c0773bc9f5d70a1e4914ada7c8a05e157722ee8a9d.
+Token-only strictchunked remains separately scoped. Finite two-phase audit,
+canary/closed/nativeFD checks pass, unexpected0, Lease closed and original
+worker timer restored. Token/raw headers/raw bodies are not saved/returned;
+logical clearing is not physical erasure or OS swap protection. Preliminary
+receipts are not final completion; final result follows all close/clock/TTL work.
+
+Index6rows comprise three image-platform rows and three unknown/unknown
+attestation rows, each reference naming its indexed distinct image target.
+Unique declared linux/arm64 ordinal1 has no variant and is1901B
+application/vnd.oci.image.manifest.v1+json at
+sha256:1b9f632fd2756d647ea76721c190f1a8821f3f1dc099b6b671e265d4346fcec4.
+Its declared associated attestation ordinal4 is841B at
+sha256:4c20411fde996d1cfa7fc0326d6d0105612af80e93de13dc5c589901fd01e63f.
+This freezes the exact child declaration and parent relationship only; no child,
+attestation, config or layer is fetched. Declared association is not a signature.
+
+Original2190 source/locks,1191 runtime files/7aliases108dirs,29 current code files,
+3helpers/4raw and every direct input (policy1649/live1655) pass full pre/post,
+with12 natural readonlyGit receipts perrun. SOURCE/RUNTIME bytes stay original;
+only known prior four progress-doc deltas are explicitly rebound with old pins
+retained. Private slice6-scanner-index-descriptors-20261027 holds source,
+SELECTED-DESCRIPTOR-v1, coverage ledger, frozen plans and original receipts;
+only four safe progressdocs belong in Git. No old proof or manifest is rewritten.
+
+Source-to-base compilation, actual OS/layers/platform compatibility, publisher
+identity/key/signature, external signature existence, fresh supply/rules and
+runtime admission remain false or UNKNOWN. The retained plain statements,
+GitHub commit/tag verification, TLS/DCD and annotation keys cannot authenticate
+an OCI publisher. Next independently review the frozen1901B child's exact
+MIME/size/digest-bound retrieval and new inputs, then separate signature-subject/
+source coverage with an approved expected signer/trust policy. No automatic
+traversal or token reuse. Original10/88/90/reserve5/byte/resource/R-C reuse gates,
+release locks, broker/general only/PGgeneral and9bindings64barriers remain.

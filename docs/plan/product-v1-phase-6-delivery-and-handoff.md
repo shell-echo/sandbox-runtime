@@ -26,6 +26,20 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Typed fixed-index descriptors (2026-10-27)
+
+The [typed fixed-index checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-typed-fixed-index-descriptors)
+passes72 current component methods (31 joint +41 new); old110 are scoped
+reuse only. A new token→fixeda3c observation verifies2364B OCI index/6rows
+and a unique declared linux/arm64 child1b9f632f…fcec4 (1901B, variant absent),
+with attestation4c20411f…e63f (841B) naming that child. Joint5.945972s/10,
+whole20.271798s/90; complete input postchecks and independent actual review.
+No child is fetched or signer authenticated; source/platform/OS/signature/
+supply/runtime remain HELD or UNKNOWN. Next independently review exact child
+MIME/size/digest-bound retrieval, then source/signature coverage. Private
+slice6-scanner-index-descriptors-20261027; mise Python, timersOFF. Phase6
+**5/15**, Slice6step2; full topology/original16/acceptance/formalstep4 open.
+
 ## Same-process fixed-base observation (2026-10-27)
 
 The [same-process fixed-base checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-same-process-fixed-base-observation)
