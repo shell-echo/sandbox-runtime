@@ -26,6 +26,20 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Strict fixed-token observation (2026-10-27)
+
+The [strict fixed-token checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-strict-fixed-token-observation)
+passes108 component methods and one new anonymous token GET. Actual native
+TLS1.3/peer/FD transfer and strict chunked completion pass; request0.478817s/10,
+whole2.308037s/90, complete input pre/post checks and independent actual review.
+The original private noTE/exactCL predicate is explicitly replaced only for
+this fixed observer; its original diagnostic stays REJECT and old B2 failure
+is preserved. Shared/formal protocol and supply gates are unchanged. No usable
+bearer is saved/returned/used, no B3 or source/signature/supply/runtime admission.
+Next independently review fresh same-process token use and exact B3 metadata
+boundaries. Private slice6-scanner-token-admission-20261027; mise Python,
+timers OFF. Phase6 **5/15**, Slice6 step2; topology16/acceptance/step4 open.
+
 ## Held token peer lifecycle (2026-10-27)
 
 The [startup audit](../audits/product-phase-6-slice-6-startup.md#2026-10-27-held-token-peer-lifecycle)

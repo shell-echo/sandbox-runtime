@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [held token peer lifecycle](#2026-10-27-held-token-peer-lifecycle).
+Latest implementation checkpoint: [strict fixed-token observation](#2026-10-27-strict-fixed-token-observation).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14662,3 +14662,73 @@ its bounded historical acceptance; step2 continues, step3's new full inventory,
 original16 scenarios and independent acceptance remain open, and formal step4
 has not started. Only broker/general issuers remain, PostgreSQL uses general;
 9 bindings/64 barriers and all original evidence/reuse rules stay.
+
+
+## 2026-10-27 strict fixed-token observation
+
+Independent boundary/design review permits an explicit token-only replacement
+of the private noTE/requiredCL predicate: retain canonical length framing and
+add only HTTP1.1 exactly-single chunked with CL absent. This expands the private
+wire acceptance set; it is not literal equivalence or an old failed-run pass.
+Shared metadata helpers and formal Provider/Control/Scanner framing rules stay
+unchanged. The old B2 failed response remains immutable; on the new chunked
+response its original noTE diagnostic still reports REJECT. No fabricated CL,
+deleted TE, automatic HTTP dechunking, retry or compatibility fallback occurs.
+
+The current private candidate has one explicit fixture/observe TokenHTTP.request.
+It rejects unknown/mutated mode and clears stale prior outcomes before refusal.
+Source-owned checked CA bytes construct the verified context. Real mode requires
+actual native TLS/connection objects, exact public address/SNI/CA/peer and original
+connected FD transfer, with one DNS/connect audit sequence and failing canary.
+These guards are independent of caller booleans and audit counts alone; the audit
+scope is trusted pinned Python defense in depth, not an OS sandbox. Original
+response/socket/file lease handoff, complete raw framing, close/clock/privacy
+refusals and original10/88/90 budgets remain. No global development installation.
+
+The new offline identity executes108 methods:38 frame,42 controller,16 retained
+policy and12 native/audit methods. All original42 assertion semantics survive
+only coherent API/receipt-name adaptation;16 policy class ASTs change only calls
+to a test-only CURRENT frame adapter. The38 tests and frame implementation keep
+original bytes. Unknown native peers, DNS/dial drift, FD handoff, canary/poisoned
+closed scope and mode/stale-outcome refusals are covered. Unit10.328s, whole
+12.437495s/90, natural0/reaped/no outer timeout/signal/truncation. An unconditional
+socket veto records zero unexpected events. The sole owned-pipe10s negative
+remains FAILED as expected at10.009247s including cleanup;1alarm/2identity-bound
+FDs close and the prior timer/handler return. It is no successful request.
+
+After independent component actual and new-run input/freshness review, exactly
+one new anonymous GET observes HTTP200/TLS1.3 with a verified native peer and
+original FD transfer. Actual audited sequence is DNS/raw-init/connect/TLS-init,
+canary/closed checks pass and unexpected events=0. Strict chunked1 completes
+5505decoded/5518raw bytes; request0.478817s/10 and whole2.308037s/90, all three
+execution layers natural0/reaped with no timeout/signal/truncation. The original
+saved request receipt is explicitly preliminary; final completion is recorded
+only after disposal, close/save/return clocks, TTL and worker timer restoration.
+Current unsigned JWT shape/repository-pull scope/anonymous subject and lifetime
+checks pass. No usable bearer/raw body/header/certificate is persisted, returned
+or used downstream; logical disposal is not physical erasure or swap protection.
+
+Both runs check the unchanged22 scripts, original2190source/locks and1191runtime
+files/7aliases/108dirs plus helpers/four raw materials before and after. The
+component checks1343direct inputs, the observation1391;12 readonly Git commands
+per run pass. SOURCE/RUNTIME bytes are not regenerated. Four committed doc deltas
+are explicitly bound by old/current Git objects; unknown drift is not rebound.
+Affected108 tests ran anew; shared48/31/9/23 and unchanged Go evidence remain
+scoped reuse only, with no broad test rerun. Preparationv1-v3 were superseded
+before execution, old bytes/reasons retained; no failed identity is replayed.
+
+Independent actual review accepts only this fixed observation. Historical B1 is
+a static realm/scope witness, not current token/object/TUF/DB freshness evidence.
+The established metadata-only host applicability stays; no heavy APK/TUF work
+or CPU/Docker-health admission is inferred. Existing misePython3.13.16 only,
+timers OFF. Private slice6-scanner-token-admission-20261027 holds all raw receipts,
+strict source/input plans and reviews; only four safe progress docs enter Git.
+
+Next separately review fresh same-process token acquisition/use and the exact
+B3 metadata/credential/redaction/body boundaries. This run grants no transferable
+bearer or B3 execution, actual OCI object kind, source/publisher signature,
+vulnerability/supply/runtime or production approval. Phase6 stays5/15; Slice6
+step1 retains historical bounded E acceptance, step2 continues, step3 full current
+inventory/original16/independent formal acceptance is incomplete, formalstep4
+not started. Broker/general with PostgreSQLgeneral,9bindings/64barriers and all
+old evidence/reuse/resource/timeout rules remain unchanged.
