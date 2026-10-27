@@ -4,7 +4,7 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [typed fixed-index descriptors](#2026-10-27-typed-fixed-index-descriptors).
+Latest implementation checkpoint: [selected-child manifest body](#2026-10-27-selected-child-manifest-body).
 
 Checkpoint 2026-09-30 (FD startup deadline, component evidence only): the
 six-target one-shot loader now reads Docker's non-TTY stdin through a
@@ -14880,3 +14880,79 @@ MIME/size/digest-bound retrieval and new inputs, then separate signature-subject
 source coverage with an approved expected signer/trust policy. No automatic
 traversal or token reuse. Original10/88/90/reserve5/byte/resource/R-C reuse gates,
 release locks, broker/general only/PGgeneral and9bindings64barriers remain.
+
+## 2026-10-27 selected-child manifest body
+
+Slice6step2 B PASS after independent design, final implementation/refusal-test,
+new identity/fullinput and actual-result review. Formal Phase6 remains5/15;
+historical boundedE step1 unchanged, step2 ongoing; current fulltopology/
+original16/independent acceptance/formalstep4 incomplete. TimersOFF; existing
+misePython3.13.16 only. This is an intermediate checkpoint, not formalstep4.
+
+The actual prior parentindexa3c selected ordinal1 linux/arm64 with no variant,
+OCI manifest1901B at
+sha256:1b9f632fd2756d647ea76721c190f1a8821f3f1dc099b6b671e265d4346fcec4.
+New private candidate changes metadata target statically to this child while
+token scope/challenge/material anchor remains parenta3c. No generic digest/URL
+input, fallback or global replacement mixes the subjects. Original schema
+functions are unchanged. Child B3 requires HTTP200/OCI MIME/CL1901/DCDchild
+before body read, then complete Entity snapshot/raw1901/SHA before JSON,
+actual consumed-bearer reflection checks and full original closed schema.
+Safe projection binds parent/platform declaration, config and ordered layers;
+unknown annotations are counts and signature-marker presence grants no trust.
+
+First child-policy-v1 remains FAILED:81 methods/80ok/1 incorrect CL expectation,
+whole natural tool1/reaped3.730407s/90, fullpostcheck/no network. Source parser
+strips edgeSP/HTAB before canonical length regex, so1901SP was already legal.
+Independent repair changes that TEST case to invalid internal19SP01, adds
+three edgeOWS positive subcases and per-length subTest. Production policy is
+unchanged. All29 original code bytes, failed results/outer/raw logs are archived;
+no failed identity replay, discarded failure or protocol waiver.
+
+New child-policy-v2 passes82 methods:31 joint (30 method assertion ASTs intact,
+one four-kind-positive narrowed to OCIpositive+3earlydeny/read0),14 original
+native/audit-shape methods repeated for changed bp.spec dependency,37child
+methods. Raw/escaped/header bearer reflection cases explicitly reach secret_scan
+at1901B after consume, so tighter size checks do not hide those refusals.
+Production SHA rejects synthetic bytes; entity drift rejects before hash;
+projection time stays in original shared10. Schema/unknownfields/URLs/data/
+integer/bool/size/aggregate/order/alias/privacy and Lease/deadline/FD refusals
+stay. Unit0.942s, complete RESULT9.349649s, natural tool9.776906s/90, no skip/
+xfail/timeout/signal/truncation. Old96 token42/frame38/policy16 evidence is
+scoped unchanged-source/AST/witness reuse only. No ownedpipe10/fullGo/build
+rerun; no Product Go/Contract/driver behavior change.
+
+New separately preflighted child-observe-v1 executes exactly fresh token GET
+then fixed child GET; both HTTP200/TLS1.3/public DNS/nativepeer/FD. Shared
+actual final return2.552593s/10, RESULT4.576815s, natural tool4.647649s/90,
+all processes reaped without flags, fullpostcheck/12readonlyGit pass. B3 raw=
+decoded1901 and Docker-Content-Digest=whole rawSHA=fixed1b9. Original noTE/
+exactCL remains; token-only strictchunked support stays separately scoped.
+Finite two-phase audit/canary/closed/nativeFD checks true/unexpected0, Lease
+closed and original worker timer restored. Pre-publication receipts stayfalse,
+final success follows all close/save/clock/TTL checks. Token, originalheaders
+and complete body remain RAM-only; logical clearing is not physical erasure
+or OS swap protection.
+
+Body declares one OCI config digest
+sha256:2aa53a7ceda166cc87113afefde3cbafc36be5073a20582421f0834c19714ab5,
+3595 declaredbytes, and6 ordered OCIgzip layers totaling73458224 declared
+compressedbytes. None of those referenced bytes or associated841B attestation
+4c20411f…e63f was fetched. Parent/basechild/baseattestation remain distinct
+from Scanner candidateindex6d/childfe18/attestation6dad and generatorae4f.
+Actual imageOS/configplatform/layers/source-to-base build/publisher signature/
+supply/runtime remain unproved, external signatures UNKNOWN. No test key,
+plain statement/annotation, TLS/DCD or GitHub tag verification substitutes
+for approved expected OCI publisher trust and signature-subject coverage.
+
+Full pre/post original2190source/1191runtime/7aliases108dirs,29scripts/3helpers/
+4raw and all directinputs (v2policy1782/live1788) pass. Original SOURCE/RUNTIME
+bytes and old evidence stay unchanged; four known prior doc deltas b3→63 are
+explicitly linked by pins/Gitblobs/one-parent scope, no manifest regeneration.
+Private slice6-scanner-child-manifest-20261027 holds current code, original
+receipts, archived failure, DERIVED-RESULT-v1 and source/signature coverage;
+only four safe progressdocs belong in Git. Next independently review the
+associated841B attestation/body and exact source/signature subjects, approved
+signer policy, new identity and fullinputs without auto-traversal/token reuse.
+Original10/88/90/reserve5/bytes/resources/R-C rules, tool/release locks,
+broker/general only/PGgeneral and9bindings64barriers remain.

@@ -26,6 +26,21 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Selected-child manifest body (2026-10-27)
+
+The [selected-child body checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-selected-child-manifest-body)
+passes82 current component methods (31 joint/14 native/37 child); old96 are
+scoped reuse only. A new twoGET run completely reads1901B OCI manifest1b9f632f…fcec4
+in RAM, verifying type/size/DCD/rawSHA against parenta3c's selected descriptor.
+Joint2.552593s/10, whole4.576815s/90, complete postcheck and independent actual
+review. One config and6 layer descriptors are recorded; their bytes and the
+associated attestation are not fetched. Source/signature/actual platform/OS/
+supply/runtime remain HELD or UNKNOWN. Old failed81-method run stays FAILED;
+only an incorrect edgeOWS test expectation was repaired, production unchanged.
+Next independently review associated841B attestation and source/signature
+coverage. Private slice6-scanner-child-manifest-20261027; mise Python,
+timersOFF. Phase6 **5/15**, Slice6step2; full topology16/acceptance/step4 open.
+
 ## Typed fixed-index descriptors (2026-10-27)
 
 The [typed fixed-index checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-27-typed-fixed-index-descriptors)
