@@ -26,6 +26,19 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Fixed-index referrers discovery (2026-10-28)
+
+The [referrers checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-referrers-discovery)
+passes249 current component methods and one native token→fixed-indexa3c
+observation. Registry200 returns a complete89B empty OCI index, joint7.390942s/10,
+whole9.828563s/90; full postchecks and independent actual review pass. This is
+only the fixed endpoint/time, without Link/DCD, child/legacy/descriptor requests,
+publisher trust or global signature-absence proof. Policy remains NOT_ESTABLISHED,
+signatures UNKNOWN and source/supply/runtime HELD. Next independently review
+documented fixed-digest legacy signature metadata and exact index/child/provenance
+coverage. Private slice6-scanner-base-referrers-20261028-v3; mise Python/timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 ## Fixed provenance body (2026-10-28)
 
 The [provenance body checkpoint](../audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)

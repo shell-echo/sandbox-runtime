@@ -1,5 +1,16 @@
 # Project Status
 
+The [fixed-index referrers checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-referrers-discovery)
+passes249 current component methods and a fresh token200→indexa3c referrers200
+observation: complete89B empty OCI index, joint7.390942s/10, whole9.828563s/90.
+Full postchecks/independent actual review pass. It queried only this index/API
+page; no child, legacy tag, descriptor payload, key or signature was fetched.
+Empty results do not prove signature absence; publisher policy NOT_ESTABLISHED,
+external signatures UNKNOWN and source/signature/supply/runtime remain HELD.
+Next review documented fixed-digest legacy signature discovery and exact
+coverage. Private slice6-scanner-base-referrers-20261028-v3, mise Python,
+timersOFF. Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 open.
+
 The [provenance body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)
 passes219 current component methods and a new threeGET observation in3.534628s/10
 (whole5.499707s/90). Complete25187B SHA matches locked32c;10 statement subjects

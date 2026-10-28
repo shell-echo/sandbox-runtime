@@ -46,6 +46,19 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [fixed-index referrers checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-referrers-discovery)
+passes249 current component methods (219 retained/30 new) and one fresh twoGET
+observation. Token200→indexa3c referrers200 returns a complete89B empty OCI index;
+joint7.390942s/10, whole9.828563s/90, full postchecks and independent actual review.
+This endpoint/time observation is not global signature absence: no Link/DCD,
+no child/legacy/descriptor request, publisher policy NOT_ESTABLISHED and external
+signatures UNKNOWN. Closed source Purpose now binds Lease/Flow/Exchange/Scope;
+default provenance behavior is retained, no Target/CDN in referrers mode.
+Next independently review documented fixed-digest legacy signature discovery and
+its exact index/child/provenance coverage. Private
+slice6-scanner-base-referrers-20261028-v3; mise Python/timersOFF. Phase6 **5/15**,
+Slice6step2; source/signature/supply/runtime and topology16/acceptance/step4 open.
+
 The [provenance body checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-provenance-body)
 passes219 current component methods, including10 real-constructor/no-connect
 cases, and a fresh token200→registry307→CDN200 observation. Joint3.534628s/10,

@@ -4,7 +4,53 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [fixed provenance body](#2026-10-28-fixed-provenance-body).
+Latest implementation checkpoint: [fixed-index referrers discovery](#2026-10-28-fixed-index-referrers-discovery).
+
+## 2026-10-28 fixed-index referrers discovery
+
+After independent design/final-code/full-input/new-identity review,249 current
+methods pass (219 retained/30 new, unit1.196s, whole3.761955s/90). A fresh native
+token200→registry referrers200 observes only fixed base indexa3cbbbc2…e8a9d in
+`clamav/clamav-debian`. Both GETs share10s: latest7.390942s, whole9.828563s/90.
+Strict exactCL/noTE and complete89B OCI-index JSON pass; rawSHA is
+`sha256:3d60eec733f106e03a571223c6adb85a3dabd53590ae0d8339e8ea2de2d32c56`.
+The response has0 descriptors, no Link and no DCD. It is an empty-list observation
+at that endpoint/time, not a complete global listing or proof of signature absence.
+No child referrers, legacy tag, descriptor payload, key or signature is fetched.
+Publisher policy remains NOT_ESTABLISHED, external signatures UNKNOWN; all source,
+signature, subject, platform, supply and runtime authority remains false.
+
+One shared transport adds only a closed source Purpose for original PROVENANCE
+and fixed INDEX_REFERRERS. Lease registration/immutable snapshot, exact spec and
+Accept, Flow/Exchange capture and finite Scope bind the same Purpose. Default
+provenance retains its original two/three phases; referrers rejects payload and
+Target before DNS, reads its own complete Entity and screens raw/decoded content
+with the consumed Lease. It never calls b3.classify or Target.issue, reports
+B3_executed=false and cannot follow Link/fallback automatically. Two native
+TLS1.3/FD phases close with unexpected0; Lease closes and timer restores. Full
+SOURCE2190/RUNTIME1191/direct/code/helper/raw and exact149 previous push artifact
+checks pass before/after, as do12 local Git queries; actual independent review
+confirms the limited result. No raw body/header/token is persisted.
+
+Official discovery found4 workflows at [fixed source5853](https://api.github.com/repos/Cisco-Talos/clamav/contents/.github/workflows?ref=5853e1396777bae4d909cd3dd44f58352e7cf9b3);
+its database-update workflow references a script whose [exact historical API path](https://api.github.com/repos/Cisco-Talos/clamav/contents/dockerfiles/update_db_image.sh?ref=5853e1396777bae4d909cd3dd44f58352e7cf9b3)
+returned404. The [fixed Jenkinsfile](https://raw.githubusercontent.com/Cisco-Talos/clamav/5853e1396777bae4d909cd3dd44f58352e7cf9b3/Jenkinsfile)
+delegates to external jobs. These observations and remote GitHub
+verification badges do not establish the OCI publication signer or fixed-digest
+coverage. Web cache misses and the connected API404 remain distinct observations,
+not a global absence claim; download-package/database signatures are separate.
+Old Scanner6d/fe18/6dad paths cannot substitute for this base DAG. The retained
+p1/p2/p3 candidates were unexecuted HELD drafts, not failed test/GET runs; v4 is
+the only new offline execution. The old negative's unraisable warning remains.
+
+Private `slice6-scanner-base-referrers-20261028-v3/REPORT.md`, DERIVED-RESULT-v1,
+OFFICIAL-DISCOVERY-v1 and independent actual review preserve the evidence;
+only four safe progress documents enter Git. No Product Go/Contract/driver edit,
+full-Go/vet/Docker/build/scan rerun, global installation or increased budget/quota.
+Existing mise Python3.13.16, timersOFF, old locks/reuse/public holds remain.
+Next independently review documented fixed-digest legacy signature metadata
+discovery, trusted publisher policy and exact index/child/provenance coverage.
+Phase6 stays **5/15**, Slice6step2; topology16/independent acceptance/step4 open.
 
 ## 2026-10-28 fixed provenance body
 
