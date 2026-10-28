@@ -15130,3 +15130,97 @@ new identity/fullinputs and exact subject/source/signature mapping, no auto
 payload/redirect traversal or token reuse. Original10/88/90/reserve5/bytes/
 resources/R-C, old release/Go locks, broker/general only/PGgeneral and9bindings/
 64barriers remain. Documentation format research is not producer authenticity.
+
+
+## 2026-10-28 legacy Cosign storage and coverage
+
+This is a Slice6 step2 component/source-audit checkpoint with a FAILED native
+observation, not a signature, supply or formal acceptance result. Phase6
+remains **5/15**; original step1 scope, step3 full current topology/original16/
+independent acceptance and formalstep4 remain unchanged.
+
+Independent source/design review fixes Cosignv3.1.3 commit
+11926fa5bbbbde47e88fc006b625a17769b743b2. Its
+[signature storage specification](https://github.com/sigstore/cosign/blob/11926fa5bbbbde47e88fc006b625a17769b743b2/specs/SIGNATURE_SPEC.md),
+[remote tag mapping](https://github.com/sigstore/cosign/blob/11926fa5bbbbde47e88fc006b625a17769b743b2/pkg/oci/remote/remote.go) and
+[registry options](https://github.com/sigstore/cosign/blob/11926fa5bbbbde47e88fc006b625a17769b743b2/cmd/cosign/cli/options/registry.go)
+support canonical same-repository sha256-<hex>.sig, while repository/prefix/
+suffix overrides mean this lookup cannot prove global signature absence.
+Nine connected official-source research references (72047B) match complete
+size/Gitblob, with four prior fixed-version native body/result originals
+retained full-byte. This is not controlled localHTTP10 source restoration,
+binary reproducibility or source authentication; fixed Cosign binary never
+runs. No Docker keychain, COSIGN_REPOSITORY, cloud credential, key or signer
+policy is adopted.
+
+The [claim verifiers](https://github.com/sigstore/cosign/blob/11926fa5bbbbde47e88fc006b625a17769b743b2/pkg/cosign/verifiers.go)
+and fixed retained verification sources separate payload target claims from
+cryptography/publisher authority. Ordinary claims compare DockerManifestDigest
+and requested annotations; Intoto accepts a matching sha256 subject, not proof
+that every subject matches; nil ClaimVerifier skips target checks. None of
+these code facts creates an approved publisher identity for this image.
+
+Coverage is explicitly bounded. A future accepted indexa3c signature with an
+approved publisher and exact claim authenticates index bytes; independently
+verified index→child1b9 and index→carrier4c2→provenance32c edges only propagate
+byte commitments. They do not independently prove builder/source/clean builds.
+A child signature does not authenticate the parent index or sibling provenance.
+The25187B32c object is plain in-toto JSON, not a manifest .sig target. Any
+later .att/DSSE use needs separate reviewed publisher/crypto/subject policy
+and exact decoded payloadSHA32c to claim this original; no reserialization or
+evidence reuse substitution is authorized.
+
+Current private41-file implementation adds two closed source Purpose values
+for canonical indexa3c and child1b9 alongside the existing provenance/referrers.
+The same Flow/Exchange/Lease/Scope binds exact typed spec/Accept/owner/budget;
+all non-provenance modes reject payload/Target before DNS. One common
+metadata_entity helper retains exactCL/noTE/noLocation, complete immutable
+Entity/fullSHA, optionalDCD=responseSHA, strictJSON and actual bearer
+reflection before safe projection. The original referrers entity-mutation
+spy now targets the actual shared parser. Legacy200 only describes a bounded
+OCI/Docker image-manifest candidate, not a verified signature payload.
+Descriptors reject URL/inline data; repeated payload digests retain ordinal
+and multiplicity because separate signatures can share payload bytes.
+Optional subject must equal queried target. Annotation values and unknown
+headers/body never become public evidence; no fallback/.att/.sbom/payload/
+key/descriptor following occurs. Publisher policy stays NOT_ESTABLISHED.
+
+Original legacy-policy-v1 FAILED281 (280ok/1ERROR, unit1.808s): its close
+fixture errored on the token hop before a Lease existed, then the assertion
+raised KeyError. Its41source and44raw originals remain at unchanged paths.
+After independent proposal/final-input review, a new v2 root changes only
+that test to inject registry-close failure after successful token; it asserts
+twoGET/token success/metadata OSError at connection-close/Leaseclosed/overall
+failure/no private error-token-body persistence. Production guards unchanged.
+New legacy-policy-v2 passes281 (original249+32new), unit5.635s,
+RESULT11.206746541s and natural tool13.204344583s/90. Full input postchecks,
+12readonlyGit and offline socket-veto0 pass; the inherited wrong-response
+constructor unraisable warning remains in raw stderr, not concealed.
+
+Independently reviewed fresh legacy-index-v1 actually FAILS. Anonymous tokenGET
+returns200 with TLS1.3/nativepeer/FD verified in2.329944s; registry connection
+then raises TimeoutError at TCP-TLS before HTTP send. request_attempted,
+request_headers_completed and registry_request_made are false; statusNone,
+no assessment, no index.sig response or signature payload. Joint final return
+10.010887958s exceeds shared10 and is failure. Natural tool exit1/reaped at
+20.103918834s/90 has no process timeout/truncation/active signal; FAILURE
+19.845538542s and complete pre/post2190source/1191runtime/aliases/current41/
+helpers/raw/2915direct/12Git remain valid. Scopeclosed/unexpected0 and
+Leaseclosed/timerrestored hold, but the second nativeFD transfer did not
+complete and is not called verified.47raw originals are retained separately
+from successful offline44; child remains unexecuted. Neither200 nor404 nor
+global absence is inferred for either canonical signature endpoint.
+
+Private slice6-scanner-legacy-signature-20261028-v2 keeps full91 mixed-disposition
+raw pins, failed-v1 custody44/source41, plans, original stderr, source discovery
+references and independent reviews. Only four safe progress documents enter
+Git; no Product Go/Contract/driver change or Go/vet/build/scan rerun occurred.
+Original10/88/90/reserve5/bytes,9bindings64barriers/frozenR-C, Go1.26.8/old
+release locks, broker/general only and PostgreSQLgeneral remain unchanged.
+Existing misePython3.13.16/Docker only; timersOFF, no global install, DNS/proxy/
+route change, nonpublic exception, AWS/login, quota increase, unrelatedprocess
+intervention or automatic retry. All owned commands ended/reaped.
+Next independently review an informative bounded TCP/TLS diagnosis using the
+existing evidence, preserving shared10; a new identity/full input review is
+required before another real attempt. Source/publisher/signature/builder/
+platform/supply/runtime authority and formal topology acceptance remain open.

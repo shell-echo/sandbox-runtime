@@ -1,5 +1,19 @@
 # Project Status
 
+The [legacy Cosign metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-legacy-cosign-storage-and-coverage)
+passes281 current component methods (249 retained/32 new), unit5.635s and
+whole13.204345s/90, with full postchecks and independent actual review.
+The separate native index observation FAILED: token200 succeeds, registry
+TCP/TLS times out before HTTP GET; joint10.010888s exceeds shared10, whole
+20.103919s/90. Lease/timer/Scope cleanup and complete postchecks pass, but the
+second native peer/FD is incomplete. No metadata response or child observation
+exists; signature existence remains UNKNOWN and publisher policy
+NOT_ESTABLISHED. Original fixture failure and native failure stay preserved.
+Next independently review an informative bounded TCP/TLS diagnosis before a
+fresh identity; no identical retry or timeout increase. Private
+slice6-scanner-legacy-signature-20261028-v2; mise Python/timersOFF.
+Phase6 **5/15**, Slice6step2; supply/runtime/topology16/acceptance/step4 open.
+
 The [fixed-index referrers checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-referrers-discovery)
 passes249 current component methods and a fresh token200→indexa3c referrers200
 observation: complete89B empty OCI index, joint7.390942s/10, whole9.828563s/90.
