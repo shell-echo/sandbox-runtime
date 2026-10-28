@@ -4,7 +4,60 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [fixed-index TLS diagnosis](#2026-10-28-fixed-index-tls-diagnosis).
+Latest implementation checkpoint: [publisher policy and fixed-child endpoint](#2026-10-28-publisher-policy-and-fixed-child-endpoint).
+
+## 2026-10-28 publisher policy and fixed-child endpoint
+
+Official [ClamAV Docker documentation](https://docs.clamav.net/manual/Installing/Docker.html)
+points to the vendor image family and Docker source repository. A connected
+official Git-ref read fixes clamav-docker main at
+1eba87c1b014d6b5598a1ad54325edb491bd691c. README, Debian image README,
+Dockerfile and [the actual Docker publication Jenkinsfile](https://github.com/Cisco-Talos/clamav-docker/blob/1eba87c1b014d6b5598a1ad54325edb491bd691c/clamav/1.4/debian/Jenkinsfile)
+have decoded-byte Git-blob hashes matching the fixed API tree. The engine
+Jenkinsfile at5853 is a separate decoded source observation, without an
+independently checked engine-tree correspondence. These are official source
+observations, not a cryptographically authenticated image publication record.
+
+The Docker job generates buildx SBOM and max provenance and pushes multiarch
+images. Version, engine repository/branch, base and image parameters are
+overridable; current defaults do not identify the actual fixeda3c run, source,
+recipe or material locks. No independently approved OCI signer key or OIDC
+issuer/identity and fixed-digest publication coverage is established. Text-local
+absence of signing commands is not global signature absence; the initial
+notation substring diagnostic is preserved and corrected separately by a
+bounded lexical diagnostic. No source pipeline, credential, registry login or AWS
+command from those files is executed.
+
+After independent final-controller/full-input/new-identity and outer-launcher
+review, one fresh same-process token200→fixed-child1b9 canonical legacy-signature
+metadata query returns404/MANIFEST_UNKNOWN. Complete169B strict JSON has SHA256
+845f54ca80d49e27023639d25ea3f6ddd0248fbceadb98b9084c5f3bcee77ff8; no DCD or Link.
+Shared request3.410548s/10, worker5.908944s/88, whole5.959028s/90; both native
+TLS/FD phases close, Scope unexpected0, Lease closes and timer restores.
+Complete originalSOURCE2190/RUNTIME1191/script41, historical evidence, explicit
+6248→b925 four-document delta and current clean Git checks pass before/after.
+The old frozen observer's second-phase display label says fixed-index registry;
+its timing applies to this child registry phase. Immutable CHILD purpose,
+exact request and original Scope establish the actual endpoint, not that label.
+
+The earlier281 component methods and104 observer assertions are reused only
+for unchanged bytes and coverage; none is rerun here. The one new56-original
+bundle receives separate independent actual review. No raw bearer/header/entity is persisted. No signature payload or key is
+fetched; no crypto verifier, Docker/build/scan or runtime admission executes. Original shared10/worker88/outer90/reserve5, privacy, public-peer,
+TTL, source-binding, supply and reuse guards remain unchanged. All prior failures
+remain FAILED; official-source discovery does not relabel them.
+
+Disposition is NOT_ADMISSIBLE_WITH_AVAILABLE_PROOF, not a claim that the image
+is unsigned. External signatures stay UNKNOWN and publisher policy
+NOT_ESTABLISHED; source/signature/supply/runtime remain held. This bounded
+discovery stage is complete; stop layout enumeration absent new authoritative
+evidence. Next independently compare an alternative with all original supply
+inputs or obtain authenticated official signer/fixed-publication proof.
+Private reports stay outside Git in slice6-scanner-publisher-discovery-20261028-v1
+and slice6-scanner-child-signature-20261028-v1; only these four progress documents
+are changed. Existing mise Python3.13.16, timersOFF, old candidates and locks
+remain. Phase6 **5/15**, Slice6step2; full topology16, independent acceptance
+and formalstep4 remain incomplete.
 
 ## 2026-10-28 fixed-index TLS diagnosis
 

@@ -1,5 +1,22 @@
 # Project Status
 
+The [publisher policy and fixed-child endpoint checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-publisher-policy-and-fixed-child-endpoint)
+binds the official Docker publishing script to commit1eba87c1 and verifies
+four file/blob correspondences. Its overridable buildx SBOM/provenance settings
+do not authenticate this fixed image's publication or expected signer.
+A fresh token200→child1b9 canonical signature-metadata404 observation completes
+in3.410548s/10, whole5.959028s/90, with complete169B MANIFEST_UNKNOWN JSON and
+full source/runtime/Git postchecks. No payload/key/crypto or admission executes.
+The unchanged281 component methods and104 observer assertions are scoped reuse,
+not rerun results. External signatures remain UNKNOWN, publisher policy
+NOT_ESTABLISHED; this candidate is not admissible with available proof.
+Stop signature-layout enumeration. Next independently compare a supply-complete
+alternative or obtain authenticated official signer/publication evidence before
+further recovery/build work. Old candidate/locks/failures remain preserved.
+Private slice6-scanner-publisher-discovery-20261028-v1 and
+slice6-scanner-child-signature-20261028-v1; mise Python, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/independent acceptance/formalstep4 open.
+
 The [fixed-index TLS diagnosis](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-tls-diagnosis)
 passes104 new offline observer assertions (whole3.492284s/90) and one new
 original token200→fixed index legacy-signature404 observation. The shared flow
