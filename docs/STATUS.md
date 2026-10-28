@@ -1,5 +1,15 @@
 # Project Status
 
+The [Scanner alternative-route review](plan/product-v1-phase-6-scanner-supply-candidates.md)
+keeps all candidates held: Chainguard requires organization access, DHI
+verification requires login, and the two fixed Alpine package pages state
+1.4.4-r0 instead of required1.4.6. These are extracted-page observations,
+not authenticated OCI/package inputs. No registry/crypto/build runs or locks
+change. Next independently assess signed-source and complete engine-image
+mapping inputs; do not start a compiler/SDK or repurpose Desktop locks.
+Private slice6-scanner-alternative-discovery-20261028-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 The [publisher policy and fixed-child endpoint checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-publisher-policy-and-fixed-child-endpoint)
 binds the official Docker publishing script to commit1eba87c1 and verifies
 four file/blob correspondences. Its overridable buildx SBOM/provenance settings

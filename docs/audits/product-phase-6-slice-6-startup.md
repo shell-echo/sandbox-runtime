@@ -4,7 +4,19 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [publisher policy and fixed-child endpoint](#2026-10-28-publisher-policy-and-fixed-child-endpoint).
+Latest implementation checkpoint: [Scanner alternative-route review](#2026-10-28-scanner-alternative-route-review).
+
+## 2026-10-28 Scanner alternative-route review
+
+The [Scanner alternative-route review](../plan/product-v1-phase-6-scanner-supply-candidates.md)
+keeps all candidates held: Chainguard requires organization access, DHI
+verification requires login, and the two fixed Alpine package pages state
+1.4.4-r0 instead of required1.4.6. These are extracted-page observations,
+not authenticated OCI/package inputs. No registry/crypto/build runs or locks
+change. Next independently assess signed-source and complete engine-image
+mapping inputs; do not start a compiler/SDK or repurpose Desktop locks.
+Private slice6-scanner-alternative-discovery-20261028-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
 
 ## 2026-10-28 publisher policy and fixed-child endpoint
 
