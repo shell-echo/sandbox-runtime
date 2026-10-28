@@ -4,7 +4,50 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [fixed-index referrers discovery](#2026-10-28-fixed-index-referrers-discovery).
+Latest implementation checkpoint: [fixed-index TLS diagnosis](#2026-10-28-fixed-index-tls-diagnosis).
+
+## 2026-10-28 fixed-index TLS diagnosis
+
+The separately reviewed new observer passes104 offline rejection/semantics
+assertions, unit0.053527s and whole3.492284s/90, without socket/process attempts.
+The original41 source files, SOURCE2190 and RUNTIME1191 remain unchanged; the
+earlier281 component methods are scoped reuse, not rerun results. Exact fourdoc
+old0c→6248 correspondence is checked separately; original manifests and receipts
+are preserved. Frozen source/header/body/TTL/peer/FD/Scope/Lease and shared10,
+worker88, outer90 and reserve5 limits remain authoritative.
+
+A fresh identity runs the original same-process token200→fixed-index canonical
+legacy-signature query. It completes in2.745516s/10, whole5.313101s/90, returning
+404/MANIFEST_UNKNOWN with complete169B entity, SHA256
+0c7f4805d0ca5d84041cc74915341614cef7645912460326d8a6884fec81938c.
+There is no DCD or Link; no child, alternate repository/tag, descriptor payload
+or signature/claim verification is followed. Both native TLS/FD phases close,
+Scope reports unexpected0, Lease closes and the original timer restores;
+complete input and current local Git postchecks pass.
+
+The source-bound current-thread profiler observes20 finite events without
+transport replacement. Registry TCP C-call callback interval is0.000550375s
+and handshake C-call interval0.903893542s. These are callback observations,
+not wire events or RTT; overhead stays inside the original10s budget.
+Python return(None) is not used as success, and a missing C terminal event
+remains an incomplete UNKNOWN prefix. Hook restoration and privacy are tested.
+[Python profile API semantics](https://docs.python.org/3.13/library/sys.html#sys.setprofile)
+are reference documentation; exact runtime3.13.16 bytes and actual builtin
+events were checked locally. The old registry TLS-init event supports entry
+into TLS construction after its source TCP checks, not completed handshake.
+This new success does not establish the old timeout cause or a durable repair.
+
+The404 is only a canonical endpoint/time observation, not proof that the image
+has no signatures. External signatures remain UNKNOWN; publisher policy
+NOT_ESTABLISHED and source/signature/subject/supply/runtime admission stay held.
+All earlier fixture/native failures remain FAILED; unexecuted observerv1 stays
+HELD. Two new56-original bundles and independent actual reviews remain private
+in slice6-scanner-tls-diagnostic-20261028; no raw token/header/entity or frame
+argument is published. No Go/Contract/driver change, full Go/vet/Docker/build/scan
+rerun, global installation, quota/deadline/cache/index/reuse change or automation
+restore occurs. Next independently review selected-child metadata and official
+publisher policy plus exact index/child/provenance coverage. Phase6 stays
+**5/15**, Slice6step2; topology16/independent acceptance/formalstep4 remain open.
 
 ## 2026-10-28 fixed-index referrers discovery
 

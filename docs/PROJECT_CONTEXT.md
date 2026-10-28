@@ -46,6 +46,21 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [fixed-index TLS diagnosis](audits/product-phase-6-slice-6-startup.md#2026-10-28-fixed-index-tls-diagnosis)
+passes104 new offline observer assertions (whole3.492284s/90) and one new
+original token200→fixed index legacy-signature404 observation. The shared flow
+returns in2.745516s/10 (whole5.313101s/90), with complete native TLS/FD/Scope,
+Lease/timer restoration and full input postchecks. The complete169B response is
+MANIFEST_UNKNOWN at this canonical endpoint/time; no child, payload or crypto
+verification ran. Publisher policy stays NOT_ESTABLISHED and external signatures
+UNKNOWN. Callback intervals separate registry TCP0.000550s and C handshake
+0.903894s; these are not wire/RTT times. Old timeout cause remains UNKNOWN and
+all old failures stay FAILED. The unchanged281 component methods are scoped
+reuse only. Next independently review selected-child discovery and official
+publisher policy/coverage. Private slice6-scanner-tls-diagnostic-20261028;
+mise Python, timersOFF. Phase6 **5/15**, Slice6step2; full topology16,
+independent acceptance and formalstep4 remain open.
+
 The [legacy Cosign metadata checkpoint](audits/product-phase-6-slice-6-startup.md#2026-10-28-legacy-cosign-storage-and-coverage)
 passes281 current component methods (249 retained/32 new), unit5.635s and
 whole13.204345s/90, with full postchecks and independent actual review.
