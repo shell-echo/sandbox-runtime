@@ -1,14 +1,20 @@
 # Project Status
 
-The [Debian route checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-route-and-response-mime-refusal-2026-10-29)
-passes 40 offline observer methods. Its one fixed Release GET is **FAILED**:
-HTTP200 declares CL34770 but omits Content-Type; this private observer's frozen MIME predicate
-refuses before body ingestion. Complete header666B/body0B, natural exit1/reaped,
-whole3.147806s/90 and full postchecks are retained. Bookworm-security1.4.6 is
-an unverified lead; no package, signature, base or Scanner admission. Next
-independently review this private MIME predicate against transport/supply
-authority; no adaptation or retry here. Private slice6-debian-release-metadata-20261029-v1;
-mise, timersOFF. Phase6 **5/15**, Slice6step2; formal steps3/4 remain open.
+The [Debian untrusted-body checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-untrusted-body-recovery-and-component-declarations-2026-10-29)
+passes 54 offline methods after independent review. One new fixed GET preserves
+complete666B headers/34770B body/0B extra, but its original terminal remains
+**FAILED** at the private component predicate; whole2.422736s/90, natural exit1,
+reaped, full postchecks. The final offline parser reads the saved original under
+a new identity: exact main or updates/main token count one, unchanged two main/...
+targets, raw fields preserved, no authenticated path mapping. Tests whole2.557165s/90,
+platform exit0, source2190/runtime1191/five-doc pre/post complete. Missing Content-Type
+is recorded as absent only for this fixed untrusted InRelease purpose; explicit
+unsupported MIME and other framing/source/closure refusals remain.
+Publisher/signature/freshness/supply remain false. Next independently establish
+Debian archive key authority and an admitted verifier, then authenticate original
+Release/index/package inputs before considering any base/Scanner selection.
+Private slice6-debian-release-mime-policy-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16, acceptance and formalstep4 remain open.
 
 The [Talos phase-observer checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)
 passes 28 offline methods and one fresh TLS-only observation. Parent-verified

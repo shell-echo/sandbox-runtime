@@ -1,7 +1,10 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: Debian route remains an unverified lead; the fixed
-Release GET fails on missing Content-Type before body ingestion. Talos key refused.
+Updated: 2026-10-29. Status: Debian route remains an unverified lead. The earlier
+release-original-v1 GET failed on missing Content-Type before body ingestion;
+release-original-v2 recovered the raw body but failed its component predicate.
+Later offline declaration parsing passes; signature and supply remain unverified.
+Talos key refused.
 Independent authority/revocation and trusted-verifier supply remain held.
 No package, engine image or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
@@ -14,6 +17,76 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Debian untrusted-body recovery and component declarations (2026-10-29)
+
+This is a private untrusted metadata observation and parser correction. It does
+not admit Debian as the Scanner base or make the Bookworm-security1.4.6 lead a
+verified package. Existing engine/source/whole-image vulnerability/runtime gates
+and the fixed two issuer policy remain unchanged.
+
+Independent requirement review finds the mandatory Content-Type predicate local
+to this observer. The repository's Coding passive-json/output and Vault KV-v2
+requirements apply to their named surfaces. [HTTP semantics section8.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.3)
+allows a recipient to process a response without that declaration.
+[APT archive security](https://manpages.debian.org/bookworm/apt/apt-secure.8.en.html)
+uses the trusted archive key and signed Release/index hash chain; MIME absence
+cannot establish that authority. The correction records MIME=null/present=false
+only for the exact security.debian.org Bookworm-security InRelease purpose.
+Present empty, duplicate or unsupported MIME, redirects, TE, ranges, cookies,
+encoding, noncanonical/oversized CL, short/extra body, unknown source and closure
+failures retain rejection. No fallback, guessed MIME or content sniffing is added.
+
+Fresh mime-tests-v2 passes48 methods, including the preserved40 and a complete
+missing-Type fixture/parent path: unit1.309s, whole2.578556s/90, natural exit0.
+One independently reviewed release-original-v2 GET then records HTTP200,
+header666B/body34770B/extra0B, body SHA256
+f41a694e321a2140205bb22f53f2b1313a62da40b05422c33baa90914a9d6432.
+Its native terminal is **FAILED** at arm64/main declaration, with natural exit1,
+owned worker reaped/connection closed, worker0.990525s, capture1.059532s/10 and
+whole2.422736s/90. Full input postchecks complete. This is not a passing native
+metadata gate and is never relabeled by later offline parsing. The previous
+release-original-v1 failure with body0 remains untouched.
+
+The recovered body literally declares Components as updates/main, updates/contrib,
+updates/non-free-firmware and updates/non-free. It also separately lists the two
+original exact SHA256 targets main/binary-arm64/Packages.xz and
+main/source/Sources.xz, with declared sizes356212 and280092B.
+The [Debian repository format description](https://wiki.debian.org/DebianRepository/Format)
+documents prefixed components; its nested-directory example does not certify
+this URL, body, key or a mapping between updates/main and main/.
+A separately reviewed offline-only correction requires arm64 and exactly one
+occurrence across the literal main and updates/main component tokens. It preserves
+the original field and both independently required positive-size main/... targets,
+without normalization or interpretation of other component tokens. Repeated or
+simultaneous accepted tokens, lookalike paths, absent arm64 and missing/renamed/zero
+targets fail the relevant predicates. It is not a complete component-name validator.
+
+Unexecuted components-offline-v3 is retired after both reviewers identify a
+fixture expectation error: updates/ main splits into a literal main token. The
+negative fixture becomes updates/ ma in, which has no accepted token; the parser
+and original48 assertions are unchanged. Fresh components-offline-v4 passes54
+methods, unit1.367s, whole2.557165s/90, natural platform exit0, 222 exact inputs
+and source2190/runtime1191/current-five-document pre/post complete. Actual saved
+headers/body/extra are checked against full identity/hash pins before offline
+declaration parsing; a separate assertion retains the old FAILED terminal.
+
+The parent request10, soft8, worker88/outer90, per stream64KiB and original
+resource boundaries remain. Shortened fixtures test timeout/signal refusal;
+no live maximum-boundary experiment or cryptographic signature calculation is
+claimed. All publisher/signature/freshness/supply flags remain false. This turn
+does not run GPG/import, download package/index payloads, select a base, scan/build
+or change production code. It does not rerun unaffected Go/Contract/Docker suites.
+Independent final acceptance checks the implementation, assertions and actual
+outcomes; private raw materials and failed identities stay outside Git at
+slice6-debian-release-mime-policy-20261029-v1. Timers remain OFF; existing mise only.
+
+Next: independently establish the Debian archive key's current authority,
+rotation/revocation and a supply-admitted verifier execution path; authenticate
+the saved Release and exact index/package/dependency inputs before any supply
+decision. If those inputs are unavailable, record the gap rather than inherit
+Talos or old candidate acceptance. Phase6 remains **5/15**, Slice6step2; steps3/4
+and the original full-topology16 gate remain open.
 
 ## Debian route and response MIME refusal (2026-10-29)
 

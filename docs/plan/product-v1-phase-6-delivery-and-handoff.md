@@ -26,6 +26,24 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Debian untrusted-body recovery and component declarations (2026-10-29)
+
+The [Debian untrusted-body checkpoint](product-v1-phase-6-scanner-supply-candidates.md#debian-untrusted-body-recovery-and-component-declarations-2026-10-29)
+passes 54 offline methods after independent review. One new fixed GET preserves
+complete666B headers/34770B body/0B extra, but its original terminal remains
+**FAILED** at the private component predicate; whole2.422736s/90, natural exit1,
+reaped, full postchecks. The final offline parser reads the saved original under
+a new identity: exact main or updates/main token count one, unchanged two main/...
+targets, raw fields preserved, no authenticated path mapping. Tests whole2.557165s/90,
+platform exit0, source2190/runtime1191/five-doc pre/post complete. Missing Content-Type
+is recorded as absent only for this fixed untrusted InRelease purpose; explicit
+unsupported MIME and other framing/source/closure refusals remain.
+Publisher/signature/freshness/supply remain false. Next independently establish
+Debian archive key authority and an admitted verifier, then authenticate original
+Release/index/package inputs before considering any base/Scanner selection.
+Private slice6-debian-release-mime-policy-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16, acceptance and formalstep4 remain open.
+
 ## Debian route and response MIME refusal (2026-10-29)
 
 The [Debian route checkpoint](product-v1-phase-6-scanner-supply-candidates.md#debian-route-and-response-mime-refusal-2026-10-29)
