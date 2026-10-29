@@ -46,6 +46,19 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Talos key data checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md)
+parses the fixed3858B original and refuses cryptographic continuation: required
+UID certification and subkey binding both declare actual signature hashID2/SHA1.
+38 offline component methods pass; actual parsing0.005061s/10, whole4.013133s/90,
+natural exit1/REFUSED with complete source2190/runtime1191/five-doc pre/post checks.
+Fingerprints are computed byte identities; selfsig, expiry, current revocation
+and publisher authority remain unverified. No GPG/import/release signature runs.
+The old GPG candidates lack supply/execution admission and fresh scan closure.
+Next independently establish a policy-compatible current certificate and its
+full-fingerprint/rotation/revocation authority before trusted-verifier execution.
+Private slice6-talos-key-policy-20261029-v1; old evidence retained, mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 The [Talos key original checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md)
 recovers one3858B public-key file from fixed official documentation commit88e34cf7.
 The native body exactly matches Git blob55837de3 and SHA2565bfca75f, with

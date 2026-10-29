@@ -1,7 +1,8 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: fixed Talos public-key original recovered;
-publisher authority and release signatures unverified. No package, engine image
+Updated: 2026-10-29. Status: fixed Talos key data parsed; required SHA1 signatures
+refuse cryptographic continuation. Publisher authority and release signatures
+unverified. No package, engine image
 or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
 
@@ -13,6 +14,80 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Talos key data refusal and verifier-source boundary (2026-10-29)
+
+A new reviewed offline data parser reads the exact original3858B/SHA2565bfca75f
+and Git blob55837de36413784018702116365d2f061294e7db, preserving its footer space.
+Armor/CRC24 and six packet bodies parse completely. This is data correspondence,
+not a trusted OpenPGP verifier, publisher identity or release-signature result.
+
+| Item | Actual data-only observation |
+| --- | --- |
+| Primary v4 fingerprint | 5BADCA2665EF59DCF8A23D8B707F0DB480836771 |
+| Subkey v4 fingerprint | 69853AB2972F0C9970A842FBF567B6B2D1F17126 |
+| Public keys | Two RSA4096, exponent65537 |
+| Packet order | 6,13,2,2,14,2 |
+| UID certification | Packet2/type0x13/hashID2/SHA1; claimed primary issuer |
+| Subkey binding | Packet5/type0x18/hashID2/SHA1; claimed primary issuer |
+| Additional certification | Packet3/type0x10/hashID2/SHA1; unverified third-party issuer |
+| Declared creation | 2025-03-13T14:51:54Z, unauthenticated |
+| Declared key expiry | 63072000seconds; calculated2027-03-13T14:51:54Z, unauthenticated |
+| Revocation packets | None in this fixed file; current revocation UNKNOWN |
+
+[RFC9580](https://www.rfc-editor.org/rfc/rfc9580.html) distinguishes the v4
+fingerprint's specified SHA1 construction from signature-hash acceptance. The
+required claimed self-certification and binding actually use SHA1; this is not
+inferred from the fingerprint algorithm. Under the reviewed strict policy, the
+real run returns **REFUSED/REJECTED_WEAK_REQUIRED_SIGNATURE**, natural exit1.
+No old-date, allow-weak or verification-time exception is adopted. Stop B:
+no self-signature math, import, GPG, release-signature or package execution.
+This refuses available evidence for admission; it does not assert the signatures
+are mathematically bad, the key expired or the publisher compromised.
+
+38 synthetic offline methods pass, including the independent
+[RFC4880 section6.6 CRC24 vector](https://www.rfc-editor.org/rfc/rfc4880.html),
+weak algorithms1/2/3, issuer/time conflicts, malformed lengths/MPI/CRC, missing
+bindings and revocation observations. A legal unimplemented0x19 signature is
+UNSUPPORTED rather than reported malformed; that test was added before any
+test execution. The original37-method plan was retired unexecuted, with its
+source snapshots preserved. Tests whole1.349083s/90. Actual parse/publication
+0.005061s/10, wrapper4.013133s/90; no signal, timeout or truncation.
+All original2190 source and1191 runtime files, current five documents and full
+new inputs are reread before/after. This is not an APK/build/scan or whole-repo
+test. Raw results, complete input identities and independent reviews remain
+private under slice6-talos-key-policy-20261029-v1; previous failures stayFAILED.
+
+No existing GPG candidate is execution-admitted: Wolfi2.4.9-r12 has carrier HIGH
+and incomplete supply closure; Alpine2.5.22 lacks complete install/ELF/helper/
+UID/runtime closure. Historical37/19 scans use a database past recorded
+NextUpdate and do not supply current evidence. OpenPGP.js's refused chain is
+not a fallback. The [GnuPG integrity guidance](https://gnupg.org/download/integrity_check.html)
+requires an already trusted verifier rather than letting a new tool bootstrap
+itself. Prefer completing one distribution-signed route only after separately
+reviewing exact roots/index/APK/source/signature/dependency/installation locks,
+complete fresh vulnerability coverage and original isolation/authority gates.
+No global installation, compiler family, quota or timeout change is approved.
+
+The [vendor verification FAQ](https://docs.clamav.net/faq/faq-upgrade.html)
+describes key rotation but its old2018 key-ID example does not establish a
+current full fingerprint. Existing vendor key links are declarations from the
+same publisher; current independent fingerprint/rotation/revocation authority
+remains missing. Search did not establish that authority, not proof it does not
+exist. Next independently review current official certificate/recertification
+discovery using permitted signature algorithms and a separate current authority
+source before material recovery or verifier execution. Do not treat merely
+downloading another copy or computing expiry as authentication. Any later GPG
+plan must use explicit isolated keyrings/no ambient trust/network and complete
+machine-status/error checks; --check-sigs alone omits signing-key revocation
+status according to the [GnuPG manual](https://www.gnupg.org/documentation/manuals/gnupg/Operational-GPG-Commands.html).
+
+Original locks, reuse rules, resource/deadline gates and evidence remain fixed.
+Phase6 **5/15**, Slice6step2; full topology/original16/independent acceptance/
+formalstep4 remain open. TimersOFF. Only five progress documents change; no Go,
+Contract, driver or supply policy implementation changes, and unaffected tests
+are not rerun. Future producers must explicitly bind these current document
+deltas without regenerating SOURCE2190.
 
 ## Fixed Talos public-key original (2026-10-29)
 

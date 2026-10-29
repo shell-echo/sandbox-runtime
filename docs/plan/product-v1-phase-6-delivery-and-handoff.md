@@ -26,6 +26,21 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Talos key data refusal (2026-10-29)
+
+The [Talos key data checkpoint](product-v1-phase-6-scanner-supply-candidates.md)
+parses the fixed3858B original and refuses cryptographic continuation: required
+UID certification and subkey binding both declare actual signature hashID2/SHA1.
+38 offline component methods pass; actual parsing0.005061s/10, whole4.013133s/90,
+natural exit1/REFUSED with complete source2190/runtime1191/five-doc pre/post checks.
+Fingerprints are computed byte identities; selfsig, expiry, current revocation
+and publisher authority remain unverified. No GPG/import/release signature runs.
+The old GPG candidates lack supply/execution admission and fresh scan closure.
+Next independently establish a policy-compatible current certificate and its
+full-fingerprint/rotation/revocation authority before trusted-verifier execution.
+Private slice6-talos-key-policy-20261029-v1; old evidence retained, mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 ## Fixed Talos key original (2026-10-29)
 
 The [Talos key original checkpoint](product-v1-phase-6-scanner-supply-candidates.md)
