@@ -26,6 +26,17 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Original-budget Talos phase observation (2026-10-29)
+
+The [Talos phase-observer checkpoint](product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)
+passes 28 offline methods and one fresh TLS-only observation. Parent-verified
+completion is 2.643320s/10; whole4.367839s/90, complete source/runtime/document
+postchecks, natural exit and owned connection closed. DNS/TCP/TLS call intervals
+are0.633409/0.000779/1.983391s, not wire RTTs. Old HTTP failure remains unexplained.
+No GET/key/GPG/signature/supply admission; old key REFUSED, authority
+NOT_ESTABLISHED, revocation UNKNOWN. Private slice6-talos-stage-observation-20261029-v1;
+old failures preserved, mise, timersOFF. Phase6 **5/15**, Slice6step2; formal gates open.
+
 ## Current Talos authority investigation (2026-10-29)
 
 The [current Talos authority check](product-v1-phase-6-scanner-supply-candidates.md)

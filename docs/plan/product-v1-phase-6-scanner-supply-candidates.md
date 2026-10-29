@@ -1,7 +1,7 @@
 # Scanner supply candidates and source-route decision
 
 Updated: 2026-10-29. Status: current official declarations still point to the
-refused Talos key; native download attempt times out with incomplete HTTP evidence.
+refused Talos key; fresh TLS-only phase observation passes, old HTTP failure unexplained.
 Independent authority/revocation and trusted-verifier supply remain held.
 No package, engine image or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
@@ -14,6 +14,41 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Original-budget Talos phase observation (2026-10-29)
+
+The [startup audit](../audits/product-phase-6-slice-6-startup.md#2026-10-29-original-budget-talos-phase-observation)
+records the reviewed two-process DNS/TCP/TLS observer and complete failure closure.
+The original10-second parent deadline and one8-second worker soft timer remain;
+no GET or key/verifier/scan/build runs. Source-bound CA/context, all public DNS
+answers, single socket/FD/peer/SNI/verified chain and closed owned descriptors are
+mandatory. Missing, changed or same-byte replaced DNS/TLS receipts fail.
+
+Fresh offline stage-policy-v5b passes28 methods, unit7.564s and whole8.979755s/90.
+It keeps all original25 test methods and their assertions and adds negative-first-timestamp plus
+signal/reap failure tests. Failed startupv3, actual25-method v4
+(1 failure/4 errors, whole10.022942s) and unexecuted retiredv5 remain preserved.
+The actual fixes reject initial relative_ns=-1 and record killpg errors without
+masking the primary failure or skipping the original bounded reap. EPERM's OS
+cause is unknown; it is never interpreted as proof the child has stopped.
+482 test artifacts and full original input checks are retained.
+
+Fresh tls-observe-v1 passes in4.367839s/90, parent terminal validation2.643320s/10,
+worker terminal2.635746s/8. DNS/TCP/TLS function calls measure
+0.633409/0.000779/1.983391s, not wire RTTs.14 events, two accepted public DNS
+answers and complete TLS peer/chain receipts close naturally; child reaped,
+no signals/truncation. Source2190/runtime1191/five-document/527-input full
+pre/post checks pass;58 native artifacts are retained in the private directory
+slice6-talos-stage-observation-20261029-v1.
+
+This closes the bounded phase-observer item only. It neither attributes the old
+HTTP timeout nor authenticates a response body, current release key or signature.
+Old key **REFUSED**, independent authority **NOT_ESTABLISHED**, current revocation
+**UNKNOWN**, trusted-verifier supply/Scanner admission held. Next prioritize an
+independently authenticated compatible certificate/authority or a separately
+reviewed supply-complete alternative. Do not rerun the old GET or execute GPG
+merely because TLS succeeds. Phase6 **5/15**, Slice6step2; topology16/acceptance/
+formalstep4 remain open. Existing mise, timersOFF; old evidence/locks preserved.
 
 ## Current Talos authority investigation and native endpoint failure (2026-10-29)
 

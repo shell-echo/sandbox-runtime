@@ -4,7 +4,70 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [current Talos authority investigation](#2026-10-29-current-talos-authority-investigation).
+Latest implementation checkpoint: [original-budget Talos phase observation](#2026-10-29-original-budget-talos-phase-observation).
+
+## 2026-10-29 original-budget Talos phase observation
+
+The new source-bound diagnostic separates DNS, TCP and TLS within the original
+10-second request maximum. One parent supervisor owns the sole worker, bounded
+streams, READY/ACK/DONE pipes and a hard deadline independent of worker Python
+signal delivery. CA/context is bound before READY; no network precedes ACK.
+The worker has one8-second soft timer; source/runtime/document checks and bounded
+reap remain within88/90. Failure cleanup may cancel only the soft timer to preserve
+its first error; it cannot extend the parent10 or produce a pass.
+
+Preserve startup stage-policy-v3 as FAILED before tests/network: root preloading
+violated the fresh-module guard. The guard remains; a same-PID stdlib-only launcher
+fixes entry without adding an executor. Actual stage-policy-v4 runs25 methods and
+FAILS with1 failure/4 errors, whole10.022942s/90, complete postchecks. First-frame
+relative_ns=-1 escaped the initial last=-1 comparison; killpg EPERM propagated
+from finally and prevented some parent failure receipts. The OS reason for EPERM
+is unknown. These failures and all original bytes remain immutable. Candidatev5
+was retired before execution after detecting a string/int fixture-name collision.
+
+A separate final implementation rejects every negative initial timestamp and
+records one owned-group signal attempt/OSError plus the original2-second reap,
+without replacing the primary error, polling/reaping before the group signal or
+falling back to a PID signal. Signal/reap errors remain FAILED; an unreaped worker
+blocks further native action. Fresh stage-policy-v5b passes28 methods
+(unit7.564s; whole8.979755s/90). All original25 test methods and their assertions remain; added cases
+cover initial timestamp bounds, EPERM/ESRCH receipt preservation and unreaped-child
+reporting. Missing, changed and same-byte replaced DNS/TLS receipts are refused
+for their actual missing/pin failures. Full482-file test evidence is retained.
+
+Fresh tls-observe-v1 completes a TLS-only observation in4.367839s/90; parent
+ACK-to-validated-DONE2.643320s/10 and worker terminal2.635746s/8. Actual DNS call
+interval0.633409s returns two accepted public answers; TCP call0.000779s and TLS
+call1.983391s return on the same owned socket/FD. These are local function-call
+intervals, not packet/RTT measurements. Source-bound CA/context, verified TLS
+chain, hostname/SNI, selected peer and both owned descriptor closures pass.
+14 continuous durable events and complete DNS/TLS receipts bind run nonce,
+plan, actual child PID, sequence and previous hash; continuity is not a signature.
+Exit0 is natural, child reaped, no signal/truncation; all58 native artifacts retained.
+Before/after2190 original source files,1191 runtime files, current5documents and
+527 complete input pins pass without replacing original manifests or using caches.
+
+An uninvolved reviewer first derives normal, boundary and failure scenarios
+from the original task, then checks implementation, assertions and raw outcomes.
+This diagnostic-stage review passes; it is not Slice acceptance or an independent
+operator signature. Full10-second/64KiB live-boundary observations were not run;
+code limits and shorter/lower-cap fault fixtures cover those refusal mechanisms.
+
+The implemented scope sends no HTTP GET and downloads no key. It proves this
+new TLS observation, not the old request's timeout cause, HTTP status/framing/body,
+current Talos authorization/revocation, OpenPGP math or package/source signatures.
+Old key **REFUSED**, authority **NOT_ESTABLISHED**, revocation **UNKNOWN**;
+trusted-verifier supply and Scanner admission remain held. Do not repeat the
+old endpoint request to turn this diagnostic into supply evidence. Next obtain
+an independently authenticated policy-compatible certificate/authority or
+independently review a supply-complete alternative before verifier execution.
+
+Private evidence: slice6-talos-stage-observation-20261029-v1. Only five progress
+documents enter Git; diagnostic source and raw evidence stay private. No Go,
+Contract, driver, old lock, issuer, quota, timeout or evidence-reuse change;
+unaffected full tests are reused, not rerun. Existing mise only, timersOFF.
+Phase6 **5/15**; bounded Guest E is not replayed; Slice6step2 remains ongoing,
+full topology/original16/independent acceptance and formalstep4 remain incomplete.
 
 ## 2026-10-29 current Talos authority investigation
 

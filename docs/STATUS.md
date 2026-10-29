@@ -1,5 +1,14 @@
 # Project Status
 
+The [Talos phase-observer checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)
+passes 28 offline methods and one fresh TLS-only observation. Parent-verified
+completion is 2.643320s/10; whole4.367839s/90, complete source/runtime/document
+postchecks, natural exit and owned connection closed. DNS/TCP/TLS call intervals
+are0.633409/0.000779/1.983391s, not wire RTTs. Old HTTP failure remains unexplained.
+No GET/key/GPG/signature/supply admission; old key REFUSED, authority
+NOT_ESTABLISHED, revocation UNKNOWN. Private slice6-talos-stage-observation-20261029-v1;
+old failures preserved, mise, timersOFF. Phase6 **5/15**, Slice6step2; formal gates open.
+
 The [current Talos authority check](plan/product-v1-phase-6-scanner-supply-candidates.md)
 still maps the official documentation and extracted download-page key to the old
 certificate. The same 15 offline observer tests pass under a fresh run identity;
