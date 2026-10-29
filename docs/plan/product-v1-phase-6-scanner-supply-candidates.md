@@ -1,7 +1,7 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: current official declarations still point to the
-refused Talos key; fresh TLS-only phase observation passes, old HTTP failure unexplained.
+Updated: 2026-10-29. Status: Debian route remains an unverified lead; the fixed
+Release GET fails on missing Content-Type before body ingestion. Talos key refused.
 Independent authority/revocation and trusted-verifier supply remain held.
 No package, engine image or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
@@ -14,6 +14,50 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Debian route and response MIME refusal (2026-10-29)
+
+The [startup audit](../audits/product-phase-6-slice-6-startup.md#2026-10-29-debian-route-and-response-mime-refusal)
+records a new distribution-authenticated-route investigation. The fixed
+[Trixie daemon page](https://packages.debian.org/trixie/clamav-daemon) and
+[security tracker](https://security-tracker.debian.org/tracker/source-package/clamav)
+declare1.4.3+dfsg-1 for Trixie, so its1.4.6 predicate stops. The tracker and arm64
+search expose Bookworm-security1.4.6+dfsg-0+deb12u1 as a lead, while specific daemon
+pages remain older and two fixed entries are web-tool inaccessible. These are
+unverified and partly conflicting page observations, not package authentication
+or proof of global absence. Conditional later pages are not fetched after failure.
+
+Official [apt-secure](https://manpages.debian.org/bookworm/apt/apt-secure.8.en.html)
+describes archive Release signatures and index/package hashes, not per-package
+signature verification. [apt-ftparchive](https://manpages.debian.org/bookworm/apt-utils/apt-ftparchive.1.en.html)
+documents Release fields and index generation. These specifications inform the
+new data-only observer; no APT/GPG tool executes. The wiki format page's403 is
+retained. Debian key authority, rotation/revocation, complete actual signed
+indices/packages/dependencies and a Debian base/ABI decision remain open.
+
+The reviewed observer keeps all original Talos predicates; a new purpose makes
+one fixed official InRelease GET, under whole-child10/worker-soft8/outer90,
+2Python executors and64KiB streams. Forty offline methods pass (unit1.497s,
+whole4.029698s/90;119 artifacts), including causally bound failure fixtures and
+outer/owned-process barriers. Old prepared v1/v2/v3 plans remain unexecuted.
+
+Fresh release-original-v1 **FAILS** at headers: HTTP200/declaredCL34770, but no
+Content-Type, so this private observer's frozen MIME policy rejects before body. Complete666B
+header/body0B are retained; no Release body/field/signature is obtained.
+Child0.895025s/10, whole3.147806s/90, natural exit1/reaped, no timer expiry,
+active signal or truncation; complete source2190/runtime1191/five-doc/158-input
+pre/post checks and45 native artifacts. An uninvolved requirement-first
+review confirms component PASS/native FAILED; full10s/64KiB live-boundary tests
+are absent. Do not adapt the predicate or repeat the native identity here.
+
+Next independently distinguish this private response-format predicate from the
+actual HTTP and supply requirements before deciding a change or alternate source.
+No new source-proof issuer, key, package, base, engine OCI or Scanner is admitted.
+A package-set hash cannot replace EngineImageDigest; fresh complete scans,
+official loaded rules/operator freshness and real isolation/cleanup remain required.
+Old key REFUSED/authority NOT_ESTABLISHED/revocation UNKNOWN and all existing
+holds remain unchanged. Private slice6-debian-release-metadata-20261029-v1;
+mise, timersOFF, Phase6 **5/15**, Slice6step2; formal topology16/steps3-4 open.
 
 ## Original-budget Talos phase observation (2026-10-29)
 

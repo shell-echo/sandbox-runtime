@@ -4,7 +4,86 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [original-budget Talos phase observation](#2026-10-29-original-budget-talos-phase-observation).
+Latest implementation checkpoint: [Debian route and response MIME refusal](#2026-10-29-debian-route-and-response-mime-refusal).
+
+## 2026-10-29 Debian route and response MIME refusal
+
+A separately reviewed distribution-signature feasibility investigation preserves
+the existing Scanner1.4.6 LTS, complete authenticated inputs, independent engine
+OCI identity, whole-image vulnerability and actual-rule/runtime gates. It does
+not select a new Debian base or source-proof authority. Trixie's fixed package
+page and tracker declare1.4.3+dfsg-1: stop that candidate's version branch.
+The same tracker/search exposes a Bookworm-security1.4.6+dfsg-0+deb12u1 arm64 lead,
+but specific cached daemon pages show1.4.3 and the fixed arm64 entry is inaccessible
+to the web tool. A separately reviewed official security-pool directory is also
+tool-inaccessible. Neither tool error proves an HTTP404 or global absence.
+Conditional root/LTS/package pages are not executed after those predicates fail;
+no package, key or original index payload is recovered by those web observations.
+
+The next reviewed purpose is fixed
+https://security.debian.org/debian-security/dists/bookworm-security/InRelease,
+as untrusted metadata only. It preserves all old Talos exactCL/hash predicates.
+Its new closed policy requires200/no redirect/noTE/no range, bounded canonicalCL,
+exactbody+EOF and fixed mandatory MIME; headers16KiB/body64KiB, per stream64KiB.
+Parent measures a10-second whole child window from before Popen, including
+startup, persistence and parent validation; worker has one8-second soft timer.
+Source/runtime/current-document checks stay within the original88/90 maxima.
+Popen/OS scheduling is not claimed to guarantee an absolute asynchronous stop.
+Late results or any signal, truncation, capture/close error or unconfirmed reap fail;
+the original2-second failure cleanup is measured rather than counted as a pass.
+An immutable outer-expired latch and dedicated stop exceptions prevent unittest
+from continuing fixtures after a real outer deadline or unknown owned PID.
+
+Plansv1/v2/v3 are retained unexecuted. Fresh metadata-tests-v4 passes40 methods:
+unit1.497s, whole4.029698s/90, natural platform exit0, complete input postchecks.
+Fixtures persist nonce/plan/PID/label readiness; exact stderr proves their error
+path, not a launcher failure. Tests cover HTTP/body/Release refusal, safe checksum
+paths, auxiliary empty indices with nonempty required targets, source-vs-arm64,
+untrusted dates, false authority claims, same-byte replacement, primary/cleanup
+errors, deadline propagation during persistence/cleanup and no second signal.
+119 test artifacts are retained. Synthetic signature armor is opaque test data,
+not a cryptographically valid reference signature. Existing primitive results are
+scoped reuse, not a fresh full repository/Contract/integration run.
+
+The sole release-original-v1 native attempt **FAILS**. It records a complete666B
+HTTP/1.1 200 response header, SHA256
+296d35d26c1b592eca6ad5b69397dd4df3f711e04490e007d85d3543574c25a4.
+Content-Length is34770, but Content-Type is absent; X-Content-Type-Options is a
+different header. The worker's first error is
+ValueError(single critical header content-type), phase=headers. body.raw and
+extra.raw are both0B:34770 is only the declared length, not recovered content.
+No Release fields, signature, timestamp or index hashes were parsed or verified.
+
+Child capture0.895025s/10, worker terminal0.794543s/8, whole3.147806s/90;
+natural exit1/reaped, no active signal, late result or truncation, cleanup/capture
+errors empty. The worker cancels soft timing only after failure for closure;
+soft did not expire. Four public DNS answers, source-bound TLS1.3/chain and single
+FD/peer/SNI/closed scope are connection evidence, not metadata or supply acceptance.
+All original2190 source files,1191 runtime files, current5documents and158 complete
+execution inputs pass pre/post checks;45 native artifacts remain private.
+
+An uninvolved reviewer first derives normal/boundary/failure scenarios from the
+task, repository authority and official APT documentation, then checks code,
+assertions and actual raw outcomes. It confirms40 offline component methods PASS
+and native FAILED: the original complete-metadata target is not met. Full10s/64KiB
+live boundary tests were not run. No data/format/SHA/time declaration substitutes
+for independently trusted Release keys, signature verification, signed index to
+full package/source/dependency bytes, base/ELF mapping or independent engine OCI.
+
+Keep this new failure and old failures immutable; no same-identity rerun or MIME
+adaptation occurs here. Next independently trace whether this private mandatory
+Content-Type predicate is required by the relevant transport and supply contract,
+or evaluate another fixed official source. That decision must precede any change,
+new frozen refusal tests and fresh-run input review. Do not describe the server
+as noncompliant, the package nonexistent or the signature invalid from these facts.
+All authority/freshness/OCI/supply and public startup holds remain closed.
+
+Private roots: slice6-scanner-debian-discovery-20261029-v1 and
+slice6-debian-release-metadata-20261029-v1. Only five progress documents enter Git;
+no Go/Contract/driver/base/lock/issuer/reuse/permission/configuration change,
+compiler/install/scan/build/key or package execution. Existing mise only, timersOFF.
+Phase6 **5/15**; Slice6step1's bounded Guest E unchanged, step2ongoing;
+full topology/original16/independent formal acceptance and step4 remain incomplete.
 
 ## 2026-10-29 original-budget Talos phase observation
 

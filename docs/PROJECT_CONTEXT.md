@@ -46,6 +46,16 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Debian route checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-route-and-response-mime-refusal-2026-10-29)
+passes 40 offline observer methods. Its one fixed Release GET is **FAILED**:
+HTTP200 declares CL34770 but omits Content-Type; this private observer's frozen MIME predicate
+refuses before body ingestion. Complete header666B/body0B, natural exit1/reaped,
+whole3.147806s/90 and full postchecks are retained. Bookworm-security1.4.6 is
+an unverified lead; no package, signature, base or Scanner admission. Next
+independently review this private MIME predicate against transport/supply
+authority; no adaptation or retry here. Private slice6-debian-release-metadata-20261029-v1;
+mise, timersOFF. Phase6 **5/15**, Slice6step2; formal steps3/4 remain open.
+
 The [Talos phase-observer checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)
 passes 28 offline methods and one fresh TLS-only observation. Parent-verified
 completion is 2.643320s/10; whole4.367839s/90, complete source/runtime/document
