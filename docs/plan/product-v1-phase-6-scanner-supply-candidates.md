@@ -1,9 +1,9 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: fixed Talos key data parsed; required SHA1 signatures
-refuse cryptographic continuation. Publisher authority and release signatures
-unverified. No package, engine image
-or Scanner candidate admitted.
+Updated: 2026-10-29. Status: current official declarations still point to the
+refused Talos key; native download attempt times out with incomplete HTTP evidence.
+Independent authority/revocation and trusted-verifier supply remain held.
+No package, engine image or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
 
 ## Fixed authority
@@ -14,6 +14,83 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Current Talos authority investigation and native endpoint failure (2026-10-29)
+
+Fresh official provider responses still map main to documentation commit
+88e34cf7c031213747c965f3c56ee854629dd7b7, root6701ff86, src460dfd33,
+manual72288b85 and the same mode100755/3858B key blob55837de3. The decoded
+provider blob exactly matches old SHA2565bfca75f and all original bytes.
+The [download page](https://www.clamav.net/downloads) also exposes 59 armor
+payload lines / 3720 base64 characters equal to the old original. That is
+extracted-page data correspondence, not original HTML or independently current
+signer authorization. No old-key parsing or weak-signature math is rerun.
+
+The [vendor FAQ](https://docs.clamav.net/faq/faq-upgrade.html) gives a general
+rotation statement and an old2018 key-ID example. Seven fixed official URL
+observations and four domain-limited searches do not establish a policy-compatible
+new certificate, independently approved current full fingerprint, rotation rule
+or timely revocation authority. This bounded investigation does not prove that
+such material does not exist elsewhere. Unrelated FMC TLS-certificate renewal
+and malware-rule hash documentation cannot substitute for release-key authority.
+
+The direct [key endpoint](https://www.clamav.net/downloads/gpg_public_key) is
+unsupported by the web extraction tool for its reported application/gpg-keys
+type. A separately reviewed new source-specific native diagnostic accepts only
+that exact type at this fixed host/path. It retains public-only complete DNS,
+single-socket FD/peer/SNI/verified TLS, HTTP200/no redirect/noTE/no encoding,
+exactCL3858/old SHA256/GitOID and original 10-second request / 88-second worker / 90-second outer / 64 KiB stream bounds.
+Old helpers/locks and their media-type profiles remain unchanged. It cannot
+admit a different certificate or turn an old matching key into a trusted signer.
+
+The new controller records bounded private error frames and lossless raw-byte
+base64 files. Its first 15-method offline run, endpoint-policy-v2, fails because
+finally's timeout error masks the original deadline ValueError. Preserve it as
+FAILED (whole 2.835138 s / 90 s), with complete postchecks. A separate v3 implementation
+only corrects exception precedence; the same frozen 15 tests and original
+ValueError assertion then pass (unittest0.126s; whole 7.280807 s / 90 s). No failed run identity was reused; the same 15 tests were rerun under a fresh
+identity without weakening their assertions. The earlier v1 plan was retired unexecuted.
+
+One fresh endpoint-original-v1 native attempt **FAILS** at the internal 10-second request
+deadline; worker naturally returns exit1 after full postchecks, whole wrapper 11.649875 s / 90 s.
+The actual request duration is not recorded and is not inferred from the wrapper.
+All three raw files decode to zero bytes, no key is published and http.json is absent.
+The missing metadata receipt prevents attributing the wait to DNS, TCP or TLS,
+or claiming a known HTTP status/peer. Outer capture did not kill or truncate the
+worker; that does not mean the internal deadline signal did not fire.
+The incomplete native evidence is a failure, not a certificate or gate pass.
+Do not immediately repeat the request or reuse this identity.
+
+Original 2190 source files, 1191 runtime files, current five documents and full
+execution inputs are reread before/after without new manifests or hash caches.
+Independent review checks 45 offline success artifacts / 44 inputs and 48 native
+failure artifacts / 49 inputs. The old 45-artifact failed-test set is retained.
+Private evidence: slice6-talos-current-authority-20261029-v1; raw provider
+responses, full identity pins, private errors and failures remain outside Git.
+
+Trusted-verifier source research remains held. The
+[GnuPG release-key page](https://www.gnupg.org/signature_key.html) declares full
+fingerprints, long-term-key cross-signatures and a qualified-signed PDF route;
+none of those keys, cross-signatures or PDF signatures is authenticated here.
+The [integrity guidance](https://gnupg.org/download/integrity_check.html) does not
+authorize using the new GPG download to authenticate itself. The fixed Alpine
+package page is inaccessible via the extraction tool, not proof of package
+unavailability. Existing Wolfi/Alpine supply, installation, ELF/helper, current
+complete vulnerability and isolation/management-authority gaps remain binding.
+No new GPG version, candidate, package/source archive, tool install or scan runs.
+
+End this bounded official-path investigation with old-key **REFUSED**, independent
+authority **NOT_ESTABLISHED**, current revocation **UNKNOWN** and native endpoint
+**FAILED**. Next separately review a read-only phase-observation and within-budget
+failure-recording design before any fresh endpoint request; keep the original
+10-second boundary. A current compatible certificate and independent authority
+are still prerequisites for OpenPGP or package verification. Do not use this
+network failure to waive source, signature, trust or freshness gates.
+
+Only five progress documents change. No Go/Contract/driver behavior or old locks,
+two-issuer/reuse rules, quota or timeout changes; no unaffected test reruns.
+Phase6 **5/15**, Slice6step2; bounded old Guest E is not replayed, full topology/
+original16/independent acceptance/formalstep4 remain incomplete. TimersOFF.
 
 ## Talos key data refusal and verifier-source boundary (2026-10-29)
 

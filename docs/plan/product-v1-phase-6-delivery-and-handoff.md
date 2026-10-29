@@ -26,6 +26,20 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Current Talos authority investigation (2026-10-29)
+
+The [current Talos authority check](product-v1-phase-6-scanner-supply-candidates.md)
+still maps the official documentation and extracted download-page key to the old
+certificate. The same 15 offline observer tests pass under a fresh run identity;
+the earlier failed run is retained. One native attempt reaches the original
+10-second request deadline (whole wrapper: 11.649875 s / 90 s). Raw captures
+contain zero bytes and no HTTP receipt exists; the DNS/TCP/TLS stage is unknown.
+The old key remains **REFUSED**, independent authority **NOT_ESTABLISHED**, and
+current revocation **UNKNOWN**. This investigation runs no GPG, OpenPGP verification,
+key import, scan or build. Private evidence:
+slice6-talos-current-authority-20261029-v1; existing mise, timers OFF.
+Phase 6 remains **5/15**, Slice 6 step 2; topology16/acceptance/formalstep4 remain open.
+
 ## Talos key data refusal (2026-10-29)
 
 The [Talos key data checkpoint](product-v1-phase-6-scanner-supply-candidates.md)
