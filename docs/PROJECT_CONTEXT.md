@@ -46,21 +46,24 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Debian untrusted-body checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-untrusted-body-recovery-and-component-declarations-2026-10-29)
-passes 54 offline methods after independent review. One new fixed GET preserves
-complete666B headers/34770B body/0B extra, but its original terminal remains
-**FAILED** at the private component predicate; whole2.422736s/90, natural exit1,
-reaped, full postchecks. The final offline parser reads the saved original under
-a new identity: exact main or updates/main token count one, unchanged two main/...
-targets, raw fields preserved, no authenticated path mapping. Tests whole2.557165s/90,
-platform exit0, source2190/runtime1191/five-doc pre/post complete. Missing Content-Type
-is recorded as absent only for this fixed untrusted InRelease purpose; explicit
-unsupported MIME and other framing/source/closure refusals remain.
-Publisher/signature/freshness/supply remain false. Next independently establish
-Debian archive key authority and an admitted verifier, then authenticate original
-Release/index/package inputs before considering any base/Scanner selection.
-Private slice6-debian-release-mime-policy-20261029-v1; mise, timersOFF.
-Phase6 **5/15**, Slice6step2; full topology16, acceptance and formalstep4 remain open.
+The [Debian archive authority review](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-archive-authority-and-verifier-bootstrap-review-2026-10-29)
+completes bounded official-source research and a future verification proposal.
+It records separate Bookworm security primary/signing-subkey candidates; the
+subkey/2031 expiry and transition signatures are search-extracted2023 declarations,
+with direct announcement access tool-refused. No current key authority,
+non-revocation or original certificate is authenticated. Source active/removed
+rings have different purposes; removal is not cryptographic revocation.
+Bookworm gpgv does not itself check expiry/revocation, and a tool authenticated
+only by this untrusted archive cannot bootstrap its own trust. Existing GPG
+candidate supply/isolation/fresh-scan gaps remain; NONE ADMITTED.
+No new native request, key import, verifier, package, Docker, scan or build runs.
+Complete source2190/runtime1191/five-doc and604 input checks pass before/after
+the research; old54 offline evidence and the native FAILED terminal retain
+their original scope. Next separately review exact current certificate/
+transition/removal material recovery and complete a noncircular verifier route
+before signature/freshness/index/package acceptance.
+Private slice6-debian-archive-authority-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
 
 The [Talos phase-observer checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)
 passes 28 offline methods and one fresh TLS-only observation. Parent-verified

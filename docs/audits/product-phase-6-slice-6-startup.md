@@ -4,7 +4,96 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Debian untrusted-body recovery and component declarations](#2026-10-29-debian-untrusted-body-recovery-and-component-declarations).
+Latest implementation checkpoint: [Debian archive authority and verifier bootstrap review](#2026-10-29-debian-archive-authority-and-verifier-bootstrap-review).
+
+## 2026-10-29 Debian archive authority and verifier bootstrap review
+
+This independently reviewed source investigation and future verification proposal
+make no new key, verifier, base or Scanner selection. The previous34770B Release
+original remains unverified and its native terminal remains FAILED; the previous
+54 offline methods are earlier component evidence, not new tests in this stage.
+
+The [FTP-team key page](https://ftp-master.debian.org/keys.html) lists the
+Bookworm security primary below, separately from the ordinary archive and stable
+release keys. It describes announced/cross-signed rotation and designated
+revokers, while requiring other verification of its informational content.
+These are purpose and procedure declarations, not current authorization.
+
+| Declared candidate | Full fingerprint | Observation scope |
+| --- | --- | --- |
+| Bookworm security primary | 05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0 | Current FTP-team page and historical announcement search extraction |
+| Bookworm security signing subkey | B0CAB9266E8C3929798B3EEEBDE6D2B9216EC7A8 | Historical announcement search extraction only |
+| Ordinary Bookworm archive primary | B8B80B5B623EAB6AD8775C45B7C5D7D6350947F8 | Separate scope; no automatic substitution |
+| Bookworm stable release key | 4D64FEC119C2029067D6E791F8D2585B8783D481 | Separate scope; no automatic substitution |
+
+The search provider extracts the [2023-03-09 transition announcement](https://lists.debian.org/debian-devel-announce/2023/03/msg00001.html)
+with the security signing-subkey identity,2031-01-19 expiry and a claim of two
+FTP-master plus Bullseye-key cross-signatures. A later direct open is tool-refused
+with a reported403. This is not an authenticated announcement original, signer
+binding or current expiry/revocation result. The proposed pair is not a final
+allowlist and is not claimed to be the actual signer of the saved Release.
+
+The [package page](https://packages.debian.org/bookworm/debian-archive-keyring)
+and [source index](https://sources.debian.org/src/debian-archive-keyring/)
+declare2023.3+deb12u2 for Bookworm; the index also lists2025.1 for newer suites.
+The displayed [README](https://sources.debian.org/src/debian-archive-keyring/2023.3%2Bdeb12u2/README/),
+[maintainer notes](https://sources.debian.org/src/debian-archive-keyring/2023.3%2Bdeb12u2/README.maintainer/)
+and [Makefile](https://sources.debian.org/src/debian-archive-keyring/2023.3%2Bdeb12u2/Makefile/)
+separate active and removed keyrings and describe moving entries out of active
+trust. A retired key is not necessarily cryptographically revoked; do not join
+both rings or use absence from an old removed directory as timely non-revocation.
+No source recipe is executed. The chosen older security-manual URL reports a
+tool404, and the source changelog is tool-inaccessible. Original errors remain;
+neither establishes global source absence. The initial find on the failed manual
+also refetches its404; no native failed run is retried.
+
+The [Bookworm gpgv2.2.40 manual](https://manpages.debian.org/bookworm/gpgv/gpgv.1.en.html)
+says its supplied keyring is already trusted and expiry/revocation are not checked.
+Its success exit alone cannot close those independent gates. The
+[GnuPG integrity guidance](https://www.gnupg.org/download/integrity_check.html)
+rejects a newly downloaded verifier authenticating itself; the
+[release-key page](https://www.gnupg.org/signature_key.html) provides further
+long-term/QES references, which remain unauthenticated leads here.
+A Debian gpgv/keyring package authenticated only by this untrusted archive would
+be circular. No new binary, adjacent checksum, self-signature or ownertrust mark
+becomes an independent root.
+
+No verifier is admitted. Existing Wolfi2.4.9-r12 carrier-HIGH/supply gaps and
+Alpine2.5.22 installation/ELF/helper/UID/runtime/full-supply gaps remain. Old37/19
+scan database freshness is not inherited, and Docker management-authority
+requirements remain. Prefer evaluating one existing distribution route against
+all current gates before adding a tool/compiler; this does not approve2.5.22 or
+a build/run. Unsupported material remains HELD/UNSUPPORTED; actual wrong
+identity/signature/hash/freshness must fail under its applicable gate.
+
+The private proposal orders exact current certificate/transition/removal
+original recovery; independently anchored current authority and authenticated
+primary/subkey certification, binding/cross-certification, algorithms, flags,
+expiry and revocation; complete verifier supply/execution admission; then an
+isolated exact-keyring/no-ambient-trust/no-network command with complete machine
+statuses/errors and refusal tests. Only afterward can preserved Release
+signature/time/anti-rollback and actual index/package/dependency hashes be
+accepted. HTTPS, GOODSIG, exit0 or a declared Valid-Until cannot replace those
+steps. No old FAILED receipt is relabeled.
+
+Three separately reviewed identities limit the research to7 exact initial pages,
+3 exact follow-up pages plus3 official-domain searches, then6 exact transition/
+keyring pages; newly returned URLs are only recorded. The runtime/provider calls
+are documentary observations, not a passing10-second native request gate.
+Source2190/runtime1191/current-five-document and complete604-input postchecks
+pass, with prechecks and immutable old manifests retained. No native client,
+GPG/import, package/index/key payload, candidate, Docker, scan or build executes.
+No production Go/Contract/driver changes or unaffected suite reruns.
+Private slice6-debian-archive-authority-20261029-v1 holds raw tool responses,
+failures, input pins, observations and the future proposal outside Git.
+Timings reported by provider retrieval are not repurposed as native evidence.
+
+Current authority NOT_ESTABLISHED, revocation UNKNOWN, verifier NONE ADMITTED;
+publisher/signature/freshness/supply remain false. Next independently review
+bounded exact-original recovery and noncircular verifier inputs, preserving
+original10/88/90,64KiB and all resource/performance/supply/isolation gates.
+Phase6 remains **5/15**, Slice6step2; full topology16, independent acceptance and
+formalstep4 remain open. Mise only in this stage; timersOFF.
 
 ## 2026-10-29 Debian untrusted-body recovery and component declarations
 

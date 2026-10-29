@@ -26,6 +26,27 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Debian archive authority and verifier bootstrap review (2026-10-29)
+
+The [Debian archive authority review](product-v1-phase-6-scanner-supply-candidates.md#debian-archive-authority-and-verifier-bootstrap-review-2026-10-29)
+completes bounded official-source research and a future verification proposal.
+It records separate Bookworm security primary/signing-subkey candidates; the
+subkey/2031 expiry and transition signatures are search-extracted2023 declarations,
+with direct announcement access tool-refused. No current key authority,
+non-revocation or original certificate is authenticated. Source active/removed
+rings have different purposes; removal is not cryptographic revocation.
+Bookworm gpgv does not itself check expiry/revocation, and a tool authenticated
+only by this untrusted archive cannot bootstrap its own trust. Existing GPG
+candidate supply/isolation/fresh-scan gaps remain; NONE ADMITTED.
+No new native request, key import, verifier, package, Docker, scan or build runs.
+Complete source2190/runtime1191/five-doc and604 input checks pass before/after
+the research; old54 offline evidence and the native FAILED terminal retain
+their original scope. Next separately review exact current certificate/
+transition/removal material recovery and complete a noncircular verifier route
+before signature/freshness/index/package acceptance.
+Private slice6-debian-archive-authority-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
+
 ## Debian untrusted-body recovery and component declarations (2026-10-29)
 
 The [Debian untrusted-body checkpoint](product-v1-phase-6-scanner-supply-candidates.md#debian-untrusted-body-recovery-and-component-declarations-2026-10-29)
