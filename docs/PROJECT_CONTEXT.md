@@ -46,23 +46,21 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
-The [Debian archive authority review](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-archive-authority-and-verifier-bootstrap-review-2026-10-29)
-completes bounded official-source research and a future verification proposal.
-It records separate Bookworm security primary/signing-subkey candidates; the
-subkey/2031 expiry and transition signatures are search-extracted2023 declarations,
-with direct announcement access tool-refused. No current key authority,
-non-revocation or original certificate is authenticated. Source active/removed
-rings have different purposes; removal is not cryptographic revocation.
-Bookworm gpgv does not itself check expiry/revocation, and a tool authenticated
-only by this untrusted archive cannot bootstrap its own trust. Existing GPG
-candidate supply/isolation/fresh-scan gaps remain; NONE ADMITTED.
-No new native request, key import, verifier, package, Docker, scan or build runs.
-Complete source2190/runtime1191/five-doc and604 input checks pass before/after
-the research; old54 offline evidence and the native FAILED terminal retain
-their original scope. Next separately review exact current certificate/
-transition/removal material recovery and complete a noncircular verifier route
-before signature/freshness/index/package acceptance.
-Private slice6-debian-archive-authority-20261029-v1; mise, timersOFF.
+The [Debian certificate-original checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-security-certificate-original-2026-10-29)
+passes46 offline component methods and one new fixed official public-key GET.
+Headers510B/body11873B/extra0B are preserved; parent-verified completion7.383214s/10,
+worker7.262760s/8, whole8.778805s/90, natural exit0/reaped/closed and full postchecks.
+Armor/CRC/packet/public-key data extraction matches the declared security primary
+05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0 and signing subkey
+B0CAB9266E8C3929798B3EEEBDE6D2B9216EC7A8. Fifteen packets include12 opaque signature
+packets, all retained without signature interpretation or math. These byte
+identities do not establish expiry, rotation, current authority or non-revocation.
+Authority NOT_ESTABLISHED, revocation UNKNOWN, verifier NONE ADMITTED; signature/
+freshness/supply remain false. Old Talos refusal and Release native FAILED remain
+unchanged. Next separately review signature/certification/rotation declarations
+and original cross-signature authority inputs, while completing a noncircular
+supply-admitted verifier path before any actual key or Release verification.
+Private slice6-debian-security-certificate-20261029-v1; mise, timersOFF.
 Phase6 **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
 
 The [Talos phase-observer checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md#original-budget-talos-phase-observation-2026-10-29)

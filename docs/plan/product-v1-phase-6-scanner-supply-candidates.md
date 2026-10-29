@@ -1,10 +1,10 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: Debian archive authority research is complete
-for the bounded documentary scope; current authority is NOT_ESTABLISHED,
-revocation UNKNOWN and verifier NONE ADMITTED. Original34770B Release is still
-unauthenticated; old native failure and earlier54 offline results are unchanged.
-Talos key refused.
+Updated: 2026-10-29. Status: fixed Debian security certificate11873B is
+recovered with matching candidate fingerprints;46 offline methods and the
+bounded native data observation pass. Authority NOT_ESTABLISHED, revocation
+UNKNOWN and verifier NONE ADMITTED. Original34770B Release remains unauthenticated
+and its old native FAILED is unchanged. Talos key refused.
 Independent authority/revocation and trusted-verifier supply remain held.
 No package, engine image or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
@@ -17,6 +17,91 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Debian security certificate original (2026-10-29)
+
+A separately reviewed fixed-source observation recovers exactly
+https://ftp-master.debian.org/keys/archive-key-12-security.asc as untrusted public
+certificate bytes. It does not select a trust root, run GPG or change a Scanner
+base/engine, package lock, issuer set or evidence-reuse rule. The source and
+fingerprint declarations are the previously recorded official FTP/2023-announcement
+observations, not an independent root or final allowlist.
+
+The new private observer reuses the previously tested parent/capture/durable
+writer and DNS/public-address/TLS/SNI/peer/single-FD/closure path. Only the exact
+certificate host/path/purpose, source-specific closed MIME and public-data
+declaration change; entry wires the already reviewed key_data module.
+Present MIME permits application/pgp-keys as well as the existing closed plain/
+octet-stream forms; absence records null/false only for this source. Present
+empty/duplicate/unknown types, missing or noncanonical CL, redirects/TE/range/
+cookie/encoding ambiguity, short/extra body and unknown source still reject.
+The old Talos exactCL3858/MIME and weak-required-signature refusal are unchanged.
+
+The public-data view reuses unarmor/CRC24/packets/public only. It requires one
+leading v4RSA primary, one bounded ASCII UID and one v4RSA subkey in the defined
+order, with bounded opaque signature bodies in UID and subkey contexts.
+Both full fingerprints must match the declared candidates. The original ASCII,
+decoded SHA256 and each packet ordinal/tag/body size/SHA256 are retained;
+no duplicate byte-offset parser is added. Signature packets are neither
+interpreted nor verified; their presence cannot prove self-certification,
+binding, cross-signature, flags, expiry or non-revocation. Unsupported actual
+formats would be a profile failure with original bytes retained.
+
+An unexecuted45-method test plan is preserved: root static review corrected the
+HTML fixture's first rejection to armor-lines and added a64KiB boundary method
+before freezing the fresh46-method identity. certificate-tests-v2 actually
+passes46 methods, unit2.579s, whole6.825139s/90, platform natural exit0,
+135 raw artifacts and644 full inputs with complete source2190/runtime1191/
+five-document pre/post checks. Its known3858B Talos fixture patches only
+test-process expected fingerprints and inherits no key admission. The explicit
+opaque-signature test even preserves signature_verified=false after replacing
+a signature body: this is data observation, not a cryptographic success vector.
+The64KiB test covers header/armor bounds, not a live maximum-size network run;
+broad replacement-error assertions prove refusal, not a unique error reason.
+
+After final implementation/test review and separate new native identity/input
+review, certificate-original-v1 performs one GET. Its actual response is200,
+Content-Type application/pgp-keys, header510B, exactCL/body11873B and extra0B.
+Complete original body SHA256:
+74f81645b4e3156d1e9a88c8dd9259271b89c7099d64af89a2a6996b592faa1f.
+Parent-verified completion is7.383214375s/10, worker7.262759750s/8,
+whole8.778805292s/90. Platform/worker naturally exit0, owned worker is reaped,
+socket is closed, no active signal/truncation/timeout/cleanup errors, and full
+source2190/runtime1191/five-document/780-input pre/post checks complete.
+Raw headers/body/extra, stdout/stderr, plan/nonce/PID bindings, terminal and
+parent results remain private;45 native artifacts are pinned.
+
+The original decodes to8709 bytes and15 packets: one primary, one UID, one subkey
+and12 uninterpreted signature packets (5 in primary context,6 after UID,1 after
+subkey). Primary and subkey are RSA4096/e65537 and reproduce the complete
+candidate fingerprints05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0 and
+B0CAB9266E8C3929798B3EEEBDE6D2B9216EC7A8. Their creation field declares
+2023-01-21T11:45:33Z; that is unverified data, not authenticated lifetime.
+No particular opaque packet is claimed as a valid FTP-master/Bullseye
+cross-signature or revocation. CRC and v4 fingerprint construction do not
+authenticate a publisher; fingerprint SHA1 is not permission for weak signatures.
+This original file need not be byte-identical to a source keyring changeset or
+another certificate encoding.
+
+Internal PASS-untrusted-metadata labels refer only to certificate-original data,
+not Release metadata or key validity. Independent uninvolved acceptance checks
+the actual component and native records against requirement-derived scenarios.
+Authority remains NOT_ESTABLISHED, current revocation UNKNOWN, verifier NONE
+ADMITTED; publisher/signature/freshness/supply flags remain false. The old Release
+native FAILED and Talos weak-signature refusal remain untouched.
+
+Next separately review the actual signature/certification/rotation declarations
+and complete original cross-signature authority inputs, including current
+independently anchored revocation state. Complete the selected noncircular
+verifier's supply, installation/ELF/helper/UID/isolation/management and fresh
+vulnerability prerequisites before any key/Release signature math. No GPG/import,
+candidate, package/index recovery, Docker, build or scan executes here.
+Only private diagnostics plus five progress documents change; unaffected Go/
+Contract/Docker suites are not rerun. Source/runtime old manifests are preserved.
+Original10/8/88/90,64KiB/two-executor/resource gates, public holds and issuer count
+remain; mise only, timersOFF, no global install or unrelated-process action.
+Private evidence: slice6-debian-security-certificate-20261029-v1.
+Phase6 remains **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
 
 ## Debian archive authority and verifier bootstrap review (2026-10-29)
 

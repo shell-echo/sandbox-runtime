@@ -26,6 +26,25 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Debian security certificate original (2026-10-29)
+
+The [Debian certificate-original checkpoint](product-v1-phase-6-scanner-supply-candidates.md#debian-security-certificate-original-2026-10-29)
+passes46 offline component methods and one new fixed official public-key GET.
+Headers510B/body11873B/extra0B are preserved; parent-verified completion7.383214s/10,
+worker7.262760s/8, whole8.778805s/90, natural exit0/reaped/closed and full postchecks.
+Armor/CRC/packet/public-key data extraction matches the declared security primary
+05AB90340C0C5E797F44A8C8254CF3B5AEC0A8F0 and signing subkey
+B0CAB9266E8C3929798B3EEEBDE6D2B9216EC7A8. Fifteen packets include12 opaque signature
+packets, all retained without signature interpretation or math. These byte
+identities do not establish expiry, rotation, current authority or non-revocation.
+Authority NOT_ESTABLISHED, revocation UNKNOWN, verifier NONE ADMITTED; signature/
+freshness/supply remain false. Old Talos refusal and Release native FAILED remain
+unchanged. Next separately review signature/certification/rotation declarations
+and original cross-signature authority inputs, while completing a noncircular
+supply-admitted verifier path before any actual key or Release verification.
+Private slice6-debian-security-certificate-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; full topology16/acceptance/formalstep4 remain open.
+
 ## Debian archive authority and verifier bootstrap review (2026-10-29)
 
 The [Debian archive authority review](product-v1-phase-6-scanner-supply-candidates.md#debian-archive-authority-and-verifier-bootstrap-review-2026-10-29)
