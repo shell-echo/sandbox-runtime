@@ -1,7 +1,8 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: official release and bounded four-file source observation
-complete; no package, engine image or Scanner candidate admitted.
+Updated: 2026-10-29. Status: fixed Talos public-key original recovered;
+publisher authority and release signatures unverified. No package, engine image
+or Scanner candidate admitted.
 Phase6 remains **5/15**, Slice6 step2 ongoing.
 
 ## Fixed authority
@@ -12,6 +13,45 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Fixed Talos public-key original (2026-10-29)
+
+The installation guide names
+[the documentation repository key](https://raw.githubusercontent.com/Cisco-Talos/clamav-documentation/main/src/manual/cisco-talos.gpg).
+The download page separately names
+[its key download endpoint](https://www.clamav.net/downloads/gpg_public_key)
+and embeds armor. Both are observed vendor declarations, not independent roots
+of trust. Neither the download endpoint nor any release .sig was requested.
+
+The official GitHub metadata maps main→commit
+88e34cf7c031213747c965f3c56ee854629dd7b7, tree6701ff86, src460dfd33,
+manual72288b85, then cisco-talos.gpg with mode100755, size3858 and Git blob
+55837de36413784018702116365d2f061294e7db. The unexpected execution bit was
+recorded after the initial100644 assumption was refused; the file is never
+executed. Decoded connector bytes match that exact blob, including a final
+space. This does not establish the website build's commit.
+
+One fresh native GET of the
+[fixed commit key](https://raw.githubusercontent.com/Cisco-Talos/clamav-documentation/88e34cf7c031213747c965f3c56ee854629dd7b7/src/manual/cisco-talos.gpg)
+recovers the full3858B, SHA256
+5bfca75f112f04b89cd992f5f925018e8dfc28e0e7f6e33f6a4c33ed9e29d911,
+byte-identical to the mapped Git blob. The saved original is0600 data,
+with no keyring import. All DNS answers are public; the single socket's native
+FD transfer, numeric TLS peer/SNI/verified chain, no redirect/TE/encoding,
+HTTP200/exactCL/MIME and full body correspondence pass. The931B header was
+parsed in RAM; only length/hash/projection is retained, so the header parse
+cannot be independently replayed from raw recorded bytes.
+
+13 offline component refusal methods pass. The old launcher cap failure is
+retainedFAILED and not counted as a test pass. The successful offline wrapper
+takes9.253769s/90; native request including cleanup1.002362s/10, wrapper3.288563s/90.
+Source2190, runtime1191, five progress documents and all new execution inputs
+are fully reread before/after; no hash cache or evidence-reuse rule changes.
+Independent review checks45 test artifacts/49 inputs and47 native artifacts/
+98 inputs. This authenticates neither OpenPGP self-signatures nor the publisher.
+Fingerprints/subkeys, expiry/rotation/revocation policy, trusted verifier and
+release-signature/package correspondence remain open. TLS authentication is
+transport evidence only.
 
 ## Official release and fixed source observations
 
@@ -30,8 +70,9 @@ and embeds PGP public-key armor. Its
 [installation guide](https://docs.clamav.net/manual/Installing.html#verifying-clamavnet-downloads-with-gpg)
 describes Talos GPG verification. The old2018 key-ID example is not an approved
 current fingerprint. Embedded armor was observed as page content, not imported,
-independently authenticated or used for verification; the complete standalone
-key URL, subkeys, validity and revocation policy remain to be established.
+independently authenticated or used for verification. The fixed key URL and
+body correspondence are now recorded above; subkeys, validity and revocation
+policy remain to be established.
 API digests and filenames are publisher declarations, not cryptographic proof.
 
 Fresh fixed API responses map the named ref to annotated tag26071af7b26cd71e66b13dcbe4bcb6bae8a8c2be,
@@ -102,10 +143,12 @@ new Scanner materials or native installation.
 
 ## Evidence boundary
 
-Private evidence: slice6-scanner-signed-source-20261029-v1. Official pages are
+Private evidence: slice6-scanner-talos-key-20261029-v1; previous source research
+remains in slice6-scanner-signed-source-20261029-v1. Official pages are
 provider-extracted text and API envelopes, not original HTML or successful
 replays of old native source stages. Old failures remainFAILED. No standalone
-archive/package/key/signature was fetched; no upstream source, verifier,
+archive/package/release-signature was fetched; only the fixed key body above
+was recovered. No upstream source, verifier,
 Cargo/CMake, compiler, Docker/build/scan or candidate runtime executed.
 Existing mise Python and source gates, budgets, old locks, two issuers and reuse
 rules remain unchanged; timers stayOFF.

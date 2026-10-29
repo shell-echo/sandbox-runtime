@@ -46,6 +46,19 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Talos key original checkpoint](plan/product-v1-phase-6-scanner-supply-candidates.md)
+recovers one3858B public-key file from fixed official documentation commit88e34cf7.
+The native body exactly matches Git blob55837de3 and SHA2565bfca75f, with
+TLS/FD/strict framing and complete source2190/runtime1191/five-doc pre/post checks.
+13 offline refusal methods pass; native request1.002362s/10, whole3.288563s/90.
+Only body bytes are preserved; headers retain length/hash/projection, not a
+replayable raw header block. Publisher authority, fingerprint/subkeys/selfsig/
+expiry/revocation and release signatures remain unverified. No key import,
+verifier/build/scan or Scanner admission. Next independently review the trusted
+verifier and complete key/rotation/revocation policy before package signatures.
+Private slice6-scanner-talos-key-20261029-v1; old failures retained, mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 The [official release/source inventory](plan/product-v1-phase-6-scanner-supply-candidates.md)
 finds1.4.6 source and aarch64 DEB/RPM companion-signature declarations.
 Fresh API tag→5853→tree068e mapping and four exact Git-blob file correspondences
