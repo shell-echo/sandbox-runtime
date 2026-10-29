@@ -1,6 +1,6 @@
 # Project Context
 
-Updated: 2026-10-28
+Updated: 2026-10-29
 
 This is the stable handoff index for a new developer, AI agent, development
 device, or implementation session. It summarizes the system, engineering
@@ -45,6 +45,17 @@ inventory private evidence and local artifacts separately from Git. Resume
 Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
+
+The [official release/source inventory](plan/product-v1-phase-6-scanner-supply-candidates.md)
+finds1.4.6 source and aarch64 DEB/RPM companion-signature declarations.
+Fresh API tag→5853→tree068e mapping and four exact Git-blob file correspondences
+pass limited research review; none authenticates the archive or asset build.
+Source compilation additionally needs C/C++/Rust/sysroot materials. Next prioritize
+current Talos key/signature and official-package feasibility before adding C/SDK.
+Actual bytes, ELF/base/dependencies, complete engine OCI mapping and supply/
+runtime gates remain held. No verifier/build/scan runs. Private
+slice6-scanner-signed-source-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
 
 The [Scanner alternative-route review](plan/product-v1-phase-6-scanner-supply-candidates.md)
 keeps all candidates held: Chainguard requires organization access, DHI

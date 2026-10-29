@@ -26,6 +26,19 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Official release and fixed-source input inventory (2026-10-29)
+
+The [official release/source inventory](product-v1-phase-6-scanner-supply-candidates.md)
+finds1.4.6 source and aarch64 DEB/RPM companion-signature declarations.
+Fresh API tag→5853→tree068e mapping and four exact Git-blob file correspondences
+pass limited research review; none authenticates the archive or asset build.
+Source compilation additionally needs C/C++/Rust/sysroot materials. Next prioritize
+current Talos key/signature and official-package feasibility before adding C/SDK.
+Actual bytes, ELF/base/dependencies, complete engine OCI mapping and supply/
+runtime gates remain held. No verifier/build/scan runs. Private
+slice6-scanner-signed-source-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 ## Scanner alternative-route review (2026-10-28)
 
 The [Scanner alternative-route review](product-v1-phase-6-scanner-supply-candidates.md)

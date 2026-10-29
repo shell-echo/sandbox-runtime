@@ -1,5 +1,16 @@
 # Project Status
 
+The [official release/source inventory](plan/product-v1-phase-6-scanner-supply-candidates.md)
+finds1.4.6 source and aarch64 DEB/RPM companion-signature declarations.
+Fresh API tag→5853→tree068e mapping and four exact Git-blob file correspondences
+pass limited research review; none authenticates the archive or asset build.
+Source compilation additionally needs C/C++/Rust/sysroot materials. Next prioritize
+current Talos key/signature and official-package feasibility before adding C/SDK.
+Actual bytes, ELF/base/dependencies, complete engine OCI mapping and supply/
+runtime gates remain held. No verifier/build/scan runs. Private
+slice6-scanner-signed-source-20261029-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 The [Scanner alternative-route review](plan/product-v1-phase-6-scanner-supply-candidates.md)
 keeps all candidates held: Chainguard requires organization access, DHI
 verification requires login, and the two fixed Alpine package pages state
