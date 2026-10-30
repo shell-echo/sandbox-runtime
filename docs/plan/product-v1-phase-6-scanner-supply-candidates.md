@@ -1,7 +1,7 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-29. Status: fixed Debian security certificate11873B is
-recovered with matching candidate fingerprints;46 offline methods and the
+Updated: 2026-10-30. Status: current-device differential observation is complete.
+The fixed Debian security certificate11873B is recovered with matching candidate fingerprints;46 offline methods and the
 bounded native data observation pass. Authority NOT_ESTABLISHED, revocation
 UNKNOWN and verifier NONE ADMITTED. Original34770B Release remains unauthenticated
 and its old native FAILED is unchanged. Talos key refused.
@@ -17,6 +17,49 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Current device identity observation (2026-10-30)
+
+Before the next Debian signature-declaration investigation, current verification
+against the sealed401-file index refuses an identity mismatch. The index itself
+retains SHA256 ebdb3c7973879eff72a8f81af71d0ba32e47ec904aaa91badec701fb7ba83c27;
+no old manifest, receipt or byte is rewritten. This current refusal does not
+retroactively invalidate the recorded historical runs.
+
+A separately reviewed read-only differential run compares every indexed byte
+and identity. All401 sealed files and43 directory anchors,2190 indexed source
+files,1191 Python runtime files,108 runtime directories and7 links differ only
+in device number16777232→16777233. Other file identities, size, SHA256, modes,
+owners and link targets match; the runtime census is exact under its original
+site-packages exclusion. The2190-source check covers its pinned set, alongside
+a separate clean Git check; it is not a census of all ignored working-tree data.
+
+V3 remains FAILED: process comm output receives81920B beyond64KiB, records
+truncation and kills only its owned PID30201, which is reaped; postchecks are
+incomplete. V4 uses the separately reviewed compact ucomm column under the same
+64KiB/command10s/whole90s limits. It naturally completes in1.433120875s/90,
+all seven command receipts are natural0/reaped without signal/truncation/late
+or capture errors, process stdout33782B, and all current input postchecks finish.
+Boot/mount records identify the current data filesystem but do not prove why the
+device changed. Process names do not prove absence of other writers.
+
+Independent review accepts only this complete observation. The user's existing
+new-run/new-binding rule permits subsequent untrusted declaration work after
+separate review of its new identity, complete current input pins and output root.
+New commitments cannot replace old manifests, skip the device field in the old
+guard, replay old receipts or inherit historic acceptance. No crypto/supply
+admission follows. The previously recovered11873B certificate still has12 opaque
+signature packets; authority NOT_ESTABLISHED, revocation UNKNOWN, verifier NONE
+ADMITTED. Talos REFUSED and Release native FAILED remain unchanged.
+
+Next: review a bounded data-only view of those12 actual signature bodies, including
+issuer claims, hashed/unhashed fields, critical/unknown data, revoker declarations
+and embedded signatures. Only then assess one concrete noncircular verifier path;
+no GPG, new Go verifier, package, Docker, APK, scan or build runs here. Production
+Go/Contract/driver behavior is unchanged; unaffected suites are not rerun.
+Private slice6-device-identity-observation-20261030-v1; existing mise only, timersOFF.
+Phase6 remains **5/15**, Slice6step2; topology16/independent acceptance/formalstep4
+remain incomplete.
 
 ## Debian security certificate original (2026-10-29)
 

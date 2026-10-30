@@ -4,7 +4,21 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest implementation checkpoint: [Debian security certificate original](#2026-10-29-debian-security-certificate-original).
+Latest investigation checkpoint: [current device identity observation](#2026-10-30-current-device-identity-observation).
+
+## 2026-10-30 Current device identity observation
+
+The [current-device observation](../plan/product-v1-phase-6-scanner-supply-candidates.md#current-device-identity-observation-2026-10-30)
+completes an independently reviewed read-only comparison:401 sealed files/43
+directories,2190 indexed source files,1191 runtime files/108 directories/7 links
+differ from historic identities only in device number16777232→16777233. V4
+finishes1.433121s/90 with complete postchecks; the old-index current recheck stays
+REFUSED and V3 stays FAILED after a64KiB process-output truncation. Historical
+passes remain unchanged. This is observation, not restored old-gate acceptance.
+Future data-only work needs a new run, complete current pins and independent
+review. Device-change cause, key authority/revocation and verifier admission remain
+unproved. Private slice6-device-identity-observation-20261030-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
 
 ## 2026-10-29 Debian security certificate original
 
