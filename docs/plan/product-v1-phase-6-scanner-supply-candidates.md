@@ -1,13 +1,46 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-30. Status: the thirteen-statement verification-object graph and
-future refusal/route design are independently reviewed. No preimage, signature
-hash, RSA/GPG verification or verifier build runs. Authority NOT_ESTABLISHED, revocation
-UNKNOWN and verifier NONE ADMITTED. Original34770B Release remains unauthenticated
-and its old native FAILED is unchanged. Talos key refused.
-Independent authority/revocation and trusted-verifier supply remain held.
-No package, engine image or Scanner candidate admitted.
-Phase6 remains **5/15**, Slice6 step2 ongoing.
+Updated: 2026-10-30. Status: three historical full-fingerprint certifier source
+mappings documented; two remain unresolved. No new key payload, verification,
+verifier build or supply admission. Authority NOT_ESTABLISHED, revocation UNKNOWN,
+verifier NONE ADMITTED. Old failures/refusals remain unchanged.
+Phase6 **5/15**, Slice6 step2 ongoing.
+
+## Debian certifier source map (2026-10-30)
+
+A bounded documentary investigation reuses the sealed verification graph and
+preserved official FTP keys-page provider response. Strict same-line complete
+fingerprint tokens match E6 to the Bookworm ordinary archive key, E7 to the
+Bullseye archive key and E8 to the Bullseye security archive key. Exact spans,
+source pointers and private identities stay outside Git. These are historical
+identity/purpose declarations, not authenticated key originals or proof of
+current authorization, freshness or non-revocation.
+
+Two initial official pages, one FTP-team navigation followup and two general
+Debian-domain queries add no exact E1/E2 correspondence. The navigation returns
+the same homepage. The 2023 announcement excerpt identifies a sender and says
+two FTP masters signed; it does not name those two signers or bind E1/E2. The
+DD/DM key service is not archive authorization. No private fingerprint is sent
+to search; no LDAP search, key payload recovery/import, GPG/RSA, preimage,
+signature hash, verifier build, scan or container runs occur. Web-provider
+observations are not native 10-second GET acceptance or authenticated originals.
+
+Independent review covers the limited source claims and unresolved cases.
+Complete current research inputs, runtime census and previous sealed exact set
+are checked without modifying old indexes. No component or full-repository
+tests rerun for this documentation-only stage. Previous failed/refused runs and
+historical passes keep their original meaning. Authority NOT_ESTABLISHED,
+revocation UNKNOWN, verifier NONE ADMITTED; signature/supply/admission stay false.
+
+Next independently choose a noncircular verifier/bootstrap and the authorization
+chain actually needed, then review exact official key endpoints and a new native
+recovery identity. Five observed certifier identifiers do not mandate five trust
+roots or justify importing every candidate. E1/E2 remain unresolved unless a
+selected chain supplies an authenticated mapping. No evidence-reuse, gate,
+quota or timeout change is authorized. Private root:
+slice6-debian-certifier-source-map-20261030-v1. Existing mise, timers OFF.
+Phase6 **5/15**, Slice6 step2; full topology16/acceptance/formalstep4 remain open.
+
 
 ## Fixed authority
 

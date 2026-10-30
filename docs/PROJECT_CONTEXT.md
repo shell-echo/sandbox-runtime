@@ -46,6 +46,17 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Debian certifier source map](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-certifier-source-map-2026-10-30)
+records exact historical full-fingerprint matches for three of five certifier
+candidates: Bookworm ordinary archive and Bullseye archive/security identities.
+Two remain unresolved; an announcement sender and two-FTP-master count do not
+identify them. Official provider observations establish neither current authority
+nor revocation. No key payload, verifier or cryptographic execution is admitted.
+Next select a noncircular verifier/bootstrap and necessary authorization chain;
+resolve remaining candidates if that chain requires them. Private evidence:
+slice6-debian-certifier-source-map-20261030-v1. Phase6 **5/15**, Slice6 step2;
+full topology16/acceptance/formalstep4 remain open. Existing mise, timers OFF.
+
 The [Debian verification-object graph](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-verification-object-graph-2026-10-30)
 maps13 unverified signature statements and8 external key identifiers. P/S candidate
 bytes cover8 statement nodes;5 UID-certifier candidates lack key bodies in the
