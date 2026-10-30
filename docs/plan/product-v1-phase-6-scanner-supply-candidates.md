@@ -1,8 +1,8 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-30. Status: twelve outer signature declarations and one embedded
-signature body are observed as untrusted data. Thirty-eight component methods and
-one new offline original-byte view complete; no OpenPGP math or admission. Authority NOT_ESTABLISHED, revocation
+Updated: 2026-10-30. Status: the thirteen-statement verification-object graph and
+future refusal/route design are independently reviewed. No preimage, signature
+hash, RSA/GPG verification or verifier build runs. Authority NOT_ESTABLISHED, revocation
 UNKNOWN and verifier NONE ADMITTED. Original34770B Release remains unauthenticated
 and its old native FAILED is unchanged. Talos key refused.
 Independent authority/revocation and trusted-verifier supply remain held.
@@ -17,6 +17,88 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Debian verification-object graph (2026-10-30)
+
+This source-bound design snapshot projects the prior fixed certificate's
+untrusted declarations. It creates no keyring, signer allowlist or operational
+trust. The original11873B certificate and all old manifests/receipts remain
+unchanged; prior38 tests are not rerun or claimed as new tests.
+
+| Actual statement positions | Declared candidate | Future object reference | Current material/status |
+| --- | --- | --- | --- |
+| Outer1–5, type1F | P | P | Candidate body present; verification NOT EXECUTED |
+| Outer7, type13 | P | P + raw UID6 | Candidate body present; verification NOT EXECUTED |
+| Outer8–12, type10 | E6/E7/E8/E1/E2 | P + raw UID6 | Five candidate key bodies absent from selected certificate |
+| Outer14, type18 | P | P + S | Candidate body present; verification NOT EXECUTED |
+| Embedded19 in outer14 | S | P + S, separate signature fields | Candidate body present; verification NOT EXECUTED |
+
+Revoker-first aliasesE1–E5 name five distinct deprecated declarations.
+The certification candidates addE6–E8 and overlapE1/E2; there are8 external
+identifiers, but only5 are claimed certifiers of the present UID statements.
+E3/E4/E5 have no signature statement in this input and must not be promoted to
+mathematical signers or trusted roots. Availability is scoped to selected input
+bytes, not a claim that no matching material exists anywhere on the computer.
+Aliases are not authenticated FTP-master/Bullseye role assignments.
+The runtime broker/general issuer set is unchanged.
+
+The inner body is at outer14's unhashed subpacket32, ordinal1 within that area.
+The outer hash excludes those bytes: future outer18 success cannot substitute
+for independent inner19 verification and matching P/S source/role policy.
+Changing or replacing the inner body must not inherit the outer result.
+This is the fixed original's layout, not a universal rejection of other OpenPGP
+packet arrangements. The [current specification](https://www.rfc-editor.org/rfc/rfc9580.html#section-5.2.4)
+supplies future key/UID framing and v4 signature-field/trailer references;
+no preimage is assembled, no SHA512 signature digest or prefix comparison occurs,
+and no cryptographic vector is executed in this stage.
+
+The private graph retains source ordinal/body SHA, full-FPR claims, embedded
+location, future object references and separate verification/authority/time/
+revocation/supply states. selected_verification_key stays null. The data-only
+projection grants no admission; private raw data and fingerprints are excluded
+from Git and standard output. The new projection run verification-graph-v4 naturally exits0: worker0.098298s/8,
+parent complete0.230754s/10, main8.850681458s, with an externally observed process
+wall upper bound9.144s/90. Its integrated parent action deadline is88s, leaving
+the original bounded owned-reap reserve without a third data executor; parent88
+and outer90 expiration are reported separately. Both are false. Full4392 pins
+and runtime1191files/108directories/7links, the old S sealed exact set/anchors
+and five Git snapshots pass before/after. The raw captures and plan/nonce/PID
+bindings are preserved privately. Earlier preparations v1–v3 were not executed;
+no new unit tests or prior38-test reruns are claimed.
+
+The separately reviewed future matrix covers source/identity drift, missing or
+ambiguous candidate keys, exact raw UID and hashed/unhashed boundaries,
+embedded substitution, unsupported critical data, algorithm/key policy, MPI/
+modulus width, bad math, unauthorized roots, expiry/rotation/revocation/clock,
+machine-status ambiguity, capture/reap failure and incomplete verifier supply.
+These are requirements and expected dispositions for future work, not executed
+tests. Independent positive/negative vectors still need authenticated inputs;
+an unadmitted verifier or a new helper cannot serve as its own oracle.
+
+Existing Alpine/Wolfi GPG candidates remain HELD. A narrow Go math component
+might reduce a new GPG/SDK dependency family while adding security-critical
+OpenPGP framing and policy obligations; it is not selected, built or executed.
+The existing managed directory's VERSION declares1.26.8 and the wrapper is
+observed in crypto/rsa/fips.go. The [version-qualified API reference](https://pkg.go.dev/crypto/rsa@go1.26.8#VerifyPKCS1v15)
+does not authenticate the installed toolchain, binary, ABI/dependency graph or
+current vulnerability state. The initial unversioned page displaying1.27.3 is
+not substituted. A Debian verifier authenticated only by this untrusted archive
+is circular; ordinary development tool permission is not verifier admission.
+No build of either route, SDK, global install or package recovery occurs.
+
+Decision: close independently anchored authority/current revocation and official
+full-fingerprint/source mappings for the five certifier candidates first; retain
+the three revoker-only aliases pending an explicit current-policy/source
+decision. Avoid parallel tool bootstraps. A later concrete verifier/source/
+command/vector/input plan must independently pass unchanged supply, isolation,
+performance and resource gates before crypto execution or Release/index/package
+acceptance. Current authority NOT_ESTABLISHED, revocation UNKNOWN and verifier
+NONE ADMITTED remain; all prior REFUSED/FAILED and historical scopes are preserved.
+
+Private slice6-debian-verification-graph-20261030-v1; existing mise only, timersOFF.
+Only progress documentation changes in Git; no Go/Contract/driver behavior or
+evidence-reuse rule changes, and no unaffected whole-repository suite reruns.
+Phase6 **5/15**, Slice6step2; full topology16/formal acceptance/step4 remain open.
 
 ## Debian signature declarations (2026-10-30)
 

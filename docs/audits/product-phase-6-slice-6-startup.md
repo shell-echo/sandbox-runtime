@@ -4,7 +4,22 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Debian signature declarations](#2026-10-30-debian-signature-declarations).
+Latest investigation checkpoint: [Debian verification-object graph](#2026-10-30-debian-verification-object-graph).
+
+## 2026-10-30 Debian verification-object graph
+
+The [Debian verification-object graph](../plan/product-v1-phase-6-scanner-supply-candidates.md#debian-verification-object-graph-2026-10-30)
+maps13 unverified signature statements and8 external key identifiers. P/S candidate
+bytes cover8 statement nodes;5 UID-certifier candidates lack key bodies in the
+selected certificate. Three other aliases occur only as deprecated revoker
+claims. The embedded19 is in outer18's unhashed area, so its future verification
+is separate. No preimage, signature digest, RSA/GPG or verifier build runs.
+A future refusal matrix and route comparison are design artifacts, not tests.
+Authority NOT_ESTABLISHED, revocation UNKNOWN, verifier NONE ADMITTED.
+Next review official source/full-fingerprint mappings for the five certifier
+candidates and current authority/revocation evidence before choosing a verifier.
+Private slice6-debian-verification-graph-20261030-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
 
 ## 2026-10-30 Debian signature declarations
 
