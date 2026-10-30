@@ -46,6 +46,19 @@ Slice 6 step 2 on the new computer; only independent acceptance of step 3
 permits 6/15, and formal step 4 still follows that acceptance. The existing
 authorization and fixed order for Slices 7–15 remain unchanged.
 
+The [Debian signature-declaration observation](plan/product-v1-phase-6-scanner-supply-candidates.md#debian-signature-declarations-2026-10-30)
+passes38 component methods and one new offline view of the fixed11873B original.
+Its12 outer signatures declare v4/RSA/SHA512; one embedded signature body and
+five deprecated revoker declarations are preserved privately. No signature math
+or authority is established. Test whole1.672290s/90; view worker0.029978s/8,
+parent0.059878s/10, whole1.835490s/90; complete current-input pre/post checks.
+Old current-identity REFUSED, Talos REFUSED and Release FAILED remain unchanged;
+historical passes are not inherited. Authority NOT_ESTABLISHED, revocation UNKNOWN,
+verifier NONE ADMITTED. Next independently design the actual verification-object
+graph and a noncircular verifier/authority path before any cryptographic execution.
+Private slice6-debian-signature-declarations-20261030-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 The [current-device observation](plan/product-v1-phase-6-scanner-supply-candidates.md#current-device-identity-observation-2026-10-30)
 completes an independently reviewed read-only comparison:401 sealed files/43
 directories,2190 indexed source files,1191 runtime files/108 directories/7 links

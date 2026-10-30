@@ -1,8 +1,8 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-30. Status: current-device differential observation is complete.
-The fixed Debian security certificate11873B is recovered with matching candidate fingerprints;46 offline methods and the
-bounded native data observation pass. Authority NOT_ESTABLISHED, revocation
+Updated: 2026-10-30. Status: twelve outer signature declarations and one embedded
+signature body are observed as untrusted data. Thirty-eight component methods and
+one new offline original-byte view complete; no OpenPGP math or admission. Authority NOT_ESTABLISHED, revocation
 UNKNOWN and verifier NONE ADMITTED. Original34770B Release remains unauthenticated
 and its old native FAILED is unchanged. Talos key refused.
 Independent authority/revocation and trusted-verifier supply remain held.
@@ -17,6 +17,82 @@ a real operator check no older than72hours. Scanner limits stay4GiB/2CPU/64PIDs/
 one scan; no runtime updater, raw unauthenticated TCP or credential expansion.
 Keep RuleManifest.EngineImageDigest as the independent engine OCI identity,
 separate from the composite Scanner image. A package-set hash cannot replace it.
+
+## Debian signature declarations (2026-10-30)
+
+This separately reviewed offline data view uses a new identity and independent
+private output root. The fixed11873B original retains SHA256
+74f81645b4e3156d1e9a88c8dd9259271b89c7099d64af89a2a6996b592faa1f.
+No original manifest or receipt is rewritten; the old-index current identity
+recheck remains REFUSED and previous historical passes are not inherited.
+
+The viewer reuses the unchanged public-certificate layout and K byte primitives,
+without calling the older signature/diagnose policy. A dedicated signature-TLV
+length decoder uses192..254 as two-byte lengths and255 plus four bytes, within
+the original bounded areas. It retains every outer signature body, hashed/
+unhashed area and subpacket as raw bytes, length, hash and ordered fields.
+Duplicates remain in order; absent issuer claims and conflicting claims are
+distinct, and no claimed issuer is chosen as valid. Unsupported signature
+versions or malformed known fields refuse. Non-RSA material stays opaque with
+UNSUPPORTED structure; critical semantics are never evaluated.
+
+The [OpenPGP specification](https://www.rfc-editor.org/rfc/rfc9580.html#section-5.2.3.23)
+marks designated-revoker subpacket12 deprecated. The view records its class,
+algorithm and fingerprint as unverified data, including the required0x80 bit
+and private sensitivity marker; outer type and positional context do not prove
+a direct-key self-signature. Issuer fingerprints require v4 and20 fingerprint
+bytes, and embedded subpacket32 is a complete signature body without a packet
+header. Sensitive fields and all original signature material stay private,
+outside Git and standard output.
+
+Thirty-eight component methods pass under signature-tests-v3: unit0.011s,
+worker0.044232s/8, parent validation0.068837s/10, whole1.672290334s/90, natural
+platform/worker exit0 and complete input postchecks. They cover TLV length/EOF/
+area/count bounds, malformed issuer/time/revoker fields, repeated opaque values,
+conflicting claims, critical data, embedded depth/count, RSA MPI structure,
+opaque non-RSA material, fixed-original body correspondence and false admission.
+Type12 enclosing-type annotations have no dedicated unit assertion; actual-result
+independent review checks them. Earlier v1/v2 preparations were not executed and
+are preserved. An explicit audit canary is denied once; unexpected denials must
+remain zero. This process audit guard is not an OS sandbox.
+
+The separate signature-view-v1 completes naturally: worker0.029978083s/8,
+parent validation0.059877542s/10, whole1.835489542s/90. Complete current pins
+are verified before/after, with runtime census1191files/108directories/7links
+and separate clean Git snapshots. The base4049 pins plus58 view-stage inputs
+include the raw original, source2190, current five documents, runtime, final
+helper/test code, frozen test results and actual platform receipt.
+
+The12 outer bodies declare v4/RSA1/SHA512:5 direct-key types0x1F,1 positive
+certification0x13,5 generic certifications0x10 and1 subkey-binding0x18.
+Their positional contexts remain5 primary/6 UID/1 subkey. One embedded body
+declares primary-key-binding0x19; five subpacket12 revoker declarations are
+present. No critical fields, missing/conflicting issuer claims or non-RSA tails
+are observed in this fixed input. These are lexical declarations, not verified
+self/binding/cross-signatures, effective permissions or current non-revocation.
+Neither algorithm names nor absence of a revocation packet authenticates a key.
+
+An uninvolved reviewer independently recomputes CRC24,15 packets and60 TLVs,
+including the embedded body, against the fixed original. Two auxiliary reviews
+initially used system Python3.9.6 and hit API errors; their records remain and
+are not used as compliant acceptance. New acceptance-mise-v1 (0.021989s/10) and
+review-inputs-mise-v1 (0.767061s/10) use the existing mise3.13.16 with -I -B -S.
+Only those affected read-only checks are corrected; formal tests/view are not
+repeated. The byte reviewer audits complete input-check receipts; the input
+reviewer additionally rehashes4107 current pins. Publisher/signature/freshness/supply/
+admission remain false; authority NOT_ESTABLISHED, revocation UNKNOWN, verifier
+NONE ADMITTED. Old Talos weak-required-signature REFUSED, Release native FAILED
+and device-observation V3 FAILED retain their original scope. No GPG/import,
+new verifier, cryptographic signature execution, package, Docker, APK, scan or
+build runs, and no production Go/Contract/driver behavior changes.
+
+Next independently specify the exact primary/UID/subkey/embedded verification
+object graph, authenticated issuer and current revocation inputs, and one
+noncircular supply-admitted verifier path with independent refusal vectors.
+A possible standard-library math kernel is not selected, built or admitted here.
+Private slice6-debian-signature-declarations-20261030-v1; existing mise only,
+timersOFF. Phase6 **5/15**, Slice6step2; full topology16/independent acceptance/
+formalstep4 remain incomplete.
 
 ## Current device identity observation (2026-10-30)
 

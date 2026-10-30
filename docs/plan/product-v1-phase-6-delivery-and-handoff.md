@@ -26,6 +26,21 @@ The user's prelaunch single-implementation direction supersedes older runtime
 compatibility intentions in this historical plan; it does not change formal
 gates, locked Contracts, original receipts or the fixed Slice6 order.
 
+## Debian signature declarations (2026-10-30)
+
+The [Debian signature-declaration observation](product-v1-phase-6-scanner-supply-candidates.md#debian-signature-declarations-2026-10-30)
+passes38 component methods and one new offline view of the fixed11873B original.
+Its12 outer signatures declare v4/RSA/SHA512; one embedded signature body and
+five deprecated revoker declarations are preserved privately. No signature math
+or authority is established. Test whole1.672290s/90; view worker0.029978s/8,
+parent0.059878s/10, whole1.835490s/90; complete current-input pre/post checks.
+Old current-identity REFUSED, Talos REFUSED and Release FAILED remain unchanged;
+historical passes are not inherited. Authority NOT_ESTABLISHED, revocation UNKNOWN,
+verifier NONE ADMITTED. Next independently design the actual verification-object
+graph and a noncircular verifier/authority path before any cryptographic execution.
+Private slice6-debian-signature-declarations-20261030-v1; mise, timersOFF.
+Phase6 **5/15**, Slice6step2; topology16/acceptance/formalstep4 remain open.
+
 ## Current device identity observation (2026-10-30)
 
 The [current-device observation](product-v1-phase-6-scanner-supply-candidates.md#current-device-identity-observation-2026-10-30)
