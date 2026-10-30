@@ -4,7 +4,22 @@ Date: 2026-09-23
 
 Status: implementation underway. Product Phase 6 remains **5/15**.
 
-Latest investigation checkpoint: [Debian certifier source map](#2026-10-30-debian-certifier-source-map).
+Latest investigation checkpoint: [Verifier bootstrap and InRelease declarations](#2026-10-30-verifier-bootstrap-and-inrelease-declarations).
+
+## 2026-10-30 Verifier bootstrap and InRelease declarations
+
+The [verifier bootstrap and InRelease declarations](../plan/product-v1-phase-6-scanner-supply-candidates.md#verifier-bootstrap-and-inrelease-declarations-2026-10-30)
+prioritize the existing Alpine GPG material route, still HELD; no verifier is
+execution-admitted. Rehashing the37 APK/12 source set was rejected as no trust
+progress and not run. A new fixed-original data observer passes24 component
+methods and reads two v4 canonical-text/RSA/SHA256 signature declarations.
+One full-fingerprint claim matches candidate S; the other matches no candidate
+in the selected catalog. Neither is an authenticated signer. If S is selected
+after authorization, its applicable P binding and independent inner19 are needed;
+all five certifiers/13 statements are not automatically required trust roots.
+Multi-signature policy, current publisher/rotation/revocation, verifier supply
+and execution remain held. Phase6 **5/15**, Slice6 step2; formal gates open.
+Private slice6-verifier-bootstrap-path-20261030-v1; existing mise, timers OFF.
 
 ## 2026-10-30 Debian certifier source map
 

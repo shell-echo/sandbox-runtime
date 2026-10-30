@@ -1,10 +1,75 @@
 # Scanner supply candidates and source-route decision
 
-Updated: 2026-10-30. Status: three historical full-fingerprint certifier source
-mappings documented; two remain unresolved. No new key payload, verification,
-verifier build or supply admission. Authority NOT_ESTABLISHED, revocation UNKNOWN,
-verifier NONE ADMITTED. Old failures/refusals remain unchanged.
+Updated: 2026-10-30. Status: the preferred Alpine verifier material route remains
+HELD. A fixed-original untrusted observation records two InRelease signature
+declarations; one claims candidate S and one is not in the selected catalog.
+No signature, current-authority, revocation or verifier execution admission.
 Phase6 **5/15**, Slice6 step2 ongoing.
+
+## Verifier bootstrap and InRelease declarations (2026-10-30)
+
+Independent route review prioritizes the existing Alpine gpg2.5.22-r0 material
+route, still HELD. Existing Wolfi carrier HIGH/source gaps and the added
+OpenPGP/toolchain/ABI/supply cost of a new Go verifier make them unsuitable
+shortcuts. No tool is execution-admitted. Rehashing37 APKs/12 sources was
+explicitly rejected as no progress on trust and was not run; old materials
+and all failures remain intact.
+
+Keep three chains separate: the verifier's independently established distribution
+authority, exact source/assembly/dependency/install/helper/runtime and fresh
+complete scan evidence; Debian's authorized publisher/purpose/full-fingerprint
+key chain; then authenticated Release/index/package identities. A verifier
+authenticated only by the archive being checked is circular. Ordinary development
+tool permission, an OS-crypto diagnosis or GPG exit0 is not verifier admission.
+The existing native execution/isolation and Docker-management-authority gaps
+remain; this data observation does not repair them.
+
+Requirements depend on the eventually selected authenticated signer. A directly
+authorized P signature does not require S or every third-party UID certification.
+Using S requires the applicable P-to-S binding and an independently verified
+inner19; the fixed certificate's inner19 is in outer18's unhashed area.
+Publisher role, security/ordinary-archive purpose, signing-time and current
+validity/rotation/revocation, trusted clock and clock rollback, Date/Valid-Until
+and anti-rollback must remain explicit. Five certifier identifiers and13
+certificate statements do not all have to become roots.
+
+The new fixed34770B LF-only observer preserves raw cleartext without trimming,
+dash-unescaping, CRLF canonicalization or signature-preimage construction.
+It retains every signature packet and hashed/unhashed issuer declaration.
+The literal legacy Hash header is a lexical profile boundary, not the source
+of algorithm policy; CRC presence/parse/match is diagnostic, not authentication.
+Covered broader legal forms are reported as UNSUPPORTED_PROFILE; other
+out-of-profile input is rejected without deciding OpenPGP validity. Old certificate CRC gates are
+unchanged. No signature math, key import, GPG/Go/Docker/scan/build runs occur.
+
+The24 synthetic format methods pass under one new test identity: worker0.081055s/8,
+parent complete0.132494s/10, entry3.456701s/90. The separate new original VIEW
+passes within worker0.084710s/8, parent complete0.177676s/10, entry5.358457s/90.
+Both retain parent action88,64KiB streams, two data executors, natural exit0,
+complete current-input/census/sealed-set postchecks and unchanged source identity.
+Test/view combined inputs are4889/4930; tests and code are frozen across VIEW.
+Old dev32 identity refusal/native Release FAILED remains; only the new current
+data binding uses dev33. Historical acceptance is not inherited.
+
+Independent original-byte review confirms1132 decoded bytes and two ordered
+v4/type1/RSA1/hash8 declarations, each with hashed full-FPR and unhashed keyID,
+without issuer conflict or critical subpackets. Packet0 matches no full-FPR in
+the selected graph catalog; packet1 claims S. These are unauthenticated claims,
+not proof of actual signing identity, RSA strength or valid signatures.
+No first/any/all-signature acceptance rule is selected. Packet0 must not be
+ignored, called invalid or assigned a role from this observation.
+
+Next independently decide multi-signature handling, including unknown/invalid
+extra signatures and rotation/downgrade; then fix the required current authority
+and key-material chain. S is a candidate path, not an allowlist. In parallel
+the preferred tool route still needs its independent root, actual assembly/
+install/helper/loader closure, fresh complete supply coverage and original
+execution/management gates before GPG can run. Authority NOT_ESTABLISHED,
+revocation UNKNOWN, verifier NONE ADMITTED; signature/supply/admission false.
+Private evidence: slice6-verifier-bootstrap-path-20261030-v1; existing mise,
+timers OFF. Phase6 **5/15**, Slice6 step2; full topology16, independent formal
+acceptance and post-acceptance step4 remain open.
+
 
 ## Debian certifier source map (2026-10-30)
 
